@@ -88,9 +88,21 @@ Each source is a markdown skill — a short file that tells the agent how to fet
 
 ## Development Philosophy
 
-**Agents do the thinking. Code does the plumbing.**
+This system runs full Claude Code sessions for every task — curation, chat, reflection, enrichment, dev agents. These are autonomous agents with tool use, file access, web search, browser, and full codebase reasoning. They don't need hand-holding.
 
-Evogent's autonomous behavior — curation, chat replies, code fixes, audits — lives in markdown instructions that Claude Code sessions read at runtime. The code is infrastructure: queues, storage, APIs, the UI you see. When something breaks, we ask first: can a short instruction handle it? If yes, write the instruction. If no, build the code.
+**1. Trust the agent runtime.** Before building custom code for any capability, ask: can the agent do this with a general instruction? Build product code for infrastructure (queues, storage, APIs, UI, WebSocket broadcast, dedup) — not for agent decision-making. A 10-line instruction in a skill file beats a 779-line orchestrator that tries to think for the agent.
+
+**2. General direction over prescriptive recipes.** Give agents problems and constraints, not step-by-step solutions. Describe what's broken and why it matters. Let the Claude Code session investigate the codebase and figure out the implementation.
+
+**3. General-purpose mechanisms over one-off fixes.** When something breaks, don't patch the symptom — ask what system should have prevented it. If a subsystem has 3+ narrow fixes, the real problem is a missing general capability. Build the capability, not another patch.
+
+**4. Strengthen diagnosis, not agent-specific patches.** If an agent hits something unexpected and works around it instead of investigating, the fix is not a custom patch for that case — it's better diagnostic instruction. These sessions can read code, query SQLite, inspect payloads, and reason through mismatches. When dispatching a fix for a bug an agent encountered, ask: what general detection capability would have caught this? Build that capability, and the specific bug should fall out as a side effect.
+
+**5. Prefer completion over time-boxing.** If work is still making real progress, prefer a longer-running task to a killed task. Use short deadlines for probes, liveness checks, and other operational safeguards, but raise or remove execution caps that terminate productive agent work without protecting correctness.
+
+**6. Render the same data the same way everywhere — suppress only what's actually duplicated.** When a component's behavior changes based on a context flag ('am I inside X?', 'am I in detail view?', 'was I given permission to render this?'), ask whether the flag is expressing a real duplication you can detect structurally (e.g., `parentId` is in the current render scope) or a blanket assumption that will drop useful content in common cases. Prefer the structural check; delete the flag where possible. A blanket flag-gated suppression is an invisible regression waiting to happen — every new place the component is rendered silently inherits the suppression.
+
+The practical test for any change: Am I writing code that does something only infrastructure can do (persist data, route messages, serve UI), or am I writing code that duplicates what a Claude Code session can already reason through or should be instructed to investigate before falling back? If it's the latter, write an instruction instead.
 
 ## Secure by default
 
