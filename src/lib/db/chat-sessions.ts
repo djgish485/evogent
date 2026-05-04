@@ -412,12 +412,19 @@ export function createChatSession(input?: {
   return existing;
 }
 
-export function ensureDefaultAppChatSessions(input: {
+type EnsureDefaultAppChatSessionsInput = {
   provider: BrainProviderName | string | null;
   workingDirectory?: string | null;
-}): { main: ChatSessionRecord; curator: ChatSessionRecord } {
+  includeCurator?: boolean;
+};
+
+export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput & { includeCurator: false }): { main: ChatSessionRecord; curator: ChatSessionRecord | null };
+export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput & { includeCurator?: true }): { main: ChatSessionRecord; curator: ChatSessionRecord };
+export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput): { main: ChatSessionRecord; curator: ChatSessionRecord | null };
+export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput): { main: ChatSessionRecord; curator: ChatSessionRecord | null } {
   const provider = normalizeBrainProvider(input.provider);
   const workingDirectory = sanitizeWorkingDirectory(input.workingDirectory) ?? process.cwd();
+  const includeCurator = input.includeCurator !== false;
   const claudeReasoningEffort = getDefaultClaudeReasoningEffort();
   const codexReasoningEffort = getDefaultCodexReasoningEffort();
   const db = getDb();
@@ -501,17 +508,22 @@ export function ensureDefaultAppChatSessions(input: {
       'blue',
       null,
     );
-    ensureSession(
-      DEFAULT_CURATOR_CHAT_SESSION_ID,
-      DEFAULT_CURATOR_AGENT_SESSION_TITLE,
-      'purple',
-      'curator',
-    );
+    if (includeCurator) {
+      ensureSession(
+        DEFAULT_CURATOR_CHAT_SESSION_ID,
+        DEFAULT_CURATOR_AGENT_SESSION_TITLE,
+        'purple',
+        'curator',
+      );
+    }
   })();
 
   const main = getChatSession(DEFAULT_MAIN_CHAT_SESSION_ID);
-  const curator = getChatSession(DEFAULT_CURATOR_CHAT_SESSION_ID);
-  if (!main || !curator) {
+  const curator = includeCurator ? getChatSession(DEFAULT_CURATOR_CHAT_SESSION_ID) : null;
+  if (!main) {
+    throw new Error('Failed to ensure first-run chat sessions');
+  }
+  if (includeCurator && !curator) {
     throw new Error('Failed to ensure first-run chat sessions');
   }
 
