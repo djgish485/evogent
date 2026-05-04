@@ -18,6 +18,7 @@ import { type CodeFixProgress, SuggestionCard } from '@/components/feed/suggesti
 import { SuggestionStatusLane } from '@/components/feed/suggestion-status-lane';
 import { ThreadGroup } from '@/components/feed/thread-group';
 import { PreferencesPanel } from '@/components/preferences-panel';
+import { PwaInstallBanner } from '@/components/pwa/PwaInstallBanner';
 import { SetupBanner } from '@/components/setup-banner';
 import { type AgentTranscriptData, type AgentTranscriptState, type AgentTranscriptTarget, type BrainTranscriptEvent, type CurationTaskState, getAgentEventMetadata, resolveTaskTranscriptTarget, type TaskTranscriptFallbackState } from '@/lib/agent-transcript';
 import { buildAnalysisRenderableEntries } from '@/lib/analysis-presentation';
@@ -7624,6 +7625,7 @@ export default function Home() {
               ) : null}
             </div>
           )}
+          <PwaInstallBanner />
           {hasCuratorSession && !hasSourceSkillInstalled ? (
             <SetupBanner
               isStarting={isStartingSetupWizard}
