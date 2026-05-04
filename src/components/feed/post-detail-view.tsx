@@ -172,7 +172,7 @@ function formatPossessive(name: string): string {
 }
 
 const detailContentContainerClass = 'mx-auto w-full max-w-3xl px-0 sm:px-2';
-const detailHeaderClass = 'sticky top-0 z-20 border-b border-zinc-800/80 bg-black/95 backdrop-blur';
+const detailHeaderClass = 'sticky top-0 z-20 border-b border-zinc-800/80 bg-black/95 pt-[max(env(safe-area-inset-top),0.25rem)] backdrop-blur';
 const detailOverlayClass = 'fixed inset-0 z-[45] flex items-stretch justify-center bg-black/70 backdrop-blur-[2px]';
 const DETAIL_MIN_BOTTOM_PADDING_PX = 176;
 const CHAT_HEADER_BACK_LABEL_MIN_ROW_WIDTH = 360;
