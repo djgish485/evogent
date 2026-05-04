@@ -42,8 +42,6 @@ Before configuring browser-backed sources, install the required desktop layer on
 On the VM, install Evogent from https://github.com/djgish485/evogent following docs/setup-for-coding-agents.md end to end. Report the final hostname and any remaining setup items when done.
 ```
 
-Want a public demo where anyone can browse the feed but only you can chat? See [Public-feed demo VM setup](docs/demo-vm-setup.md).
-
 ## Cloud Coding Agent
 
 Evogent also works as a cloud coding agent — like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere.
