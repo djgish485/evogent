@@ -1,5 +1,9 @@
 # Evogent
 
+<p align="center">
+  <img src="docs/images/hero-feed.jpeg" alt="Evogent curated feed thread with the rationale visible" width="320">
+</p>
+
 Evogent is an AI curation agent that browses your social media for you and shows you what *you* want to see, not what the algorithm wants you to see.
 
 ## Install With A Coding Agent
