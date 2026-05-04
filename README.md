@@ -6,6 +6,10 @@
 
 Evogent is an AI curation agent that browses your social media for you and shows you what *you* want to see, not what the algorithm wants you to see.
 
+## No API Keys
+
+Evogent runs on the Claude Code or Codex CLI you already have authenticated. Your existing Claude Pro or ChatGPT Plus subscription powers curation, chat, code fixes, audits — everything. No API keys to provision, no per-token billing.
+
 ## Install With A Coding Agent
 
 Paste this into your favorite coding agent:
@@ -42,7 +46,7 @@ Want a public demo where anyone can browse the feed but only you can chat? See [
 
 ## Cloud Coding Agent
 
-Evogent also works as a cloud coding agent — like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere. No API keys — works with your existing Claude Pro or ChatGPT Plus subscription.
+Evogent also works as a cloud coding agent — like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere.
 
 ```text
 Install Evogent in coding-agent-only mode on a small VM I can drive from my phone, gated by my email through Cloudflare Access.
@@ -72,6 +76,12 @@ sudo bash scripts/setup.sh
 Then open http://localhost:3001 and use the setup card's **Finish Setup** button. It starts `/setup-wizard` in chat to check configuration and guide the next setup step.
 
 For the full setup flow from https://github.com/djgish485/evogent, see [Setup for coding agents](docs/setup-for-coding-agents.md).
+
+## Development Philosophy
+
+**Agents do the thinking. Code does the plumbing.**
+
+Evogent's autonomous behavior — curation, chat replies, code fixes, audits — lives in markdown instructions that Claude Code sessions read at runtime. The code is infrastructure: queues, storage, APIs, the UI you see. When something breaks, we ask first: can a short instruction handle it? If yes, write the instruction. If no, build the code.
 
 ## Security
 
