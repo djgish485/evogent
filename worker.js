@@ -14,7 +14,7 @@ const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = requi
 const { regeneratePreferenceContext } = require('./src/lib/preferences-context-runtime.js');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { readAutomaticCurationEnabled, readBackgroundSourceBrowsingEnabled } = require('./lib/brain-config');
-const { listInstalledCacheSources, readCacheRefreshIntervals, readConfigUsageLevel } = require('./lib/cache-refresh-config');
+const { hasCurationCapability, listInstalledCacheSources, readCacheRefreshIntervals, readConfigUsageLevel } = require('./lib/cache-refresh-config');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
@@ -1780,6 +1780,24 @@ async function runCacheRefreshSchedulerCheck(triggeredBy = 'timer') {
   }
 }
 
+async function runCurationTimerTick(triggeredBy = 'timer') {
+  if (!hasCurationCapability(process.cwd())) {
+    if (triggeredBy === 'startup') {
+      console.log('> Curation timers idle: no curator session, no source skills');
+    }
+    return;
+  }
+
+  if (isAutomaticCurationEnabled()) {
+    await enqueueHeartbeatCheck(triggeredBy);
+  } else if (triggeredBy === 'startup') {
+    console.log('> Automatic curation disabled in data/config.md; adaptive heartbeat checks paused');
+  }
+
+  await runReflectionSchedulerCheck(triggeredBy);
+  await runCacheRefreshSchedulerCheck(triggeredBy);
+}
+
 function createBackgroundWorker() {
   const worker = new Worker(BACKGROUND_QUEUE_NAME, async (job) => {
     if (job.name === BACKGROUND_JOB_NAMES.HEARTBEAT) {
@@ -1914,20 +1932,10 @@ async function start() {
     return;
   }
 
-  if (isAutomaticCurationEnabled()) {
-    await enqueueHeartbeatCheck('startup');
-  } else {
-    console.log('> Automatic curation disabled in data/config.md; adaptive heartbeat checks paused');
-  }
-  await runReflectionSchedulerCheck('startup');
-  await runCacheRefreshSchedulerCheck('startup');
+  await runCurationTimerTick('startup');
 
   const heartbeatTimer = setInterval(() => {
-    if (isAutomaticCurationEnabled()) {
-      void enqueueHeartbeatCheck('timer');
-    }
-    void runReflectionSchedulerCheck('timer');
-    void runCacheRefreshSchedulerCheck('timer');
+    void runCurationTimerTick('timer');
   }, HEARTBEAT_CHECK_INTERVAL_MS);
   if (typeof heartbeatTimer.unref === 'function') heartbeatTimer.unref();
   timerHandles.push(heartbeatTimer);

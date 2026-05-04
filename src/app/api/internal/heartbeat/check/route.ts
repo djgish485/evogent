@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { evaluateAdaptiveHeartbeat } from '@/lib/heartbeat-service';
+import { hasCurationCapability } from '../../../../../../lib/cache-refresh-config.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,16 @@ export async function POST(request: Request) {
   const triggeredBy = typeof triggeredByRaw === 'string' && triggeredByRaw.trim()
     ? triggeredByRaw.trim()
     : 'timer';
+
+  if (!hasCurationCapability(process.cwd())) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: 'no_curation_capability',
+      triggered: false,
+      checkedAt: new Date().toISOString(),
+    });
+  }
 
   try {
     const result = await evaluateAdaptiveHeartbeat({ triggeredBy });
