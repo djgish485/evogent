@@ -48,9 +48,9 @@ export function buildBaseFeedFilters(input: { hasTweetSource: boolean; hasCurato
   return [
     ALWAYS_FEED_FILTERS[0]!,
     ALWAYS_FEED_FILTERS[1]!,
+    ALWAYS_FEED_FILTERS[2]!,
     ...(input.hasTweetSource ? [TWEET_FEED_FILTER] : []),
     ...(input.hasCuratorSession ? [CURATION_FEED_FILTERS[0]!] : []),
-    ALWAYS_FEED_FILTERS[2]!,
     ...(input.hasCuratorSession ? [CURATION_FEED_FILTERS[1]!] : []),
     ALWAYS_FEED_FILTERS[3]!,
   ];
