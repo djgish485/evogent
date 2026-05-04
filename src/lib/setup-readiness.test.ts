@@ -207,6 +207,41 @@ describe('first-run setup readiness', () => {
     assert.strictEqual(rowsAfterSecond.find((row) => row.title === 'General Agent')?.session_type, null);
   });
 
+  test('coding-agent-only default-session bootstrap creates only the General Agent', async () => {
+    process.env.MEDIA_AGENT_ROOT = '/root/evogent';
+
+    const readiness = await getFirstRunReadiness({
+      checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
+      codingAgentOnly: true,
+      ensureSessions: true,
+    });
+
+    assert.strictEqual(readiness.sessions.ready, true);
+    assert.strictEqual(readiness.sessions.mainSessionId, DEFAULT_MAIN_CHAT_SESSION_ID);
+    assert.strictEqual(readiness.sessions.curatorSessionId, null);
+    assert.match(readiness.ready.join('\n'), /Default General Agent chat session exists\./);
+    assert.doesNotMatch(readiness.ready.join('\n'), /Curator Agent chat sessions exist/);
+
+    const rows = getDb().prepare(`
+      SELECT id, title, session_type
+      FROM chat_sessions
+      ORDER BY id ASC
+    `).all() as Array<{ id: string; title: string; session_type: string | null }>;
+
+    assert.deepStrictEqual(rows, [{
+      id: DEFAULT_MAIN_CHAT_SESSION_ID,
+      title: 'General Agent',
+      session_type: null,
+    }]);
+
+    const noFlagReadiness = await getFirstRunReadiness({
+      checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
+    });
+    assert.strictEqual(noFlagReadiness.sessions.ready, true);
+    assert.strictEqual(noFlagReadiness.sessions.curatorSessionId, null);
+    assert.doesNotMatch(noFlagReadiness.pending.join('\n'), /Default chat sessions/);
+  });
+
   test('does not create default sessions when no brain provider is runnable', async () => {
     await installSkill({ registry: 'tweet-cache' });
 
