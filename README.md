@@ -82,3 +82,4 @@ Evogent's brain has shell access to your host. By default, only read-only routes
 - [Security](docs/security.md)
 - [Development](docs/development.md)
 - [Architecture](docs/architecture-v2.md)
+- [License](LICENSE)
