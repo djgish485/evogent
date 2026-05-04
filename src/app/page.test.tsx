@@ -83,7 +83,7 @@ describe('dynamic feed source filters', () => {
     assert.strictEqual(hasTweetFeedSource([{ value: 'x.com', label: 'X' }]), true);
     assert.deepStrictEqual(
       buildBaseFeedFilters({ hasTweetSource: true, hasCuratorSession: true }).map((filter) => filter.value),
-      ['all', 'agent', 'tweet', 'article', 'suggestion', 'analysis', 'notification'],
+      ['all', 'agent', 'suggestion', 'tweet', 'article', 'analysis', 'notification'],
     );
   });
 

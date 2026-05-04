@@ -1486,7 +1486,25 @@ export default function Home() {
       .map((value) => feedFiltersByValue.get(value))
       .filter((filter): filter is FeedFilterOption => Boolean(filter));
   }, [feedFiltersByValue, headerFilters, pinnedHeaderValues, selectedFilter]);
-  const mobileHeaderFilters = visibleHeaderFilters;
+  const mobilePinnedHeaderFilters = useMemo(() => {
+    const analysisFilter = headerFilters.find((filter) => filter.value === 'analysis');
+    return [
+      ...headerFilters.slice(0, 3),
+      ...(analysisFilter ? [analysisFilter] : []),
+    ];
+  }, [headerFilters]);
+  const mobilePinnedHeaderValues = useMemo(
+    () => mobilePinnedHeaderFilters.map((filter) => filter.value),
+    [mobilePinnedHeaderFilters],
+  );
+  const mobileHeaderFilters = useMemo(() => {
+    if (selectedFilter === 'all' || mobilePinnedHeaderValues.includes(selectedFilter)) {
+      return mobilePinnedHeaderFilters;
+    }
+    return [...mobilePinnedHeaderValues.slice(0, -1), selectedFilter]
+      .map((value) => feedFiltersByValue.get(value))
+      .filter((filter): filter is FeedFilterOption => Boolean(filter));
+  }, [feedFiltersByValue, mobilePinnedHeaderFilters, mobilePinnedHeaderValues, selectedFilter]);
   const desktopHeaderFilters = visibleHeaderFilters;
   const fallbackChatProgress = useMemo(
     () => (chatProgress ? null : getFallbackChatProgress(orchestratorStatus)),
