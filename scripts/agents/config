@@ -1,0 +1,13 @@
+# Migrated from ~/.clawdbot/ to repo on 2026-04-14
+
+# Default coding agent (claude, codex, gemini)
+DEFAULT_AGENT=${DEFAULT_AGENT:-codex}
+
+# Model overrides per agent type (env vars take precedence)
+CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-7[1m]}
+CODEX_MODEL=${CODEX_MODEL:-gpt-5.5}
+CODEX_REASONING=${CODEX_REASONING:-high}
+# Set CODEX_FAST_MODE=0 to disable Codex fast service tier for develop agents.
+CODEX_FAST_MODE=${CODEX_FAST_MODE:-1}
+GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-pro-preview}
+AGENT_MAX_ATTEMPTS=${AGENT_MAX_ATTEMPTS:-3}

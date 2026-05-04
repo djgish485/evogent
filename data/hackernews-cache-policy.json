@@ -1,0 +1,31 @@
+{
+  "profiles": {
+    "low": {
+      "ttlHours": 48,
+      "topStories": 30,
+      "bestStories": 0,
+      "newStories": 0,
+      "outputAuthorCap": 2
+    },
+    "medium": {
+      "ttlHours": 36,
+      "topStories": 50,
+      "bestStories": 30,
+      "newStories": 0,
+      "outputAuthorCap": 2
+    },
+    "high": {
+      "ttlHours": 24,
+      "topStories": 100,
+      "bestStories": 50,
+      "newStories": 0,
+      "outputAuthorCap": 3
+    }
+  },
+  "deadlineBudget": {
+    "stepDeadlineMs": 300000,
+    "stepDeadlinePaddingMs": null,
+    "minRunDeadlineMs": 600000,
+    "maxRunDeadlineMs": 1800000
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "codex": [
+    "cache-refresh",
+    "curate",
+    "curate-latest",
+    "new-chat-session",
+    "reflect",
+    "research",
+    "setup-wizard",
+    "source-status"
+  ]
+}

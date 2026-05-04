@@ -1,0 +1,55 @@
+export const PAGE_SIZE = 20;
+
+export const SUGGESTION_PAGE_SIZE = PAGE_SIZE * 4;
+
+export const MIN_PRIMARY_FEED_ITEMS = 6;
+
+export const MAX_RESET_FEED_BATCHES = 3;
+
+export const FEED_BANNER_COMPLETED_TASK_TIMEOUT_MS = 30_000;
+
+export const CURATION_STATUS_POLL_INTERVAL_MS = 2_500;
+
+export const CURATION_FEED_POLL_INTERVAL_MS = 5_000;
+
+export const RESTART_STATUS_POLL_INTERVAL_MS = 30_000;
+
+export const RESTART_APPLY_POLL_INTERVAL_MS = 2_000;
+
+export const RESTART_APPLY_WAIT_TIMEOUT_MS = 120_000;
+
+export const STATUS_SYNC_INTERVAL_MS = 15_000;
+
+export const ACTIVE_CHAT_STATUS_SYNC_INTERVAL_MS = 5_000;
+
+export const APP_HEADER_HEIGHT_FALLBACK_PX = 52;
+
+export const CONVERSATION_SESSION_PAGE_SIZE = 50;
+
+export const DEFAULT_FEED_SORT_ORDER = 'created' as const;
+
+export const SELECTED_CHAT_SESSION_STORAGE_KEY = 'evogent-selected-chat-session';
+
+export const SELECTED_CHAT_SESSION_AUTOCORRECT_GRACE_MS = 3_000;
+
+export const POST_CONTEXT_SEPARATOR = '\n\nContext — discussing this post:';
+
+export const CHAT_INPUT_MAX_HEIGHT_PX = 180;
+
+export const CHAT_HISTORY_PAGE_SIZE = 50;
+
+export const CHAT_HISTORY_TOP_LOAD_THRESHOLD_PX = 96;
+
+export const CHAT_COMPOSER_MIN_RESERVED_HEIGHT_PX = 192;
+
+export const CHAT_COMPOSER_GAP_PX = 12;
+
+export const CHAT_ACTIVITY_STALE_TIMEOUT_MS = 180_000;
+
+export const CHAT_SESSION_COMPACTION_STALE_TIMEOUT_MS = 5 * 60_000;
+
+export const COMPACT_FEEDBACK_TIMEOUT_MS = 6_000;
+
+export const STREAMING_PREVIEW_MAX_CHARS = 180;
+
+export const CODEX_MANUAL_COMPACTION_UNAVAILABLE_REASON = 'Codex CLI manual compact is not supported yet.';

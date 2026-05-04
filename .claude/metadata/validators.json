@@ -1,0 +1,12 @@
+{
+  "validators": [
+    {
+      "label": "Lint",
+      "command": ["npm", "run", "lint"]
+    },
+    {
+      "label": "Build",
+      "command": ["npm", "run", "build"]
+    }
+  ]
+}
