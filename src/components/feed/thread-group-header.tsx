@@ -45,12 +45,12 @@ export function ThreadGroupHeader({
 
   return (
     <header
-      className="flex flex-row items-start justify-between gap-3 rounded-t-2xl border border-transparent p-4 sm:gap-4 sm:p-5"
+      className="rounded-t-2xl border border-transparent p-4 sm:p-5"
       style={{
         background: `linear-gradient(to bottom, ${threadTint.bg}, transparent) padding-box, linear-gradient(to bottom, ${threadTint.border}, transparent) border-box`,
       }}
     >
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="flex flex-row items-start justify-between gap-3 sm:gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <span
             className="rounded-full border bg-zinc-950/50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em]"
@@ -62,21 +62,21 @@ export function ThreadGroupHeader({
             <span className="text-xs text-zinc-400">Continuing from earlier</span>
           ) : null}
         </div>
-        <div className="space-y-1">
-          <h2 className={titleClassName} data-prominence={threadProminence?.level}>{threadTitle}</h2>
-          {threadRationale ? (
-            <p className="max-w-2xl text-sm leading-6 text-zinc-300">{threadRationale}</p>
-          ) : null}
-        </div>
+        <ThreadFeedbackControl
+          threadId={threadId}
+          cycleId={cycleId}
+          threadTitle={threadTitle}
+          feedbackProbe={feedbackProbe}
+          sourceItemIds={sourceItemIds}
+          onSubmit={onSubmitFeedback}
+        />
       </div>
-      <ThreadFeedbackControl
-        threadId={threadId}
-        cycleId={cycleId}
-        threadTitle={threadTitle}
-        feedbackProbe={feedbackProbe}
-        sourceItemIds={sourceItemIds}
-        onSubmit={onSubmitFeedback}
-      />
+      <div className="mt-2 space-y-1">
+        <h2 className={titleClassName} data-prominence={threadProminence?.level}>{threadTitle}</h2>
+        {threadRationale ? (
+          <p className="text-sm leading-6 text-zinc-300">{threadRationale}</p>
+        ) : null}
+      </div>
     </header>
   );
 }

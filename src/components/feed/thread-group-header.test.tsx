@@ -56,6 +56,26 @@ describe('ThreadGroupHeader', () => {
     assert.doesNotMatch(markup, /Tune this lane/);
   });
 
+  test('lets thread title and rationale sit below the feedback row at full width', () => {
+    const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
+      threadId: 'thread-1',
+      cycleId: 'cycle-1',
+      threadTitle: 'Long ordinary thread title',
+      threadRationale: 'This rationale should use the natural card width instead of a capped text column.',
+      threadProminence: null,
+      continuing: true,
+      threadTint,
+      onSubmitFeedback: async () => {},
+    }));
+
+    assert.match(markup, /class="rounded-t-2xl border border-transparent p-4 sm:p-5"/);
+    assert.match(markup, /class="flex flex-row items-start justify-between gap-3 sm:gap-4"/);
+    assert.match(markup, /Continuing from earlier/);
+    assert.match(markup, /<div class="mt-2 space-y-1"><h2/);
+    assert.match(markup, /<p class="text-sm leading-6 text-zinc-300">/);
+    assert.doesNotMatch(markup, /max-w-2xl/);
+  });
+
   test('renders large A/B controls for feedback probe threads', () => {
     const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
       threadId: 'thread-1',
