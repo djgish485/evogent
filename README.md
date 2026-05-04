@@ -44,7 +44,9 @@ On the VM, install Evogent from https://github.com/djgish485/evogent following d
 
 ## Cloud Coding Agent
 
-Evogent also works as a cloud coding agent, like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere.
+Evogent works beautifully as a cloud coding agent - more stable than Claude Code remote control, more user-friendly than SSH apps. It's like Twitter for your repo.
+
+To use it as a stand-alone coding agent, paste these instructions into your coding agent:
 
 ```text
 Install Evogent in coding-agent-only mode on a small VM I can drive from my phone, gated by my email through Cloudflare Access.
