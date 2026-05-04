@@ -8,7 +8,7 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 ## Install With A Coding Agent
 
-Copy this into Claude Code, Codex, Gemini, or another coding agent on the machine where you want Evogent installed:
+Paste this into your favorite coding agent:
 
 ```text
 Install Evogent for me from the latest repo at https://github.com/djgish485/evogent.
@@ -32,6 +32,8 @@ Install Evogent on a small Hetzner VM behind Cloudflare Access. I want to reach 
 I have ready: a Hetzner Cloud API token, a domain managed by Cloudflare with Zero Trust enabled, the hostname I want for Evogent (ask me), and the email I want allowed through Access (ask me). If a prerequisite is missing, tell me exactly where to create it before starting.
 
 Provision a small Ubuntu VM, set up a Cloudflare tunnel that routes my chosen hostname to the app running on the VM at localhost:3001, and create a Cloudflare Access self-hosted application restricting the hostname to my email. Lock the VM down so its only public reachable surface is the tunnel.
+
+Before configuring browser-backed sources, install the required desktop layer on the VM: XFCE + LightDM + gnome-keyring auto-unlocked via PAM. Use `scripts/setup-desktop-browser.sh`, then reboot. This is required for Twitter, YouTube, and Substack logins to survive Chrome restarts; --headless Chrome or a no-desktop install will break source auth on restart. See `docs/reference/browser-setup-guide.md` for the full explanation.
 
 On the VM, install Evogent from https://github.com/djgish485/evogent following docs/setup-for-coding-agents.md end to end. Report the final hostname and any remaining setup items when done.
 ```
