@@ -506,14 +506,26 @@ async function getBrowserProviderCheck(
   }, browserProviderRequired);
 }
 
-export function formatSetupAgentReport(checks: BasicCheck[], readiness: FirstRunReadiness): string {
+export function formatSetupAgentReport(
+  checks: BasicCheck[],
+  readiness: FirstRunReadiness,
+  options: { codingAgentOnly?: boolean } = {},
+): string {
   const lines = [
     'Evogent setup readiness',
     ...checks.map((check) => `${check.status} ${check.key}: ${check.message}`),
   ];
+  const readyDefaultSessions = [
+    `${DEFAULT_GENERAL_AGENT_SESSION_TITLE}=${readiness.sessions.mainSessionId}`,
+    ...(readiness.sessions.curatorSessionId
+      ? [`${DEFAULT_CURATOR_AGENT_SESSION_TITLE}=${readiness.sessions.curatorSessionId}`]
+      : []),
+  ].join(' ');
   const defaultSessionsMessage = readiness.sessions.ready
-    ? `${DEFAULT_GENERAL_AGENT_SESSION_TITLE}=${readiness.sessions.mainSessionId} ${DEFAULT_CURATOR_AGENT_SESSION_TITLE}=${readiness.sessions.curatorSessionId}`
-    : 'Create with npm run setup:agent -- --bootstrap-default-sessions after provider readiness is clean.';
+    ? readyDefaultSessions
+    : options.codingAgentOnly
+      ? 'Create with npm run setup:agent -- --bootstrap-default-sessions --coding-agent-only after provider readiness is clean.'
+      : 'Create with npm run setup:agent -- --bootstrap-default-sessions after provider readiness is clean.';
 
   lines.push(`${readiness.provider.ready ? 'READY' : 'REQUIRED'} brain_provider: ${readiness.provider.message}`);
   lines.push(`${readiness.sessions.ready ? 'READY' : 'PENDING'} default_sessions: ${defaultSessionsMessage}`);
@@ -530,17 +542,19 @@ export function formatSetupAgentReport(checks: BasicCheck[], readiness: FirstRun
 }
 
 async function main() {
+  const codingAgentOnly = process.argv.includes('--coding-agent-only');
   const bootstrapDefaultSessions = process.argv.includes('--bootstrap-default-sessions')
+    || codingAgentOnly
     || process.env.MEDIA_AGENT_BOOTSTRAP_DEFAULT_SESSIONS === '1';
   const [basicChecks, readiness] = await Promise.all([
     getBasicChecks(),
-    getFirstRunReadiness({ bootstrapDefaultSessions }),
+    getFirstRunReadiness({ bootstrapDefaultSessions, codingAgentOnly }),
   ]);
   const checks = [
     ...basicChecks,
     await getBrowserProviderCheck(readiness.provider.selected, readiness.sources),
   ];
-  const report = formatSetupAgentReport(checks, readiness);
+  const report = formatSetupAgentReport(checks, readiness, { codingAgentOnly });
   process.stdout.write(report);
 
   const hasRequired = checks.some((check) => check.status === 'REQUIRED') || readiness.required.length > 0;

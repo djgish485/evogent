@@ -124,6 +124,7 @@ export interface ReadinessOptions {
   persistConfig?: boolean;
   bootstrapDefaultSessions?: boolean;
   ensureSessions?: boolean;
+  codingAgentOnly?: boolean;
   notifyWelcomeNotification?: (item: FeedItem) => Promise<void> | void;
 }
 
@@ -413,25 +414,34 @@ export async function getFirstRunReadiness(options: ReadinessOptions = {}): Prom
 
   const shouldBootstrapDefaultSessions = options.bootstrapDefaultSessions === true
     || options.ensureSessions === true;
+  const codingAgentOnly = options.codingAgentOnly === true;
+  let readySessionMessage = `Default ${DEFAULT_GENERAL_AGENT_SESSION_TITLE} and ${DEFAULT_CURATOR_AGENT_SESSION_TITLE} chat sessions exist.`;
 
   if (provider.selected && shouldBootstrapDefaultSessions) {
     const ensured = ensureDefaultAppChatSessions({
       provider: provider.selected,
       workingDirectory: resolveRuntimeWorkingDirectory(),
+      includeCurator: !codingAgentOnly,
     });
     sessions = {
-      ready: true,
+      ready: Boolean(ensured.main && (codingAgentOnly || ensured.curator)),
       mainSessionId: ensured.main.id,
-      curatorSessionId: ensured.curator.id,
+      curatorSessionId: ensured.curator?.id ?? null,
     };
   } else {
     const main = getChatSession(DEFAULT_MAIN_CHAT_SESSION_ID);
     const curator = getChatSession(DEFAULT_CURATOR_CHAT_SESSION_ID);
+    const inferredCodingAgentOnly = Boolean(main && !curator);
+    const requireCurator = !codingAgentOnly && !inferredCodingAgentOnly;
     sessions = {
-      ready: Boolean(main && curator),
+      ready: Boolean(main && (!requireCurator || curator)),
       mainSessionId: main?.id ?? null,
       curatorSessionId: curator?.id ?? null,
     };
+  }
+
+  if (sessions.ready && !sessions.curatorSessionId) {
+    readySessionMessage = `Default ${DEFAULT_GENERAL_AGENT_SESSION_TITLE} chat session exists.`;
   }
 
   const required: string[] = [];
@@ -445,9 +455,7 @@ export async function getFirstRunReadiness(options: ReadinessOptions = {}): Prom
   }
 
   if (sessions.ready) {
-    ready.push(
-      `Default ${DEFAULT_GENERAL_AGENT_SESSION_TITLE} and ${DEFAULT_CURATOR_AGENT_SESSION_TITLE} chat sessions exist.`,
-    );
+    ready.push(readySessionMessage);
   } else {
     pending.push('Default chat sessions can be created with the explicit bootstrap action after a runnable brain provider is available.');
   }
