@@ -51,9 +51,9 @@ To use it as a stand-alone coding agent, paste these instructions into your codi
 ```text
 Install Evogent in coding-agent-only mode (minimum-install mode: just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated). Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely.
 
-Follow docs/setup-for-coding-agents.md from https://github.com/djgish485/evogent, but stop after the minimum install runs.
+Follow docs/setup-for-coding-agents.md from https://github.com/djgish485/evogent, but stop after the minimum install runs. Then run `npm run setup:agent -- --bootstrap-default-sessions --coding-agent-only` so the General Agent session is seeded (coding-agent-only installs do not create a Curator Agent - there is nothing to curate).
 
-When done, report the URL where Evogent is running. I'll open it in my browser and start a coding agent chat session from there.
+When done, report the URL where Evogent is running.
 ```
 
 ## Manual Install
