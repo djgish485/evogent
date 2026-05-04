@@ -49,15 +49,11 @@ Evogent works beautifully as a cloud coding agent - more stable than Claude Code
 To use it as a stand-alone coding agent, paste these instructions into your coding agent:
 
 ```text
-Install Evogent in coding-agent-only mode on a small VM I can drive from my phone, gated by my email through Cloudflare Access.
+Install Evogent in coding-agent-only mode (minimum-install mode: just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated). Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely.
 
-I have ready: a cloud provider account (Hetzner, DigitalOcean, Fly, etc.), a domain managed by Cloudflare with Zero Trust enabled, the hostname I want for Evogent (ask me), the email I want allowed through Access (ask me), and either Claude Code or Codex CLI authenticated on this local machine; install and authenticate the same one on the VM.
+Follow docs/setup-for-coding-agents.md from https://github.com/djgish485/evogent, but stop after the minimum install runs.
 
-Provision a small Ubuntu VM, set up a Cloudflare tunnel routing my chosen hostname to the app at localhost:3001, and create a Cloudflare Access self-hosted application restricting access to my email. Lock the VM down so the only public reachable surface is the tunnel.
-
-On the VM, install Evogent from https://github.com/djgish485/evogent in minimum-install mode: just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated. Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely. Follow docs/setup-for-coding-agents.md but stop after the minimum install runs.
-
-When done, open the UI, create a chat session pointed at the repo I want to drive, and report the final hostname.
+When done, open the UI, create a chat session pointed at the repo I want to drive, and report the final URL.
 ```
 
 ## Manual Install
