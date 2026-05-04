@@ -53,7 +53,7 @@ Install Evogent in coding-agent-only mode (minimum-install mode: just PORT in .e
 
 Follow docs/setup-for-coding-agents.md from https://github.com/djgish485/evogent, but stop after the minimum install runs.
 
-When done, open the UI, create a chat session pointed at the repo I want to drive, and report the final URL.
+When done, report the URL where Evogent is running. I'll open it in my browser and start a coding agent chat session from there.
 ```
 
 ## Manual Install
