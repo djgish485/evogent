@@ -1,0 +1,132 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47981856",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47981856",
+    "url": "https://www.nytimes.com/2026/05/01/us/politics/us-troops-germany.html",
+    "title": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+    "authorUsername": "mikhael",
+    "authorDisplayName": "mikhael",
+    "publishedAtMs": 1777679556000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47981856",
+      "id": 47981856,
+      "type": "story",
+      "title": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+      "text": null,
+      "url": "https://www.nytimes.com/2026/05/01/us/politics/us-troops-germany.html",
+      "hnUrl": "https://news.ycombinator.com/item?id=47981856",
+      "discussionUrl": "https://news.ycombinator.com/item?id=47981856",
+      "authorUsername": "mikhael",
+      "authorDisplayName": "mikhael",
+      "by": "mikhael",
+      "publishedAtMs": 1777679556000,
+      "time": 1777679556,
+      "score": 22,
+      "descendants": 3,
+      "commentCount": 3,
+      "kids": [
+        47982157,
+        47981969
+      ],
+      "lists": [
+        "topstories"
+      ],
+      "fetchedAtMs": 1777683463628
+    },
+    "fetchedAtMs": 1777683463628,
+    "expiresAtMs": 1777813063628,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-f050beeebb",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47981856",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T23:52:36.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+    "url": "https://www.nytimes.com/2026/05/01/us/politics/us-troops-germany.html",
+    "excerpt": "Hacker News discussion: 22 points, 3 comments.",
+    "text": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+    "authorUsername": "mikhael",
+    "authorDisplayName": "mikhael",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47981856"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+    "url": "https://www.nytimes.com/2026/05/01/us/politics/us-troops-germany.html",
+    "excerpt": "Hacker News discussion: 22 points, 3 comments.",
+    "text": "U.S. to Withdraw 5k Troops from Germany, Pentagon Says",
+    "authorUsername": "mikhael",
+    "authorDisplayName": "mikhael",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.hnUrl"
+  ]
+}

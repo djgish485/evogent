@@ -1,0 +1,114 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "chipkin-advances-in-physics-conference",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "chipkin-advances-in-physics-conference",
+    "url": "https://chipkin.substack.com/p/our-first-online-conference-advances",
+    "title": "Our First Online Conference: Advances in Physics",
+    "authorUsername": null,
+    "authorDisplayName": "Conjecture Institute",
+    "publishedAtMs": 1776946001000,
+    "payload": {
+      "publication": "Conjecture Institute",
+      "title": "Our First Online Conference: Advances in Physics",
+      "subtitle": "On June 17th, Conjecture Institute brings together physicists working on constructor theory, foundations of quantum theory, locality, quantum gravity, time, and other fundamental areas.",
+      "url": "https://chipkin.substack.com/p/our-first-online-conference-advances",
+      "publishedAt": "2026-04-23T12:00:00Z",
+      "readTime": "3 min read"
+    },
+    "fetchedAtMs": 1777294827357,
+    "expiresAtMs": 1777510827357,
+    "seenByCurationAtMs": 1777302768175
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-114ee425a4",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "chipkin-advances-in-physics-conference",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-23T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Our First Online Conference: Advances in Physics",
+    "url": "https://chipkin.substack.com/p/our-first-online-conference-advances",
+    "excerpt": "On June 17th, Conjecture Institute brings together physicists working on constructor theory, foundations of quantum theory, locality, quantum gravity, time, and other fundamental areas.",
+    "text": "On June 17th, Conjecture Institute brings together physicists working on constructor theory, foundations of quantum theory, locality, quantum gravity, time, and other fundamental areas.",
+    "authorUsername": null,
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Our First Online Conference: Advances in Physics",
+    "url": "https://chipkin.substack.com/p/our-first-online-conference-advances",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

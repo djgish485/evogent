@@ -1,0 +1,166 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "mDG_Hx3BSUE",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "mDG_Hx3BSUE",
+    "url": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+    "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "authorUsername": "@DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "publishedAtMs": 1775140888657,
+    "payload": {
+      "videoId": "mDG_Hx3BSUE",
+      "canonicalUrl": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+      "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+      "channelName": "Dwarkesh Patel",
+      "channelUrl": "https://www.youtube.com/@DwarkeshPatel",
+      "channelHandle": "@DwarkeshPatel",
+      "channel": {
+        "name": "Dwarkesh Patel",
+        "url": "https://www.youtube.com/@DwarkeshPatel",
+        "handle": "@DwarkeshPatel"
+      },
+      "publishLabel": "1 month ago",
+      "publishDateText": "1 month ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/mDG_Hx3BSUE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC-PU6BvZLyhJtIEjk4MHRjyZdevg",
+      "duration": "2:30:45",
+      "viewCount": 235000,
+      "viewCountLabel": "235K views",
+      "sourceKind": "subscriptions",
+      "firstSeenPass": 0,
+      "sourceKinds": [
+        "subscriptions"
+      ],
+      "source": "youtube",
+      "sourceCaptureFile": "data/tmp/youtube-subs-cache-refresh-youtube-1777732563134.capture",
+      "captureRunId": "cache-refresh-youtube-1777732563134",
+      "sourceNotes": [
+        "subscriptions pass 1 added zero videos",
+        "subscriptions pass 3 added zero videos",
+        "subscriptions pass 4 added zero videos",
+        "subscriptions pass 5 added zero videos"
+      ],
+      "publishedAtMs": 1775140888657,
+      "fetchedAtMs": 1777732888657,
+      "expiresAtMs": 1778596888657
+    },
+    "fetchedAtMs": 1777732888657,
+    "expiresAtMs": 1778596888657,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-7c9cfcb2f8",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "mDG_Hx3BSUE",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-03-22T17:18:39.316Z"
+  },
+  "historicalFeedRow": {
+    "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "url": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+    "excerpt": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "text": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "authorUsername": "DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/mDG_Hx3BSUE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC-PU6BvZLyhJtIEjk4MHRjyZdevg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+        "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/mDG_Hx3BSUE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC-PU6BvZLyhJtIEjk4MHRjyZdevg",
+        "videoId": "mDG_Hx3BSUE"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "mDG_Hx3BSUE",
+        "canonicalUrl": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+        "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+        "channelName": "Dwarkesh Patel",
+        "channelHandle": "DwarkeshPatel",
+        "thumbnailUrl": "https://i.ytimg.com/vi/mDG_Hx3BSUE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC-PU6BvZLyhJtIEjk4MHRjyZdevg",
+        "publishDateText": "1 month ago",
+        "duration": "2:30:45",
+        "url": "https://www.youtube.com/watch?v=mDG_Hx3BSUE"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "url": "https://www.youtube.com/watch?v=mDG_Hx3BSUE",
+    "excerpt": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "text": "Dylan Patel — The single biggest bottleneck to scaling AI compute",
+    "authorUsername": "@DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/mDG_Hx3BSUE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC-PU6BvZLyhJtIEjk4MHRjyZdevg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

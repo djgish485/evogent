@@ -1,0 +1,185 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47960778",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47960778",
+    "url": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+    "title": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "authorUsername": "pantalaimon",
+    "authorDisplayName": "pantalaimon",
+    "publishedAtMs": 1777547314000,
+    "payload": {
+      "source": "hackernews",
+      "id": 47960778,
+      "sourceId": "47960778",
+      "type": "story",
+      "title": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+      "text": null,
+      "fullText": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+      "full_text": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+      "bodyText": null,
+      "url": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+      "externalUrl": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+      "canonicalUrl": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+      "finalUrl": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+      "hnUrl": "https://news.ycombinator.com/item?id=47960778",
+      "by": "pantalaimon",
+      "authorUsername": "pantalaimon",
+      "authorDisplayName": "pantalaimon",
+      "score": 56,
+      "descendants": 67,
+      "commentCount": 67,
+      "time": 1777547314,
+      "publishedAt": "2026-04-30T11:08:34.000Z",
+      "publishedAtMs": 1777547314000,
+      "kids": [
+        47961239,
+        47968082,
+        47969833,
+        47968128,
+        47961658,
+        47961213,
+        47961034
+      ],
+      "fetchKind": "top",
+      "fetchContexts": [
+        "top"
+      ],
+      "sourceLists": [
+        "top"
+      ],
+      "topRank": 50,
+      "bestRank": null,
+      "newRank": null,
+      "ask": false,
+      "show": false,
+      "launch": false,
+      "isAskHn": false,
+      "isShowHn": false,
+      "isLaunchHn": false,
+      "domain": "heise.de",
+      "ogDescription": null,
+      "ogImage": null,
+      "ogImageUrl": null,
+      "mediaUrls": [],
+      "metadata": {
+        "title": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+        "score": 56,
+        "commentCount": 67,
+        "author": "pantalaimon",
+        "hnUrl": "https://news.ycombinator.com/item?id=47960778",
+        "canonicalUrl": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+        "storyType": "story",
+        "ask": false,
+        "show": false,
+        "launch": false,
+        "ogDescription": null,
+        "ogImage": null,
+        "sourceLists": [
+          "top"
+        ],
+        "topRank": 50,
+        "bestRank": null,
+        "newRank": null
+      },
+      "fetchedAtMs": 1777627958840,
+      "expiresAtMs": 1777757558840
+    },
+    "fetchedAtMs": 1777627958840,
+    "expiresAtMs": 1777757558840,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-6d37287825",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47960778",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T11:08:34.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "url": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+    "excerpt": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "text": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "authorUsername": "pantalaimon",
+    "authorDisplayName": "pantalaimon",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 27,
+      "reposts": 0,
+      "replies": 20,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47960778"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "url": "https://www.heise.de/en/news/1-4-GW-Huge-battery-storage-at-former-Grohnde-nuclear-power-plant-11277367.html",
+    "excerpt": "Hacker News discussion: 56 points, 67 comments.",
+    "text": "1.4 GW: battery storage at former Grohnde nuclear power plant",
+    "authorUsername": "pantalaimon",
+    "authorDisplayName": "pantalaimon",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.hnUrl"
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "Jd6elWlKG-g",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "Jd6elWlKG-g",
+    "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+    "title": "Why Don't Blue Whales Eat Fish?",
+    "authorUsername": "MinuteEarth",
+    "authorDisplayName": "MinuteEarth",
+    "publishedAtMs": 1777574354532,
+    "payload": {
+      "videoId": "Jd6elWlKG-g",
+      "canonicalUrl": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+      "title": "Why Don't Blue Whales Eat Fish?",
+      "channelName": "MinuteEarth",
+      "channelUrl": "https://www.youtube.com/@MinuteEarth",
+      "channelHandle": "MinuteEarth",
+      "channel": {
+        "name": "MinuteEarth",
+        "url": "https://www.youtube.com/@MinuteEarth",
+        "handle": "MinuteEarth"
+      },
+      "publishLabel": "2 hours ago",
+      "publishDateText": "2 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/Jd6elWlKG-g/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBI-FBCkSkNGp4dE7hO1WVeaS49zA",
+      "duration": "2:30",
+      "viewCount": 8800,
+      "viewCountLabel": "8.8K views",
+      "sourceKind": "home",
+      "firstSeenPass": 1,
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+      "source": "youtube",
+      "sourceId": "Jd6elWlKG-g",
+      "publishedAtMs": 1777574354532,
+      "extraction": {
+        "taskId": "cache-refresh-youtube-1777581322323",
+        "runId": "cache-refresh-youtube-1777581322323",
+        "sourceKinds": [
+          "home"
+        ],
+        "policy": "youtube-cache"
+      }
+    },
+    "fetchedAtMs": 1777581554532,
+    "expiresAtMs": 1778445554532,
+    "seenByCurationAtMs": 1777593113500
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-0a7d8c4e36",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "Jd6elWlKG-g",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T18:39:14.532Z"
+  },
+  "historicalFeedRow": {
+    "title": "Why Don't Blue Whales Eat Fish?",
+    "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+    "excerpt": "Why Don't Blue Whales Eat Fish?",
+    "text": "2:30\nWhy Don't Blue Whales Eat Fish?\nMinuteEarth\n8.8K views",
+    "authorUsername": "MinuteEarth",
+    "authorDisplayName": "MinuteEarth",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/Jd6elWlKG-g/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBI-FBCkSkNGp4dE7hO1WVeaS49zA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 8800
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+        "title": "Why Don't Blue Whales Eat Fish?",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/Jd6elWlKG-g/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBI-FBCkSkNGp4dE7hO1WVeaS49zA",
+        "videoId": "Jd6elWlKG-g"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "Jd6elWlKG-g",
+        "canonicalUrl": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+        "title": "Why Don't Blue Whales Eat Fish?",
+        "channelName": "MinuteEarth",
+        "channelHandle": "MinuteEarth",
+        "thumbnailUrl": "https://i.ytimg.com/vi/Jd6elWlKG-g/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBI-FBCkSkNGp4dE7hO1WVeaS49zA",
+        "publishDateText": "2 hours ago",
+        "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+        "publishDate": "2026-04-30T18:39:14.532Z"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Why Don't Blue Whales Eat Fish?",
+    "url": "https://www.youtube.com/watch?v=Jd6elWlKG-g",
+    "excerpt": "Why Don't Blue Whales Eat Fish?",
+    "text": "Why Don't Blue Whales Eat Fish?",
+    "authorUsername": "MinuteEarth",
+    "authorDisplayName": "MinuteEarth",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/Jd6elWlKG-g/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBI-FBCkSkNGp4dE7hO1WVeaS49zA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

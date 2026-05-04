@@ -1,0 +1,134 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47965593",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47965593",
+    "url": "https://fsfe.org/activities/radiodirective/radiodirective.html",
+    "title": "Radio Lockdown Averted",
+    "authorUsername": "M95D",
+    "authorDisplayName": "M95D",
+    "publishedAtMs": 1777569747000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47965593",
+      "hnId": 47965593,
+      "type": "story",
+      "title": "Radio Lockdown Averted",
+      "url": "https://fsfe.org/activities/radiodirective/radiodirective.html",
+      "originalUrl": "https://fsfe.org/activities/radiodirective/radiodirective.html",
+      "discussionUrl": "https://news.ycombinator.com/item?id=47965593",
+      "authorUsername": "M95D",
+      "authorDisplayName": "M95D",
+      "publishedAtMs": 1777569747000,
+      "score": 7,
+      "commentCount": 0,
+      "kids": [],
+      "listRank": 46,
+      "fetchedFrom": {
+        "topStoriesLimit": 50,
+        "bestStoriesLimit": 30,
+        "usageProfile": "medium"
+      },
+      "socialImage": "https://fsfe.org/graphics/logo-text_square.png",
+      "socialImageEvidence": {
+        "status": "verified",
+        "source": "og-or-twitter-image"
+      }
+    },
+    "fetchedAtMs": 1777574348329,
+    "expiresAtMs": 1777703948329,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-702ebf1898",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47965593",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T17:22:27.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Radio Lockdown Averted",
+    "url": "https://fsfe.org/activities/radiodirective/radiodirective.html",
+    "excerpt": "Radio Lockdown Averted",
+    "text": "Radio Lockdown Averted",
+    "authorUsername": "M95D",
+    "authorDisplayName": "M95D",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 3,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47965593"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Radio Lockdown Averted",
+    "url": "https://fsfe.org/activities/radiodirective/radiodirective.html",
+    "excerpt": "Hacker News discussion: 7 points, 0 comments.",
+    "text": "Radio Lockdown Averted",
+    "authorUsername": "M95D",
+    "authorDisplayName": "M95D",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metrics.likes",
+    "metadata.hnUrl"
+  ]
+}

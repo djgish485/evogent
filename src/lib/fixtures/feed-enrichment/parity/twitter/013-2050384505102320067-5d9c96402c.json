@@ -1,0 +1,196 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050384505102320067",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050384505102320067",
+    "url": "https://x.com/NinaDSchick/status/2050384505102320067",
+    "title": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of t",
+    "authorUsername": "NinaDSchick",
+    "authorDisplayName": "Nina Schick",
+    "publishedAtMs": 1777684734000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050384505102320067",
+      "url": "https://x.com/NinaDSchick/status/2050384505102320067",
+      "title": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of t",
+      "authorUsername": "NinaDSchick",
+      "authorDisplayName": "Nina Schick",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2026475433986756608/jnFrTvnm_normal.jpg",
+      "text": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even really exist yet.\n\n(A free layer of ChatGPT is not it.)",
+      "full_text": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even really exist yet.\n\n(A free layer of ChatGPT is not it.)",
+      "publishedAt": "2026-05-02T01:18:54.000Z",
+      "publishedAtMs": 1777684734000,
+      "metrics": {
+        "replies": 1,
+        "reposts": 5,
+        "likes": 8,
+        "views": 1303
+      },
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHP8JnhWQAA0Gsi?format=jpg&name=small",
+          "alt": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHP8JnhWQAA0Gsi?format=jpg&name=small"
+      ],
+      "quotedTweet": {
+        "authorUsername": "Futurenvesting",
+        "authorDisplayName": "Tannor Manson",
+        "authorAvatarUrl": null,
+        "text": "Anthropic is now showing off $44 BILLION in annual recurring revenue.\n\nThis is up $14 billion (+46.6%) since last month!\n\nBULLISH for AI Infrastructure $NVDA $AMD",
+        "url": null
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "raw_data": {
+        "surface": "timeline",
+        "capturedFromUrl": "https://x.com/home",
+        "userNameBlock": "Nina Schick\n@NinaDSchick\n·\n5h",
+        "articleText": "Nina Schick\n@NinaDSchick\n·\n5h\nLast month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even really exist yet.\n\n(A free layer of ChatGPT is not it.)\nQuote\nTannor Manson\n@Futurenvesting\n·\n13h\nAnthropic is now showing off $44 BILLION in annual recurring revenue.\n\nThis is up $14 billion (+46.6%) since last month!\n\nBULLISH for AI Infrastructure $NVDA $AMD\n1\n5\n8\n1.3K",
+        "quotedTweet": {
+          "authorUsername": "Futurenvesting",
+          "authorDisplayName": "Tannor Manson",
+          "authorAvatarUrl": null,
+          "text": "Anthropic is now showing off $44 BILLION in annual recurring revenue.\n\nThis is up $14 billion (+46.6%) since last month!\n\nBULLISH for AI Infrastructure $NVDA $AMD",
+          "url": null
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "cacheSurfaces": [
+        "home_for_you"
+      ],
+      "cacheRefresh": {
+        "runId": "cache-refresh-twitter-1777704062905",
+        "fetchedAtMs": 1777704649723,
+        "expiresAtMs": 1777920649723,
+        "sourceMode": "browser",
+        "surfaces": [
+          "home_for_you"
+        ],
+        "captureFiles": [
+          "data/tmp/tweet-home-cache-refresh-twitter-1777704062905.capture",
+          "data/tmp/tweet-following-cache-refresh-twitter-1777704062905.capture"
+        ],
+        "ttlHours": 60
+      }
+    },
+    "fetchedAtMs": 1777704649723,
+    "expiresAtMs": 1777920649723,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-e0dea9ab61",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050384505102320067",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T01:18:54.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even rea",
+    "url": "https://x.com/NinaDSchick/status/2050384505102320067",
+    "excerpt": null,
+    "text": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even really exist yet.\n\n(A free layer of ChatGPT is not it.)",
+    "authorUsername": "NinaDSchick",
+    "authorDisplayName": "Nina Schick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2026475433986756608/jnFrTvnm_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHP8JnhWQAA0Gsi?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of t",
+    "url": "https://x.com/NinaDSchick/status/2050384505102320067",
+    "excerpt": null,
+    "text": "Last month Anthropic was on 30bN.\n\nWe are so compute and Intelligence constrained.\n\nAnthropic doesn’t even serve 1% of the enterprise - and as for Individual AI it doesn’t even really exist yet.\n\n(A free layer of ChatGPT is not it.)",
+    "authorUsername": "NinaDSchick",
+    "authorDisplayName": "Nina Schick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2026475433986756608/jnFrTvnm_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHP8JnhWQAA0Gsi?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 8,
+      "reposts": 5,
+      "replies": 1,
+      "views": 1303
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Anthropic is now showing off $44 BILLION in annual recurring revenue.\n\nThis is up $14 billion (+46.6%) since last month!\n\nBULLISH for AI Infrastructure $NVDA $AMD",
+        "author": {
+          "username": "Futurenvesting",
+          "displayName": "Tannor Manson"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views",
+    "metadata.quotedTweet"
+  ]
+}

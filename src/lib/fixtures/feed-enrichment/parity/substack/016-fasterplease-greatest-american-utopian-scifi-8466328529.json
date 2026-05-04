@@ -1,0 +1,114 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "fasterplease-greatest-american-utopian-scifi",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "fasterplease-greatest-american-utopian-scifi",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "title": "What's the 'greatest American utopian science fiction story' ever written?",
+    "authorUsername": null,
+    "authorDisplayName": "James Pethokoukis",
+    "publishedAtMs": 1777032401000,
+    "payload": {
+      "publication": "Faster, Please!",
+      "title": "What's the 'greatest American utopian science fiction story' ever written?",
+      "subtitle": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+      "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+      "publishedAt": "2026-04-24T12:00:00Z",
+      "readTime": "4 min read"
+    },
+    "fetchedAtMs": 1777294827357,
+    "expiresAtMs": 1777510827357,
+    "seenByCurationAtMs": 1777302915638
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-c56c21f584",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "fasterplease-greatest-american-utopian-scifi",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-24T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "What's the 'greatest American utopian science fiction story' ever written?",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "excerpt": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+    "text": "What's the 'greatest American utopian science fiction story' ever written? Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir.",
+    "authorUsername": null,
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "What's the 'greatest American utopian science fiction story' ever written?",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050354576973504537",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050354576973504537",
+    "url": "https://x.com/codybaldwin/status/2050354576973504537",
+    "title": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. \n\nSaying everyone should learn a an i",
+    "authorUsername": "codybaldwin",
+    "authorDisplayName": "Cody",
+    "publishedAtMs": 1777677599000,
+    "payload": {
+      "surface": "following",
+      "sourceId": "2050354576973504537",
+      "url": "https://x.com/codybaldwin/status/2050354576973504537",
+      "authorUsername": "codybaldwin",
+      "authorDisplayName": "Cody",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1642456526161076225/AZ5QbNZf_normal.jpg",
+      "text": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. \n\nSaying everyone should learn a an input type is just the same “force input” state but for an entire category of input.\n\nThat requires totalitarian activity. \n\nOne of the biggest blindspots in",
+      "title": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. \n\nSaying everyone should learn a an i",
+      "publishedAt": "2026-05-01T23:19:59.000Z",
+      "publishedAtMs": 1777677599000,
+      "media": [],
+      "metricsText": "Cody @codybaldwin · 3h The thing that makes us all the same is that we are unpredictable. Input ≠ output. Saying everyone should learn a an input type is just the same “force input” state but for an entire category of input. That requires totalitarian activity. One of the biggest blindspots in Show more 12",
+      "quotedTweet": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "surfaces": [
+        "following"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-925961b659",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050354576973504537",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T23:19:59.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. Saying everyone should learn a an input type is just the same “f...",
+    "url": "https://x.com/codybaldwin/status/2050354576973504537",
+    "excerpt": null,
+    "text": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. Saying everyone should learn a an input type is just the same “force input” state but for an entire category of input. That requires totalitarian activity. One of the biggest blindspots in",
+    "authorUsername": "codybaldwin",
+    "authorDisplayName": "Cody",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1642456526161076225/AZ5QbNZf_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. \n\nSaying everyone should learn a an i",
+    "url": "https://x.com/codybaldwin/status/2050354576973504537",
+    "excerpt": null,
+    "text": "The thing that makes us all the same is that we are unpredictable. Input ≠ output. \n\nSaying everyone should learn a an input type is just the same “force input” state but for an entire category of input.\n\nThat requires totalitarian activity. \n\nOne of the biggest blindspots in",
+    "authorUsername": "codybaldwin",
+    "authorDisplayName": "Cody",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1642456526161076225/AZ5QbNZf_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "text"
+  ]
+}

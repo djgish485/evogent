@@ -1,0 +1,197 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050234809188761677",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050234809188761677",
+    "url": "https://x.com/paulg/status/2050234809188761677",
+    "title": "Paul Graham: I was trying to think what's the opposite of this kind of company. Who really re",
+    "authorUsername": "paulg",
+    "authorDisplayName": "Paul Graham",
+    "publishedAtMs": 1777649044000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050234809188761677",
+      "id": "2050234809188761677",
+      "url": "https://x.com/paulg/status/2050234809188761677",
+      "title": "Paul Graham: I was trying to think what's the opposite of this kind of company. Who really re",
+      "text": "I was trying to think what's the opposite of this kind of company. Who really respects their customers? And I realized (I swear I didn't set this up) the answer is YC. YC's customers are Tony Xu and Brian Chesky and the Collisons. Respect? More like awe, frankly.",
+      "authorUsername": "paulg",
+      "authorDisplayName": "Paul Graham",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1824002576/pg-railsconf_normal.jpg",
+      "publishedAt": "2026-05-01T15:24:04.000Z",
+      "publishedAtMs": 1777649044000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "inReplyToUsername": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "replyCapture": {
+        "source": "profile_tweets",
+        "requestedHandle": "paulg"
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "raw_data": {
+        "sourceSurface": "profile_tweets",
+        "requestedHandle": "paulg",
+        "pass": 0,
+        "quotedTweet": null,
+        "linkCard": null,
+        "urlEntities": []
+      },
+      "cacheRefresh": {
+        "runId": "cache-refresh-twitter-1777673462663",
+        "taskId": "cache-refresh-twitter-1777673462663",
+        "capturedAtMs": 1777673876573,
+        "sourceFiles": [
+          {
+            "file": "tweet-account-karpathy-cache-refresh-twitter-1777673462663.capture",
+            "kind": "user_tweets",
+            "handle": "karpathy",
+            "query": null,
+            "count": 10
+          },
+          {
+            "file": "tweet-account-patrickc-cache-refresh-twitter-1777673462663.capture",
+            "kind": "user_tweets",
+            "handle": "patrickc",
+            "query": null,
+            "count": 10
+          },
+          {
+            "file": "tweet-account-paulg-cache-refresh-twitter-1777673462663.capture",
+            "kind": "user_tweets",
+            "handle": "paulg",
+            "query": null,
+            "count": 10
+          },
+          {
+            "file": "tweet-following-cache-refresh-twitter-1777673462663.capture",
+            "kind": "following",
+            "handle": null,
+            "query": null,
+            "count": 37
+          },
+          {
+            "file": "tweet-home-cache-refresh-twitter-1777673462663.capture",
+            "kind": "home",
+            "handle": null,
+            "query": null,
+            "count": 52
+          },
+          {
+            "file": "tweet-search-ai-agents-cache-refresh-twitter-1777673462663.capture",
+            "kind": "search",
+            "handle": null,
+            "query": "AI agents",
+            "count": 12
+          },
+          {
+            "file": "tweet-search-iran-middle-east-cache-refresh-twitter-1777673462663.capture",
+            "kind": "search",
+            "handle": null,
+            "query": "Iran Middle East",
+            "count": 12
+          }
+        ]
+      }
+    },
+    "fetchedAtMs": 1777673876573,
+    "expiresAtMs": 1777889876573,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-b8a27537c6",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050234809188761677",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T15:24:04.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I was trying to think what's the opposite of this kind of company. Who really respects their customers? And I realized (I swear I didn't set this up) the answer is YC. YC's custome",
+    "url": "https://x.com/paulg/status/2050234809188761677",
+    "excerpt": null,
+    "text": "I was trying to think what's the opposite of this kind of company. Who really respects their customers? And I realized (I swear I didn't set this up) the answer is YC. YC's customers are Tony Xu and Brian Chesky and the Collisons. Respect? More like awe, frankly.",
+    "authorUsername": "paulg",
+    "authorDisplayName": "Paul Graham",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1824002576/pg-railsconf_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Paul Graham: I was trying to think what's the opposite of this kind of company. Who really re",
+    "url": "https://x.com/paulg/status/2050234809188761677",
+    "excerpt": null,
+    "text": "I was trying to think what's the opposite of this kind of company. Who really respects their customers? And I realized (I swear I didn't set this up) the answer is YC. YC's customers are Tony Xu and Brian Chesky and the Collisons. Respect? More like awe, frankly.",
+    "authorUsername": "paulg",
+    "authorDisplayName": "Paul Graham",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1824002576/pg-railsconf_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "DGtUUMNYLcc",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "DGtUUMNYLcc",
+    "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+    "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "DGtUUMNYLcc",
+      "canonicalUrl": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+      "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+      "channelName": "Y Combinator",
+      "channelUrl": "https://www.youtube.com/@ycombinator",
+      "channelHandle": "@ycombinator",
+      "channel": {
+        "name": "Y Combinator",
+        "url": "https://www.youtube.com/@ycombinator",
+        "handle": "@ycombinator"
+      },
+      "publishLabel": "2 hours ago",
+      "publishDateText": "2 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/DGtUUMNYLcc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC0SacyCTn23Z24e1W3YF-f5fiS6A",
+      "duration": "37:53",
+      "viewCount": 1200,
+      "viewCountLabel": "1.2K views",
+      "sourceKind": "home",
+      "firstSeenPass": 0,
+      "source": "youtube",
+      "sourceId": "DGtUUMNYLcc",
+      "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+      "capturePath": "data/tmp/youtube-home-cache-refresh-youtube-1777653662513.capture",
+      "captureRunId": "cache-refresh-youtube-1777653662513"
+    },
+    "fetchedAtMs": 1777653862902,
+    "expiresAtMs": 1778517862902,
+    "seenByCurationAtMs": 1777658903314
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-8e0c994ae9",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "DGtUUMNYLcc",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T16:08:23.086Z"
+  },
+  "historicalFeedRow": {
+    "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+    "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+    "excerpt": "Y Combinator · 2 hours ago",
+    "text": "YC’s video frames recursion as another scaling axis for AI. That fits this thread because recursion, workload evaluation, and memory mechanics are all about making models useful over longer tasks.",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/DGtUUMNYLcc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC0SacyCTn23Z24e1W3YF-f5fiS6A"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+        "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/DGtUUMNYLcc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC0SacyCTn23Z24e1W3YF-f5fiS6A",
+        "videoId": "DGtUUMNYLcc"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "DGtUUMNYLcc",
+        "canonicalUrl": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+        "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+        "channelName": "Y Combinator",
+        "channelHandle": "@ycombinator",
+        "thumbnailUrl": "https://i.ytimg.com/vi/DGtUUMNYLcc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC0SacyCTn23Z24e1W3YF-f5fiS6A",
+        "publishDateText": "2 hours ago",
+        "viewCount": 1200,
+        "duration": "37:53",
+        "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+    "url": "https://www.youtube.com/watch?v=DGtUUMNYLcc",
+    "excerpt": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+    "text": "Beyond Bigger Models: Recursion As The Next Scaling Axis In AI",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/DGtUUMNYLcc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC0SacyCTn23Z24e1W3YF-f5fiS6A"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

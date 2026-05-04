@@ -1,0 +1,189 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050319564219809833",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050319564219809833",
+    "url": "https://x.com/bnielson01/status/2050319564219809833",
+    "title": "Bruce Nielson@bnielson01·2h: \"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The",
+    "authorUsername": "bnielson01",
+    "authorDisplayName": "Bruce Nielson@bnielson01·2h",
+    "publishedAtMs": 1777669251000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050319564219809833",
+      "id": "2050319564219809833",
+      "url": "https://x.com/bnielson01/status/2050319564219809833",
+      "title": "Bruce Nielson@bnielson01·2h: \"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The ",
+      "text": "\"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The moment they let go, quality collapses, and they know it. This matches what every serious shop has quietly figured out. The developers",
+      "authorUsername": "bnielson01",
+      "authorDisplayName": "Bruce Nielson@bnielson01·2h",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1859603771204173824/BkAmKCbp_normal.jpg",
+      "publishedAt": "2026-05-01T21:00:51.000Z",
+      "publishedAtMs": 1777669251000,
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+      ],
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small",
+          "alt": "Image"
+        }
+      ],
+      "quotedTweet": {
+        "authorUsername": null,
+        "authorDisplayName": null,
+        "text": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers"
+      },
+      "inReplyToStatusId": null,
+      "inReplyToUsername": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "metrics": {
+        "reply": "0 Replies. Reply",
+        "retweet": "1 repost. Repost",
+        "like": "1 Like. Like",
+        "bookmark": "Bookmark"
+      },
+      "raw_data": {
+        "kind": "following",
+        "pass": 3,
+        "statusAnchors": [
+          {
+            "href": "https://x.com/bnielson01/status/2050319564219809833",
+            "id": "2050319564219809833"
+          },
+          {
+            "href": "https://x.com/sukh_saroy/status/2050221973406699532/photo/1",
+            "id": "2050221973406699532"
+          },
+          {
+            "href": "https://x.com/bnielson01/status/2050319564219809833/analytics",
+            "id": "2050319564219809833"
+          }
+        ],
+        "userText": "Bruce Nielson@bnielson01·2h",
+        "tweetTexts": [
+          "\"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The moment they let go, quality collapses, and they know it. This matches what every serious shop has quietly figured out. The developers",
+          "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers"
+        ],
+        "replyText": ""
+      },
+      "cacheRefresh": {
+        "taskId": "cache-refresh-twitter-1777677662701",
+        "captureKind": "following",
+        "fetchedAtMs": 1777677916850,
+        "expiresAtMs": 1777893916850
+      }
+    },
+    "fetchedAtMs": 1777677916850,
+    "expiresAtMs": 1777893916850,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-784cd95877",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050319564219809833",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T21:00:51.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "\"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The moment...",
+    "url": "https://x.com/bnielson01/status/2050319564219809833",
+    "excerpt": null,
+    "text": "\"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The moment they let go, quality collapses, and they know it. This matches what every serious shop has quietly figured out. The developers",
+    "authorUsername": "bnielson01",
+    "authorDisplayName": "Bruce Nielson",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1859603771204173824/BkAmKCbp_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Bruce Nielson@bnielson01·2h: \"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The",
+    "url": "https://x.com/bnielson01/status/2050319564219809833",
+    "excerpt": null,
+    "text": "\"The paper's biggest insight is in one sentence: experienced developers feel positive about AI agents only when they remain in control. The moment they let go, quality collapses, and they know it. This matches what every serious shop has quietly figured out. The developers",
+    "authorUsername": "bnielson01",
+    "authorDisplayName": "Bruce Nielson@bnielson01·2h",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1859603771204173824/BkAmKCbp_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers",
+        "author": {
+          "username": "unknown_quote_author"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "authorDisplayName",
+    "metadata.quotedTweet"
+  ]
+}

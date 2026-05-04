@@ -1,0 +1,128 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+    "url": "https://www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+    "title": "Jesus: Ancient Revolutionary, but Not the Father of the Enlightenment",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "RICHARD HANANIA'S NEWSLETTER",
+    "publishedAtMs": 1776902400000,
+    "payload": {
+      "url": "https://www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+      "host": "www.richardhanania.com",
+      "slug": "jesus-ancient-revolutionary-but-not",
+      "title": "Jesus: Ancient Revolutionary, but Not the Father of the Enlightenment",
+      "rawTitle": "RICHARD HANANIA'S NEWSLETTER\nAPR 23\nJesus: Ancient Revolutionary, but Not the Father of the Enlightenment\nReview of Tom Holland's Dominion\nPREVIEW∙RICHARD HANANIA∙9 MIN READ",
+      "publicationName": "RICHARD HANANIA'S NEWSLETTER",
+      "author": null,
+      "authorDisplayName": "RICHARD HANANIA'S NEWSLETTER",
+      "authorUsername": "richardhanania",
+      "summary": "Review of Tom Holland's Dominion",
+      "excerpt": "Review of Tom Holland's Dominion",
+      "timestampLabel": "APR 23",
+      "publishedAtMs": 1776902400000,
+      "readingMeta": "PREVIEW∙RICHARD HANANIA∙9 MIN READ",
+      "discoverySurface": "inbox",
+      "extractedAtMs": 1777709902284,
+      "fetchedAtMs": 1777709928008,
+      "expiresAtMs": 1777925928008
+    },
+    "fetchedAtMs": 1777709928008,
+    "expiresAtMs": 1777925928008,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-9f79f8dc6f",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-23T11:16:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Jesus: Ancient Revolutionary, but Not the Father of the Enlightenment",
+    "url": "https://www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+    "excerpt": "Review of Tom Holland's Dominion",
+    "text": "Review of Tom Holland's Dominion",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "Richard Hanania",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!qxuo!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ff5e263f1-710f-4845-9372-e092435263ed_2016x2016.jpeg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Jesus: Ancient Revolutionary, but Not the Father of the Enlightenment",
+    "url": "https://www.richardhanania.com/p/jesus-ancient-revolutionary-but-not",
+    "excerpt": "Review of Tom Holland's Dominion",
+    "text": "Review of Tom Holland's Dominion",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "RICHARD HANANIA'S NEWSLETTER",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

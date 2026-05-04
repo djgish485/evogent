@@ -1,0 +1,227 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050241848732524808",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050241848732524808",
+    "url": "https://x.com/chris_j_paxton/status/2050241848732524808",
+    "title": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+    "authorUsername": "chris_j_paxton",
+    "authorDisplayName": "Chris Paxton",
+    "publishedAtMs": 1777650723000,
+    "payload": {
+      "tweetId": "2050241848732524808",
+      "rest_id": "2050241848732524808",
+      "id": "2050241848732524808",
+      "url": "https://x.com/chris_j_paxton/status/2050241848732524808",
+      "text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+      "full_text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+      "authorUsername": "chris_j_paxton",
+      "authorDisplayName": "Chris Paxton",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1330994153518411777/2LfHg9GF_normal.jpg",
+      "publishedAt": "2026-05-01T15:52:03.000Z",
+      "publishedAtMs": 1777650723000,
+      "likes": 42,
+      "reposts": 6,
+      "replies": 7,
+      "viewCount": null,
+      "mediaUrls": [
+        "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+      ],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg",
+          "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+        }
+      ],
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "replyCapture": {
+        "source": "timeline",
+        "classification": "none",
+        "requestedHandle": null,
+        "authoredByRequestedAccount": null,
+        "visibleReplyBanner": false
+      },
+      "textCapture": {
+        "visibleText": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+        "textSource": "timeline_card",
+        "collapsedCardDetected": false,
+        "statusPageAttempted": false,
+        "statusPageRecovered": false,
+        "diagnostic": null
+      },
+      "raw_data": {
+        "rest_id": "2050241848732524808",
+        "text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+        "full_text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+        "core": {
+          "user_results": {
+            "result": {
+              "legacy": {
+                "screen_name": "chris_j_paxton",
+                "name": "Chris Paxton",
+                "profile_image_url_https": "https://pbs.twimg.com/profile_images/1330994153518411777/2LfHg9GF_normal.jpg"
+              }
+            }
+          }
+        },
+        "legacy": {
+          "id_str": "2050241848732524808",
+          "full_text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+          "favorite_count": 42,
+          "retweet_count": 6,
+          "reply_count": 7,
+          "created_at": "2026-05-01T15:52:03.000Z",
+          "entities": {
+            "media": [
+              {
+                "type": "photo",
+                "url": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg",
+                "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+              }
+            ]
+          },
+          "extended_entities": {
+            "media": [
+              {
+                "type": "photo",
+                "url": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg",
+                "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+              }
+            ]
+          }
+        },
+        "replyCapture": {
+          "source": "timeline",
+          "classification": "none",
+          "requestedHandle": null,
+          "authoredByRequestedAccount": null,
+          "visibleReplyBanner": false
+        },
+        "evogent_reply_capture": {
+          "source": "timeline",
+          "classification": "none",
+          "requestedHandle": null,
+          "authoredByRequestedAccount": null,
+          "visibleReplyBanner": false
+        },
+        "evogent_text_capture": {
+          "visibleText": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+          "textSource": "timeline_card",
+          "collapsedCardDetected": false,
+          "statusPageAttempted": false,
+          "statusPageRecovered": false,
+          "diagnostic": null
+        }
+      },
+      "cache": {
+        "sourceSurface": "home",
+        "capturedAt": "2026-05-01T18:48:11.016Z",
+        "taskId": "cache-refresh-twitter-1777661162540"
+      }
+    },
+    "fetchedAtMs": 1777661390928,
+    "expiresAtMs": 1777877390928,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-a2e8034b05",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050241848732524808",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T15:52:03.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+    "url": "https://x.com/chris_j_paxton/status/2050241848732524808",
+    "excerpt": null,
+    "text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+    "authorUsername": "chris_j_paxton",
+    "authorDisplayName": "Chris Paxton",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1330994153518411777/2LfHg9GF_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+    "url": "https://x.com/chris_j_paxton/status/2050241848732524808",
+    "excerpt": null,
+    "text": "Having a robot as a cleaning helper, where a human is right there beside them and can handle things the robot cant, will help them start the data flywheel i think",
+    "authorUsername": "chris_j_paxton",
+    "authorDisplayName": "Chris Paxton",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1330994153518411777/2LfHg9GF_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+    ],
+    "metrics": {
+      "likes": 42,
+      "reposts": 6,
+      "replies": 7,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies"
+  ]
+}

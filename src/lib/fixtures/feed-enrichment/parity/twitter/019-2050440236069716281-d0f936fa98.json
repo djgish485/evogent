@@ -1,0 +1,170 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050440236069716281",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050440236069716281",
+    "url": "https://x.com/pitdesi/status/2050440236069716281",
+    "title": "@pitdesi: The\n@SpiritAirlines\n social media is still responding saying that they are opera",
+    "authorUsername": "pitdesi",
+    "authorDisplayName": "Sheel Mohnot",
+    "publishedAtMs": 1777698022000,
+    "payload": {
+      "source": "twitter",
+      "tweetId": "2050440236069716281",
+      "id": "2050440236069716281",
+      "sourceId": "2050440236069716281",
+      "url": "https://x.com/pitdesi/status/2050440236069716281",
+      "title": "@pitdesi: The\n@SpiritAirlines\n social media is still responding saying that they are opera",
+      "text": "The\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!",
+      "visibleText": "Sheel Mohnot\n@pitdesi\n·\n5h\nThe\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!\nQuote\nSpirit Airlines\n@SpiritAirlines\n·\n5h\nReplying to @tleech_\nOur flights are operating as scheduled. The most important thing to know is that Spirit continues to operate and offer high-value travel options. DM us for further help.\n2\n1\n6\n3.8K",
+      "authorUsername": "pitdesi",
+      "authorDisplayName": "Sheel Mohnot",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1998468623392788480/dS-ftLeP_normal.jpg",
+      "publishedAt": "2026-05-02T05:00:22.000Z",
+      "publishedAtMs": 1777698022000,
+      "metrics": {
+        "replies": 2,
+        "reposts": 1,
+        "likes": 6,
+        "views": null
+      },
+      "replies": 2,
+      "reposts": 1,
+      "likes": 6,
+      "viewCount": null,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": {
+        "authorUsername": "SpiritAirlines",
+        "authorDisplayName": "Spirit Airlines",
+        "text": "Our flights are operating as scheduled. The most important thing to know is that Spirit continues to operate and offer high-value travel options. DM us for further help."
+      },
+      "inReplyToStatusId": null,
+      "replyingTo": "@tleech_",
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "textCapture": {
+        "textSource": "timeline_card",
+        "visibleText": "The\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!",
+        "text": "The\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": null,
+        "requestedHandle": null
+      },
+      "raw_data": {
+        "quotedTweet": {
+          "authorUsername": "SpiritAirlines",
+          "authorDisplayName": "Spirit Airlines",
+          "text": "Our flights are operating as scheduled. The most important thing to know is that Spirit continues to operate and offer high-value travel options. DM us for further help."
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "cacheCaptureKind": "following",
+      "fetchedAtMs": 1777716360628,
+      "expiresAtMs": 1777932360628
+    },
+    "fetchedAtMs": 1777716360628,
+    "expiresAtMs": 1777932360628,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-0cc36dc16f",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050440236069716281",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T05:00:22.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!",
+    "url": "https://x.com/pitdesi/status/2050440236069716281",
+    "excerpt": null,
+    "text": "The\n@SpiritAirlines\n social media is still responding saying that they are operating as scheduled, clearly not the case!",
+    "authorUsername": "pitdesi",
+    "authorDisplayName": "Sheel Mohnot",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1998468623392788480/dS-ftLeP_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": null,
+    "url": null,
+    "excerpt": null,
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "url",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "authorAvatarUrl"
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050428861494829178",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050428861494829178",
+    "url": "https://x.com/ToKTeacher/status/2050428861494829178",
+    "title": "@ToKTeacher: Would you like to understand explanatory universality? Here we go!",
+    "authorUsername": "ToKTeacher",
+    "authorDisplayName": "Brett Hall",
+    "publishedAtMs": 1777695310000,
+    "payload": {
+      "source": "twitter",
+      "tweetId": "2050428861494829178",
+      "id": "2050428861494829178",
+      "sourceId": "2050428861494829178",
+      "url": "https://x.com/ToKTeacher/status/2050428861494829178",
+      "title": "@ToKTeacher: Would you like to understand explanatory universality? Here we go!",
+      "text": "Would you like to understand explanatory universality? Here we go!",
+      "visibleText": "Brett Hall\n@ToKTeacher\n·\n5h\nWould you like to understand explanatory universality? Here we go!\nThe Farthest Reaches\nFrom amazon.com\n2\n360",
+      "authorUsername": "ToKTeacher",
+      "authorDisplayName": "Brett Hall",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1599154524459241472/7RQWUjkC_normal.jpg",
+      "publishedAt": "2026-05-02T04:15:10.000Z",
+      "publishedAtMs": 1777695310000,
+      "metrics": {
+        "replies": 0,
+        "reposts": 0,
+        "likes": 2,
+        "views": null
+      },
+      "replies": 0,
+      "reposts": 0,
+      "likes": 2,
+      "viewCount": null,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "replyingTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "textCapture": {
+        "textSource": "timeline_card",
+        "visibleText": "Would you like to understand explanatory universality? Here we go!",
+        "text": "Would you like to understand explanatory universality? Here we go!"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": null,
+        "requestedHandle": null
+      },
+      "raw_data": {
+        "quotedTweet": null,
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "cacheCaptureKind": "following",
+      "fetchedAtMs": 1777716360628,
+      "expiresAtMs": 1777932360628
+    },
+    "fetchedAtMs": 1777716360628,
+    "expiresAtMs": 1777932360628,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-a570539814",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050428861494829178",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T04:15:10.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Would you like to understand explanatory universality? Here we go!",
+    "url": "https://x.com/ToKTeacher/status/2050428861494829178",
+    "excerpt": null,
+    "text": "Would you like to understand explanatory universality? Here we go!",
+    "authorUsername": "ToKTeacher",
+    "authorDisplayName": "Brett Hall",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1599154524459241472/7RQWUjkC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 1,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/IElAvOD3uh",
+        "title": "The Farthest Reaches",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": [
+        {
+          "url": "https://t.co/IElAvOD3uh",
+          "expandedUrl": "https://t.co/IElAvOD3uh",
+          "displayUrl": "t.co"
+        },
+        {
+          "url": "https://t.co/IElAvOD3uh",
+          "expandedUrl": "https://t.co/IElAvOD3uh",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "@ToKTeacher: Would you like to understand explanatory universality? Here we go!",
+    "url": "https://x.com/ToKTeacher/status/2050428861494829178",
+    "excerpt": null,
+    "text": "Would you like to understand explanatory universality? Here we go!",
+    "authorUsername": "ToKTeacher",
+    "authorDisplayName": "Brett Hall",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1599154524459241472/7RQWUjkC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 2,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metadata.linkCard",
+    "metadata.urlEntities"
+  ]
+}

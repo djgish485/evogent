@@ -1,0 +1,127 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.astralcodexten.com:links-for-april-2026",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.astralcodexten.com:links-for-april-2026",
+    "url": "https://www.astralcodexten.com/p/links-for-april-2026",
+    "title": "Links For April 2026",
+    "authorUsername": "astralcodexten",
+    "authorDisplayName": "Scott Alexander",
+    "publishedAtMs": 1776965609000,
+    "payload": {
+      "source": "substack",
+      "sourceId": "www.astralcodexten.com:links-for-april-2026",
+      "url": "https://www.astralcodexten.com/p/links-for-april-2026",
+      "title": "Links For April 2026",
+      "excerpt": "...",
+      "publication": "www.astralcodexten.com",
+      "publicationHost": "www.astralcodexten.com",
+      "publicationHandle": "astralcodexten",
+      "authorUsername": "astralcodexten",
+      "authorDisplayName": "Scott Alexander",
+      "publishedAtMs": 1776965609000,
+      "postDate": "2026-04-23T17:33:29.849Z",
+      "audience": "everyone",
+      "coverImage": "https://substack-post-media.s3.amazonaws.com/public/images/25bbdbf4-f560-4b64-b61c-bea7b0acd382_670x402.png",
+      "slug": "links-for-april-2026",
+      "postId": 191203347,
+      "type": "newsletter",
+      "freePreview": false,
+      "origin": "browser_publication"
+    },
+    "fetchedAtMs": 1777059453516,
+    "expiresAtMs": 1777232253516,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-ec9c634b09",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.astralcodexten.com:links-for-april-2026",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-23T17:33:29.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Links For April 2026",
+    "url": "https://www.astralcodexten.com/p/links-for-april-2026",
+    "excerpt": "Scott Alexander's monthly link aggregator across AI, science, economics, and culture — the highest signal-density reading of the month.",
+    "text": "Scott Alexander's monthly link aggregator across AI, science, economics, and culture — the highest signal-density reading of the month.",
+    "authorUsername": "astralcodexten",
+    "authorDisplayName": "Scott Alexander",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Links For April 2026",
+    "url": "https://www.astralcodexten.com/p/links-for-april-2026",
+    "excerpt": "...",
+    "text": "",
+    "authorUsername": "astralcodexten",
+    "authorDisplayName": "Scott Alexander",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

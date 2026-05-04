@@ -1,0 +1,157 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2047769406701211953",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2047769406701211953",
+    "url": "https://x.com/s8mb/status/2047769406701211953",
+    "title": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+    "authorUsername": "s8mb",
+    "authorDisplayName": "Sam Bowman",
+    "publishedAtMs": 1777061246000,
+    "payload": {
+      "tweetId": "2047769406701211953",
+      "authorUsername": "s8mb",
+      "authorDisplayName": "Sam Bowman",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1713244259954937856/BnnCvI4S_normal.jpg",
+      "text": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+      "publishedAtIso": "2026-04-24T20:07:26.000Z",
+      "publishedAtMs": 1777061246000,
+      "url": "https://x.com/s8mb/status/2047769406701211953",
+      "quotedTweet": null,
+      "inReplyToHandle": null,
+      "inReplyToStatusId": null,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HGsjbAGXQAEppKS?format=jpg&name=small"
+        }
+      ],
+      "engagement": {
+        "replies": "12",
+        "retweets": "11",
+        "likes": "120",
+        "views": "6245"
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "surface": "home",
+      "raw_data": {
+        "quotedTweet": null,
+        "inReplyToHandle": null,
+        "inReplyToStatusId": null,
+        "media": [
+          {
+            "type": "photo",
+            "url": "https://pbs.twimg.com/media/HGsjbAGXQAEppKS?format=jpg&name=small"
+          }
+        ],
+        "engagement": {
+          "replies": "12",
+          "retweets": "11",
+          "likes": "120",
+          "views": "6245"
+        }
+      }
+    },
+    "fetchedAtMs": 1777098830679,
+    "expiresAtMs": 1777314830679,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-d8ff35e6fa",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2047769406701211953",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-24T20:07:26.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+    "url": "https://x.com/s8mb/status/2047769406701211953",
+    "excerpt": null,
+    "text": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+    "authorUsername": "s8mb",
+    "authorDisplayName": "Sam Bowman",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1713244259954937856/BnnCvI4S_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+    "url": "https://x.com/s8mb/status/2047769406701211953",
+    "excerpt": null,
+    "text": "The Campaign to Protect Rural England contends that the housing crisis is driven by high rents, not building too few houses.",
+    "authorUsername": "s8mb",
+    "authorDisplayName": "Sam Bowman",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1713244259954937856/BnnCvI4S_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HGsjbAGXQAEppKS?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls"
+  ]
+}

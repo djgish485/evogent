@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "KO53gwuqZUQ",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "KO53gwuqZUQ",
+    "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+    "title": "Automating Neurosurgery with Robotics | Neuralink",
+    "authorUsername": "@neuralink",
+    "authorDisplayName": "Neuralink",
+    "publishedAtMs": 1777481591092,
+    "payload": {
+      "videoId": "KO53gwuqZUQ",
+      "canonicalUrl": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+      "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+      "title": "Automating Neurosurgery with Robotics | Neuralink",
+      "channelName": "Neuralink",
+      "channelUrl": "https://www.youtube.com/@neuralink",
+      "channelHandle": "@neuralink",
+      "channel": {
+        "name": "Neuralink",
+        "url": "https://www.youtube.com/@neuralink",
+        "handle": "@neuralink"
+      },
+      "publishLabel": "15 hours ago",
+      "publishDateText": "15 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/KO53gwuqZUQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCrJ-IvKiaUOJPCIiR4oIooWBjaJg",
+      "duration": "4:12",
+      "viewCount": 92000,
+      "viewCountLabel": "92K views",
+      "sourceKind": "home",
+      "discoverySurfaces": [
+        "home"
+      ],
+      "firstSeenPass": 3,
+      "captureRunId": "cache-refresh-youtube-1777535283253",
+      "captureNotes": []
+    },
+    "fetchedAtMs": 1777535591092,
+    "expiresAtMs": 1778399591092,
+    "seenByCurationAtMs": 1777526116838
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-705e26bf44",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "KO53gwuqZUQ",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T16:33:22.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Automating Neurosurgery with Robotics | Neuralink",
+    "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+    "excerpt": null,
+    "text": "Neuralink: Automating Neurosurgery with Robotics | Neuralink",
+    "authorUsername": "neuralink",
+    "authorDisplayName": "Neuralink",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/KO53gwuqZUQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCrJ-IvKiaUOJPCIiR4oIooWBjaJg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+        "title": "Automating Neurosurgery with Robotics | Neuralink",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/KO53gwuqZUQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCrJ-IvKiaUOJPCIiR4oIooWBjaJg",
+        "videoId": "KO53gwuqZUQ"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "KO53gwuqZUQ",
+        "canonicalUrl": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+        "title": "Automating Neurosurgery with Robotics | Neuralink",
+        "channelName": "Neuralink",
+        "channelHandle": "neuralink",
+        "thumbnailUrl": "https://i.ytimg.com/vi/KO53gwuqZUQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCrJ-IvKiaUOJPCIiR4oIooWBjaJg",
+        "publishDate": "2026-04-29T16:33:22.000Z",
+        "publishDateText": "2026-04-29T16:33:22.000Z",
+        "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Automating Neurosurgery with Robotics | Neuralink",
+    "url": "https://www.youtube.com/watch?v=KO53gwuqZUQ",
+    "excerpt": "Automating Neurosurgery with Robotics | Neuralink",
+    "text": "Automating Neurosurgery with Robotics | Neuralink",
+    "authorUsername": "@neuralink",
+    "authorDisplayName": "Neuralink",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/KO53gwuqZUQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCrJ-IvKiaUOJPCIiR4oIooWBjaJg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

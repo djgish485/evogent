@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "YFeb3yAxtjE",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "YFeb3yAxtjE",
+    "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+    "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "publishedAtMs": 1759502367032,
+    "payload": {
+      "videoId": "YFeb3yAxtjE",
+      "canonicalUrl": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+      "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+      "channelName": "Y Combinator",
+      "channelUrl": "https://www.youtube.com/@ycombinator",
+      "channelHandle": "@ycombinator",
+      "channel": {
+        "name": "Y Combinator",
+        "url": "https://www.youtube.com/@ycombinator",
+        "handle": "@ycombinator"
+      },
+      "publishLabel": "7 months ago",
+      "publishDateText": "7 months ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/YFeb3yAxtjE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLACucEGxQkb3LpnlilBiEtayLw5Yw",
+      "duration": "1:04:05",
+      "viewCount": 29000,
+      "viewCountLabel": "29K views",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "source": "youtube",
+      "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+      "sourceCapture": {
+        "pageUrl": "https://www.youtube.com/",
+        "completedScrollPasses": 3,
+        "requiredScrollPasses": 3,
+        "notes": []
+      }
+    },
+    "fetchedAtMs": 1777646367032,
+    "expiresAtMs": 1778510367032,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-ed6414b2f8",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "YFeb3yAxtjE",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2025-10-01T14:55:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+    "excerpt": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "text": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/YFeb3yAxtjE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLACucEGxQkb3LpnlilBiEtayLw5Yw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+        "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/YFeb3yAxtjE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLACucEGxQkb3LpnlilBiEtayLw5Yw",
+        "videoId": "YFeb3yAxtjE"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "YFeb3yAxtjE",
+        "canonicalUrl": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+        "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+        "channelName": "Y Combinator",
+        "channelHandle": "@ycombinator",
+        "thumbnailUrl": "https://i.ytimg.com/vi/YFeb3yAxtjE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLACucEGxQkb3LpnlilBiEtayLw5Yw",
+        "publishDate": "2025-10-01T14:55:00.000Z",
+        "publishDateText": "7 months ago",
+        "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "url": "https://www.youtube.com/watch?v=YFeb3yAxtjE",
+    "excerpt": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "text": "Anthropic Head of Pretraining on Scaling Laws, Compute, and the Future of AI",
+    "authorUsername": "@ycombinator",
+    "authorDisplayName": "Y Combinator",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/YFeb3yAxtjE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLACucEGxQkb3LpnlilBiEtayLw5Yw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "ezJSw0BRrTA",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "ezJSw0BRrTA",
+    "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+    "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "authorUsername": "@TheRoyalInstitution",
+    "authorDisplayName": "The Royal Institution",
+    "publishedAtMs": 1777441155441,
+    "payload": {
+      "videoId": "ezJSw0BRrTA",
+      "canonicalUrl": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+      "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+      "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+      "channelName": "The Royal Institution",
+      "channelUrl": "https://www.youtube.com/@TheRoyalInstitution",
+      "channelHandle": "@TheRoyalInstitution",
+      "channel": {
+        "name": "The Royal Institution",
+        "url": "https://www.youtube.com/@TheRoyalInstitution",
+        "handle": "@TheRoyalInstitution"
+      },
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "publishedAtMs": 1777441155441,
+      "thumbnailUrl": null,
+      "duration": "33:26",
+      "viewCount": 13000,
+      "viewCountText": "13K views",
+      "viewCountLabel": "13K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshRunId": "cache-refresh-youtube-1777526162330"
+    },
+    "fetchedAtMs": 1777527555441,
+    "expiresAtMs": 1778391555441,
+    "seenByCurationAtMs": 1777477575411
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-75e4cd41b5",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "ezJSw0BRrTA",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T17:06:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+    "excerpt": null,
+    "text": "The Royal Institution: How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "authorUsername": "TheRoyalInstitution",
+    "authorDisplayName": "The Royal Institution",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/ezJSw0BRrTA/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCclxv9xvTwgkKW9MrMKfZK6USSPg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+        "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/ezJSw0BRrTA/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCclxv9xvTwgkKW9MrMKfZK6USSPg",
+        "videoId": "ezJSw0BRrTA"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "ezJSw0BRrTA",
+        "canonicalUrl": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+        "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+        "channelName": "The Royal Institution",
+        "channelHandle": "TheRoyalInstitution",
+        "thumbnailUrl": "https://i.ytimg.com/vi/ezJSw0BRrTA/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCclxv9xvTwgkKW9MrMKfZK6USSPg",
+        "publishDate": "2026-04-28T17:06:20.000Z",
+        "publishDateText": "2026-04-28T17:06:20.000Z",
+        "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "url": "https://www.youtube.com/watch?v=ezJSw0BRrTA",
+    "excerpt": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "text": "How does your brain create your sense of self? Part 1 with Anil Seth and Michael Pollan",
+    "authorUsername": "@TheRoyalInstitution",
+    "authorDisplayName": "The Royal Institution",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

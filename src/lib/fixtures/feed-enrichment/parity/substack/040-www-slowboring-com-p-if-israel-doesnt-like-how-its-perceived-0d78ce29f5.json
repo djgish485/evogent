@@ -1,0 +1,127 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+    "url": "https://www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+    "title": "If Israel doesn’t like how it’s perceived, it should change its behavior",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "SLOW BORING",
+    "publishedAtMs": 1776816000000,
+    "payload": {
+      "url": "https://www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+      "host": "www.slowboring.com",
+      "slug": "if-israel-doesnt-like-how-its-perceived",
+      "title": "If Israel doesn’t like how it’s perceived, it should change its behavior",
+      "rawTitle": "SLOW BORING\nAPR 22\nIf Israel doesn’t like how it’s perceived, it should change its behavior\nThere are always persuadable audiences — it’s worth trying\nPREVIEW∙MATTHEW YGLESIAS∙10 MIN READ",
+      "publicationName": "SLOW BORING",
+      "author": null,
+      "authorDisplayName": "SLOW BORING",
+      "authorUsername": "slowboring",
+      "summary": "There are always persuadable audiences — it’s worth trying",
+      "excerpt": "There are always persuadable audiences — it’s worth trying",
+      "timestampLabel": "APR 22",
+      "publishedAtMs": 1776816000000,
+      "readingMeta": "PREVIEW∙MATTHEW YGLESIAS∙10 MIN READ",
+      "discoverySurface": "inbox",
+      "extractedAtMs": 1777709902284,
+      "fetchedAtMs": 1777709928008,
+      "expiresAtMs": 1777925928008
+    },
+    "fetchedAtMs": 1777709928008,
+    "expiresAtMs": 1777925928008,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-515d6a8e2e",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-22T10:03:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "If Israel doesn’t like how it’s perceived, it should change its behavior",
+    "url": "https://www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+    "excerpt": null,
+    "text": "There are always persuadable audiences — it’s worth trying",
+    "authorUsername": null,
+    "authorDisplayName": "MATTHEW YGLESIAS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "If Israel doesn’t like how it’s perceived, it should change its behavior",
+    "url": "https://www.slowboring.com/p/if-israel-doesnt-like-how-its-perceived",
+    "excerpt": "There are always persuadable audiences — it’s worth trying",
+    "text": "There are always persuadable audiences — it’s worth trying",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "SLOW BORING",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "authorUsername",
+    "authorDisplayName"
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47977498",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47977498",
+    "url": "https://arstechnica.com/gadgets/2026/05/amazon-stuck-with-months-of-repairs-after-drone-strikes-on-data-centers/",
+    "title": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "publishedAtMs": 1777656525000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47977498",
+      "id": 47977498,
+      "type": "story",
+      "title": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+      "text": null,
+      "url": "https://arstechnica.com/gadgets/2026/05/amazon-stuck-with-months-of-repairs-after-drone-strikes-on-data-centers/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47977498",
+      "discussionUrl": "https://news.ycombinator.com/item?id=47977498",
+      "authorUsername": "johnbarron",
+      "authorDisplayName": "johnbarron",
+      "by": "johnbarron",
+      "publishedAtMs": 1777656525000,
+      "time": 1777656525,
+      "score": 134,
+      "descendants": 67,
+      "commentCount": 67,
+      "kids": [
+        47978180,
+        47978859,
+        47981389,
+        47978000,
+        47981748,
+        47980539,
+        47979111,
+        47979416,
+        47978258,
+        47978038,
+        47980572,
+        47980946
+      ],
+      "lists": [
+        "topstories"
+      ],
+      "fetchedAtMs": 1777683463628
+    },
+    "fetchedAtMs": 1777683463628,
+    "expiresAtMs": 1777813063628,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-ed52161496",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47977498",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T17:28:45.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+    "url": "https://arstechnica.com/gadgets/2026/05/amazon-stuck-with-months-of-repairs-after-drone-strikes-on-data-centers/",
+    "excerpt": "HN: 117 points, 50 comments",
+    "text": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47977498"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+    "url": "https://arstechnica.com/gadgets/2026/05/amazon-stuck-with-months-of-repairs-after-drone-strikes-on-data-centers/",
+    "excerpt": "Hacker News discussion: 134 points, 67 comments.",
+    "text": "AWS stops billing Middle East cloud customers as repairs to war damage drag on",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

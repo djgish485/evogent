@@ -1,0 +1,162 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050384125861797957",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050384125861797957",
+    "url": "https://x.com/teortaxesTex/status/2050384125861797957",
+    "title": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on th",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "publishedAtMs": 1777684644000,
+    "payload": {
+      "surface": "following",
+      "sourceId": "2050384125861797957",
+      "url": "https://x.com/teortaxesTex/status/2050384125861797957",
+      "authorUsername": "teortaxesTex",
+      "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+      "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+      "text": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on the shit list and weaker than Iran are left. Cuba's time go. Winners win largely by their wisdom of fighting losers.",
+      "title": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on th",
+      "publishedAt": "2026-05-02T01:17:24.000Z",
+      "publishedAtMs": 1777684644000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHRtDwPWkAAYLjK?format=jpg&name=small"
+        }
+      ],
+      "metricsText": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞) @teortaxesTex · 1h Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on the shit list and weaker than Iran are left. Cuba's time go. Winners win largely by their wisdom of fighting losers. Quote Teortaxes (DeepSeek 推特铁粉 2023 – ∞) @teortaxesTex · Apr 8 Very unclear whether Trump will want an actually Short Glorious War to soothe his ego and get the base Tired of Winning again (also cutting China off… cigars, idk), or if he's wary of more adventures for a while and Cuba may yet survive. x.com/crystal_horror… 4 12 1.7K",
+      "quotedTweet": {
+        "authorUsername": null,
+        "authorDisplayName": "",
+        "text": "Very unclear whether Trump will want an actually Short Glorious War to soothe his ego and get the base Tired of Winning again (also cutting China off… cigars, idk), or if he's wary of more adventures for a while and Cuba may yet survive. x.com/crystal_horror…"
+      },
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": {
+          "authorUsername": null,
+          "authorDisplayName": "",
+          "text": "Very unclear whether Trump will want an actually Short Glorious War to soothe his ego and get the base Tired of Winning again (also cutting China off… cigars, idk), or if he's wary of more adventures for a while and Cuba may yet survive. x.com/crystal_horror…"
+        },
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "surfaces": [
+        "following"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-3b05d37bc5",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050384125861797957",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T01:17:24.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on th",
+    "url": "https://x.com/teortaxesTex/status/2050384125861797957",
+    "excerpt": null,
+    "text": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on the shit list and weaker than Iran are left. Cuba's time go. Winners win largely by their wisdom of fighting losers.",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on th",
+    "url": "https://x.com/teortaxesTex/status/2050384125861797957",
+    "excerpt": null,
+    "text": "Well seems like we have an answer. Iran is \"over\" supposedly, so A Short Glorious War it is. Not many nations both on the shit list and weaker than Iran are left. Cuba's time go. Winners win largely by their wisdom of fighting losers.",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHRtDwPWkAAYLjK?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Very unclear whether Trump will want an actually Short Glorious War to soothe his ego and get the base Tired of Winning again (also cutting China off… cigars, idk), or if he's wary of more adventures for a while and Cuba may yet survive. x.com/crystal_horror…",
+        "author": {
+          "username": "unknown_quote_author"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls",
+    "metadata.quotedTweet"
+  ]
+}

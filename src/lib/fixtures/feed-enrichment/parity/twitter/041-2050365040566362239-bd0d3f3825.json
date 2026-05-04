@@ -1,0 +1,139 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050365040566362239",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050365040566362239",
+    "url": "https://x.com/WarMonitor3/status/2050365040566362239",
+    "title": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "publishedAtMs": 1777680094000,
+    "payload": {
+      "surface": "following",
+      "sourceId": "2050365040566362239",
+      "url": "https://x.com/WarMonitor3/status/2050365040566362239",
+      "authorUsername": "WarMonitor3",
+      "authorDisplayName": "WarMonitor",
+      "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+      "text": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+      "title": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+      "publishedAt": "2026-05-02T00:01:34.000Z",
+      "publishedAtMs": 1777680094000,
+      "media": [],
+      "metricsText": "WarMonitor @WarMonitor3 · 2h BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS 72 36 666 31K",
+      "quotedTweet": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "surfaces": [
+        "following"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-62f9071814",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050365040566362239",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T00:01:34.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+    "url": "https://x.com/WarMonitor3/status/2050365040566362239",
+    "excerpt": null,
+    "text": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+    "url": "https://x.com/WarMonitor3/status/2050365040566362239",
+    "excerpt": null,
+    "text": "BREAKING: Pentagon planning to withdraw 5000 troops from Germany-CBS",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

@@ -1,0 +1,134 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050559773985087641",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050559773985087641",
+    "url": "https://x.com/emollick/status/2050559773985087641",
+    "title": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "publishedAtMs": 1777726522000,
+    "payload": {
+      "id": "2050559773985087641",
+      "sourceId": "2050559773985087641",
+      "url": "https://x.com/emollick/status/2050559773985087641",
+      "text": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways that indicate that they clearly come from X discussions & rumors (often filtered through LinkedIn)",
+      "full_text": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways that indicate that they clearly come from X discussions & rumors (often filtered through LinkedIn)",
+      "authorUsername": "emollick",
+      "authorDisplayName": "Ethan Mollick",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+      "publishedAt": "2026-05-02T12:55:22.000Z",
+      "publishedAtMs": 1777726522000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureSurface": "home",
+        "pass": 5,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "tweetTextCount": 1,
+        "visibleText": "Ethan Mollick\n@emollick\n·\n32m\nGenerally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways that indicate that they clearly come from X discussions & rumors (often filtered through LinkedIn)\n18\n1\n53\n3.2K"
+      }
+    },
+    "fetchedAtMs": 1777728574342,
+    "expiresAtMs": 1777944574342,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-4052dc5702",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050559773985087641",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:55:22.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways ",
+    "url": "https://x.com/emollick/status/2050559773985087641",
+    "excerpt": null,
+    "text": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways that indicate that they clearly come from X discussions & rumors (often filtered through LinkedIn)",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways",
+    "url": "https://x.com/emollick/status/2050559773985087641",
+    "excerpt": null,
+    "text": "Generally, I would say X is not real life, but I am surprised about how often I get asked by executives about which AI lab is winning or what is up with a particular model in ways that indicate that they clearly come from X discussions & rumors (often filtered through LinkedIn)",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title"
+  ]
+}

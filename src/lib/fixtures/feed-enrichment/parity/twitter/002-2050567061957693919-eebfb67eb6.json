@@ -1,0 +1,235 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050567061957693919",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050567061957693919",
+    "url": "https://x.com/yudapearl/status/2050567061957693919",
+    "title": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/w",
+    "authorUsername": "yudapearl",
+    "authorDisplayName": "Judea Pearl",
+    "publishedAtMs": 1777728259000,
+    "payload": {
+      "tweetId": "2050567061957693919",
+      "sourceId": "2050567061957693919",
+      "authorUsername": "yudapearl",
+      "authorDisplayName": "Judea Pearl",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1012181647993606144/TeYvs7NH_200x200.jpg",
+      "text": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2… I’m glad we had the chance to talk at length about the situation at UCLA (30 min.) and explore what the future may entail.",
+      "visibleText": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2… I’m glad we had the chance to talk at length about the situation at UCLA (30 min.) and explore what the future may entail.",
+      "url": "https://x.com/yudapearl/status/2050567061957693919",
+      "publishedAt": "2026-05-02T13:24:19.000Z",
+      "likes": 5,
+      "reposts": 2,
+      "replies": 0,
+      "viewCount": 2,
+      "mediaUrls": [
+        "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+      ],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+        }
+      ],
+      "quotedTweet": null,
+      "inReplyToUsername": null,
+      "inReplyToStatusId": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/P7kQGvTfbE",
+        "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240",
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/P7kQGvTfbE",
+          "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240",
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/P7kQGvTfbE",
+          "expandedUrl": "https://t.co/P7kQGvTfbE",
+          "displayUrl": "t.co"
+        }
+      ],
+      "raw_data": {
+        "source": "timeline",
+        "quotedTweet": null,
+        "linkCard": {
+          "type": "link",
+          "url": "https://t.co/P7kQGvTfbE",
+          "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+          "domain": "t.co",
+          "imageUrl": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240",
+          "description": null
+        },
+        "linkPreviews": [
+          {
+            "url": "https://t.co/P7kQGvTfbE",
+            "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+            "domain": "t.co",
+            "image": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240",
+            "description": null
+          }
+        ],
+        "urlEntities": [
+          {
+            "url": "https://t.co/P7kQGvTfbE",
+            "expandedUrl": "https://t.co/P7kQGvTfbE"
+          }
+        ]
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": "none",
+        "requestedHandle": null,
+        "authoredByRequestedAccount": null,
+        "visibleReplyBanner": false
+      },
+      "textCapture": {
+        "textSource": "timeline_card",
+        "collapsedCardDetected": false,
+        "statusPageAttempted": false,
+        "statusPageRecovered": false,
+        "diagnostic": null
+      },
+      "source": "twitter",
+      "sourceSurface": "following",
+      "fetchedBy": "cache-refresh",
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777732863134"
+    },
+    "fetchedAtMs": 1777733123283,
+    "expiresAtMs": 1777949123283,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-732c8d568f",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050567061957693919",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T13:24:19.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60",
+    "url": "https://x.com/yudapearl/status/2050567061957693919",
+    "excerpt": null,
+    "text": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2… I’m glad we had the chance to talk at length about the situation at UCLA (30 min.) and explore what the future may entail.",
+    "authorUsername": "yudapearl",
+    "authorDisplayName": "Judea Pearl",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1012181647993606144/TeYvs7NH_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/P7kQGvTfbE",
+        "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/w",
+    "url": "https://x.com/yudapearl/status/2050567061957693919",
+    "excerpt": null,
+    "text": "It was a pleasure to be interviewed on \"Don't Know Much About\" with Naya Hecht. The video is available now on youtube: https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2… I’m glad we had the chance to talk at length about the situation at UCLA (30 min.) and explore what the future may entail.",
+    "authorUsername": "yudapearl",
+    "authorDisplayName": "Judea Pearl",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1012181647993606144/TeYvs7NH_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 5,
+      "reposts": 2,
+      "replies": 0,
+      "views": 2
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/P7kQGvTfbE",
+        "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/P7kQGvTfbE",
+          "title": "https://youtube.com/watch?v=jFlSrFJP7x0&list=PLrlwSfCViZekM60tmUQq3cGmYpvyk51Md&index=2…",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2050561073468866560/OJda00EW?format=jpg&name=240x240"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/P7kQGvTfbE",
+          "expandedUrl": "https://t.co/P7kQGvTfbE",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.views",
+    "metadata.linkPreviews",
+    "metadata.urlEntities"
+  ]
+}

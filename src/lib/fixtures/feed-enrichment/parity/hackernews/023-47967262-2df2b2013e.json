@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47967262",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47967262",
+    "url": "https://404privacy.com/blog/linkedin-is-scanning-your-browser-extensions-this-is-how-they-use-the-data/",
+    "title": "LinkedIn is scanning browser extensions",
+    "authorUsername": "un-nf",
+    "authorDisplayName": "un-nf",
+    "publishedAtMs": 1777578020000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47967262",
+      "id": 47967262,
+      "type": "story",
+      "title": "LinkedIn is scanning browser extensions",
+      "url": "https://404privacy.com/blog/linkedin-is-scanning-your-browser-extensions-this-is-how-they-use-the-data/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47967262",
+      "canonicalUrl": "https://404privacy.com/blog/linkedin-is-scanning-your-browser-extensions-this-is-how-they-use-the-data/",
+      "author": "un-nf",
+      "score": 432,
+      "commentCount": 213,
+      "descendants": 213,
+      "publishedAtMs": 1777578020000,
+      "time": 1777578020,
+      "text": null,
+      "kids": [
+        47968121,
+        47968039,
+        47968307,
+        47968156,
+        47969414,
+        47968496,
+        47969706,
+        47985002,
+        47968202,
+        47972435,
+        47977591,
+        47969085,
+        47968563,
+        47969736,
+        47970055,
+        47967936,
+        47974403,
+        47970109,
+        47970002,
+        47968127,
+        47968782,
+        47970006,
+        47969623,
+        47968754,
+        47970029
+      ],
+      "lists": [
+        "beststories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-e4b8b767a3",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47967262",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T19:40:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "LinkedIn is scanning browser extensions",
+    "url": "https://404privacy.com/blog/linkedin-is-scanning-your-browser-extensions-this-is-how-they-use-the-data/",
+    "excerpt": "LinkedIn is scanning browser extensions",
+    "text": "LinkedIn is scanning browser extensions",
+    "authorUsername": "un-nf",
+    "authorDisplayName": "un-nf",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47967262"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "LinkedIn is scanning browser extensions",
+    "url": "https://404privacy.com/blog/linkedin-is-scanning-your-browser-extensions-this-is-how-they-use-the-data/",
+    "excerpt": "Hacker News discussion: 432 points, 213 comments.",
+    "text": "LinkedIn is scanning browser extensions",
+    "authorUsername": "un-nf",
+    "authorDisplayName": "un-nf",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

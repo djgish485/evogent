@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "vD_4Hce2G_w",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "vD_4Hce2G_w",
+    "url": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+    "title": "Introducing GPT-5.5 with Databricks",
+    "authorUsername": "@OpenAI",
+    "authorDisplayName": "OpenAI",
+    "publishedAtMs": 1777480402576,
+    "payload": {
+      "videoId": "vD_4Hce2G_w",
+      "canonicalUrl": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+      "title": "Introducing GPT-5.5 with Databricks",
+      "channelName": "OpenAI",
+      "channelUrl": "https://www.youtube.com/@OpenAI",
+      "channelHandle": "@OpenAI",
+      "channel": {
+        "name": "OpenAI",
+        "url": "https://www.youtube.com/@OpenAI",
+        "handle": "@OpenAI"
+      },
+      "publishLabel": "2 hours ago",
+      "publishDateText": "2 hours ago",
+      "publishedAtMs": 1777480402576,
+      "thumbnailUrl": "https://i.ytimg.com/vi/vD_4Hce2G_w/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAS8r9mu3W-Egdw4u2OQUq9bgzTKA",
+      "duration": "1:03",
+      "sourceKind": "search",
+      "sourceKinds": [
+        "search"
+      ],
+      "searchQuery": "GPT-5.5",
+      "searchQueries": [
+        "GPT-5.5"
+      ],
+      "fetchedBy": "youtube-cache",
+      "taskId": "cache-refresh-youtube-1777486262014"
+    },
+    "fetchedAtMs": 1777487602576,
+    "expiresAtMs": 1778351602576,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-5a4d860244",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "vD_4Hce2G_w",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T16:33:22.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Introducing GPT-5.5 with Databricks",
+    "url": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+    "excerpt": null,
+    "text": "OpenAI: Introducing GPT-5.5 with Databricks",
+    "authorUsername": "OpenAI",
+    "authorDisplayName": "OpenAI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/vD_4Hce2G_w/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAS8r9mu3W-Egdw4u2OQUq9bgzTKA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+        "title": "Introducing GPT-5.5 with Databricks",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/vD_4Hce2G_w/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAS8r9mu3W-Egdw4u2OQUq9bgzTKA",
+        "videoId": "vD_4Hce2G_w"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "vD_4Hce2G_w",
+        "canonicalUrl": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+        "title": "Introducing GPT-5.5 with Databricks",
+        "channelName": "OpenAI",
+        "channelHandle": "OpenAI",
+        "thumbnailUrl": "https://i.ytimg.com/vi/vD_4Hce2G_w/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAS8r9mu3W-Egdw4u2OQUq9bgzTKA",
+        "publishDate": "2026-04-29T16:33:22.000Z",
+        "publishDateText": "2026-04-29T16:33:22.000Z",
+        "url": "https://www.youtube.com/watch?v=vD_4Hce2G_w"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Introducing GPT-5.5 with Databricks",
+    "url": "https://www.youtube.com/watch?v=vD_4Hce2G_w",
+    "excerpt": "Introducing GPT-5.5 with Databricks",
+    "text": "Introducing GPT-5.5 with Databricks",
+    "authorUsername": "@OpenAI",
+    "authorDisplayName": "OpenAI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/vD_4Hce2G_w/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAS8r9mu3W-Egdw4u2OQUq9bgzTKA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

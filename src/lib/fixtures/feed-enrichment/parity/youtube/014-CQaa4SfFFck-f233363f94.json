@@ -1,0 +1,168 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "CQaa4SfFFck",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "CQaa4SfFFck",
+    "url": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+    "title": "Battle of Verdun 3D",
+    "authorUsername": "@EpichistoryTv",
+    "authorDisplayName": "Epic History",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "CQaa4SfFFck",
+      "canonicalUrl": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+      "title": "Battle of Verdun 3D",
+      "channelName": "Epic History",
+      "channelUrl": "https://www.youtube.com/@EpichistoryTv",
+      "channelHandle": "@EpichistoryTv",
+      "channel": {
+        "name": "Epic History",
+        "url": "https://www.youtube.com/@EpichistoryTv",
+        "handle": "@EpichistoryTv"
+      },
+      "publishLabel": "15 hours ago",
+      "publishDateText": "15 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/CQaa4SfFFck/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCiqfq2kMc8Ym3kJ4JDvkS4hnxXMw",
+      "duration": "20:56",
+      "viewCount": 148000,
+      "viewCountLabel": "148K views",
+      "sourceKind": "home",
+      "firstSeenPass": 2,
+      "rawTextLines": [
+        "20:56",
+        "Battle of Verdun 3D",
+        "Epic History",
+        "148K views",
+        "•",
+        "15 hours ago"
+      ],
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+      "source": "youtube",
+      "sourceId": "CQaa4SfFFck",
+      "cacheRefreshTaskId": "cache-refresh-youtube-1777631462305",
+      "cacheRefreshRunId": "cache-refresh-youtube-1777631462305"
+    },
+    "fetchedAtMs": 1777631645753,
+    "expiresAtMs": 1778495645753,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-9451088779",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "CQaa4SfFFck",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T19:44:58.978Z"
+  },
+  "historicalFeedRow": {
+    "title": "Battle of Verdun 3D",
+    "url": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+    "excerpt": "Epic History, 20:56.",
+    "text": "Video from Epic History.",
+    "authorUsername": "@EpichistoryTv",
+    "authorDisplayName": "Epic History",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/CQaa4SfFFck/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCiqfq2kMc8Ym3kJ4JDvkS4hnxXMw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+        "title": "Battle of Verdun 3D",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/CQaa4SfFFck/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCiqfq2kMc8Ym3kJ4JDvkS4hnxXMw",
+        "videoId": "CQaa4SfFFck"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "CQaa4SfFFck",
+        "canonicalUrl": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+        "title": "Battle of Verdun 3D",
+        "channelName": "Epic History",
+        "channelHandle": "@EpichistoryTv",
+        "thumbnailUrl": "https://i.ytimg.com/vi/CQaa4SfFFck/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCiqfq2kMc8Ym3kJ4JDvkS4hnxXMw",
+        "publishDate": "2026-04-30T19:44:58.978Z",
+        "publishDateText": "5 hours ago",
+        "url": "https://www.youtube.com/watch?v=CQaa4SfFFck"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Battle of Verdun 3D",
+    "url": "https://www.youtube.com/watch?v=CQaa4SfFFck",
+    "excerpt": "Battle of Verdun 3D",
+    "text": "Battle of Verdun 3D",
+    "authorUsername": "@EpichistoryTv",
+    "authorDisplayName": "Epic History",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/CQaa4SfFFck/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCiqfq2kMc8Ym3kJ4JDvkS4hnxXMw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

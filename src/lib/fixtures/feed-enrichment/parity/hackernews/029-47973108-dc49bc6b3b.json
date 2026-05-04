@@ -1,0 +1,137 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47973108",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47973108",
+    "url": "https://techcrunch.com/2026/04/30/after-dissing-anthropic-for-limiting-mythos-openai-restricts-access-to-cyber-too/",
+    "title": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "authorUsername": "gbourne1",
+    "authorDisplayName": "gbourne1",
+    "publishedAtMs": 1777631292000,
+    "payload": {
+      "id": 47973108,
+      "type": "story",
+      "by": "gbourne1",
+      "title": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+      "url": "https://techcrunch.com/2026/04/30/after-dissing-anthropic-for-limiting-mythos-openai-restricts-access-to-cyber-too/",
+      "score": 97,
+      "descendants": 72,
+      "time": 1777631292,
+      "kids": [
+        47973221,
+        47973247,
+        47973317,
+        47973517,
+        47974040,
+        47974497,
+        47973483,
+        47974213,
+        47974537,
+        47973668,
+        47974768,
+        47973869,
+        47973660,
+        47973295,
+        47974694,
+        47974460,
+        47973312
+      ],
+      "text": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47973108"
+    },
+    "fetchedAtMs": 1777643569907,
+    "expiresAtMs": 1777773169907,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-8185679316",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47973108",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T10:28:12.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "url": "https://techcrunch.com/2026/04/30/after-dissing-anthropic-for-limiting-mythos-openai-restricts-access-to-cyber-too/",
+    "excerpt": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "text": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "authorUsername": "gbourne1",
+    "authorDisplayName": "gbourne1",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47973108"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "url": "https://techcrunch.com/2026/04/30/after-dissing-anthropic-for-limiting-mythos-openai-restricts-access-to-cyber-too/",
+    "excerpt": "Hacker News discussion: 97 points, 72 comments.",
+    "text": "After dissing Anthropic for limiting Mythos, OpenAI restricts access to Cyber",
+    "authorUsername": "gbourne1",
+    "authorDisplayName": "gbourne1",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

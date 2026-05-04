@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050543521032007783",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050543521032007783",
+    "url": "https://x.com/kyleichan/status/2050543521032007783",
+    "title": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved.",
+    "authorUsername": "kyleichan",
+    "authorDisplayName": "Kyle Chan",
+    "publishedAtMs": 1777722647000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050543521032007783",
+      "tweetId": "2050543521032007783",
+      "id": "2050543521032007783",
+      "url": "https://x.com/kyleichan/status/2050543521032007783",
+      "title": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. ",
+      "authorUsername": "kyleichan",
+      "authorDisplayName": "Kyle Chan",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1510936164651438085/p7FFNvzL_normal.jpg",
+      "text": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. But grasping and manipulation—anything related to haptics—hasn’t been solved. That’s the key bottleneck preventing them from being deployed at scale in factories and homes. He says that",
+      "full_text": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. But grasping and manipulation—anything related to haptics—hasn’t been solved. That’s the key bottleneck preventing them from being deployed at scale in factories and homes. He says that",
+      "publishedAt": "2026-05-02T11:50:47.000Z",
+      "publishedAtMs": 1777722647000,
+      "media": [
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050541882644504576/img/Q6m0utJu_X2pNxlV.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2050541882644504576/img/Q6m0utJu_X2pNxlV.jpg",
+          "alt": null
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/amplify_video_thumb/2050541882644504576/img/Q6m0utJu_X2pNxlV.jpg"
+      ],
+      "quotedTweet": null,
+      "inReplyToStatusId": "2050543521032007783",
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "metrics": {
+        "replies": 1,
+        "reposts": 5,
+        "likes": 11,
+        "views": 789
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "timeline",
+        "capturedAt": "2026-05-02T12:13:16.281Z"
+      },
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777723863093"
+    },
+    "fetchedAtMs": 1777724170597,
+    "expiresAtMs": 1777940170597,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-c89e6655fe",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050543521032007783",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T11:50:47.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. But grasping and manipulation—anything related to haptics—hasn’t been solved. That’s the k",
+    "url": "https://x.com/kyleichan/status/2050543521032007783",
+    "excerpt": null,
+    "text": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. But grasping and manipulation—anything related to haptics—hasn’t been solved. That’s the key bottleneck preventing them from being deployed at scale in factories and homes. He says that",
+    "authorUsername": "kyleichan",
+    "authorDisplayName": "Kyle Chan",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1510936164651438085/p7FFNvzL_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050541882644504576/img/Q6m0utJu_X2pNxlV.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved.",
+    "url": "https://x.com/kyleichan/status/2050543521032007783",
+    "excerpt": null,
+    "text": "Unitree founder Wang Xingxing: In robotics, locomotion and basic motion is mostly solved. But grasping and manipulation—anything related to haptics—hasn’t been solved. That’s the key bottleneck preventing them from being deployed at scale in factories and homes. He says that",
+    "authorUsername": "kyleichan",
+    "authorDisplayName": "Kyle Chan",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1510936164651438085/p7FFNvzL_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050541882644504576/img/Q6m0utJu_X2pNxlV.jpg"
+    ],
+    "metrics": {
+      "likes": 11,
+      "reposts": 5,
+      "replies": 1,
+      "views": 789
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

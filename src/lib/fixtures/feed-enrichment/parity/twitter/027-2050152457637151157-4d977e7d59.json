@@ -1,0 +1,185 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050152457637151157",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050152457637151157",
+    "url": "https://x.com/Andercot/status/2050152457637151157",
+    "title": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 second",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "publishedAtMs": 1777629410000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050152457637151157",
+      "tweetId": "2050152457637151157",
+      "url": "https://x.com/Andercot/status/2050152457637151157",
+      "authorUsername": "Andercot",
+      "authorDisplayName": "Andrew Côté",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+      "text": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 seconds. So you make 100x copies of the novel, and for each copy you cut it up into strings of 100 words with incremental offsets Copy 1 of the novel has strings of word 1-100,",
+      "title": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 second",
+      "publishedAt": "2026-05-01T09:56:50.000Z",
+      "publishedAtMs": 1777629410000,
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHOay2tbcAAa5s6?format=jpg&name=360x360",
+          "alt": "Image"
+        },
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHOay2sbEAAiItZ?format=jpg&name=small",
+          "alt": "Image"
+        },
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHHIgf8bkAAoLLA?format=jpg&name=240x240",
+          "alt": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHOay2tbcAAa5s6?format=jpg&name=360x360",
+        "https://pbs.twimg.com/media/HHOay2sbEAAiItZ?format=jpg&name=small",
+        "https://pbs.twimg.com/media/HHHIgf8bkAAoLLA?format=jpg&name=240x240"
+      ],
+      "metrics": {
+        "replies": 0,
+        "reposts": 3,
+        "likes": 6,
+        "views": 1102
+      },
+      "quotedTweet": {
+        "authorUsername": "maxmarchione",
+        "authorDisplayName": "Max Marchione",
+        "text": "The cost of sequencing a human genome dropped from $100M to less than $100 in about 25 years. That's a million-fold decrease, which outpaces even Moore's Law. We're about to enter the era of personalized medicine."
+      },
+      "inReplyToStatusId": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "home",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null
+      },
+      "surfaces": [
+        "home"
+      ],
+      "cacheRunId": "cache-refresh-twitter-1777630862298",
+      "fetchedFrom": "home"
+    },
+    "fetchedAtMs": 1777631221145,
+    "expiresAtMs": 1777847221145,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-1844c33393",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050152457637151157",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T09:56:50.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 second",
+    "url": "https://x.com/Andercot/status/2050152457637151157",
+    "excerpt": null,
+    "text": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 seconds. So you make 100x copies of the novel, and for each copy you cut it up into strings of 100 words with incremental offsets Copy 1 of the novel has strings of word 1-100,",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHOay2tbcAAa5s6?format=jpg&name=360x360",
+      "https://pbs.twimg.com/media/HHOay2sbEAAiItZ?format=jpg&name=small",
+      "https://pbs.twimg.com/media/HHHIgf8bkAAoLLA?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 6,
+      "reposts": 3,
+      "replies": 0,
+      "views": 1102
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "The cost of sequencing a human genome dropped from $100M to less than $100 in about 25 years. That's a million-fold decrease, which outpaces even Moore's Law. We're about to enter the era of personalized medicine.",
+        "author": {
+          "username": "maxmarchione",
+          "displayName": "Max Marchione"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 second",
+    "url": "https://x.com/Andercot/status/2050152457637151157",
+    "excerpt": null,
+    "text": "The breakthrough of NGS can be thought of like this: You want to read an 800 page novel in 60 seconds. So you make 100x copies of the novel, and for each copy you cut it up into strings of 100 words with incremental offsets Copy 1 of the novel has strings of word 1-100,",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHOay2tbcAAa5s6?format=jpg&name=360x360",
+      "https://pbs.twimg.com/media/HHOay2sbEAAiItZ?format=jpg&name=small",
+      "https://pbs.twimg.com/media/HHHIgf8bkAAoLLA?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 6,
+      "reposts": 3,
+      "replies": 0,
+      "views": 1102
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "The cost of sequencing a human genome dropped from $100M to less than $100 in about 25 years. That's a million-fold decrease, which outpaces even Moore's Law. We're about to enter the era of personalized medicine.",
+        "author": {
+          "username": "maxmarchione",
+          "displayName": "Max Marchione"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

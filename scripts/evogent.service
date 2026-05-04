@@ -1,0 +1,48 @@
+# Evogent systemd service
+#
+# KNOWN ISSUE: EADDRINUSE crash loops on restart
+#
+# When agents merge code and the post-merge hook restarts this service,
+# child processes (spawned by tmux agents, npm scripts, etc.) can outlive
+# the main node process and hold port 3001. The new process can't bind
+# and crash-loops until the old children die.
+#
+# The ExecStopPost lines below kill the listener on port 3001 and any
+# reparented node server.js orphans still rooted in this WorkingDirectory.
+# This keeps agent tmux sessions alive while reaping leaked app children.
+#
+# If this doesn't fix it on a new VM:
+# 1. Check: systemctl status evogent — look for "remains running" warnings
+# 2. Check: fuser 3001/tcp — see what's holding the port
+# 3. Nuclear option: add "ExecStartPre=-/usr/bin/fuser -k 3001/tcp" too
+# 4. Better fix: run agents outside the service's cgroup (separate slice)
+#
+# Install: cp scripts/evogent.service /etc/systemd/system/ && systemctl daemon-reload
+
+[Unit]
+Description=Evogent Next.js service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__WORKING_DIR__
+Environment=NODE_ENV=production
+Environment=HOME=/root
+Environment=XDG_CONFIG_HOME=/root/.config
+Environment=GH_CONFIG_DIR=/root/.config/gh
+Environment=GIT_TERMINAL_PROMPT=0
+Environment=PORT=3001
+Environment=PATH=__LOCAL_BIN__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/node server.js
+ExecStopPost=-/usr/bin/fuser -k 3001/tcp
+ExecStopPost=-/bin/bash -lc 'for proc_dir in /proc/[0-9]*; do pid="${proc_dir#/proc/}"; ppid="$(awk "/^PPid:/ { print \\$2 }" "$proc_dir/status" 2>/dev/null)"; [ "$ppid" = "1" ] || continue; cwd="$(readlink "$proc_dir/cwd" 2>/dev/null || true)"; [ "$cwd" = "__WORKING_DIR__" ] || continue; cmdline="$(tr "\\0" " " < "$proc_dir/cmdline" 2>/dev/null || true)"; case "$cmdline" in *"node server.js"*) kill "$pid" 2>/dev/null || true ;; esac; done'
+ExecStopPost=-/bin/bash -lc 'sleep 2; for proc_dir in /proc/[0-9]*; do pid="${proc_dir#/proc/}"; ppid="$(awk "/^PPid:/ { print \\$2 }" "$proc_dir/status" 2>/dev/null)"; [ "$ppid" = "1" ] || continue; cwd="$(readlink "$proc_dir/cwd" 2>/dev/null || true)"; [ "$cwd" = "__WORKING_DIR__" ] || continue; cmdline="$(tr "\\0" " " < "$proc_dir/cmdline" 2>/dev/null || true)"; case "$cmdline" in *"node server.js"*) kill -9 "$pid" 2>/dev/null || true ;; esac; done'
+KillMode=control-group
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

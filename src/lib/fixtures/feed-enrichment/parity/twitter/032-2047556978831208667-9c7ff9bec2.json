@@ -1,0 +1,132 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2047556978831208667",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2047556978831208667",
+    "url": "https://x.com/simonw/status/2047556978831208667",
+    "title": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and Dee...",
+    "authorUsername": "simonw",
+    "authorDisplayName": "Simon Willison",
+    "publishedAtMs": 1777010600000,
+    "payload": {
+      "tweetId": "2047556978831208667",
+      "tweetUrl": "https://x.com/simonw/status/2047556978831208667",
+      "authorUsername": "simonw",
+      "authorDisplayName": "Simon Willison",
+      "text": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and DeepSeek-V4-Pro are the cheapest models in their categories while benchmarking close to the frontier models from other providers\n\nhttps://\nsimonwillison.net/2026/Apr/24/de\nepseek-v4/\n…",
+      "publishedAtMs": 1777010600000,
+      "inReplyToHandle": null,
+      "quotedTweet": null,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HGpiI6qbAAAqZXt?format=png&name=240x240"
+        }
+      ],
+      "metrics": {
+        "likes": "51",
+        "retweets": "3"
+      },
+      "replyCapture": {
+        "source": "timeline"
+      }
+    },
+    "fetchedAtMs": 1777018021684,
+    "expiresAtMs": 1777190821684,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-d3a8d66936",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2047556978831208667",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-24T06:03:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and Dee...",
+    "url": "https://x.com/simonw/status/2047556978831208667",
+    "excerpt": null,
+    "text": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and DeepSeek-V4-Pro are the cheapest models in their categories while benchmarking close to the frontier models from other providers https:// simonwillison.net/2026/Apr/24/de epseek-v4/ …",
+    "authorUsername": "simonw",
+    "authorDisplayName": "Simon Willison",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/378800000261649705/be9cc55e64014e6d7663c50d7cb9fc75_normal.jpeg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 51,
+      "reposts": 3,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and Dee...",
+    "url": "https://x.com/simonw/status/2047556978831208667",
+    "excerpt": null,
+    "text": "More of my notes on DeepSeek V4 - the really big news is the pricing: both DeepSeek-V4-Flash and DeepSeek-V4-Pro are the cheapest models in their categories while benchmarking close to the frontier models from other providers\n\nhttps://\nsimonwillison.net/2026/Apr/24/de\nepseek-v4/\n…",
+    "authorUsername": "simonw",
+    "authorDisplayName": "Simon Willison",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HGpiI6qbAAAqZXt?format=png&name=240x240"
+    ],
+    "metrics": {
+      "likes": 51,
+      "reposts": 3,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorAvatarUrl",
+    "mediaUrls"
+  ]
+}

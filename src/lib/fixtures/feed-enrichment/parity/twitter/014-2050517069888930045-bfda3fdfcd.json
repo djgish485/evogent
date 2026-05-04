@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050517069888930045",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050517069888930045",
+    "url": "https://x.com/rohanpaul_ai/status/2050517069888930045",
+    "title": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pent",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "publishedAtMs": 1777716340000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050517069888930045",
+      "tweetId": "2050517069888930045",
+      "id": "2050517069888930045",
+      "url": "https://x.com/rohanpaul_ai/status/2050517069888930045",
+      "title": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pent",
+      "authorUsername": "rohanpaul_ai",
+      "authorDisplayName": "Rohan Paul",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+      "text": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pentagon expands classified-network AI agreements to seven to eight firms — Google, Microsoft, AWS, NVIDIA, OpenAI, Reflection, and SpaceX — with Anthropic explicitly excluded. AI now its",
+      "full_text": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pentagon expands classified-network AI agreements to seven to eight firms — Google, Microsoft, AWS, NVIDIA, OpenAI, Reflection, and SpaceX — with Anthropic explicitly excluded. AI now its",
+      "publishedAt": "2026-05-02T10:05:40.000Z",
+      "publishedAtMs": 1777716340000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHTlbAkaEAAahyz?format=png&name=small",
+          "alt": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHTlbAkaEAAahyz?format=png&name=small"
+      ],
+      "quotedTweet": null,
+      "inReplyToStatusId": "2050517069888930045",
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "metrics": {
+        "replies": 4,
+        "reposts": 5,
+        "likes": 16,
+        "views": 1386
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "timeline",
+        "capturedAt": "2026-05-02T12:13:22.291Z"
+      },
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777723863093"
+    },
+    "fetchedAtMs": 1777724170597,
+    "expiresAtMs": 1777940170597,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-70845efc8b",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050517069888930045",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T10:05:40.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pentagon expands classified-network AI agreements to seven to eight firms — Google, Microsoft,",
+    "url": "https://x.com/rohanpaul_ai/status/2050517069888930045",
+    "excerpt": null,
+    "text": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pentagon expands classified-network AI agreements to seven to eight firms — Google, Microsoft, AWS, NVIDIA, OpenAI, Reflection, and SpaceX — with Anthropic explicitly excluded. AI now its",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTlbAkaEAAahyz?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pent",
+    "url": "https://x.com/rohanpaul_ai/status/2050517069888930045",
+    "excerpt": null,
+    "text": "US military reaches deal with 7 biggest AI labs to use their AI on classified systems Pentagon expands classified-network AI agreements to seven to eight firms — Google, Microsoft, AWS, NVIDIA, OpenAI, Reflection, and SpaceX — with Anthropic explicitly excluded. AI now its",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTlbAkaEAAahyz?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 16,
+      "reposts": 5,
+      "replies": 4,
+      "views": 1386
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

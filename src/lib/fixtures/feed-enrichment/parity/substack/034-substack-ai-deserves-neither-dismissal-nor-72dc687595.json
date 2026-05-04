@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "substack-ai-deserves-neither-dismissal-nor",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "substack-ai-deserves-neither-dismissal-nor",
+    "url": "https://fasterplease.substack.com/p/ai-deserves-neither-dismissal-nor",
+    "title": "AI deserves neither dismissal nor doom-mongering",
+    "authorUsername": null,
+    "authorDisplayName": "James Pethokoukis",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "title": "AI deserves neither dismissal nor doom-mongering",
+      "excerpt": "New productivity data challenges the skeptics and reassures the worriers—at least for now",
+      "url": "https://fasterplease.substack.com/p/ai-deserves-neither-dismissal-nor",
+      "publication": "Faster, Please!",
+      "authorDisplayName": "James Pethokoukis",
+      "authorUsername": null,
+      "publishedAtMs": 1776686400000,
+      "fetchedAtMs": 1776979730201
+    },
+    "fetchedAtMs": 1776979730201,
+    "expiresAtMs": 1777152530201,
+    "seenByCurationAtMs": 1777044169034
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-d2737272da",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "substack-ai-deserves-neither-dismissal-nor",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "AI deserves neither dismissal nor doom-mongering",
+    "url": "https://fasterplease.substack.com/p/ai-deserves-neither-dismissal-nor",
+    "excerpt": "New productivity data challenges the skeptics and reassures the worriers—at least for now",
+    "text": "New productivity data challenges the skeptics and reassures the worriers—at least for now",
+    "authorUsername": "jpethokoukis",
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "AI deserves neither dismissal nor doom-mongering",
+    "url": "https://fasterplease.substack.com/p/ai-deserves-neither-dismissal-nor",
+    "excerpt": "New productivity data challenges the skeptics and reassures the worriers—at least for now",
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorUsername"
+  ]
+}

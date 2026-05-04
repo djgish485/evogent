@@ -1,0 +1,125 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+    "url": "https://andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+    "title": "Greg Lukianoff On Free Speech Fights",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "THE WEEKLY DISH",
+    "publishedAtMs": 1776988800000,
+    "payload": {
+      "url": "https://andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+      "host": "andrewsullivan.substack.com",
+      "slug": "greg-lukianoff-on-free-speech-fights",
+      "title": "Greg Lukianoff On Free Speech Fights",
+      "rawTitle": "THE WEEKLY DISH\nAPR 24\nGreg Lukianoff On Free Speech Fights\nThe First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.\nPREVIEW∙ANDREW SULLIVAN∙ 38 MIN LISTEN",
+      "publicationName": "THE WEEKLY DISH",
+      "author": null,
+      "authorDisplayName": "THE WEEKLY DISH",
+      "authorUsername": "andrewsullivan",
+      "summary": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+      "excerpt": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+      "timestampLabel": "APR 24",
+      "publishedAtMs": 1776988800000,
+      "readingMeta": "PREVIEW∙ANDREW SULLIVAN∙ 38 MIN LISTEN",
+      "discoverySurface": "inbox",
+      "extractedAtMs": 1777709902284,
+      "fetchedAtMs": 1777709928008,
+      "expiresAtMs": 1777925928008
+    },
+    "fetchedAtMs": 1777709928008,
+    "expiresAtMs": 1777925928008,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-c54f90b7e2",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-25T06:41:40.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Greg Lukianoff On Free Speech Fights",
+    "url": "https://andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+    "excerpt": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+    "text": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "Andrew Sullivan",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Greg Lukianoff On Free Speech Fights",
+    "url": "https://andrewsullivan.substack.com/p/greg-lukianoff-on-free-speech-fights",
+    "excerpt": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+    "text": "The First Amendment is increasingly threatened by both political tribes. Listen now on the Dishcast.",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "THE WEEKLY DISH",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "authorDisplayName"
+  ]
+}

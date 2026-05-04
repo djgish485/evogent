@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "c0SWtVwwqMk",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "c0SWtVwwqMk",
+    "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+    "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "authorUsername": "@seancarroll",
+    "authorDisplayName": "Sean Carroll",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "c0SWtVwwqMk",
+      "canonicalUrl": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+      "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+      "channelName": "Sean Carroll",
+      "channelUrl": "https://www.youtube.com/@seancarroll",
+      "channelHandle": "@seancarroll",
+      "channel": {
+        "name": "Sean Carroll",
+        "url": "https://www.youtube.com/@seancarroll",
+        "handle": "@seancarroll"
+      },
+      "publishLabel": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+      "publishDateText": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+      "thumbnailUrl": "https://i.ytimg.com/vi/c0SWtVwwqMk/hq720.jpg?sqp=-oaymwFBCOgCEMoBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGGMgYyhjMA8=&rs=AOn4CLBZM4SI4ObtY5yxyqNLD9N0_7sEzw",
+      "duration": "1:22:38",
+      "viewCount": 9400,
+      "viewCountLabel": "9.4K views",
+      "sourceKind": "home",
+      "firstSeenPass": 1,
+      "source": "youtube",
+      "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+      "sourceCapture": {
+        "pageUrl": "https://www.youtube.com/",
+        "completedScrollPasses": 3,
+        "requiredScrollPasses": 3,
+        "notes": []
+      }
+    },
+    "fetchedAtMs": 1777646367032,
+    "expiresAtMs": 1778510367032,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-2ff12309e5",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "c0SWtVwwqMk",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T00:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+    "excerpt": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "text": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "authorUsername": "@seancarroll",
+    "authorDisplayName": "Sean Carroll",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/c0SWtVwwqMk/hq720.jpg?sqp=-oaymwFBCOgCEMoBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGGMgYyhjMA8=&rs=AOn4CLBZM4SI4ObtY5yxyqNLD9N0_7sEzw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+        "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/c0SWtVwwqMk/hq720.jpg?sqp=-oaymwFBCOgCEMoBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGGMgYyhjMA8=&rs=AOn4CLBZM4SI4ObtY5yxyqNLD9N0_7sEzw",
+        "videoId": "c0SWtVwwqMk"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "c0SWtVwwqMk",
+        "canonicalUrl": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+        "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+        "channelName": "Sean Carroll",
+        "channelHandle": "@seancarroll",
+        "thumbnailUrl": "https://i.ytimg.com/vi/c0SWtVwwqMk/hq720.jpg?sqp=-oaymwFBCOgCEMoBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGGMgYyhjMA8=&rs=AOn4CLBZM4SI4ObtY5yxyqNLD9N0_7sEzw",
+        "publishDate": "2026-05-01T00:00:00.000Z",
+        "publishDateText": "publish time unavailable in cache",
+        "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "url": "https://www.youtube.com/watch?v=c0SWtVwwqMk",
+    "excerpt": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "text": "J. Eric Oliver on the Self and How to Know It | Mindscape 350",
+    "authorUsername": "@seancarroll",
+    "authorDisplayName": "Sean Carroll",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/c0SWtVwwqMk/hq720.jpg?sqp=-oaymwFBCOgCEMoBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGGMgYyhjMA8=&rs=AOn4CLBZM4SI4ObtY5yxyqNLD9N0_7sEzw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

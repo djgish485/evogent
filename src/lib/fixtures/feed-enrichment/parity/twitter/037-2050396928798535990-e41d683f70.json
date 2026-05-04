@@ -1,0 +1,225 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050396928798535990",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050396928798535990",
+    "url": "https://x.com/emollick/status/2050396928798535990",
+    "title": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out t",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "publishedAtMs": 1777687697000,
+    "payload": {
+      "surface": "home",
+      "sourceId": "2050396928798535990",
+      "url": "https://x.com/emollick/status/2050396928798535990",
+      "authorUsername": "emollick",
+      "authorDisplayName": "Ethan Mollick",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+      "text": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out the reasons why we whipsawed from “AI is a bubble” to “there are not enough data centers” in less than six months. Spoiler: its agents. \nhttps://\ntheatlantic.com/economy/2026/0\n5/ai-bubble-revenue-anthropic/687022/\n…",
+      "title": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out t",
+      "publishedAt": "2026-05-02T02:08:17.000Z",
+      "publishedAtMs": 1777687697000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHR5HniX0AADmK6?format=jpg&name=small"
+        },
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHR5HngWEAAGbzr?format=jpg&name=360x360"
+        }
+      ],
+      "metricsText": "Ethan Mollick @emollick · 24m I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out the reasons why we whipsawed from “AI is a bubble” to “there are not enough data centers” in less than six months. Spoiler: its agents. https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ … 6 5 42 2.5K",
+      "quotedTweet": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/BqZ5dfq8hg",
+        "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+        "domain": "t.co",
+        "imageUrl": null,
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/BqZ5dfq8hg",
+          "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+          "domain": "t.co",
+          "image": null,
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/BqZ5dfq8hg",
+          "expandedUrl": "https://t.co/BqZ5dfq8hg",
+          "displayUrl": "t.co"
+        }
+      ],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": {
+          "type": "external",
+          "url": "https://t.co/BqZ5dfq8hg",
+          "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+          "domain": "t.co",
+          "imageUrl": null,
+          "description": null
+        },
+        "linkPreviews": [
+          {
+            "url": "https://t.co/BqZ5dfq8hg",
+            "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+            "domain": "t.co",
+            "image": null,
+            "description": null
+          }
+        ],
+        "urlEntities": [
+          {
+            "url": "https://t.co/BqZ5dfq8hg",
+            "expandedUrl": "https://t.co/BqZ5dfq8hg",
+            "displayUrl": "t.co"
+          }
+        ]
+      },
+      "surfaces": [
+        "home"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-43a662283f",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050396928798535990",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T02:08:17.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out t",
+    "url": "https://x.com/emollick/status/2050396928798535990",
+    "excerpt": null,
+    "text": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out the reasons why we whipsawed from “AI is a bubble” to “there are not enough data centers” in less than six months. Spoiler: its agents. https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/BqZ5dfq8hg",
+        "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": [
+        {
+          "url": "https://t.co/BqZ5dfq8hg",
+          "expandedUrl": "https://t.co/BqZ5dfq8hg",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out t",
+    "url": "https://x.com/emollick/status/2050396928798535990",
+    "excerpt": null,
+    "text": "I was quoted a couple times in this Atlantic article, but that isn’t (the only) reason I think it is good. It lays out the reasons why we whipsawed from “AI is a bubble” to “there are not enough data centers” in less than six months. Spoiler: its agents. \nhttps://\ntheatlantic.com/economy/2026/0\n5/ai-bubble-revenue-anthropic/687022/\n…",
+    "authorUsername": "emollick",
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1601382188712398850/3AAOlqrX_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHR5HniX0AADmK6?format=jpg&name=small",
+      "https://pbs.twimg.com/media/HHR5HngWEAAGbzr?format=jpg&name=360x360"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/BqZ5dfq8hg",
+        "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/BqZ5dfq8hg",
+          "title": "https:// theatlantic.com/economy/2026/0 5/ai-bubble-revenue-anthropic/687022/ …",
+          "domain": "t.co"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/BqZ5dfq8hg",
+          "expandedUrl": "https://t.co/BqZ5dfq8hg",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "mediaUrls",
+    "metadata.linkPreviews"
+  ]
+}

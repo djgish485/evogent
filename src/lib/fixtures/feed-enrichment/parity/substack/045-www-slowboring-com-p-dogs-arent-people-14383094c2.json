@@ -1,0 +1,121 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://www.slowboring.com/p/dogs-arent-people",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://www.slowboring.com/p/dogs-arent-people",
+    "url": "https://www.slowboring.com/p/dogs-arent-people",
+    "title": "Dogs aren’t people",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "url": "https://www.slowboring.com/p/dogs-arent-people",
+      "title": "Dogs aren’t people",
+      "excerpt": "One of my hottest takes",
+      "publicationName": "SLOW BORING",
+      "publicationHost": "www.slowboring.com",
+      "author": "PREVIEW∙MATTHEW YGLESIAS",
+      "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+      "publishedLabel": "APR 20",
+      "publishedAtMs": 1776686400000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777044169034
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-66716f1993",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://www.slowboring.com/p/dogs-arent-people",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Dogs aren’t people",
+    "url": "https://www.slowboring.com/p/dogs-arent-people",
+    "excerpt": null,
+    "text": "One of my hottest takes",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "Matthew Yglesias",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!gzxV!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fceeb681e-a14d-4bbb-a8fe-951c29603e3f_256x256.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Dogs aren’t people",
+    "url": "https://www.slowboring.com/p/dogs-arent-people",
+    "excerpt": "One of my hottest takes",
+    "text": "",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

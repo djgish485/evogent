@@ -1,0 +1,162 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050340618044617211",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050340618044617211",
+    "url": "https://x.com/RichardSSutton/status/2050340618044617211",
+    "title": "Richard Sutton@RichardSSutton·58m: RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcem",
+    "authorUsername": "RichardSSutton",
+    "authorDisplayName": "Richard Sutton@RichardSSutton·58m",
+    "publishedAtMs": 1777674271000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050340618044617211",
+      "id": "2050340618044617211",
+      "url": "https://x.com/RichardSSutton/status/2050340618044617211",
+      "title": "Richard Sutton@RichardSSutton·58m: RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcem",
+      "text": "RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcement learning in simple, layman’s terms that are accessible to all. Reinforcement learning agents seek to maximize their reward over time,",
+      "authorUsername": "RichardSSutton",
+      "authorDisplayName": "Richard Sutton@RichardSSutton·58m",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1797759934811254786/XsJes4Sk_normal.jpg",
+      "publishedAt": "2026-05-01T22:24:31.000Z",
+      "publishedAtMs": 1777674271000,
+      "mediaUrls": [],
+      "media": [],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "inReplyToUsername": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "metrics": {
+        "reply": "2 Replies. Reply",
+        "retweet": "9 reposts. Repost",
+        "like": "55 Likes. Like",
+        "bookmark": "Bookmark"
+      },
+      "raw_data": {
+        "kind": "home",
+        "pass": 1,
+        "statusAnchors": [
+          {
+            "href": "https://x.com/RichardSSutton/status/2050340618044617211",
+            "id": "2050340618044617211"
+          },
+          {
+            "href": "https://x.com/RichardSSutton/status/2050340618044617211/analytics",
+            "id": "2050340618044617211"
+          }
+        ],
+        "userText": "Richard Sutton@RichardSSutton·58m",
+        "tweetTexts": [
+          "RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcement learning in simple, layman’s terms that are accessible to all. Reinforcement learning agents seek to maximize their reward over time,"
+        ],
+        "replyText": ""
+      },
+      "cacheRefresh": {
+        "taskId": "cache-refresh-twitter-1777677662701",
+        "captureKind": "home",
+        "fetchedAtMs": 1777677916850,
+        "expiresAtMs": 1777893916850
+      }
+    },
+    "fetchedAtMs": 1777677916850,
+    "expiresAtMs": 1777893916850,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-367f3cdb1a",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050340618044617211",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T22:24:31.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcement lea...",
+    "url": "https://x.com/RichardSSutton/status/2050340618044617211",
+    "excerpt": null,
+    "text": "RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcement learning in simple, layman’s terms that are accessible to all. Reinforcement learning agents seek to maximize their reward over time,",
+    "authorUsername": "RichardSSutton",
+    "authorDisplayName": "Richard Sutton",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1797759934811254786/XsJes4Sk_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Richard Sutton@RichardSSutton·58m: RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcem",
+    "url": "https://x.com/RichardSSutton/status/2050340618044617211",
+    "excerpt": null,
+    "text": "RL Ethics has a Predictive Semantics I would like to try to explain the view of ethics and values that arises from my research in reinforcement learning in simple, layman’s terms that are accessible to all. Reinforcement learning agents seek to maximize their reward over time,",
+    "authorUsername": "RichardSSutton",
+    "authorDisplayName": "Richard Sutton@RichardSSutton·58m",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1797759934811254786/XsJes4Sk_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "authorDisplayName"
+  ]
+}

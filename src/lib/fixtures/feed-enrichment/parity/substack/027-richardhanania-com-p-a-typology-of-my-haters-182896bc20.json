@@ -1,0 +1,121 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "richardhanania.com/p/a-typology-of-my-haters",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "richardhanania.com/p/a-typology-of-my-haters",
+    "url": "https://www.richardhanania.com/p/a-typology-of-my-haters",
+    "title": "A Typology of My Haters",
+    "authorUsername": "richardhanania.com",
+    "authorDisplayName": "The hidden political axis that explains it allRichard Hanania",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "url": "https://www.richardhanania.com/p/a-typology-of-my-haters",
+      "title": "A Typology of My Haters",
+      "publicationName": "Richard Hanania's Newsletter",
+      "publicationHost": "richardhanania.com",
+      "authorDisplayName": "The hidden political axis that explains it allRichard Hanania",
+      "subtitle": null,
+      "timeText": "Apr 20",
+      "lengthHint": "20 min read",
+      "publishedAtMs": 1776686400000,
+      "source": "substack",
+      "surface": "inbox"
+    },
+    "fetchedAtMs": 1777277869747,
+    "expiresAtMs": 1777493869747,
+    "seenByCurationAtMs": 1777099306528
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-a5a1f24812",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "richardhanania.com/p/a-typology-of-my-haters",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-25T06:41:40.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "A Typology of My Haters",
+    "url": "https://www.richardhanania.com/p/a-typology-of-my-haters",
+    "excerpt": "The hidden political axis that explains it all.",
+    "text": "The hidden political axis that explains it all.",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "Richard Hanania",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "A Typology of My Haters",
+    "url": "https://www.richardhanania.com/p/a-typology-of-my-haters",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "richardhanania.com",
+    "authorDisplayName": "The hidden political axis that explains it allRichard Hanania",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName"
+  ]
+}

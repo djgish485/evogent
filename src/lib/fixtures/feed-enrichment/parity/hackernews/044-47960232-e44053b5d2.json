@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47960232",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47960232",
+    "url": "https://github.com/NorskHelsenett/copy-fail-destroyer",
+    "title": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "authorUsername": "evenh",
+    "authorDisplayName": "evenh",
+    "publishedAtMs": 1777542599000,
+    "payload": {
+      "source": "hackernews",
+      "hnId": 47960232,
+      "id": 47960232,
+      "type": "story",
+      "title": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+      "url": "https://github.com/NorskHelsenett/copy-fail-destroyer",
+      "canonicalUrl": "https://github.com/NorskHelsenett/copy-fail-destroyer",
+      "discussionUrl": "https://news.ycombinator.com/item?id=47960232",
+      "author": "evenh",
+      "authorUsername": "evenh",
+      "score": 11,
+      "commentCount": 7,
+      "descendants": 7,
+      "publishedAtMs": 1777542599000,
+      "time": 1777542599,
+      "rankSignals": [
+        {
+          "surface": "top",
+          "rank": 43
+        }
+      ],
+      "primarySurface": "top",
+      "primaryRank": 43,
+      "domain": "github.com",
+      "isSelfPost": false,
+      "socialImage": null,
+      "socialImageUrl": null,
+      "kids": [
+        47961400,
+        47962870,
+        47961094
+      ]
+    },
+    "fetchedAtMs": 1777558902795,
+    "expiresAtMs": 1777688502795,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-f89c228d25",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47960232",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T09:49:59.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "url": "https://github.com/NorskHelsenett/copy-fail-destroyer",
+    "excerpt": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "text": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "authorUsername": "evenh",
+    "authorDisplayName": "evenh",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 11,
+      "reposts": 0,
+      "replies": 7,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47960232"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "url": "https://github.com/NorskHelsenett/copy-fail-destroyer",
+    "excerpt": "Hacker News discussion: 11 points, 7 comments.",
+    "text": "Copy-fail-destroyer: K8s remediation for CVE-2026-31431",
+    "authorUsername": "evenh",
+    "authorDisplayName": "evenh",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.hnUrl"
+  ]
+}

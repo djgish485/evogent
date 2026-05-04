@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "substack-import-ai-454-automating-alignment",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "substack-import-ai-454-automating-alignment",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "authorUsername": null,
+    "authorDisplayName": "Jack Clark",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+      "excerpt": "At what point do the financial markets price in the singularity?",
+      "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+      "publication": "Import AI",
+      "authorDisplayName": "Jack Clark",
+      "authorUsername": null,
+      "publishedAtMs": 1776686400000,
+      "fetchedAtMs": 1776979730201
+    },
+    "fetchedAtMs": 1776979730201,
+    "expiresAtMs": 1777152530201,
+    "seenByCurationAtMs": 1777044169034
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-7e5b848bae",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "substack-import-ai-454-automating-alignment",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "excerpt": "At what point do the financial markets price in the singularity?",
+    "text": "At what point do the financial markets price in the singularity?",
+    "authorUsername": "jackclarkSF",
+    "authorDisplayName": "Jack Clark",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "excerpt": "At what point do the financial markets price in the singularity?",
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "Jack Clark",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorUsername"
+  ]
+}

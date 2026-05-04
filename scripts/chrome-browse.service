@@ -1,0 +1,23 @@
+[Unit]
+Description=Chrome for browser-backed sources (desktop session)
+After=network.target display-manager.service graphical.target
+Wants=display-manager.service
+
+[Service]
+Type=simple
+User=root
+Environment=DISPLAY=:0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+Environment=XDG_RUNTIME_DIR=/run/user/0
+ExecStartPre=/bin/sh -c 'test -S /tmp/.X11-unix/X0'
+ExecStartPre=/bin/sh -c 'test -S /run/user/0/bus'
+ExecStartPre=/bin/sh -c 'test -d __KEYRING_DIR__'
+ExecStartPre=-/bin/rm -f __CHROME_PROFILE_DIR__/SingletonLock
+ExecStart=/usr/bin/google-chrome --lang=en-US --no-sandbox --remote-debugging-port=9222 --user-data-dir=__CHROME_PROFILE_DIR__ --no-first-run --noerrdialogs --window-size=1280,1024 --disable-features=HttpsUpgrades
+Restart=always
+RestartSec=10
+MemoryMax=2G
+MemoryHigh=1536M
+
+[Install]
+WantedBy=graphical.target

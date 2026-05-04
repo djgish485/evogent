@@ -1,0 +1,92 @@
+---
+metadata:
+  evogent:
+    user-facing: true
+---
+
+Report whether configured Evogent sources are refreshing and serving usable cache data.
+
+Usage: `/source-status`
+
+## Execution Model
+
+- This is a chat-answering diagnostic command. Submit exactly one concise chat reply to the current chat session.
+- Do not submit feed items, code_fix suggestions, curation candidates, or notifications unless the user explicitly asks for a follow-up action.
+- Resolve `API_BASE` from `MEDIA_AGENT_INTERNAL_BASE_URL` first, then `ORCHESTRATOR_INTERNAL_URL`, then `http://127.0.0.1:${PORT:-3001}`. Do not hardcode localhost or a production port.
+- Use SQLite as the source of truth when local DB access is available. Use internal APIs where useful for installed-skill or item inspection, but do not replace DB evidence with API summaries when the DB can be read directly.
+
+## Source Discovery
+
+Discover sources dynamically. Do not start from a fixed source list.
+
+1. Read `.claude/skills/*/SKILL.md`.
+2. Parse YAML frontmatter and collect every skill with:
+   - `metadata.evogent.feed-source`
+   - optional `metadata.evogent.feed-source-label`
+3. Treat each discovered `feed-source` as an installed source skill. Examples of source ids may include `twitter`, `youtube`, `substack`, or `hackernews`, but future installs may declare any source id and must work without code changes.
+4. Query SQLite for distinct cache sources from both `browse_cache_refresh_runs.source` and `browse_cache_items.source`.
+5. Report the union of installed source-skill ids and DB source ids. Account for both:
+   - installed source skills with no cache rows yet
+   - cache rows or refresh runs whose source has no installed skill
+
+## Evidence To Inspect
+
+Use `DATA_DIR/media-agent.db` when `DATA_DIR` is set; otherwise use `data/media-agent.db` under the repo root. If the DB cannot be opened, say that plainly and fall back to `API_BASE` endpoints where they exist.
+
+For each discovered source, inspect:
+
+- why it is considered configured: installed source skill, DB refresh runs, DB cache rows, source policy/config evidence, or a combination
+- expected cadence when derivable from the source skill Cacher Mode, policy JSON, or config
+- latest refresh run: `id`, `status`, age, `items_added`, and `error`
+- recent completed and failed run counts, using a bounded recent window such as the latest 10 runs or the last 24 hours
+- recent inserted-item totals from `browse_cache_refresh_runs.items_added`
+- current cache row count from `browse_cache_items`
+- fresh/unexpired count where `expires_at_ms > now`
+- unseen count where `seen_by_curation_at_ms IS NULL`
+- latest fetched and published timestamps from `browse_cache_items`
+- relevant task-log or orchestrator failures from `data/task-logs`, `data/agent-logs`, or recent app/orchestrator status APIs when available
+- a plain health opinion based on the evidence, separating content outage, stale cache, degraded refresh, no data yet, and healthy states
+
+Useful SQLite checks:
+
+```sql
+SELECT DISTINCT source FROM browse_cache_refresh_runs
+UNION
+SELECT DISTINCT source FROM browse_cache_items
+ORDER BY source;
+
+SELECT id, status, started_at_ms, completed_at_ms, items_added, error
+FROM browse_cache_refresh_runs
+WHERE source = ?
+ORDER BY started_at_ms DESC, id DESC
+LIMIT 10;
+
+SELECT
+  COUNT(*) AS total,
+  SUM(CASE WHEN expires_at_ms > ? THEN 1 ELSE 0 END) AS fresh,
+  SUM(CASE WHEN seen_by_curation_at_ms IS NULL THEN 1 ELSE 0 END) AS unseen,
+  MAX(fetched_at_ms) AS latest_fetched_at_ms,
+  MAX(published_at_ms) AS latest_published_at_ms
+FROM browse_cache_items
+WHERE source = ?;
+```
+
+## Unknown Or Mismatch Section
+
+Include a short "Unknown/mismatch" section when any of these appear:
+
+- installed source skill with no cache data
+- cache source with no installed skill
+- invalid, missing, future, or non-monotonic refresh timestamps
+- suspicious cadence when the latest run age is far beyond an expected cadence you could derive
+- repeated completed refreshes with zero items added
+- recent failures after the latest success
+- DB unavailable or schema missing expected cache tables
+
+## Response Format
+
+Keep the answer compact:
+
+- Start with one sentence summarizing overall source health.
+- Then include one bullet per discovered source with the source id/label, health opinion, latest run, item counts, freshness, unseen count, and notable errors.
+- End with the unknown/mismatch section only when needed.

@@ -1,0 +1,168 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "xmkSf5IS-zw",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "xmkSf5IS-zw",
+    "url": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+    "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "authorUsername": "@DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "publishedAtMs": 1777560088657,
+    "payload": {
+      "videoId": "xmkSf5IS-zw",
+      "canonicalUrl": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+      "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+      "channelName": "Dwarkesh Patel",
+      "channelUrl": "https://www.youtube.com/@DwarkeshPatel",
+      "channelHandle": "@DwarkeshPatel",
+      "channel": {
+        "name": "Dwarkesh Patel",
+        "url": "https://www.youtube.com/@DwarkeshPatel",
+        "handle": "@DwarkeshPatel"
+      },
+      "publishLabel": "2 days ago",
+      "publishDateText": "2 days ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/xmkSf5IS-zw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB4fId74in2VEED01I7GM8EHQe8Qg",
+      "duration": "2:13:41",
+      "viewCount": 184000,
+      "viewCountLabel": "184K views",
+      "sourceKind": "subscriptions",
+      "firstSeenPass": 0,
+      "sourceKinds": [
+        "subscriptions"
+      ],
+      "source": "youtube",
+      "sourceCaptureFile": "data/tmp/youtube-subs-cache-refresh-youtube-1777732563134.capture",
+      "captureRunId": "cache-refresh-youtube-1777732563134",
+      "sourceNotes": [
+        "subscriptions pass 1 added zero videos",
+        "subscriptions pass 3 added zero videos",
+        "subscriptions pass 4 added zero videos",
+        "subscriptions pass 5 added zero videos"
+      ],
+      "publishedAtMs": 1777560088657,
+      "fetchedAtMs": 1777732888657,
+      "expiresAtMs": 1778596888657
+    },
+    "fetchedAtMs": 1777732888657,
+    "expiresAtMs": 1778596888657,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-90c74087b4",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "xmkSf5IS-zw",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T17:39:57.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "url": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+    "excerpt": null,
+    "text": "Dwarkesh Patel: How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "authorUsername": "DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/xmkSf5IS-zw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB4fId74in2VEED01I7GM8EHQe8Qg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+        "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/xmkSf5IS-zw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB4fId74in2VEED01I7GM8EHQe8Qg",
+        "videoId": "xmkSf5IS-zw"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "xmkSf5IS-zw",
+        "canonicalUrl": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+        "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+        "channelName": "Dwarkesh Patel",
+        "channelHandle": "DwarkeshPatel",
+        "thumbnailUrl": "https://i.ytimg.com/vi/xmkSf5IS-zw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB4fId74in2VEED01I7GM8EHQe8Qg",
+        "publishDate": "2026-04-29T17:39:57.000Z",
+        "publishDateText": "2026-04-29T17:39:57.000Z",
+        "url": "https://www.youtube.com/watch?v=xmkSf5IS-zw"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "url": "https://www.youtube.com/watch?v=xmkSf5IS-zw",
+    "excerpt": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "text": "How GPT-5, Claude, and Gemini are actually trained and served – Reiner Pope",
+    "authorUsername": "@DwarkeshPatel",
+    "authorDisplayName": "Dwarkesh Patel",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/xmkSf5IS-zw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB4fId74in2VEED01I7GM8EHQe8Qg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

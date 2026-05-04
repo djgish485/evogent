@@ -1,0 +1,162 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "OCyXKRYcJ0Q",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "OCyXKRYcJ0Q",
+    "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+    "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "authorUsername": "@BPSspace",
+    "authorDisplayName": "BPS.space",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "OCyXKRYcJ0Q",
+      "canonicalUrl": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+      "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+      "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+      "channelName": "BPS.space",
+      "channelUrl": "https://www.youtube.com/@BPSspace",
+      "channelHandle": "@BPSspace",
+      "channel": {
+        "name": "BPS.space",
+        "url": "https://www.youtube.com/@BPSspace",
+        "handle": "@BPSspace"
+      },
+      "authorUsername": "@BPSspace",
+      "authorDisplayName": "BPS.space",
+      "publishLabel": "17 hours ago",
+      "publishDateText": "17 hours ago",
+      "publishedAtMs": null,
+      "thumbnailUrl": "https://i.ytimg.com/vi/OCyXKRYcJ0Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAWq5T8O8qHsuY02IOq3XiZxE2VDw",
+      "duration": "43:06",
+      "viewCount": 207000,
+      "viewCountLabel": "207K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "fetchedAtMs": 1777573889244,
+      "captureRunId": "cache-refresh-youtube-1777573681272"
+    },
+    "fetchedAtMs": 1777573889244,
+    "expiresAtMs": 1778437889244,
+    "seenByCurationAtMs": 1777548614503
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-afc6ad4295",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "OCyXKRYcJ0Q",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T01:53:11.092Z"
+  },
+  "historicalFeedRow": {
+    "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+    "excerpt": "BPS.space video.",
+    "text": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "authorUsername": "@BPSspace",
+    "authorDisplayName": "BPS.space",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/OCyXKRYcJ0Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAWq5T8O8qHsuY02IOq3XiZxE2VDw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+        "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/OCyXKRYcJ0Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAWq5T8O8qHsuY02IOq3XiZxE2VDw",
+        "videoId": "OCyXKRYcJ0Q"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "OCyXKRYcJ0Q",
+        "canonicalUrl": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+        "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+        "channelName": "BPS.space",
+        "channelHandle": "@BPSspace",
+        "channelUrl": "https://www.youtube.com/@BPSspace",
+        "thumbnailUrl": "https://i.ytimg.com/vi/OCyXKRYcJ0Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAWq5T8O8qHsuY02IOq3XiZxE2VDw",
+        "publishDate": null,
+        "publishDateText": "6 hours ago",
+        "duration": "43:06",
+        "viewCountText": "72K views",
+        "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "url": "https://www.youtube.com/watch?v=OCyXKRYcJ0Q",
+    "excerpt": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "text": "Building a Tiny 240fps Gyroscopic Stabilized Camera with GPS",
+    "authorUsername": "@BPSspace",
+    "authorDisplayName": "BPS.space",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/OCyXKRYcJ0Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAWq5T8O8qHsuY02IOq3XiZxE2VDw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

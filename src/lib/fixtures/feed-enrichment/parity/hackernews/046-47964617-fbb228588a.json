@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47964617",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47964617",
+    "url": "https://semgrep.dev/blog/2026/malicious-dependency-in-pytorch-lightning-used-for-ai-training/",
+    "title": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "authorUsername": "j12y",
+    "authorDisplayName": "j12y",
+    "publishedAtMs": 1777565366000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47964617",
+      "id": 47964617,
+      "type": "story",
+      "title": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+      "url": "https://semgrep.dev/blog/2026/malicious-dependency-in-pytorch-lightning-used-for-ai-training/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47964617",
+      "canonicalUrl": "https://semgrep.dev/blog/2026/malicious-dependency-in-pytorch-lightning-used-for-ai-training/",
+      "author": "j12y",
+      "score": 460,
+      "commentCount": 177,
+      "descendants": 177,
+      "publishedAtMs": 1777565366000,
+      "time": 1777565366,
+      "text": "Also: <a href=\"https:&#x2F;&#x2F;socket.dev&#x2F;blog&#x2F;lightning-pypi-package-compromised\" rel=\"nofollow\">https:&#x2F;&#x2F;socket.dev&#x2F;blog&#x2F;lightning-pypi-package-compromised</a>",
+      "kids": [
+        47966396,
+        47966126,
+        47970986,
+        47967274,
+        47965646,
+        47966862,
+        47967352,
+        47974815,
+        47966117,
+        47969993,
+        47966508,
+        47965608,
+        47966043,
+        47970362,
+        47965809,
+        47966521,
+        47972870,
+        47965888,
+        47966204,
+        47965717,
+        47965997,
+        47967094,
+        47974072,
+        47968862,
+        47972027
+      ],
+      "lists": [
+        "beststories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-bc1f35131b",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47964617",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T16:09:26.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "url": "https://semgrep.dev/blog/2026/malicious-dependency-in-pytorch-lightning-used-for-ai-training/",
+    "excerpt": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "text": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "authorUsername": "j12y",
+    "authorDisplayName": "j12y",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 50,
+      "reposts": 0,
+      "replies": 4,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47964617"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "url": "https://semgrep.dev/blog/2026/malicious-dependency-in-pytorch-lightning-used-for-ai-training/",
+    "excerpt": "Hacker News discussion: 460 points, 177 comments.",
+    "text": "Shai-Hulud Themed Malware Found in the PyTorch Lightning AI Training Library",
+    "authorUsername": "j12y",
+    "authorDisplayName": "j12y",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.hnUrl"
+  ]
+}

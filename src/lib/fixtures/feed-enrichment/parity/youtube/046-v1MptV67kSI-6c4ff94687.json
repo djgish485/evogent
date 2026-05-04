@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "v1MptV67kSI",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "v1MptV67kSI",
+    "url": "https://www.youtube.com/watch?v=v1MptV67kSI",
+    "title": "Claude Code's favorite tech stack",
+    "authorUsername": "@t3dotgg",
+    "authorDisplayName": "Theo - t3․gg",
+    "publishedAtMs": 1777453580659,
+    "payload": {
+      "videoId": "v1MptV67kSI",
+      "canonicalUrl": "https://www.youtube.com/watch?v=v1MptV67kSI",
+      "url": "https://www.youtube.com/watch?v=v1MptV67kSI",
+      "title": "Claude Code's favorite tech stack",
+      "channelName": "Theo - t3․gg",
+      "channelUrl": "https://www.youtube.com/@t3dotgg",
+      "channelHandle": "@t3dotgg",
+      "channel": {
+        "name": "Theo - t3․gg",
+        "url": "https://www.youtube.com/@t3dotgg",
+        "handle": "@t3dotgg"
+      },
+      "publishLabel": "5 hours ago",
+      "publishDateText": "5 hours ago",
+      "thumbnailUrl": null,
+      "duration": "38:59",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "firstSeenPass": 3,
+      "firstSeenOrder": 90,
+      "publishedAtMs": 1777453580659,
+      "cacheTaskId": "cache-refresh-youtube-1777471009755",
+      "expiresAtMs": 1778335580659
+    },
+    "fetchedAtMs": 1777471580659,
+    "expiresAtMs": 1778335580659,
+    "seenByCurationAtMs": 1777477575411
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-c70e5c53cd",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "v1MptV67kSI",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T09:06:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Claude Code's favorite tech stack",
+    "url": "https://www.youtube.com/watch?v=v1MptV67kSI",
+    "excerpt": null,
+    "text": "Theo - t3․gg: Claude Code's favorite tech stack",
+    "authorUsername": "t3dotgg",
+    "authorDisplayName": "Theo - t3․gg",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/v1MptV67kSI/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=v1MptV67kSI",
+        "title": "Claude Code's favorite tech stack",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/v1MptV67kSI/hqdefault.jpg",
+        "videoId": "v1MptV67kSI"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "v1MptV67kSI",
+        "canonicalUrl": "https://www.youtube.com/watch?v=v1MptV67kSI",
+        "title": "Claude Code's favorite tech stack",
+        "channelName": "Theo - t3․gg",
+        "channelHandle": "t3dotgg",
+        "thumbnailUrl": "https://i.ytimg.com/vi/v1MptV67kSI/hqdefault.jpg",
+        "publishDate": "2026-04-29T09:06:20.000Z",
+        "publishDateText": "2026-04-29T09:06:20.000Z",
+        "url": "https://www.youtube.com/watch?v=v1MptV67kSI"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Claude Code's favorite tech stack",
+    "url": "https://www.youtube.com/watch?v=v1MptV67kSI",
+    "excerpt": "Claude Code's favorite tech stack",
+    "text": "Claude Code's favorite tech stack",
+    "authorUsername": "@t3dotgg",
+    "authorDisplayName": "Theo - t3․gg",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

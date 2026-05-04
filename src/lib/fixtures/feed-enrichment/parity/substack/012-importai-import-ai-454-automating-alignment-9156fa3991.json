@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "importai:import-ai-454-automating-alignment",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "importai:import-ai-454-automating-alignment",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "authorUsername": "importai",
+    "authorDisplayName": "Import AI",
+    "publishedAtMs": null,
+    "payload": {
+      "source": "substack",
+      "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+      "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+      "authorUsername": "importai",
+      "authorDisplayName": "Import AI",
+      "publishedAtMs": null,
+      "excerpt": null,
+      "fetchedAtMs": 1777377036368
+    },
+    "fetchedAtMs": 1777377036368,
+    "expiresAtMs": 1777593036368,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-533e095ca7",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "importai:import-ai-454-automating-alignment",
+    "parentId": null,
+    "relationship": "parent",
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T11:50:36.368Z"
+  },
+  "historicalFeedRow": {
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "excerpt": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "text": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "authorUsername": "importai",
+    "authorDisplayName": "Import AI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "expectedFeedRow": {
+    "title": "Import AI 454: Automating alignment research; safety study of a Chinese model; HiFloat4",
+    "url": "https://importai.substack.com/p/import-ai-454-automating-alignment",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "importai",
+    "authorDisplayName": "Import AI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

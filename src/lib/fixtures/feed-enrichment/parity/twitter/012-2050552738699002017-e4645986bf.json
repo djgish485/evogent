@@ -1,0 +1,152 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050552738699002017",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050552738699002017",
+    "url": "https://x.com/robotsdigest/status/2050552738699002017",
+    "title": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of co",
+    "authorUsername": "robotsdigest",
+    "authorDisplayName": "Robots Digest",
+    "publishedAtMs": 1777724844000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050552738699002017",
+      "url": "https://x.com/robotsdigest/status/2050552738699002017",
+      "title": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of co",
+      "authorUsername": "robotsdigest",
+      "authorDisplayName": "Robots Digest",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1960300063454081024/y9QhWj-e_normal.jpg",
+      "text": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of continuous improvement. A pretrained vision language action policy is deployed across a robot fleet, collects real world experience, and improves itself through",
+      "publishedAt": "2026-05-02T12:27:24.000Z",
+      "publishedAtMs": 1777724844000,
+      "media": [
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050552157250953216/img/jU0NAKxO0W5za40k.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2050552157250953216/img/jU0NAKxO0W5za40k.jpg",
+          "alt": null
+        }
+      ],
+      "metrics": {
+        "repostCountText": "3",
+        "likeCountText": "12",
+        "viewCountText": "1017",
+        "bookmarkCountText": "7",
+        "accessibleLabel": "Verified account | 1 hour ago | Grok actions | More | Embedded video | Seek slider | Play | Unmute | Volume slider | Video Settings | Picture-in-Picture | Full screen | 1 reply, 3 reposts, 12 likes, 7 bookmarks, 1017 views | 1 Reply. Reply | 3 reposts. Repost | 12 Likes. Like | 1017 views. View post analytics | Bookmark | Share post"
+      },
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureKind": "home",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "articleIndex": 1
+      },
+      "cacheRunId": "cache-refresh-twitter-1777730463129",
+      "capturedFrom": "home",
+      "capturedAt": "2026-05-02T14:03:32.086Z"
+    },
+    "fetchedAtMs": 1777730772776,
+    "expiresAtMs": 1777946772776,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-30c5d85023",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050552738699002017",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:27:24.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of continuous improvement. A pretrained vision language action po",
+    "url": "https://x.com/robotsdigest/status/2050552738699002017",
+    "excerpt": null,
+    "text": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of continuous improvement. A pretrained vision language action policy is deployed across a robot fleet, collects real world experience, and improves itself through",
+    "authorUsername": "robotsdigest",
+    "authorDisplayName": "Robots Digest",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1960300063454081024/y9QhWj-e_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050552157250953216/img/jU0NAKxO0W5za40k.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of co",
+    "url": "https://x.com/robotsdigest/status/2050552738699002017",
+    "excerpt": null,
+    "text": "Learning While Deploying introduces a shift in robotics: deployment is no longer the end of training but the start of continuous improvement. A pretrained vision language action policy is deployed across a robot fleet, collects real world experience, and improves itself through",
+    "authorUsername": "robotsdigest",
+    "authorDisplayName": "Robots Digest",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1960300063454081024/y9QhWj-e_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050552157250953216/img/jU0NAKxO0W5za40k.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title"
+  ]
+}

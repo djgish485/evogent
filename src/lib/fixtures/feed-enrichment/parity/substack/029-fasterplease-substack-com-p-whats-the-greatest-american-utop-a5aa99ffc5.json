@@ -1,0 +1,128 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "title": "🛸 What's the 'greatest American utopian science fiction story' ever written?",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "FASTER, PLEASE!",
+    "publishedAtMs": 1776988800000,
+    "payload": {
+      "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+      "host": "fasterplease.substack.com",
+      "slug": "whats-the-greatest-american-utopian",
+      "title": "🛸 What's the 'greatest American utopian science fiction story' ever written?",
+      "rawTitle": "FASTER, PLEASE!\nAPR 24\n🛸 What's the 'greatest American utopian science fiction story' ever written?\nHint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir\nJAMES PETHOKOUKIS∙4 MIN READ",
+      "publicationName": "FASTER, PLEASE!",
+      "author": null,
+      "authorDisplayName": "FASTER, PLEASE!",
+      "authorUsername": "fasterplease",
+      "summary": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+      "excerpt": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+      "timestampLabel": "APR 24",
+      "publishedAtMs": 1776988800000,
+      "readingMeta": "JAMES PETHOKOUKIS∙4 MIN READ",
+      "discoverySurface": "inbox",
+      "extractedAtMs": 1777709902284,
+      "fetchedAtMs": 1777709928008,
+      "expiresAtMs": 1777925928008
+    },
+    "fetchedAtMs": 1777709928008,
+    "expiresAtMs": 1777925928008,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-caf2647c70",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-25T06:41:40.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "What's the 'greatest American utopian science fiction story' ever written?",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "excerpt": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir.",
+    "text": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir.",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "🛸 What's the 'greatest American utopian science fiction story' ever written?",
+    "url": "https://fasterplease.substack.com/p/whats-the-greatest-american-utopian",
+    "excerpt": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+    "text": "Hint: It's not by Isaac Asimov, Ray Bradbury, or Andy Weir",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "FASTER, PLEASE!",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "excerpt",
+    "text",
+    "authorDisplayName"
+  ]
+}

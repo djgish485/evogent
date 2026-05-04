@@ -1,0 +1,152 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2049976877612179663",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2049976877612179663",
+    "url": "https://x.com/60Minutes/status/2049976877612179663",
+    "title": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of",
+    "authorUsername": "60minutes",
+    "authorDisplayName": "60 Minutes",
+    "publishedAtMs": 1777587549000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2049976877612179663",
+      "surface": "home",
+      "url": "https://x.com/60Minutes/status/2049976877612179663",
+      "title": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of ",
+      "text": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of scientists created a synthetic bacteria designed on a computer, with man-made DNA. Venter says that from concept to completion, it took 15 years and $40 million",
+      "authorUsername": "60minutes",
+      "authorDisplayName": "60 Minutes",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1617634745348661249/6YmPYpNd_bigger.jpg",
+      "publishedAt": "2026-04-30T22:19:09.000Z",
+      "publishedAtMs": 1777587549000,
+      "media": [
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2049976720627740672/img/YPncUeJFQs_hRvzx.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2049976720627740672/img/YPncUeJFQs_hRvzx.jpg",
+          "alt": ""
+        }
+      ],
+      "metrics": {
+        "replies": "9 replies, 99 reposts, 291 likes, 80 bookmarks, 40950 views",
+        "reposts": "99 reposts. Repost",
+        "likes": "291 Likes. Like",
+        "views": "40950 views. View post analytics"
+      },
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "inReplyToHandle": null,
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null,
+        "replyingText": "9"
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "capturedAt": "2026-05-01T08:32:44.320Z",
+      "fetchedAtMs": 1777624477223,
+      "expiresAtMs": 1777840477223,
+      "cacheRunId": "cache-refresh-twitter-1777623776791"
+    },
+    "fetchedAtMs": 1777624477223,
+    "expiresAtMs": 1777840477223,
+    "seenByCurationAtMs": null
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-2bb1d15ff2",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2049976877612179663",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T22:19:09.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of",
+    "url": "https://x.com/60Minutes/status/2049976877612179663",
+    "excerpt": null,
+    "text": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of scientists created a synthetic bacteria designed on a computer, with man-made DNA. Venter says that from concept to completion, it took 15 years and $40 million",
+    "authorUsername": "60minutes",
+    "authorDisplayName": "60 Minutes",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1617634745348661249/6YmPYpNd_bigger.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of",
+    "url": "https://x.com/60Minutes/status/2049976877612179663",
+    "excerpt": null,
+    "text": "\"This is the first synthetic species,” microbiologist J. Craig Venter told 60 Minutes’ Steve Kroft in 2010. His team of scientists created a synthetic bacteria designed on a computer, with man-made DNA. Venter says that from concept to completion, it took 15 years and $40 million",
+    "authorUsername": "60minutes",
+    "authorDisplayName": "60 Minutes",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1617634745348661249/6YmPYpNd_bigger.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2049976720627740672/img/YPncUeJFQs_hRvzx.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls"
+  ]
+}

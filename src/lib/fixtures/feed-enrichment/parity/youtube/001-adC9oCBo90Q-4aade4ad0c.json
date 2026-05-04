@@ -1,0 +1,156 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "adC9oCBo90Q",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "adC9oCBo90Q",
+    "url": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+    "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "authorUsername": null,
+    "authorDisplayName": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+    "publishedAtMs": 1774995368740,
+    "payload": {
+      "videoId": "adC9oCBo90Q",
+      "canonicalUrl": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+      "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+      "channelName": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+      "channelUrl": null,
+      "channelHandle": null,
+      "channel": {
+        "name": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+        "url": null,
+        "handle": null
+      },
+      "publishLabel": "3 weeks ago",
+      "publishDateText": "3 weeks ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/adC9oCBo90Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAU50-zDWrXpi8sR0qn0FvAO5yuLA",
+      "duration": "1:12:49",
+      "sourceKind": "home",
+      "firstSeenPass": 0,
+      "seenIn": [
+        "home"
+      ],
+      "captureNotes": [],
+      "source": "youtube",
+      "fetchedAtMs": 1776809768740,
+      "expiresAtMs": 1778019368740
+    },
+    "fetchedAtMs": 1776809768740,
+    "expiresAtMs": 1778019368740,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-149a6480b6",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "adC9oCBo90Q",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-03-31T22:16:08.740Z"
+  },
+  "historicalFeedRow": {
+    "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "url": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+    "excerpt": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "text": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "authorUsername": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+    "authorDisplayName": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/adC9oCBo90Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAU50-zDWrXpi8sR0qn0FvAO5yuLA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+        "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/adC9oCBo90Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAU50-zDWrXpi8sR0qn0FvAO5yuLA",
+        "videoId": "adC9oCBo90Q"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "adC9oCBo90Q",
+        "canonicalUrl": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+        "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+        "channelName": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+        "channelHandle": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+        "thumbnailUrl": "https://i.ytimg.com/vi/adC9oCBo90Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAU50-zDWrXpi8sR0qn0FvAO5yuLA",
+        "publishDateText": "3 weeks ago",
+        "duration": "1:12:49",
+        "url": "https://www.youtube.com/watch?v=adC9oCBo90Q"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "url": "https://www.youtube.com/watch?v=adC9oCBo90Q",
+    "excerpt": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "text": "Rome's Crisis of the Third Century Explained with Adrian Goldsworthy",
+    "authorUsername": null,
+    "authorDisplayName": "Tribunate and Adrian Goldsworthy. Historian and Novelist",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/adC9oCBo90Q/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAU50-zDWrXpi8sR0qn0FvAO5yuLA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2049919348849213676",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2049919348849213676",
+    "url": "https://x.com/KianSadeghi5/status/2049919348849213676",
+    "title": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many",
+    "authorUsername": "KianSadeghi5",
+    "authorDisplayName": "Kian Sadeghi",
+    "publishedAtMs": 1777573833000,
+    "payload": {
+      "id": "2049919348849213676",
+      "url": "https://x.com/KianSadeghi5/status/2049919348849213676",
+      "text": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many years, and it’s only now becoming obvious to the broader world + Silicon Valley the profound impact it will have.",
+      "full_text": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many years, and it’s only now becoming obvious to the broader world + Silicon Valley the profound impact it will have.",
+      "authorUsername": "KianSadeghi5",
+      "authorDisplayName": "Kian Sadeghi",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1966228106496159744/QpPzFQDi_normal.jpg",
+      "handle": "@KianSadeghi5",
+      "publishedAtMs": 1777573833000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": {
+        "authorUsername": "alexisohanian",
+        "authorDisplayName": "Alexis Ohanian",
+        "text": "Few realize how big of a deal this is and what it will mean for improving medicine... x.com/maxmarchione/s…"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "rawText": "Alex Tabarrok reposted\nKian Sadeghi\n@KianSadeghi5\n·\n7h\nI continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many years, and it’s only now becoming obvious to the broader world + Silicon Valley the profound impact it will have.\nQuote\nAlexis Ohanian\n@alexisohanian\n·\n9h\nFew realize how big of a deal this is and what it will mean for improving medicine... x.com/maxmarchione/s…\n2\n4\n36\n5.5K",
+      "cacheRefresh": {
+        "taskId": "cache-refresh-twitter-1777599022502",
+        "runId": "cache-refresh-twitter-1777599022502",
+        "surface": "following",
+        "capturedAtMs": 1777599187085
+      }
+    },
+    "fetchedAtMs": 1777599239939,
+    "expiresAtMs": 1777815239939,
+    "seenByCurationAtMs": null
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-e06e25fa50",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2049919348849213676",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T18:30:33.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many",
+    "url": "https://x.com/KianSadeghi5/status/2049919348849213676",
+    "excerpt": null,
+    "text": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many years, and it’s only now becoming obvious to the broader world + Silicon Valley the profound impact it will have.",
+    "authorUsername": "KianSadeghi5",
+    "authorDisplayName": "Kian Sadeghi",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1966228106496159744/QpPzFQDi_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many",
+    "url": "https://x.com/KianSadeghi5/status/2049919348849213676",
+    "excerpt": null,
+    "text": "I continue to maintain genomics is a bit like AI in the 2010’s — a small number of people have been going at it for many years, and it’s only now becoming obvious to the broader world + Silicon Valley the profound impact it will have.",
+    "authorUsername": "KianSadeghi5",
+    "authorDisplayName": "Kian Sadeghi",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1966228106496159744/QpPzFQDi_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Few realize how big of a deal this is and what it will mean for improving medicine... x.com/maxmarchione/s…",
+        "author": {
+          "username": "alexisohanian",
+          "displayName": "Alexis Ohanian"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.quotedTweet"
+  ]
+}

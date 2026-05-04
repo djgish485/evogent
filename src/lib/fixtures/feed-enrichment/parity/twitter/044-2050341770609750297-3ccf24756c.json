@@ -1,0 +1,229 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050341770609750297",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050341770609750297",
+    "url": "https://x.com/code/status/2050341770609750297",
+    "title": "Visual Studio Code@code·54m: Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discove",
+    "authorUsername": "code",
+    "authorDisplayName": "Visual Studio Code@code·54m",
+    "publishedAtMs": 1777674546000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050341770609750297",
+      "id": "2050341770609750297",
+      "url": "https://x.com/code/status/2050341770609750297",
+      "title": "Visual Studio Code@code·54m: Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discove",
+      "text": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+      "authorUsername": "code",
+      "authorDisplayName": "Visual Studio Code@code·54m",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1545098208556097536/rKXaODLl_normal.jpg",
+      "publishedAt": "2026-05-01T22:29:06.000Z",
+      "publishedAtMs": 1777674546000,
+      "mediaUrls": [
+        "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg"
+      ],
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg",
+          "alt": null
+        },
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg",
+          "posterUrl": "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg"
+        }
+      ],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "inReplyToUsername": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/w88v6dCCqi",
+        "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+        "domain": "t.co",
+        "imageUrl": null,
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/w88v6dCCqi",
+          "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+          "domain": "t.co",
+          "image": null,
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/w88v6dCCqi",
+          "expandedUrl": "https://t.co/w88v6dCCqi",
+          "displayUrl": "t.co"
+        }
+      ],
+      "metrics": {
+        "reply": "3 Replies. Reply",
+        "retweet": "8 reposts. Repost",
+        "like": "64 Likes. Like",
+        "bookmark": "Bookmark"
+      },
+      "raw_data": {
+        "kind": "home",
+        "pass": 1,
+        "statusAnchors": [
+          {
+            "href": "https://x.com/code/status/2050341770609750297",
+            "id": "2050341770609750297"
+          },
+          {
+            "href": "https://x.com/code/status/2050341770609750297/analytics",
+            "id": "2050341770609750297"
+          }
+        ],
+        "userText": "Visual Studio Code@code·54m",
+        "tweetTexts": [
+          "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …"
+        ],
+        "replyText": ""
+      },
+      "cacheRefresh": {
+        "taskId": "cache-refresh-twitter-1777677662701",
+        "captureKind": "home",
+        "fetchedAtMs": 1777677916850,
+        "expiresAtMs": 1777893916850
+      }
+    },
+    "fetchedAtMs": 1777677916850,
+    "expiresAtMs": 1777893916850,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-b57ccab04e",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050341770609750297",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T22:29:06.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, age...",
+    "url": "https://x.com/code/status/2050341770609750297",
+    "excerpt": null,
+    "text": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+    "authorUsername": "code",
+    "authorDisplayName": "Visual Studio Code",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1545098208556097536/rKXaODLl_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/w88v6dCCqi",
+        "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/w88v6dCCqi",
+          "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+          "domain": "t.co"
+        }
+      ],
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Visual Studio Code@code·54m: Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discove",
+    "url": "https://x.com/code/status/2050341770609750297",
+    "excerpt": null,
+    "text": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+    "authorUsername": "code",
+    "authorDisplayName": "Visual Studio Code@code·54m",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1545098208556097536/rKXaODLl_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/ext_tw_video_thumb/2050341747339755520/pu/img/LzSgWwHtSbCTkk-J.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/w88v6dCCqi",
+        "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/w88v6dCCqi",
+          "title": "Want to see what happens behind each prompt? Agent Debug Logs lets you inspect chat interactions, tool calls, model requests, prompt discovery, agent flows, and more. https:// code.visualstudio.com/docs/copilot/c hat/chat-debug-view …",
+          "domain": "t.co"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/w88v6dCCqi",
+          "expandedUrl": "https://t.co/w88v6dCCqi",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "authorDisplayName",
+    "metadata.urlEntities"
+  ]
+}

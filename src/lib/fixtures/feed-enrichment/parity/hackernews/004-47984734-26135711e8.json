@@ -1,0 +1,141 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47984734",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47984734",
+    "url": "https://iesna.eu/?wasm=skyglow_demo",
+    "title": "Show HN: Browser-based light pollution simulator using real photometric data",
+    "authorUsername": "holg",
+    "authorDisplayName": "holg",
+    "publishedAtMs": 1777712898000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47984734",
+      "id": 47984734,
+      "type": "story",
+      "title": "Show HN: Browser-based light pollution simulator using real photometric data",
+      "url": "https://iesna.eu/?wasm=skyglow_demo",
+      "hnUrl": "https://news.ycombinator.com/item?id=47984734",
+      "canonicalUrl": "https://iesna.eu/?wasm=skyglow_demo",
+      "author": "holg",
+      "score": 29,
+      "commentCount": 6,
+      "descendants": 6,
+      "publishedAtMs": 1777712898000,
+      "time": 1777712898,
+      "text": "Hi HN — author here. iesna.eu is a browser-based ecosystem for working with photometric data: parsing standard luminaire files (LDT&#x2F;EULUMDAT, IES LM-63, Oxytech, ATLA-S001), running design calculations against EN 13201 &#x2F; ANSI&#x2F;IES RP-8 &#x2F; CJJ 45 &#x2F; IES-IDA MLO, and (the part I most want to show off here) rendering real urban scenes in Bevy with the photometric data driving actual streetlight behavior, including sky-glow contribution.\nThe Skyglow Analysis demo loads a real LDT file into a Bevy scene (Khronos Bistro test asset). \nThe luminaire&#x27;s intensity distribution drives the streetlight rendering directly — no fudging — and the sky-glow grade updates live as you adjust the uplight percentage. Swap to a full-cutoff fixture and the sky goes from F (Severe) back to A (Excellent). You can see the difference on the buildings as well as in the sky.\nStack: Rust core (eulumdat-rs and friends, ~20 crates handling photometric formats), Bevy for the 3D rendering, WASM for browser deployment. No backend; everything runs client-side. About a thousand lines of new code on top of the existing photometric library to make the Bevy integration work.\nThings I&#x27;d love feedback on:<p>The atmospheric scattering model is currently single-scattering Rayleigh+Mie. Is that defensible for the use case, or should I move toward multi-scattering?\nThe Bistro test scene works well visually but isn&#x27;t a controlled environment. \nAnyone know of a public urban geometry asset that&#x27;s more typical of real road-lighting evaluation?\nThe CJJ 45 implementation (China&#x27;s national road lighting standard) is the only one I&#x27;ve had to reverse-engineer from translated PDFs. \nIf anyone has primary-source experience with it, I&#x27;d value a sanity check.<p>Open-source on GitHub (eulumdat-rs and the related crates).\nCrates.io: eulumdat",
+      "kids": [
+        47985805,
+        47985660,
+        47985272,
+        47985195
+      ],
+      "lists": [
+        "topstories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": true,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777733325021
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-a990ae02bd",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47984734",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T09:08:18.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Show HN: Browser-based light pollution simulator using real photometric data",
+    "url": "https://iesna.eu/?wasm=skyglow_demo",
+    "excerpt": null,
+    "text": "Show HN: Browser-based light pollution simulator using real photometric data",
+    "authorUsername": "holg",
+    "authorDisplayName": "holg",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "sourceName": "Hacker News",
+        "canonicalUrl": "https://iesna.eu/?wasm=skyglow_demo"
+      },
+      "hnUrl": "https://news.ycombinator.com/item?id=47984734"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Show HN: Browser-based light pollution simulator using real photometric data",
+    "url": "https://iesna.eu/?wasm=skyglow_demo",
+    "excerpt": "Hacker News discussion: 29 points, 6 comments.",
+    "text": "Show HN: Browser-based light pollution simulator using real photometric data",
+    "authorUsername": "holg",
+    "authorDisplayName": "holg",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.article",
+    "metadata.hnUrl"
+  ]
+}

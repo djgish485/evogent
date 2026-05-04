@@ -1,0 +1,136 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "samharris.substack.com/p/money-power-and-moral-failure-ep",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "samharris.substack.com/p/money-power-and-moral-failure-ep",
+    "url": "https://samharris.substack.com/p/money-power-and-moral-failure-ep",
+    "title": "Money, Power, and Moral Failure (Ep. 473)",
+    "authorUsername": "samharris",
+    "authorDisplayName": "Sam Harris",
+    "publishedAtMs": 1777464000000,
+    "payload": {
+      "url": "https://samharris.substack.com/p/money-power-and-moral-failure-ep",
+      "host": "samharris.substack.com",
+      "slug": "money-power-and-moral-failure-ep",
+      "title": "Money, Power, and Moral Failure (Ep. 473)",
+      "rawTitle": "SAM HARRIS\nAPR 29\nMoney, Power, and Moral Failure (Ep. 473)\nA Conversation with Lloyd Blankfein\nPREVIEW∙SAM HARRIS∙ 1 HR 20 MIN WATCH",
+      "publicationName": "Sam Harris",
+      "author": "Sam Harris",
+      "authorDisplayName": "Sam Harris",
+      "authorUsername": "samharris",
+      "summary": "A Conversation with Lloyd Blankfein",
+      "text": "A Conversation with Lloyd Blankfein",
+      "excerpt": "A Conversation with Lloyd Blankfein",
+      "timestampLabel": "APR 29",
+      "publishedAtMs": 1777464000000,
+      "readingMeta": "1 hr 20 min watch",
+      "discoverySurface": "inbox",
+      "mediaUrls": [
+        "https://substackcdn.com/image/fetch/$s_!HozL!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc08194ac-5a99-42fb-b27a-4a1d29723922_635x635.png"
+      ],
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!HozL!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc08194ac-5a99-42fb-b27a-4a1d29723922_635x635.png",
+      "visibleText": "SAM HARRIS\nAPR 29\nMoney, Power, and Moral Failure (Ep. 473)\nA Conversation with Lloyd Blankfein\nPREVIEW∙SAM HARRIS∙ 1 HR 20 MIN WATCH",
+      "extractedAtMs": 1777724969494,
+      "fetchedAtMs": 1777724969494,
+      "expiresAtMs": 1777940969494,
+      "cacheRunId": "cache-refresh-substack-1777724763099"
+    },
+    "fetchedAtMs": 1777724969494,
+    "expiresAtMs": 1777940969494,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-dc924b4f66",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "samharris.substack.com/p/money-power-and-moral-failure-ep",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Money, Power, and Moral Failure (Ep. 473)",
+    "url": "https://samharris.substack.com/p/money-power-and-moral-failure-ep",
+    "excerpt": "A conversation with Lloyd Blankfein about money, power, incentives, and moral failure.",
+    "text": "A conversation with Lloyd Blankfein about money, power, incentives, and moral failure.",
+    "authorUsername": "samharris",
+    "authorDisplayName": "Sam Harris",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Money, Power, and Moral Failure (Ep. 473)",
+    "url": "https://samharris.substack.com/p/money-power-and-moral-failure-ep",
+    "excerpt": "A Conversation with Lloyd Blankfein",
+    "text": "A Conversation with Lloyd Blankfein",
+    "authorUsername": "samharris",
+    "authorDisplayName": "Sam Harris",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!HozL!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc08194ac-5a99-42fb-b27a-4a1d29723922_635x635.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "mediaUrls"
+  ]
+}

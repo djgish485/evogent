@@ -1,0 +1,153 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050571382841327999",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050571382841327999",
+    "url": "https://x.com/deanwball/status/2050571382841327999",
+    "title": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--t",
+    "authorUsername": "deanwball",
+    "authorDisplayName": "Dean W. Ball",
+    "publishedAtMs": 1777729290000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050571382841327999",
+      "url": "https://x.com/deanwball/status/2050571382841327999",
+      "title": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--t",
+      "authorUsername": "deanwball",
+      "authorDisplayName": "Dean W. Ball",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1997065021491130368/X76ALSbp_normal.jpg",
+      "text": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--that OpenAI and Anthropic were both founded during the heyday of \"stakeholder capitalism\" as a theory that would replace \"shareholder capitalism.\"\n\nThe idea was",
+      "publishedAt": "2026-05-02T13:41:30.000Z",
+      "publishedAtMs": 1777729290000,
+      "media": [],
+      "metrics": {
+        "replyCountText": "3",
+        "repostCountText": "4",
+        "likeCountText": "15",
+        "viewCountText": "1500",
+        "bookmarkCountText": "2",
+        "accessibleLabel": "Verified account | 21 minutes ago | Grok actions | More | Verified account | May 1 | 3 replies, 4 reposts, 15 likes, 2 bookmarks, 1500 views | 3 Replies. Reply | 4 reposts. Repost | 15 Likes. Like | 1500 views. View post analytics | Bookmark | Share post"
+      },
+      "quotedTweet": {
+        "authorUsername": "GreenPlusAnE",
+        "authorDisplayName": "Russ Greene",
+        "text": "This seems under-discussed: both Anthropic and OpenAI are structured as \"public benefit corporations\", a form of corporate governance that didn't even exist until 2010. It was designed with a political purpose, to reject, even replace shareholder primacy, the Milton Friedman"
+      },
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureKind": "home",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "articleIndex": 2
+      },
+      "cacheRunId": "cache-refresh-twitter-1777730463129",
+      "capturedFrom": "home",
+      "capturedAt": "2026-05-02T14:03:32.086Z"
+    },
+    "fetchedAtMs": 1777730772776,
+    "expiresAtMs": 1777946772776,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-66c1b6552d",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050571382841327999",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T13:41:30.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--that OpenAI and Anthropic were both founded during the heyday",
+    "url": "https://x.com/deanwball/status/2050571382841327999",
+    "excerpt": null,
+    "text": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--that OpenAI and Anthropic were both founded during the heyday of \"stakeholder capitalism\" as a theory that would replace \"shareholder capitalism.\"\n\nThe idea was",
+    "authorUsername": "deanwball",
+    "authorDisplayName": "Dean W. Ball",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1997065021491130368/X76ALSbp_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--t",
+    "url": "https://x.com/deanwball/status/2050571382841327999",
+    "excerpt": null,
+    "text": "It is such a fascinating quirk of history--the sort of thing that is not at all structural but is entirely contingent--that OpenAI and Anthropic were both founded during the heyday of \"stakeholder capitalism\" as a theory that would replace \"shareholder capitalism.\"\n\nThe idea was",
+    "authorUsername": "deanwball",
+    "authorDisplayName": "Dean W. Ball",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1997065021491130368/X76ALSbp_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "This seems under-discussed: both Anthropic and OpenAI are structured as \"public benefit corporations\", a form of corporate governance that didn't even exist until 2010. It was designed with a political purpose, to reject, even replace shareholder primacy, the Milton Friedman",
+        "author": {
+          "username": "GreenPlusAnE",
+          "displayName": "Russ Greene"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metadata.quotedTweet"
+  ]
+}

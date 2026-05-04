@@ -1,0 +1,153 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050329206391742570",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050329206391742570",
+    "url": "https://x.com/StateDept/status/2050329206391742570",
+    "title": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing don",
+    "authorUsername": "StateDept",
+    "authorDisplayName": "Department of State",
+    "publishedAtMs": 1777671550000,
+    "payload": {
+      "surface": "home",
+      "sourceId": "2050329206391742570",
+      "url": "https://x.com/StateDept/status/2050329206391742570",
+      "authorUsername": "StateDept",
+      "authorDisplayName": "Department of State",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1883303881632804864/d638Kku-_normal.jpg",
+      "text": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing done properly. We’re not going to leave early and then have the problem arise in 3 years.",
+      "title": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing don",
+      "publishedAt": "2026-05-01T21:39:10.000Z",
+      "publishedAtMs": 1777671550000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050329152016773123/img/VqRrJuREjFYkhmml.jpg"
+        },
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050329152016773123/img/VqRrJuREjFYkhmml.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2050329152016773123/img/VqRrJuREjFYkhmml.jpg"
+        }
+      ],
+      "metricsText": "Department of State @StateDept · 4h PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing done properly. We’re not going to leave early and then have the problem arise in 3 years. 481 1.6K 7.9K 245K",
+      "quotedTweet": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "surfaces": [
+        "home"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-c29f1828aa",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050329206391742570",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T21:39:10.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing don",
+    "url": "https://x.com/StateDept/status/2050329206391742570",
+    "excerpt": null,
+    "text": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing done properly. We’re not going to leave early and then have the problem arise in 3 years.",
+    "authorUsername": "StateDept",
+    "authorDisplayName": "Department of State",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1883303881632804864/d638Kku-_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050329152016773123/img/VqRrJuREjFYkhmml.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing don",
+    "url": "https://x.com/StateDept/status/2050329206391742570",
+    "excerpt": null,
+    "text": "PRESIDENT TRUMP: Iran isn’t coming through with the kind of deal that we need to have. We’re going to get this thing done properly. We’re not going to leave early and then have the problem arise in 3 years.",
+    "authorUsername": "StateDept",
+    "authorDisplayName": "Department of State",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1883303881632804864/d638Kku-_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050329152016773123/img/VqRrJuREjFYkhmml.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

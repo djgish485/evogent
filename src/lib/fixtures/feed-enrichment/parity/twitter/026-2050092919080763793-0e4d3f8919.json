@@ -1,0 +1,197 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050092919080763793",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050092919080763793",
+    "url": "https://x.com/Andercot/status/2050092919080763793",
+    "title": "@Andercot: Fusion is the last energy source humanity will ever need as it takes to the stars, but the",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "publishedAtMs": 1777615215000,
+    "payload": {
+      "source": "twitter",
+      "sourceItemId": "2050092919080763793",
+      "sourceId": "2050092919080763793",
+      "tweetId": "2050092919080763793",
+      "url": "https://x.com/Andercot/status/2050092919080763793",
+      "title": "@Andercot: Fusion is the last energy source humanity will ever need as it takes to the stars, but the",
+      "text": "Fusion is the last energy source humanity will ever need as it takes to the stars, but there are dozens of approaches Two extremes: Stellarators, operating near steady-state magnetic confinement with low density plasmas Then Laser Inertial confinement, collapsing",
+      "authorUsername": "Andercot",
+      "authorDisplayName": "Andrew Côté",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+      "publishedAt": "2026-05-01T06:00:15.000Z",
+      "publishedAtMs": 1777615215000,
+      "metrics": {},
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHNkdI5a0AAssr2?format=png&name=small"
+        },
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HF6y_IabsAAFFAD?format=jpg&name=240x240"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHNkdI5a0AAssr2?format=png&name=small",
+        "https://pbs.twimg.com/media/HF6y_IabsAAFFAD?format=jpg&name=240x240"
+      ],
+      "quotedTweet": {
+        "authorUsername": null,
+        "authorDisplayName": null,
+        "text": "We're taking @deeptechweek to Berlin Germany is an industrial powerhouse and the economic engine of Europe. As the EU moves towards its own reindustrialization, the continents deep tech investors and founders will be in Berlin May 18-22"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "inReplyToStatusId": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "home",
+        "url": "https://x.com/Andercot/status/2050092919080763793",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": {
+          "source": "timeline",
+          "requestedHandle": null
+        },
+        "quotedTweet": {
+          "authorUsername": null,
+          "authorDisplayName": null,
+          "text": "We're taking @deeptechweek to Berlin Germany is an industrial powerhouse and the economic engine of Europe. As the EU moves towards its own reindustrialization, the continents deep tech investors and founders will be in Berlin May 18-22"
+        },
+        "inReplyToStatusId": null,
+        "capturedAt": "2026-05-01T06:37:01.442Z",
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": [],
+        "media": [
+          {
+            "type": "image",
+            "url": "https://pbs.twimg.com/media/HHNkdI5a0AAssr2?format=png&name=small"
+          },
+          {
+            "type": "image",
+            "url": "https://pbs.twimg.com/media/HF6y_IabsAAFFAD?format=jpg&name=240x240"
+          }
+        ],
+        "captureKind": "home",
+        "captureUrl": "https://x.com/home"
+      },
+      "captureKind": "home",
+      "captureUrl": "https://x.com/home",
+      "capturedAt": "2026-05-01T06:37:01.442Z"
+    },
+    "fetchedAtMs": 1777617514208,
+    "expiresAtMs": 1777833514208,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-dc714931fc",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050092919080763793",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T06:00:15.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "@Andercot: Fusion is the last energy source humanity will ever need as it takes to the stars, but the",
+    "url": "https://x.com/Andercot/status/2050092919080763793",
+    "excerpt": null,
+    "text": "Fusion is the last energy source humanity will ever need as it takes to the stars, but there are dozens of approaches Two extremes: Stellarators, operating near steady-state magnetic confinement with low density plasmas Then Laser Inertial confinement, collapsing",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHNkdI5a0AAssr2?format=png&name=small",
+      "https://pbs.twimg.com/media/HF6y_IabsAAFFAD?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "@Andercot: Fusion is the last energy source humanity will ever need as it takes to the stars, but the",
+    "url": "https://x.com/Andercot/status/2050092919080763793",
+    "excerpt": null,
+    "text": "Fusion is the last energy source humanity will ever need as it takes to the stars, but there are dozens of approaches Two extremes: Stellarators, operating near steady-state magnetic confinement with low density plasmas Then Laser Inertial confinement, collapsing",
+    "authorUsername": "Andercot",
+    "authorDisplayName": "Andrew Côté",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1805893620832288768/vgwGHkvb_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHNkdI5a0AAssr2?format=png&name=small",
+      "https://pbs.twimg.com/media/HF6y_IabsAAFFAD?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "We're taking @deeptechweek to Berlin Germany is an industrial powerhouse and the economic engine of Europe. As the EU moves towards its own reindustrialization, the continents deep tech investors and founders will be in Berlin May 18-22",
+        "author": {
+          "username": "unknown_quote_author"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.quotedTweet"
+  ]
+}

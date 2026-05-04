@@ -1,0 +1,125 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "civilization-module-4-knowledge-wealth",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "civilization-module-4-knowledge-wealth",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "publishedAtMs": null,
+    "payload": {
+      "source": "substack",
+      "sourceId": "civilization-module-4-knowledge-wealth",
+      "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+      "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+      "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+      "publication": "Conjecture Institute",
+      "publicationSlug": "chipkin",
+      "authorDisplayName": "Conjecture Institute",
+      "authorUsername": "chipkin",
+      "readTime": "7 MIN READ",
+      "publishedAtMs": null,
+      "visiblePublishedAt": "APR 28",
+      "fetchedAtMs": 1777486120237,
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png",
+      "extractedFrom": "substack-inbox"
+    },
+    "fetchedAtMs": 1777486120237,
+    "expiresAtMs": 1777702120237,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-314fa54a5f",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "civilization-module-4-knowledge-wealth",
+    "parentId": null,
+    "relationship": "parent",
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T14:08:18.377Z"
+  },
+  "historicalFeedRow": {
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "text": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "expectedFeedRow": {
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "text": "",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "intentionalImprovements": [
+    "text",
+    "mediaUrls"
+  ]
+}

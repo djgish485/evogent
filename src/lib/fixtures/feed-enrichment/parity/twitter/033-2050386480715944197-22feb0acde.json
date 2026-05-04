@@ -1,0 +1,175 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050386480715944197",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050386480715944197",
+    "url": "https://x.com/teortaxesTex/status/2050386480715944197",
+    "title": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely hav",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "publishedAtMs": 1777685205000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050386480715944197",
+      "tweetId": "2050386480715944197",
+      "url": "https://x.com/teortaxesTex/status/2050386480715944197",
+      "title": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely hav",
+      "text": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely have failed or neglected to train for this. This is 12.5% of total score. –10 points for Pro. If not for that one thing, it'd be ranked the best OS model.",
+      "authorUsername": "teortaxesTex",
+      "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+      "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+      "publishedAt": "2026-05-02T01:26:45.000Z",
+      "publishedAtMs": 1777685205000,
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHRnQteXoAAml7v?format=jpg&name=small"
+      ],
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHRnQteXoAAml7v?format=jpg&name=small"
+        }
+      ],
+      "metrics": {
+        "replies": 5,
+        "reposts": 1,
+        "likes": 53,
+        "views": null
+      },
+      "quotedTweet": {
+        "authorUsername": "XFreeze",
+        "authorDisplayName": "X Freeze",
+        "text": "Grok 4.3 is absolutely ranking at the top in the latest Artificial Analysis benchmarks - #1 on IFBench (81%) - #1 on τ²-Bench Telecom (98%) - 74% Non-Hallucination Rate (Top-tier factual accuracy) - 196 Output Tokens per Second (Blazing fast) Not only did it take the #1 spot"
+      },
+      "inReplyToStatusId": null,
+      "inReplyToUsername": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "timeline",
+        "capturedAt": "2026-05-02T04:39:00.906Z",
+        "quotedTweet": {
+          "authorUsername": "XFreeze",
+          "authorDisplayName": "X Freeze",
+          "text": "Grok 4.3 is absolutely ranking at the top in the latest Artificial Analysis benchmarks - #1 on IFBench (81%) - #1 on τ²-Bench Telecom (98%) - 74% Non-Hallucination Rate (Top-tier factual accuracy) - 196 Output Tokens per Second (Blazing fast) Not only did it take the #1 spot"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": [],
+        "cacheCaptureFile": "data/tmp/tweet-following-cache-refresh-twitter-1777696562851.capture",
+        "cacheRunId": "cache-refresh-twitter-1777696562851"
+      }
+    },
+    "fetchedAtMs": 1777696826534,
+    "expiresAtMs": 1777912826534,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-794ff4d695",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050386480715944197",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T01:26:45.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely hav",
+    "url": "https://x.com/teortaxesTex/status/2050386480715944197",
+    "excerpt": null,
+    "text": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely have failed or neglected to train for this. This is 12.5% of total score. –10 points for Pro. If not for that one thing, it'd be ranked the best OS model.",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHRnQteXoAAml7v?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 53,
+      "reposts": 1,
+      "replies": 5,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Grok 4.3 is absolutely ranking at the top in the latest Artificial Analysis benchmarks - #1 on IFBench (81%) - #1 on τ²-Bench Telecom (98%) - 74% Non-Hallucination Rate (Top-tier factual accuracy) - 196 Output Tokens per Second (Blazing fast) Not only did it take the #1 spot",
+        "author": {
+          "username": "XFreeze",
+          "displayName": "X Freeze"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely hav",
+    "url": "https://x.com/teortaxesTex/status/2050386480715944197",
+    "excerpt": null,
+    "text": "It's actually insane how bad DeepSeek does on AA-Omniscience. It actually knows a hell of a lot, but they absolutely have failed or neglected to train for this. This is 12.5% of total score. –10 points for Pro. If not for that one thing, it'd be ranked the best OS model.",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHRnQteXoAAml7v?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 53,
+      "reposts": 1,
+      "replies": 5,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Grok 4.3 is absolutely ranking at the top in the latest Artificial Analysis benchmarks - #1 on IFBench (81%) - #1 on τ²-Bench Telecom (98%) - 74% Non-Hallucination Rate (Top-tier factual accuracy) - 196 Output Tokens per Second (Blazing fast) Not only did it take the #1 spot",
+        "author": {
+          "username": "XFreeze",
+          "displayName": "X Freeze"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

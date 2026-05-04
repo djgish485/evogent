@@ -1,0 +1,50 @@
+{
+  "profiles": {
+    "low": {
+      "ttlHours": 72,
+      "maxPublications": 6,
+      "browserFeedItems": 8,
+      "outputAuthorCap": 2
+    },
+    "medium": {
+      "ttlHours": 60,
+      "maxPublications": 10,
+      "browserFeedItems": 12,
+      "outputAuthorCap": 2
+    },
+    "high": {
+      "ttlHours": 48,
+      "maxPublications": 14,
+      "browserFeedItems": 18,
+      "outputAuthorCap": 3
+    }
+  },
+  "deadlineBudget": {
+    "stepDeadlineMs": 1800000,
+    "stepDeadlinePaddingMs": null,
+    "minRunDeadlineMs": 600000,
+    "maxRunDeadlineMs": 86400000
+  },
+  "refreshPrompt": {
+    "common": [
+      "CRITICAL — SCROLLING: Do NOT use keyboard End, Home, Page Down, or arrow keys to scroll any page. These keys can activate focused elements and navigate away from the current page. Always use window.scrollBy(0, window.innerHeight * 3) executed via browser JavaScript evaluation.",
+      "CRITICAL — PAGE NAVIGATION GUARD: After each scroll pass, verify the current page URL is still the expected feed/page. If the browser navigated to a detail page, navigate back to the feed URL before continuing extraction.",
+      "CRITICAL — TAB MANAGEMENT: The shared browser may have stale tabs from previous agents. At the start of each source step, verify you are on the correct tab and URL. If needed, navigate to the target URL in the current tab rather than opening new tabs. Do not close other tabs.",
+      "For browser_inbox, the per-kind scroll instructions define the minimum scroll passes. Complete all required scroll passes before evaluating whether content is repeating.",
+      "Use the shared authenticated browser session for both planned publication pages and the inbox step. Browse the requested publication directly instead of relying on feed URLs.",
+      "Prefer canonical Substack post URLs, rendered publication identity, visible publish time, and visible excerpt text from the current source before opening extra tabs.",
+      "When a field is not readily visible from the rendered page, store null instead of spending extra time hunting for it.",
+      "If a browser step lands on a login wall, error page, or empty shell, keep any successful publication or inbox work and mention the browser failure briefly in the final status."
+    ],
+    "byKind": {
+      "browser_publication": [
+        "For publication pages, the API endpoint is the primary source. No scrolling needed for API-based extraction.",
+        "Stay on the requested publication rather than substituting inbox discoveries or adjacent recommendations. Skip posts that are clearly outside the TTL window or are missing a stable canonical post URL."
+      ],
+      "browser_inbox": [
+        "The Substack inbox at substack.com/inbox contains all subscribed publication posts. Perform at least 3 scroll passes to load more posts. Extract at least 15 unique posts from the inbox including title, publication name, author, and post URL. The inbox typically has 50-120 items loaded after scrolling.",
+        "If inbox is initially sparse or loading, wait briefly and retry once before concluding the browser step failed."
+      ]
+    }
+  }
+}

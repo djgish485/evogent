@@ -1,0 +1,120 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+    "url": "https://fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+    "title": "🚀 The high frontiersman: Gerard K. O'Neill",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "JAMES PETHOKOUKIS",
+    "publishedAtMs": 1777550400000,
+    "payload": {
+      "url": "https://fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+      "host": "fasterplease.substack.com",
+      "slug": "the-high-frontiersman-gerard-k-oneill",
+      "title": "🚀 The high frontiersman: Gerard K. O'Neill",
+      "publicationName": "FASTER, PLEASE!",
+      "author": "JAMES PETHOKOUKIS",
+      "authorDisplayName": "JAMES PETHOKOUKIS",
+      "authorUsername": "fasterplease",
+      "summary": "He accepted the Down Wing 1970s diagnosis of humanity's future of overpopulation and scarcity. His Up Wing cure was to leave the planet for Solar System abundance",
+      "timestampLabel": "APR 30",
+      "publishedAtMs": 1777550400000,
+      "discoverySurface": "inbox"
+    },
+    "fetchedAtMs": 1777732504047,
+    "expiresAtMs": 1777948504047,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-3024cb17f4",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T15:32:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The high frontiersman: Gerard K. O'Neill",
+    "url": "https://fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+    "excerpt": "He accepted the Down Wing 1970s diagnosis of humanity's future of overpopulation and scarcity. His Up Wing cure was to leave the planet for Solar System abundance",
+    "text": "He accepted the Down Wing 1970s diagnosis of humanity's future of overpopulation and scarcity. His Up Wing cure was to leave the planet for Solar System abundance",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "🚀 The high frontiersman: Gerard K. O'Neill",
+    "url": "https://fasterplease.substack.com/p/the-high-frontiersman-gerard-k-oneill",
+    "excerpt": "He accepted the Down Wing 1970s diagnosis of humanity's future of overpopulation and scarcity. His Up Wing cure was to leave the planet for Solar System abundance",
+    "text": "He accepted the Down Wing 1970s diagnosis of humanity's future of overpopulation and scarcity. His Up Wing cure was to leave the planet for Solar System abundance",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "JAMES PETHOKOUKIS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "authorDisplayName"
+  ]
+}

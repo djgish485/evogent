@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "FAH6DU8GHYQ",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "FAH6DU8GHYQ",
+    "url": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+    "title": "Strategic Exhaustion: Will Iran Fold?",
+    "authorUsername": "@csis",
+    "authorDisplayName": "Center for Strategic & International Studies",
+    "publishedAtMs": 1777491597363,
+    "payload": {
+      "videoId": "FAH6DU8GHYQ",
+      "canonicalUrl": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+      "title": "Strategic Exhaustion: Will Iran Fold?",
+      "channelName": "Center for Strategic & International Studies",
+      "channelUrl": "https://www.youtube.com/@csis",
+      "channelHandle": "@csis",
+      "channel": {
+        "name": "Center for Strategic & International Studies",
+        "url": "https://www.youtube.com/@csis",
+        "handle": "@csis"
+      },
+      "publishLabel": "3 hours ago",
+      "publishDateText": "3 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/FAH6DU8GHYQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDVlrsZujn7PUSrqlQntSEWeKBb1A",
+      "duration": "31:16",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "source": "youtube",
+      "capture": {
+        "sourceKind": "home",
+        "pageUrl": "https://www.youtube.com/",
+        "searchQuery": null,
+        "completedScrollPasses": 3,
+        "requiredScrollPasses": 3,
+        "notes": []
+      }
+    },
+    "fetchedAtMs": 1777502397363,
+    "expiresAtMs": 1778366397363,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-a905f3c022",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "FAH6DU8GHYQ",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T19:39:57.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Strategic Exhaustion: Will Iran Fold?",
+    "url": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+    "excerpt": null,
+    "text": "Center for Strategic & International Studies: Strategic Exhaustion: Will Iran Fold?",
+    "authorUsername": "csis",
+    "authorDisplayName": "Center for Strategic & International Studies",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FAH6DU8GHYQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDVlrsZujn7PUSrqlQntSEWeKBb1A"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+        "title": "Strategic Exhaustion: Will Iran Fold?",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/FAH6DU8GHYQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDVlrsZujn7PUSrqlQntSEWeKBb1A",
+        "videoId": "FAH6DU8GHYQ"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "FAH6DU8GHYQ",
+        "canonicalUrl": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+        "title": "Strategic Exhaustion: Will Iran Fold?",
+        "channelName": "Center for Strategic & International Studies",
+        "channelHandle": "csis",
+        "thumbnailUrl": "https://i.ytimg.com/vi/FAH6DU8GHYQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDVlrsZujn7PUSrqlQntSEWeKBb1A",
+        "publishDate": "2026-04-29T19:39:57.000Z",
+        "publishDateText": "2026-04-29T19:39:57.000Z",
+        "url": "https://www.youtube.com/watch?v=FAH6DU8GHYQ"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Strategic Exhaustion: Will Iran Fold?",
+    "url": "https://www.youtube.com/watch?v=FAH6DU8GHYQ",
+    "excerpt": "Strategic Exhaustion: Will Iran Fold?",
+    "text": "Strategic Exhaustion: Will Iran Fold?",
+    "authorUsername": "@csis",
+    "authorDisplayName": "Center for Strategic & International Studies",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FAH6DU8GHYQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDVlrsZujn7PUSrqlQntSEWeKBb1A"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

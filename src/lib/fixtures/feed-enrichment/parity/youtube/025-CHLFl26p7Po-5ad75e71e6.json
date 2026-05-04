@@ -1,0 +1,157 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "CHLFl26p7Po",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "CHLFl26p7Po",
+    "url": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+    "title": "Palantir's Al Targeting System Running the Iran War",
+    "authorUsername": "@bilawalsidhu",
+    "authorDisplayName": "Bilawal Sidhu",
+    "publishedAtMs": 1777555485142,
+    "payload": {
+      "videoId": "CHLFl26p7Po",
+      "canonicalUrl": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+      "title": "Palantir's Al Targeting System Running the Iran War",
+      "channelName": "Bilawal Sidhu",
+      "channelUrl": "https://www.youtube.com/@bilawalsidhu",
+      "channelHandle": "@bilawalsidhu",
+      "channel": {
+        "name": "Bilawal Sidhu",
+        "url": "https://www.youtube.com/@bilawalsidhu",
+        "handle": "@bilawalsidhu"
+      },
+      "publishLabel": "3 hours ago",
+      "publishDateText": "3 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/CHLFl26p7Po/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDGaw4o6U-iZNzUo5R9fIYZAfZoOg",
+      "duration": "16:45",
+      "viewCount": 7000,
+      "viewCountLabel": "7K views",
+      "sourceKind": "home",
+      "firstSeenPass": 1,
+      "visibleText": "16:45\nPalantir's Al Targeting System Running the Iran War\nBilawal Sidhu\n7K views\n•\n3 hours ago",
+      "url": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+      "sourceSurface": "home",
+      "captureRunId": "cache-refresh-youtube-1777566040258",
+      "capturePageUrl": "https://www.youtube.com/",
+      "captureNotes": []
+    },
+    "fetchedAtMs": 1777566285142,
+    "expiresAtMs": 1778430285142,
+    "seenByCurationAtMs": 1777570685321
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-be5bda03ee",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "CHLFl26p7Po",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T13:24:45.142Z"
+  },
+  "historicalFeedRow": {
+    "title": "Palantir's Al Targeting System Running the Iran War",
+    "url": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+    "excerpt": "Palantir's Al Targeting System Running the Iran War",
+    "text": "16:45\nPalantir's Al Targeting System Running the Iran War\nBilawal Sidhu\n7K views\n•\n3 hours ago",
+    "authorUsername": "@bilawalsidhu",
+    "authorDisplayName": "Bilawal Sidhu",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/CHLFl26p7Po/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDGaw4o6U-iZNzUo5R9fIYZAfZoOg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 7000
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+        "title": "Palantir's Al Targeting System Running the Iran War",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/CHLFl26p7Po/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDGaw4o6U-iZNzUo5R9fIYZAfZoOg",
+        "videoId": "CHLFl26p7Po"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "CHLFl26p7Po",
+        "canonicalUrl": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+        "title": "Palantir's Al Targeting System Running the Iran War",
+        "channelName": "Bilawal Sidhu",
+        "channelHandle": "@bilawalsidhu",
+        "thumbnailUrl": "https://i.ytimg.com/vi/CHLFl26p7Po/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDGaw4o6U-iZNzUo5R9fIYZAfZoOg",
+        "publishDateText": "3 hours ago",
+        "url": "https://www.youtube.com/watch?v=CHLFl26p7Po"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Palantir's Al Targeting System Running the Iran War",
+    "url": "https://www.youtube.com/watch?v=CHLFl26p7Po",
+    "excerpt": "Palantir's Al Targeting System Running the Iran War",
+    "text": "Palantir's Al Targeting System Running the Iran War",
+    "authorUsername": "@bilawalsidhu",
+    "authorDisplayName": "Bilawal Sidhu",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/CHLFl26p7Po/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDGaw4o6U-iZNzUo5R9fIYZAfZoOg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

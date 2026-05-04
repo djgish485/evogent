@@ -1,0 +1,151 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "myGI5jkuB2k",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "myGI5jkuB2k",
+    "url": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+    "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+    "authorUsername": "@aljazeeraenglish",
+    "authorDisplayName": "Al Jazeera English",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "myGI5jkuB2k",
+      "canonicalUrl": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+      "url": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+      "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+      "channelName": "Al Jazeera English",
+      "channelUrl": "https://www.youtube.com/@aljazeeraenglish",
+      "channelHandle": "@aljazeeraenglish",
+      "channel": {
+        "name": "Al Jazeera English",
+        "url": "https://www.youtube.com/@aljazeeraenglish",
+        "handle": "@aljazeeraenglish"
+      },
+      "publishLabel": "LIVE",
+      "publishDateText": "LIVE",
+      "thumbnailUrl": "https://i.ytimg.com/vi/myGI5jkuB2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqS1wiSsUxloBosgvX7M0lmCFVag",
+      "duration": "5:52",
+      "sourceKind": "home"
+    },
+    "fetchedAtMs": 1777455925788,
+    "expiresAtMs": 1778319925788,
+    "seenByCurationAtMs": 1777465448469
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-8762d3fe50",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "myGI5jkuB2k",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T11:25:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+    "url": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+    "excerpt": "Beijing convenes a multilateral Hormuz forum with Russia, UAE, Spain — without the US.",
+    "text": "Al Jazeera English live segment: China convenes a multilateral meeting with Russia, UAE, and Spain on the Hormuz blockade and the war on Iran. A Beijing-led forum signals a non-Western negotiation track during the blockade.",
+    "authorUsername": "@aljazeeraenglish",
+    "authorDisplayName": "Al Jazeera English",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/myGI5jkuB2k/hq720.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+        "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/myGI5jkuB2k/hq720.jpg",
+        "videoId": "myGI5jkuB2k"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "myGI5jkuB2k",
+        "canonicalUrl": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+        "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+        "channelName": "Al Jazeera English",
+        "channelHandle": "@aljazeeraenglish",
+        "thumbnailUrl": "https://i.ytimg.com/vi/myGI5jkuB2k/hq720.jpg",
+        "publishDate": "2026-04-29T11:25:00.000Z",
+        "publishDateText": "LIVE",
+        "url": "https://www.youtube.com/watch?v=myGI5jkuB2k"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+    "url": "https://www.youtube.com/watch?v=myGI5jkuB2k",
+    "excerpt": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+    "text": "China hosts Russia, UAE and Spain for meetings on Hormuz blockade and war on Iran",
+    "authorUsername": "@aljazeeraenglish",
+    "authorDisplayName": "Al Jazeera English",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/myGI5jkuB2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqS1wiSsUxloBosgvX7M0lmCFVag"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

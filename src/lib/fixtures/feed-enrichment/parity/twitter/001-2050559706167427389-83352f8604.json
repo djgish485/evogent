@@ -1,0 +1,132 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050559706167427389",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050559706167427389",
+    "url": "https://x.com/nntaleb/status/2050559706167427389",
+    "title": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+    "authorUsername": "nntaleb",
+    "authorDisplayName": "Nassim Nicholas Taleb",
+    "publishedAtMs": 1777726506000,
+    "payload": {
+      "id": "2050559706167427389",
+      "sourceId": "2050559706167427389",
+      "url": "https://x.com/nntaleb/status/2050559706167427389",
+      "text": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+      "full_text": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+      "authorUsername": "nntaleb",
+      "authorDisplayName": "Nassim Nicholas Taleb",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1835982938879508480/q4-Esddn_normal.jpg",
+      "publishedAt": "2026-05-02T12:55:06.000Z",
+      "publishedAtMs": 1777726506000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureSurface": "home",
+        "pass": 2,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "tweetTextCount": 1,
+        "visibleText": "Nassim Nicholas Taleb\n@nntaleb\n·\n32m\nSome fields work in theory but not in practice. Some fields work in practice but not theory. \nThe uniqueness of economics is that it works in neither theory nor practice.\n38\n110\n614\n18K"
+      }
+    },
+    "fetchedAtMs": 1777728574342,
+    "expiresAtMs": 1777944574342,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-3d0908f211",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050559706167427389",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:55:06.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+    "url": "https://x.com/nntaleb/status/2050559706167427389",
+    "excerpt": null,
+    "text": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+    "authorUsername": "nntaleb",
+    "authorDisplayName": "Nassim Nicholas Taleb",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1835982938879508480/q4-Esddn_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+    "url": "https://x.com/nntaleb/status/2050559706167427389",
+    "excerpt": null,
+    "text": "Some fields work in theory but not in practice. Some fields work in practice but not theory. The uniqueness of economics is that it works in neither theory nor practice.",
+    "authorUsername": "nntaleb",
+    "authorDisplayName": "Nassim Nicholas Taleb",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1835982938879508480/q4-Esddn_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

@@ -1,0 +1,162 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "qxuMRaUbWow",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "qxuMRaUbWow",
+    "url": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+    "title": "Talking About Dark Matter - Sixty Symbols",
+    "authorUsername": "@sixtysymbols",
+    "authorDisplayName": "Sixty Symbols",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "qxuMRaUbWow",
+      "canonicalUrl": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+      "url": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+      "title": "Talking About Dark Matter - Sixty Symbols",
+      "channelName": "Sixty Symbols",
+      "channelUrl": "https://www.youtube.com/@sixtysymbols",
+      "channelHandle": "@sixtysymbols",
+      "channel": {
+        "name": "Sixty Symbols",
+        "url": "https://www.youtube.com/@sixtysymbols",
+        "handle": "@sixtysymbols"
+      },
+      "authorUsername": "@sixtysymbols",
+      "authorDisplayName": "Sixty Symbols",
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "publishedAtMs": null,
+      "thumbnailUrl": "https://i.ytimg.com/vi/qxuMRaUbWow/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAm9nMJoMjx9SRk9AjqQCLQj3x2GA",
+      "duration": "12:19",
+      "viewCount": 31000,
+      "viewCountLabel": "31K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "fetchedAtMs": 1777573889244,
+      "captureRunId": "cache-refresh-youtube-1777573681272"
+    },
+    "fetchedAtMs": 1777573889244,
+    "expiresAtMs": 1778437889244,
+    "seenByCurationAtMs": 1777477575411
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-ec05450f7f",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "qxuMRaUbWow",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T13:06:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Talking About Dark Matter - Sixty Symbols",
+    "url": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+    "excerpt": null,
+    "text": "Sixty Symbols: Talking About Dark Matter - Sixty Symbols",
+    "authorUsername": "sixtysymbols",
+    "authorDisplayName": "Sixty Symbols",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/qxuMRaUbWow/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+        "title": "Talking About Dark Matter - Sixty Symbols",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/qxuMRaUbWow/hqdefault.jpg",
+        "videoId": "qxuMRaUbWow"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "qxuMRaUbWow",
+        "canonicalUrl": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+        "title": "Talking About Dark Matter - Sixty Symbols",
+        "channelName": "Sixty Symbols",
+        "channelHandle": "sixtysymbols",
+        "thumbnailUrl": "https://i.ytimg.com/vi/qxuMRaUbWow/hqdefault.jpg",
+        "publishDate": "2026-04-29T13:06:20.000Z",
+        "publishDateText": "2026-04-29T13:06:20.000Z",
+        "url": "https://www.youtube.com/watch?v=qxuMRaUbWow"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Talking About Dark Matter - Sixty Symbols",
+    "url": "https://www.youtube.com/watch?v=qxuMRaUbWow",
+    "excerpt": "Talking About Dark Matter - Sixty Symbols",
+    "text": "Talking About Dark Matter - Sixty Symbols",
+    "authorUsername": "@sixtysymbols",
+    "authorDisplayName": "Sixty Symbols",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/qxuMRaUbWow/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAm9nMJoMjx9SRk9AjqQCLQj3x2GA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

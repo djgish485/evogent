@@ -1,0 +1,156 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050274842507661429",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050274842507661429",
+    "url": "https://x.com/IlirAliu_/status/2050274842507661429",
+    "title": "Ilir Aliu: Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data.",
+    "authorUsername": "IlirAliu_",
+    "authorDisplayName": "Ilir Aliu",
+    "publishedAtMs": 1777658589000,
+    "payload": {
+      "id": "2050274842507661429",
+      "sourceId": "2050274842507661429",
+      "source": "twitter",
+      "kind": "home",
+      "url": "https://x.com/IlirAliu_/status/2050274842507661429",
+      "text": "Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data. > 99.4% success rate. > 108 motors soldered in 5+ hours straight. Sub-0.6 mm precision on messy, deformable (!) cables. This hybrid “learning-augmented” system adds neural",
+      "fullText": "Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data. > 99.4% success rate. > 108 motors soldered in 5+ hours straight. Sub-0.6 mm precision on messy, deformable (!) cables. This hybrid “learning-augmented” system adds neural",
+      "authorUsername": "IlirAliu_",
+      "authorDisplayName": "Ilir Aliu",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1866636974339039232/YtrQjbyS_normal.jpg",
+      "publishedAt": "2026-05-01T18:03:09.000Z",
+      "publishedAtMs": 1777658589000,
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/ext_tw_video_thumb/2050274813638246402/pu/img/E_UzZoFQuH09c2vF.jpg",
+          "alt": null
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/ext_tw_video_thumb/2050274813638246402/pu/img/E_UzZoFQuH09c2vF.jpg"
+      ],
+      "metrics": {
+        "replies": 1,
+        "reposts": 12,
+        "likes": 52,
+        "views": null
+      },
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "capturedFrom": "https://x.com/home",
+        "extractedAt": "2026-05-01T20:00:01.728Z",
+        "userNameText": "Ilir Aliu @IlirAliu_ · 1h"
+      }
+    },
+    "fetchedAtMs": 1777665646986,
+    "expiresAtMs": 1777881646986,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-774f51285f",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050274842507661429",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T18:03:09.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data. > 99.4% success rate. > 108 motors soldered in 5+ hours straight. Sub-0.6 mm pre",
+    "url": "https://x.com/IlirAliu_/status/2050274842507661429",
+    "excerpt": null,
+    "text": "Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data. > 99.4% success rate. > 108 motors soldered in 5+ hours straight. Sub-0.6 mm precision on messy, deformable (!) cables. This hybrid “learning-augmented” system adds neural",
+    "authorUsername": "IlirAliu_",
+    "authorDisplayName": "Ilir Aliu",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1866636974339039232/YtrQjbyS_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/ext_tw_video_thumb/2050274813638246402/pu/img/E_UzZoFQuH09c2vF.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Ilir Aliu: Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data.",
+    "url": "https://x.com/IlirAliu_/status/2050274842507661429",
+    "excerpt": null,
+    "text": "Robots that actually WORK in real factories. Without endless retraining. > Just 20 minutes of data. > 99.4% success rate. > 108 motors soldered in 5+ hours straight. Sub-0.6 mm precision on messy, deformable (!) cables. This hybrid “learning-augmented” system adds neural",
+    "authorUsername": "IlirAliu_",
+    "authorDisplayName": "Ilir Aliu",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1866636974339039232/YtrQjbyS_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/ext_tw_video_thumb/2050274813638246402/pu/img/E_UzZoFQuH09c2vF.jpg"
+    ],
+    "metrics": {
+      "likes": 52,
+      "reposts": 12,
+      "replies": 1,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies"
+  ]
+}

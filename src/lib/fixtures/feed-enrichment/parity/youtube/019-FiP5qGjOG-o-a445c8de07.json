@@ -1,0 +1,167 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "FiP5qGjOG_o",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "FiP5qGjOG_o",
+    "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+    "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "authorUsername": "readingisaskill",
+    "authorDisplayName": "Reading is a Skill",
+    "publishedAtMs": 1777563554532,
+    "payload": {
+      "videoId": "FiP5qGjOG_o",
+      "canonicalUrl": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+      "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+      "channelName": "Reading is a Skill",
+      "channelUrl": "https://www.youtube.com/@readingisaskill",
+      "channelHandle": "readingisaskill",
+      "channel": {
+        "name": "Reading is a Skill",
+        "url": "https://www.youtube.com/@readingisaskill",
+        "handle": "readingisaskill"
+      },
+      "publishLabel": "5 hours ago",
+      "publishDateText": "5 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/FiP5qGjOG_o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAhmsM8GHcVMXBn6nGaRZfBr7PSfQ",
+      "duration": "16:38",
+      "viewCount": 333,
+      "viewCountLabel": "333 views",
+      "sourceKind": "home",
+      "firstSeenPass": 2,
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+      "source": "youtube",
+      "sourceId": "FiP5qGjOG_o",
+      "publishedAtMs": 1777563554532,
+      "extraction": {
+        "taskId": "cache-refresh-youtube-1777581322323",
+        "runId": "cache-refresh-youtube-1777581322323",
+        "sourceKinds": [
+          "home"
+        ],
+        "policy": "youtube-cache"
+      }
+    },
+    "fetchedAtMs": 1777581554532,
+    "expiresAtMs": 1778445554532,
+    "seenByCurationAtMs": 1777593113500
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-d0742266d8",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "FiP5qGjOG_o",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T15:39:14.532Z"
+  },
+  "historicalFeedRow": {
+    "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+    "excerpt": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "text": "16:38\nWe replaced their science with Blackwell Instant Science ... let's see if anyone noticed\nReading is a Skill\n333 views",
+    "authorUsername": "readingisaskill",
+    "authorDisplayName": "Reading is a Skill",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FiP5qGjOG_o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAhmsM8GHcVMXBn6nGaRZfBr7PSfQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 333
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+        "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/FiP5qGjOG_o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAhmsM8GHcVMXBn6nGaRZfBr7PSfQ",
+        "videoId": "FiP5qGjOG_o"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "FiP5qGjOG_o",
+        "canonicalUrl": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+        "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+        "channelName": "Reading is a Skill",
+        "channelHandle": "readingisaskill",
+        "thumbnailUrl": "https://i.ytimg.com/vi/FiP5qGjOG_o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAhmsM8GHcVMXBn6nGaRZfBr7PSfQ",
+        "publishDateText": "8 hours ago",
+        "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+        "publishDate": "2026-04-30T15:39:14.532Z"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "url": "https://www.youtube.com/watch?v=FiP5qGjOG_o",
+    "excerpt": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "text": "We replaced their science with Blackwell Instant Science ... let's see if anyone noticed",
+    "authorUsername": "readingisaskill",
+    "authorDisplayName": "Reading is a Skill",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FiP5qGjOG_o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAhmsM8GHcVMXBn6nGaRZfBr7PSfQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

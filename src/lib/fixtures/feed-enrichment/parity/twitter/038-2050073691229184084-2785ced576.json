@@ -1,0 +1,197 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050073691229184084",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050073691229184084",
+    "url": "https://x.com/vlada_mc/status/2050073691229184084",
+    "title": "@vlada_mc: Demise of UN is unbearable to watch. US should sit down with China and work out a new fram",
+    "authorUsername": "vlada_mc",
+    "authorDisplayName": "Vladimir Milosevic",
+    "publishedAtMs": 1777610631000,
+    "payload": {
+      "source": "twitter",
+      "sourceItemId": "2050073691229184084",
+      "sourceId": "2050073691229184084",
+      "tweetId": "2050073691229184084",
+      "url": "https://x.com/vlada_mc/status/2050073691229184084",
+      "title": "@vlada_mc: Demise of UN is unbearable to watch. US should sit down with China and work out a new fram",
+      "text": "Demise of UN is unbearable to watch. US should sit down with China and work out a new framework for settling disputes, such that it could occasionally help. This is useless, wasteful and harmful. UN helped a lot in the past, so there might be a way if it regains legitimacy.",
+      "authorUsername": "vlada_mc",
+      "authorDisplayName": "Vladimir Milosevic",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1190988524255883266/ljycPVBy_normal.jpg",
+      "publishedAt": "2026-05-01T04:43:51.000Z",
+      "publishedAtMs": 1777610631000,
+      "metrics": {},
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+        },
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg",
+        "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+      ],
+      "quotedTweet": {
+        "authorUsername": null,
+        "authorDisplayName": null,
+        "text": "BREAKING: The U.N. just elected the Islamic Republic of Iran as one of the Vice Presidents of the Nuclear Non-Proliferation Review Conference. Bravo to the U.S., UAE, Australia, UK, France and Germany for objecting. Last time, only spoke out: https:// x.com/UNWatch/status /2044678577854255116 …"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "inReplyToStatusId": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "following",
+        "url": "https://x.com/vlada_mc/status/2050073691229184084",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": {
+          "source": "timeline",
+          "requestedHandle": null
+        },
+        "quotedTweet": {
+          "authorUsername": null,
+          "authorDisplayName": null,
+          "text": "BREAKING: The U.N. just elected the Islamic Republic of Iran as one of the Vice Presidents of the Nuclear Non-Proliferation Review Conference. Bravo to the U.S., UAE, Australia, UK, France and Germany for objecting. Last time, only spoke out: https:// x.com/UNWatch/status /2044678577854255116 …"
+        },
+        "inReplyToStatusId": null,
+        "capturedAt": "2026-05-01T06:37:47.210Z",
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": [],
+        "media": [
+          {
+            "type": "image",
+            "url": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+          },
+          {
+            "type": "video",
+            "url": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg",
+            "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+          }
+        ],
+        "captureKind": "following",
+        "captureUrl": "https://x.com/home"
+      },
+      "captureKind": "following",
+      "captureUrl": "https://x.com/home",
+      "capturedAt": "2026-05-01T06:37:47.210Z"
+    },
+    "fetchedAtMs": 1777617514208,
+    "expiresAtMs": 1777833514208,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-4c3adb8bc9",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050073691229184084",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T04:43:51.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "@vlada_mc: Demise of UN is unbearable to watch. US should sit down with China and work out a new fram",
+    "url": "https://x.com/vlada_mc/status/2050073691229184084",
+    "excerpt": null,
+    "text": "Demise of UN is unbearable to watch. US should sit down with China and work out a new framework for settling disputes, such that it could occasionally help. This is useless, wasteful and harmful. UN helped a lot in the past, so there might be a way if it regains legitimacy.",
+    "authorUsername": "vlada_mc",
+    "authorDisplayName": "Vladimir Milosevic",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1190988524255883266/ljycPVBy_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "@vlada_mc: Demise of UN is unbearable to watch. US should sit down with China and work out a new fram",
+    "url": "https://x.com/vlada_mc/status/2050073691229184084",
+    "excerpt": null,
+    "text": "Demise of UN is unbearable to watch. US should sit down with China and work out a new framework for settling disputes, such that it could occasionally help. This is useless, wasteful and harmful. UN helped a lot in the past, so there might be a way if it regains legitimacy.",
+    "authorUsername": "vlada_mc",
+    "authorDisplayName": "Vladimir Milosevic",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1190988524255883266/ljycPVBy_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2048897720061181952/img/doO35x1tZxAWP7kw.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "BREAKING: The U.N. just elected the Islamic Republic of Iran as one of the Vice Presidents of the Nuclear Non-Proliferation Review Conference. Bravo to the U.S., UAE, Australia, UK, France and Germany for objecting. Last time, only spoke out: https:// x.com/UNWatch/status /2044678577854255116 …",
+        "author": {
+          "username": "unknown_quote_author"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.quotedTweet"
+  ]
+}

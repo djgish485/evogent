@@ -1,0 +1,126 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "the-moderately-easy-problem-of-consciousness",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "the-moderately-easy-problem-of-consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "title": "The moderately easy problem of consciousness",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "publishedAtMs": 1777291200000,
+    "payload": {
+      "source": "substack",
+      "sourceId": "the-moderately-easy-problem-of-consciousness",
+      "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+      "title": "The moderately easy problem of consciousness",
+      "excerpt": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+      "publication": "Noahpinion",
+      "authorDisplayName": "Noah Smith",
+      "authorUsername": "noahpinion",
+      "readTime": "14 min read",
+      "publishedAtMs": 1777291200000,
+      "fetchedAtMs": 1777447976362,
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!ucy9!,w_160,h_84,c_fill,f_auto,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F58eca23f-c355-486b-805c-f9c03e14ca00_825x413.jpeg",
+      "extractedFrom": "substack-inbox"
+    },
+    "fetchedAtMs": 1777447976362,
+    "expiresAtMs": 1777663976362,
+    "seenByCurationAtMs": 1777464288984
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-9cc2fab090",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "the-moderately-easy-problem-of-consciousness",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-27T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The moderately easy problem of consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "excerpt": null,
+    "text": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The moderately easy problem of consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "excerpt": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+    "text": "",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!ucy9!,w_160,h_84,c_fill,f_auto,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F58eca23f-c355-486b-805c-f9c03e14ca00_825x413.jpeg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

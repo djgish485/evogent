@@ -1,0 +1,168 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050515355333009859",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050515355333009859",
+    "url": "https://x.com/rohanpaul_ai/status/2050515355333009859",
+    "title": "Rohan Paul: Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning ser",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "publishedAtMs": 1777715932000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050515355333009859",
+      "id": "2050515355333009859",
+      "url": "https://x.com/rohanpaul_ai/status/2050515355333009859",
+      "title": "Rohan Paul: Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning ser",
+      "authorUsername": "rohanpaul_ai",
+      "authorDisplayName": "Rohan Paul",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+      "text": "Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning service is already in operation. Robot handles the repetitive stuff, while the person focuses on the rest. A preview of the everyday future we will be living soon.",
+      "publishedAtMs": 1777715932000,
+      "fetchedAtMs": 1777720066001,
+      "surface": "home",
+      "media": [
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+        }
+      ],
+      "metrics": {
+        "replies": 3,
+        "reposts": 6,
+        "likes": 21,
+        "views": 1700
+      },
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "inReplyToStatusId": null,
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "tweetId": "2050515355333009859",
+      "visibleText": "Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning service is already in operation. Robot handles the repetitive stuff, while the person focuses on the rest. A preview of the everyday future we will be living soon.",
+      "publishedAt": "2026-05-02T09:58:52.000Z",
+      "replies": 3,
+      "reposts": 6,
+      "likes": 21,
+      "viewCount": 1700,
+      "mediaUrls": [
+        "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+      ],
+      "cacheCaptureKind": "home",
+      "expiresAtMs": 1777936066001
+    },
+    "fetchedAtMs": 1777720066001,
+    "expiresAtMs": 1777936066001,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-811abe24ff",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050515355333009859",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T09:58:52.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning service is already in operation. Robot handles the repetitive stuff, while the person focuses",
+    "url": "https://x.com/rohanpaul_ai/status/2050515355333009859",
+    "excerpt": null,
+    "text": "Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning service is already in operation. Robot handles the repetitive stuff, while the person focuses on the rest. A preview of the everyday future we will be living soon.",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Rohan Paul: Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning ser",
+    "url": "https://x.com/rohanpaul_ai/status/2050515355333009859",
+    "excerpt": null,
+    "text": "Real homes in China are now data labs for robotics. A hybrid human-robot home cleaning service is already in operation. Robot handles the repetitive stuff, while the person focuses on the rest. A preview of the everyday future we will be living soon.",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2050167941799497728/img/IdknUTqCR8SB6eIG.jpg"
+    ],
+    "metrics": {
+      "likes": 21,
+      "reposts": 6,
+      "replies": 3,
+      "views": 1700
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

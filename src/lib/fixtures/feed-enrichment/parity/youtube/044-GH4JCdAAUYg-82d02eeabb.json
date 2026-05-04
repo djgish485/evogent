@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "GH4JCdAAUYg",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "GH4JCdAAUYg",
+    "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+    "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "authorUsername": "@rishabhagarwal7540",
+    "authorDisplayName": "Rishabh Agarwal",
+    "publishedAtMs": 1777417580659,
+    "payload": {
+      "videoId": "GH4JCdAAUYg",
+      "canonicalUrl": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+      "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+      "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+      "channelName": "Rishabh Agarwal",
+      "channelUrl": "https://www.youtube.com/@rishabhagarwal7540",
+      "channelHandle": "@rishabhagarwal7540",
+      "channel": {
+        "name": "Rishabh Agarwal",
+        "url": "https://www.youtube.com/@rishabhagarwal7540",
+        "handle": "@rishabhagarwal7540"
+      },
+      "publishLabel": "15 hours ago",
+      "publishDateText": "15 hours ago",
+      "thumbnailUrl": null,
+      "duration": "28:46",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "firstSeenPass": 1,
+      "firstSeenOrder": 38,
+      "publishedAtMs": 1777417580659,
+      "cacheTaskId": "cache-refresh-youtube-1777471009755",
+      "expiresAtMs": 1778335580659
+    },
+    "fetchedAtMs": 1777471580659,
+    "expiresAtMs": 1778335580659,
+    "seenByCurationAtMs": 1777477575411
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-820e819dbe",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "GH4JCdAAUYg",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T23:06:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+    "excerpt": null,
+    "text": "Rishabh Agarwal: The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "authorUsername": "rishabhagarwal7540",
+    "authorDisplayName": "Rishabh Agarwal",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/GH4JCdAAUYg/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+        "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/GH4JCdAAUYg/hqdefault.jpg",
+        "videoId": "GH4JCdAAUYg"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "GH4JCdAAUYg",
+        "canonicalUrl": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+        "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+        "channelName": "Rishabh Agarwal",
+        "channelHandle": "rishabhagarwal7540",
+        "thumbnailUrl": "https://i.ytimg.com/vi/GH4JCdAAUYg/hqdefault.jpg",
+        "publishDate": "2026-04-28T23:06:20.000Z",
+        "publishDateText": "2026-04-28T23:06:20.000Z",
+        "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "url": "https://www.youtube.com/watch?v=GH4JCdAAUYg",
+    "excerpt": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "text": "The Hitchhiker's Guide to Frontier Reinforcement Learning",
+    "authorUsername": "@rishabhagarwal7540",
+    "authorDisplayName": "Rishabh Agarwal",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

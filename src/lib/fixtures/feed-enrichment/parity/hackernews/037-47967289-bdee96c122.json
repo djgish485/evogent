@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47967289",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47967289",
+    "url": "https://www.wsj.com/politics/policy/senators-vote-to-ban-themselves-from-trading-on-prediction-markets-ae4535dd",
+    "title": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "authorUsername": "kamaraju",
+    "authorDisplayName": "kamaraju",
+    "publishedAtMs": 1777578153000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47967289",
+      "id": 47967289,
+      "type": "story",
+      "title": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+      "url": "https://www.wsj.com/politics/policy/senators-vote-to-ban-themselves-from-trading-on-prediction-markets-ae4535dd",
+      "hnUrl": "https://news.ycombinator.com/item?id=47967289",
+      "canonicalUrl": "https://www.wsj.com/politics/policy/senators-vote-to-ban-themselves-from-trading-on-prediction-markets-ae4535dd",
+      "author": "kamaraju",
+      "score": 311,
+      "commentCount": 106,
+      "descendants": 106,
+      "publishedAtMs": 1777578153000,
+      "time": 1777578153,
+      "text": null,
+      "kids": [
+        47967631,
+        47967884,
+        47968817,
+        47967594,
+        47967436,
+        47968098,
+        47968060,
+        47983141,
+        47967944,
+        47968030,
+        47968287,
+        47968656,
+        47972028,
+        47968266,
+        47967463,
+        47967412,
+        47968220,
+        47968139,
+        47967808,
+        47967924,
+        47967831,
+        47968890,
+        47967449,
+        47967640,
+        47983878
+      ],
+      "lists": [
+        "beststories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-e08d45aba3",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47967289",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T19:42:33.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "url": "https://www.wsj.com/politics/policy/senators-vote-to-ban-themselves-from-trading-on-prediction-markets-ae4535dd",
+    "excerpt": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "text": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "authorUsername": "kamaraju",
+    "authorDisplayName": "kamaraju",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 250,
+      "reposts": 0,
+      "replies": 92,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47967289"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "url": "https://www.wsj.com/politics/policy/senators-vote-to-ban-themselves-from-trading-on-prediction-markets-ae4535dd",
+    "excerpt": "Hacker News discussion: 311 points, 106 comments.",
+    "text": "U.S. Senators Vote to Ban Themselves from Trading on Prediction Markets",
+    "authorUsername": "kamaraju",
+    "authorDisplayName": "kamaraju",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.hnUrl"
+  ]
+}

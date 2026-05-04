@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "6iMiCJHxTww",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "6iMiCJHxTww",
+    "url": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+    "title": "Princeton Scientist: We Don't Understand AI",
+    "authorUsername": "@DrBrianKeating",
+    "authorDisplayName": "Dr Brian Keating",
+    "publishedAtMs": 1777473555441,
+    "payload": {
+      "videoId": "6iMiCJHxTww",
+      "canonicalUrl": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+      "url": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+      "title": "Princeton Scientist: We Don't Understand AI",
+      "channelName": "Dr Brian Keating",
+      "channelUrl": "https://www.youtube.com/@DrBrianKeating",
+      "channelHandle": "@DrBrianKeating",
+      "channel": {
+        "name": "Dr Brian Keating",
+        "url": "https://www.youtube.com/@DrBrianKeating",
+        "handle": "@DrBrianKeating"
+      },
+      "publishLabel": "15 hours ago",
+      "publishDateText": "15 hours ago",
+      "publishedAtMs": 1777473555441,
+      "thumbnailUrl": null,
+      "duration": "48:04",
+      "viewCount": 16000,
+      "viewCountText": "16K views",
+      "viewCountLabel": "16K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshRunId": "cache-refresh-youtube-1777526162330"
+    },
+    "fetchedAtMs": 1777527555441,
+    "expiresAtMs": 1778391555441,
+    "seenByCurationAtMs": 1777548614503
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-b79e74f3d1",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "6iMiCJHxTww",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T14:39:15.441Z"
+  },
+  "historicalFeedRow": {
+    "title": "Princeton Scientist: We Don't Understand AI",
+    "url": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+    "excerpt": "Dr Brian Keating video.",
+    "text": "Princeton Scientist: We Don't Understand AI",
+    "authorUsername": "@DrBrianKeating",
+    "authorDisplayName": "Dr Brian Keating",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/6iMiCJHxTww/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+        "title": "Princeton Scientist: We Don't Understand AI",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/6iMiCJHxTww/hqdefault.jpg",
+        "videoId": "6iMiCJHxTww"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "6iMiCJHxTww",
+        "canonicalUrl": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+        "title": "Princeton Scientist: We Don't Understand AI",
+        "channelName": "Dr Brian Keating",
+        "channelHandle": "@DrBrianKeating",
+        "channelUrl": "https://www.youtube.com/@DrBrianKeating",
+        "thumbnailUrl": "https://i.ytimg.com/vi/6iMiCJHxTww/hqdefault.jpg",
+        "publishDate": null,
+        "publishDateText": "15 hours ago",
+        "duration": "48:04",
+        "viewCountText": "16K views",
+        "url": "https://www.youtube.com/watch?v=6iMiCJHxTww"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Princeton Scientist: We Don't Understand AI",
+    "url": "https://www.youtube.com/watch?v=6iMiCJHxTww",
+    "excerpt": "Princeton Scientist: We Don't Understand AI",
+    "text": "Princeton Scientist: We Don't Understand AI",
+    "authorUsername": "@DrBrianKeating",
+    "authorDisplayName": "Dr Brian Keating",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

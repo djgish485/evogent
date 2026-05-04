@@ -1,0 +1,162 @@
+{
+  "profiles": {
+    "low": {
+      "ttlHours": 72,
+      "homeLimit": 150,
+      "followingLimit": 150,
+      "maxAccounts": 2,
+      "accountTweetLimit": 8,
+      "priorityAccountTweetLimit": 16,
+      "maxTopicQueries": 1,
+      "topicTweetLimit": 10,
+      "generalAuthorCap": 3,
+      "strictAuthorCap": 1,
+      "outputAuthorCap": 2
+    },
+    "medium": {
+      "ttlHours": 60,
+      "homeLimit": 150,
+      "followingLimit": 150,
+      "maxAccounts": 3,
+      "accountTweetLimit": 10,
+      "priorityAccountTweetLimit": 20,
+      "maxTopicQueries": 2,
+      "topicTweetLimit": 12,
+      "generalAuthorCap": 4,
+      "strictAuthorCap": 2,
+      "outputAuthorCap": 2
+    },
+    "high": {
+      "ttlHours": 48,
+      "homeLimit": 150,
+      "followingLimit": 150,
+      "maxAccounts": 3,
+      "accountTweetLimit": 12,
+      "priorityAccountTweetLimit": 24,
+      "maxTopicQueries": 2,
+      "topicTweetLimit": 15,
+      "generalAuthorCap": 5,
+      "strictAuthorCap": 2,
+      "outputAuthorCap": 3
+    }
+  },
+  "accountPool": [
+    { "handle": "karpathy", "weight": 9, "includeReplies": false },
+    { "handle": "paulg", "weight": 8, "includeReplies": false },
+    { "handle": "patrickc", "weight": 7, "includeReplies": false },
+    { "handle": "ylecun", "weight": 7, "includeReplies": true },
+    { "handle": "natfriedman", "weight": 6, "includeReplies": false },
+    { "handle": "pmarca", "weight": 6, "includeReplies": false },
+    { "handle": "naval", "weight": 5, "includeReplies": true },
+    { "handle": "daviddeutschoxf", "weight": 4, "includeReplies": true }
+  ],
+  "defaultPriorityAccountWeight": 8,
+  "priorityAccountWeightMultiplier": 2.5,
+  "phaseOrder": [
+    "foundation",
+    "account",
+    "search"
+  ],
+  "providerPhaseStepCaps": {
+    "bird": {},
+    "browser": {
+      "search": 4
+    }
+  },
+  "deadlineBudgets": {
+    "bird": {
+      "stepDeadlineMs": 90000,
+      "stepDeadlinePaddingMs": null,
+      "minRunDeadlineMs": null,
+      "maxRunDeadlineMs": null
+    },
+    "browser": {
+      "stepDeadlineMs": 3600000,
+      "stepDeadlinePaddingMs": null,
+      "minRunDeadlineMs": 1080000,
+      "maxRunDeadlineMs": 86400000
+    }
+  },
+  "browserPrompt": {
+    "common": [
+      "CRITICAL — SCROLLING: Do NOT use keyboard End, Home, Page Down, or arrow keys to scroll any page. These keys can activate focused elements and navigate away from the current page. Always use window.scrollBy(0, window.innerHeight * 3) executed via browser JavaScript evaluation.",
+      "CRITICAL — PAGE NAVIGATION GUARD: After each scroll pass, verify the current page URL is still the expected feed/page. If the browser navigated to a detail page, navigate back to the feed URL before continuing extraction.",
+      "CRITICAL — TAB MANAGEMENT: The shared browser may have stale tabs from previous agents. At the start of each source step, verify you are on the correct tab and URL. If needed, navigate to the target URL in the current tab rather than opening new tabs. Do not close other tabs.",
+      "CRITICAL — QUOTED TWEETS AND REPLIES: For EVERY tweet you extract, you MUST check for and include: (1) If the tweet contains an embedded quoted tweet card, extract quotedTweet: {authorUsername, authorDisplayName, text} from the visible card content — this is the second tweetText and second User-Name element in the article. (2) If Replying to @handle appears above the tweet text, capture inReplyToUsername from the visible handle. Extract inReplyToStatusId only when X exposes the parent status URL/href or when the parent-with-child-below connector rule links the reply to the immediately preceding article. If X shows only Replying to @handle and no parent-rendered-above connector layout, inReplyToUsername alone is acceptable, inReplyToStatusId should remain null, and QA must not fail that item because the timeline DOM does not expose the parent's status URL. (3) Use the precise parent-with-child-below connector rule below for timeline article adjacency. (4) Store these in raw_data so downstream normalization preserves them. This is non-optional — every tweet that visibly contains a quote, reply indicator, or detected parent-with-child-below connector MUST have the corresponding metadata field populated.",
+      "CRITICAL — PARENT-WITH-CHILD-BELOW CONNECTOR TWO-PASS: On Home, Following, profile/with_replies, and other X timelines, perform reply linkage in two passes over [data-testid=\"cellInnerDiv\"] cells. Pass 1 collects each cell that contains an article, recording the cell element, article element, sourceId, and author handle. Pass 2 walks those collected cells in DOM order and tests each parent candidate cell N for X's avatar connector-line signature inside its article: a div whose CSS classes include all of r-1bimlpy, r-f8sm7e, and r-m5arl1; whose getBoundingClientRect() width is between 1 and 4px; whose height is >= 30px; and whose bottom is greater than cell.getBoundingClientRect().bottom - 5, meaning the line extends past the cell's bottom boundary.",
+      "CRITICAL — CONNECTOR LINKAGE: When the parent-with-child-below connector signal fires on cell N, the immediately next collected cell with an article, cell N+1, is the child reply. Set the child article's inReplyToStatusId to the parent article's sourceId and inReplyToUsername to the parent article's author handle. This applies to cross-author replies and same-author self-threads, and it does not require the visible Replying to @handle indicator.",
+      "CRITICAL — REPLY EXTRACTION AUDIT: Every cache refresh cycleSummary must include cycleSummary.replyExtractionAudit with exactly these production visibility counts: totalCells, cellsWithConnectorBelow, repliesLinkedFromConnector, and repliesWithReplyingToIndicator.",
+      "CRITICAL — VISIBLE PARENT TWEETS ABOVE REPLIES: On Home and Following timelines, X may render the parent tweet inline above a reply card as its own complete article immediately preceding the reply. When this visible-parent layout appears, capture that parent as a separate cache item with its own authorUsername, authorDisplayName, text, authorAvatarUrl, and media. Do not only store the reply's inReplyToStatusId. This is non-optional, same as embedded quoted tweet capture.",
+      "CRITICAL — EXTERNAL LINKED-PAGE CARDS: If a rendered tweet shows a visible external article/link card, capture it as supported tweet metadata rather than dropping it. Store linkCard with the existing shape {type, url, title, domain, imageUrl, description} when visible, store linkPreviews as [{url, title, domain, image, description}] when the capture naturally has preview entries, and store urlEntities as [{url, expandedUrl, displayUrl}] for the tweet URL entities that correspond to the rendered link. Use only facts visible on the rendered tweet or already exposed by the tweet data; do not follow the linked page or invent Open Graph fields. NEVER capture a linkCard, linkPreview, or urlEntity whose URL host is x.com or twitter.com — those point inside Twitter (the tweet author's own profile, status, or another tweet) and are not external link cards. The author's User-Name block (handle, displayName, profile link) is part of the tweet header, not a link card; leave linkCard null and linkPreviews/urlEntities empty when the only candidate anchors are self-references.",
+      "CRITICAL — VIDEO MEDIA: If a rendered tweet shows a playable video, emit each visible video as exactly ONE media entry with type: 'video'. Extract the visible poster/thumbnail URL and use it for both url and posterUrl on that video media object so downstream normalization and UI rendering can display the video thumbnail with the play affordance. If both a <video> element with a blob: URL and an <img> poster element are present for the same video, treat them as the SAME media entry, not two. Never emit a blob: URL as a media entry's url; blob URLs are session-scoped and unusable downstream. If you're unsure whether two entries represent the same video, dedupe by posterUrl identity.",
+      "CRITICAL — AUTHOR AVATAR: For every tweet, including reply child items, parent ancestors, and thread context tweets, capture the visible avatar image src from the author user-name block as authorAvatarUrl. This is not limited to top-level cards: each visible user_name block has an <img> avatar element; capture its src.",
+      "THREAD CONTEXT: When a rendered page shows a reply thread or conversation context, extract ALL visible tweets in that thread as separate items, not just tweets authored by the requested account. Keep visible parents, ancestors, and other visible thread tweets that provide the reply context.",
+      "MAIN-TWEET IDENTIFICATION:",
+      "1. On x.com/<user>/status/<sourceId> pages, articles[0] is often the parent tweet, not the main tweet. Never use array index alone to identify the main article.",
+      "2. Identify the main article as the article whose self-link href matches the current page URL: it contains an a[href] ending with /status/<sourceId> for the current item sourceId. Equivalent: the only article whose own permalink anchor points to its own /status/<id>.",
+      "3. Articles before the matched main article are upstream context. Persist the article immediately preceding main as relationship=\"parent\"; persist older ancestors as relationship=\"thread\", oldest first. Articles after the matched main article are reply candidates, so any reply picker must use articles after the matched main index.",
+      "4. PATCH text, media_urls, metrics, and linkCard for the main feed row only from the matched main article, never from articles[0] blindly.",
+      "5. Before PATCHing text, compare the curator-submitted feed-row text with the freshly extracted candidate text. If they are plainly about different topics, different framings, or different tweet authors, STOP, re-check the URL match, and do not PATCH. Use agent judgment, not a JS text comparator.",
+      "6. Do not PATCH text merely because a candidate is longer. Text replacement requires the URL-matched main article plus the sanity judgment above.",
+      "For foundation feeds (home, following), the per-kind MANDATORY SCROLL LOOP instructions define the minimum scroll passes. Complete all required scroll passes before evaluating whether content is repeating. Do not declare a feed 'covered enough' until the mandatory passes are done.",
+      "Foundation feeds are the highest-priority tasks in this refresh. Spend the deepest scroll budget on Home and Following before account or search tasks.",
+      "Stay on the canonical target page for the current task unless you need to open an individual tweet to recover clipped text for an item you will return.",
+      "Focus on extracting fresh content rather than re-reading tweets you already captured earlier in this curation cycle.",
+      "When a schema field is not readily visible from the rendered page, return null or an empty list instead of spending extra time hunting for it.",
+      "Prefer canonical tweet text. Open the tweet page only when needed to recover the full rendered text for tweets you return.",
+      "CRITICAL — TEXT COMPLETENESS AUDIT: Before returning or persisting any Twitter/X cache row captured from a timeline, profile, search result, or quoted-card surface, audit whether the main tweet text is complete enough for cache-only curation. Use rendered evidence and agent judgment. Treat text as likely incomplete when the visible card has a Show more/read-more affordance, a clipped/line-clamped text container, a trailing ellipsis from X, an unmatched quote after a long excerpt, or a natural-language fragment that visibly ends mid-sentence or mid-claim, such as ending on a conjunction, preposition, article, auxiliary verb, or open quote.",
+      "CRITICAL — STATUS-PAGE TEXT RECOVERY: When the text-completeness audit says a returned tweet may be clipped, open its canonical https://x.com/<author>/status/<sourceId> URL in the shared browser before writing the cache row. Identify the main article by matching the article's own permalink to /status/<sourceId>, not by array index. Replace the cached main text only with the full rendered text from that matched status-page article.",
+      "CRITICAL — TEXT RECOVERY MARKERS: When status-page recovery succeeds, persist the row with payload.text as the recovered full text, textCapture: {textSource: \"status_page\", completeness: \"complete\", recoveredFromStatusPage: true}, and cacheAudit: {textCompleteness: \"complete\", statusPageRecovered: true}. When timeline text was already complete, use textCapture: {textSource: \"timeline_card\", completeness: \"complete\"}.",
+      "CRITICAL — INCOMPLETE TEXT MARKERS: If status-page recovery fails or the status page still cannot prove full rendered text, do not silently persist a normal-looking tweet row. Either drop the row from the returned items and count it as skipped incomplete, or persist it with payload.text as the visible snippet plus textCapture: {textSource: \"timeline_card_fallback\", completeness: \"incomplete\"}, cacheAudit: {textCompleteness: \"incomplete\", needsStatusPage: true, recoveryFailed: true, rejectionReason: \"source-incomplete-text\"}, and sourceQuality: {textCompleteness: \"incomplete\", issue: \"twitter_text_incomplete\"}. Cache-only curation must be able to tell this is a source-quality miss, not a taste/content rejection.",
+      "CRITICAL — TEXT COMPLETENESS CYCLE SUMMARY: Every Twitter cache refresh cycleSummary must include cycleSummary.textCompletenessAudit with exactly these counts: tweetRowsAudited, statusPageRecovered, skippedIncomplete, and deduped. Increment statusPageRecovered only for rows whose main text came from the canonical status page. Increment skippedIncomplete for rows dropped or explicitly marked incomplete after failed recovery.",
+      "CRITICAL — TWEET SOURCE-ID DEDUPE: Use the bare numeric tweet id as sourceId for every Twitter cache item. If a capture sees both twitter:<id>, tweet-<id>, a status URL, and <id> for the same tweet, treat them as the same row, keep the highest-quality text capture (complete status_page beats incomplete timeline_card), and increment cycleSummary.textCompletenessAudit.deduped.",
+      "IMAGE-ONLY OR VIDEO-ONLY TWEETS: When a tweet has no visible body text and only contains media (image, video, GIF), return text as an empty string. Do NOT describe the image or video. Do NOT use the image's accessibility alt text as the tweet body. Do NOT generate any caption, transcription, or summary from the rendered media. The image stands on its own — it is the content. The text field reflects what the author typed, not what the agent sees.",
+      "If X lands on login, consent, rate-limit, challenge, or other blocking/interstitial pages, set ok=false and describe the problem in error.",
+      "Use replyCapture.source only from this set when relevant: timeline, search, profile_tweets, profile_with_replies, status_thread, status_replies.",
+      "Use textCapture.textSource only from this set when relevant: timeline_card, status_page, timeline_card_fallback.",
+      "Use textCapture.completeness only from this set when relevant: complete, incomplete.",
+      "replyCapture.requestedHandle should be null unless the rendered page is explicitly scoped to the requested account.",
+      "Before you finalize each batch, verify: any tweet whose rendered article contained a visible quoted tweet card MUST have quotedTweet in its raw_data. Missing quoted tweet metadata on a tweet that visibly had one is a data quality failure.",
+      "Before you finalize each batch, verify: any tweet whose rendered article contained a visible external linked-page card MUST have linkCard and/or linkPreviews plus matching urlEntities in its raw_data/payload. Missing linked-page metadata on a tweet that visibly had a card is a data quality failure.",
+      "Before finalizing the batch, for each tweet spot-check that if the rendered article contains a second User-Name + tweetText card inside, quotedTweet is populated. Missing quotedTweet when one is visible means the extraction failed; re-capture or drop that item."
+    ],
+    "byKind": {
+      "home": [
+        "MANDATORY PAGE RELOAD for Home: Navigate to https://x.com/home and force-reload the page at the START of this step. Do not extract from a stale page left by a previous agent.",
+        "MANDATORY TAB SELECTION for Home: Click the For you tab before extracting. Use the browser click tool on the [role=tab] element containing text For you, then verify the tab becomes selected with aria-selected=true. The Following tab may be active from a previous session, so you must explicitly select For you after the reload.",
+        "MANDATORY KEYBOARD BLOCKER for Home: Before any scrolling, inject a keyboard shortcut blocker to prevent X from hijacking scroll events. Execute via browser_evaluate: document.addEventListener('keydown', function(e) { if ('/jklrtmbuxsn.?'.includes(e.key)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true); Also click querySelector('[data-testid=primaryColumn]') to ensure body focus before scrolling.",
+        "MANDATORY VIRTUAL DOM + SCROLL LOOP for Home: X removes articles from the DOM once they scroll off screen. Do NOT wait until the end and read only the currently visible DOM. In a SINGLE async browser_evaluate call, create a Map keyed by tweetId, extract the visible tweets, scroll, wait, and merge each newly visible tweet into that same Map across all passes before returning.",
+        "MANDATORY SCROLL LOOP for Home: After the page loads and you extract the initial visible tweets, perform at least 4 additional scroll passes. Each pass: execute window.scrollTo(0, window.scrollY + 3600), wait 2-3 seconds for new content, then extract newly visible tweets into the same in-page Map. Continue until you have at least 50 unique tweets or the page is clearly recycling identical content after 2 consecutive passes with zero new tweets.",
+        "MANDATORY FILE OUTPUT for Home: Ensure data/tmp exists before saving (for example `mkdir -p data/tmp`). Use browser_evaluate's filename parameter to write the full capture object directly to disk, for example `data/tmp/tweet-home-<run-id>.capture`. Do not send the full tweet batch through bash/stdout because transport limits can truncate the results.",
+        "MANDATORY RETURN for Home: After writing the capture file, keep the raw JSON object available for your scratchpad and later candidate evaluation. Do not run persistence scripts or cache upserts from this prompt.",
+        "Your final response for Home/For You must be the raw JSON object only. Do not add any intro sentence, explanation, markdown fence, or trailing note before or after the JSON."
+      ],
+      "following": [
+        "MANDATORY PAGE RELOAD for Following: Navigate to the Following tab on https://x.com/home and reload the page. Use default Popular ordering — do NOT switch to Latest/Recent.",
+        "MANDATORY TAB SELECTION for Following: Click the Following tab before extracting. Use the browser click tool on the [role=tab] element containing text Following, then verify the tab becomes selected with aria-selected=true. Do NOT just navigate to https://x.com/home because both tabs share the same URL and the For you tab may still be active.",
+        "MANDATORY KEYBOARD BLOCKER for Following: Inject the same keyboard shortcut blocker as Home if not already active.",
+        "MANDATORY VIRTUAL DOM + SCROLL LOOP for Following: X removes articles from the DOM once they scroll off screen. Do NOT rely on the currently visible DOM at the end. In a SINGLE async browser_evaluate call, create a Map keyed by tweetId, extract the visible tweets, scroll, wait, and merge each newly visible tweet into that same Map across all passes before returning.",
+        "MANDATORY SCROLL LOOP for Following: After the page loads and you extract the initial visible tweets, perform at least 3 additional scroll passes. Each pass: execute window.scrollTo(0, window.scrollY + 3600), wait 2-3 seconds for new content, then extract newly visible tweets into the same in-page Map. Continue until you have at least 30 unique tweets or the feed is clearly recycling identical content after 2 consecutive passes with zero new tweets.",
+        "MANDATORY FILE OUTPUT for Following: Ensure data/tmp exists before saving (for example `mkdir -p data/tmp`). Use browser_evaluate's filename parameter to write the full capture object directly to disk, for example `data/tmp/tweet-following-<run-id>.capture`. Do not send the full tweet batch through bash/stdout because transport limits can truncate the results.",
+        "MANDATORY RETURN for Following: After writing the capture file, keep the raw JSON object available for your scratchpad and later candidate evaluation. Do not run persistence scripts or cache upserts from this prompt."
+      ],
+      "user_tweets": [
+        "The selected profile list is already a weighted sample. Browse the requested account deeply enough to get a useful batch, then move on instead of substituting other accounts.",
+        "Profile timelines should stop once the rendered tweets have become clearly repetitive or stale relative to the rest of this cycle's findings.",
+        "MANDATORY FILE OUTPUT for account tweets: Use browser_evaluate's filename parameter to save extracted tweets to `data/tmp/tweet-account-<handle>.capture`.",
+        "MANDATORY RETURN for account tweets: After saving, keep the raw JSON object available for your scratchpad and later candidate evaluation. Do not run persistence scripts or cache upserts from this prompt."
+      ],
+      "user_replies": [
+        "With replies timelines should stop once the rendered tweets have become clearly repetitive or stale relative to the rest of this cycle's findings.",
+        "MANDATORY FILE OUTPUT for account replies: Use browser_evaluate's filename parameter to save extracted tweets to `data/tmp/tweet-account-<handle>.capture`.",
+        "MANDATORY RETURN for account replies: After saving, keep the raw JSON object available for your scratchpad and later candidate evaluation. Do not run persistence scripts or cache upserts from this prompt."
+      ],
+      "search": [
+        "Treat search as a small supplementary pass sourced from the current cycle's gaps and hypotheses rather than the main discovery surface.",
+        "Stay within live search results for the requested query and use the requested handle only when the rendered results are explicitly scoped to that account's replies.",
+        "MANDATORY FILE OUTPUT for search: Use browser_evaluate's filename parameter to save to `data/tmp/tweet-search-<query>.capture`.",
+        "MANDATORY RETURN for search: After saving, keep the raw JSON object available for your scratchpad and later candidate evaluation. Do not run persistence scripts or cache upserts from this prompt."
+      ]
+    }
+  }
+}

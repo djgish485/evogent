@@ -1,0 +1,132 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050552916767875156",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050552916767875156",
+    "url": "https://x.com/KobeissiLetter/status/2050552916767875156",
+    "title": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+    "authorUsername": "kobeissiletter",
+    "authorDisplayName": "The Kobeissi Letter",
+    "publishedAtMs": 1777724887000,
+    "payload": {
+      "id": "2050552916767875156",
+      "sourceId": "2050552916767875156",
+      "url": "https://x.com/KobeissiLetter/status/2050552916767875156",
+      "text": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+      "full_text": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+      "authorUsername": "kobeissiletter",
+      "authorDisplayName": "The Kobeissi Letter",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1975243710846640128/fwYCe67Y_normal.jpg",
+      "publishedAt": "2026-05-02T12:28:07.000Z",
+      "publishedAtMs": 1777724887000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureSurface": "home",
+        "pass": 7,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "tweetTextCount": 1,
+        "visibleText": "The Kobeissi Letter\n@KobeissiLetter\n·\n59m\nBREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations.\n\nAll flights have been canceled and customer service is no longer available.\n241\n330\n2.5K\n141K"
+      }
+    },
+    "fetchedAtMs": 1777728574342,
+    "expiresAtMs": 1777944574342,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-da8a5ed137",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050552916767875156",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:28:07.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+    "url": "https://x.com/KobeissiLetter/status/2050552916767875156",
+    "excerpt": null,
+    "text": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+    "authorUsername": "kobeissiletter",
+    "authorDisplayName": "The Kobeissi Letter",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1975243710846640128/fwYCe67Y_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+    "url": "https://x.com/KobeissiLetter/status/2050552916767875156",
+    "excerpt": null,
+    "text": "BREAKING: After 33 years, Spirit Airlines has officially gone bankrupt and shut down all operations. All flights have been canceled and customer service is no longer available.",
+    "authorUsername": "kobeissiletter",
+    "authorDisplayName": "The Kobeissi Letter",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1975243710846640128/fwYCe67Y_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

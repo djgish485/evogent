@@ -1,0 +1,129 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+    "url": "https://andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+    "title": "The Ukrainian Miracle",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "ANDREW SULLIVAN",
+    "publishedAtMs": 1777636800000,
+    "payload": {
+      "url": "https://andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+      "host": "andrewsullivan.substack.com",
+      "slug": "the-ukrainian-miracle-ee5",
+      "title": "The Ukrainian Miracle",
+      "publicationName": "THE WEEKLY DISH",
+      "author": "ANDREW SULLIVAN",
+      "authorDisplayName": "ANDREW SULLIVAN",
+      "authorUsername": "andrewsullivan",
+      "summary": "Resilience, innovation, drones, and a Europe finally waking up. Who knew?",
+      "timestampLabel": "MAY 1",
+      "publishedAtMs": 1777636800000,
+      "discoverySurface": "inbox"
+    },
+    "fetchedAtMs": 1777732504047,
+    "expiresAtMs": 1777948504047,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-9059ff2043",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T17:56:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The Ukrainian Miracle",
+    "url": "https://andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+    "excerpt": "Resilience, innovation, drones, and a Europe finally waking up. Who knew?",
+    "text": "The Ukrainian Miracle\n\nResilience, innovation, drones, and a Europe finally waking up. Who knew?",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "The Weekly Dish",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!pu7G!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F32cbb7d5-6065-4695-96ab-98a53e3d3254_585x585.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "publicationName": "The Weekly Dish",
+        "author": "Andrew Sullivan",
+        "imageUrl": "https://substackcdn.com/image/fetch/$s_!pu7G!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F32cbb7d5-6065-4695-96ab-98a53e3d3254_585x585.png"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The Ukrainian Miracle",
+    "url": "https://andrewsullivan.substack.com/p/the-ukrainian-miracle-ee5",
+    "excerpt": "Resilience, innovation, drones, and a Europe finally waking up. Who knew?",
+    "text": "Resilience, innovation, drones, and a Europe finally waking up. Who knew?",
+    "authorUsername": "andrewsullivan",
+    "authorDisplayName": "ANDREW SULLIVAN",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorDisplayName",
+    "mediaUrls",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "qI3DAXM0-do",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "qI3DAXM0-do",
+    "url": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+    "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+    "authorUsername": "@CoolWorldsPodcast",
+    "authorDisplayName": "Cool Worlds Podcast",
+    "publishedAtMs": 1776523288657,
+    "payload": {
+      "videoId": "qI3DAXM0-do",
+      "canonicalUrl": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+      "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+      "channelName": "Cool Worlds Podcast",
+      "channelUrl": "https://www.youtube.com/@CoolWorldsPodcast",
+      "channelHandle": "@CoolWorldsPodcast",
+      "channel": {
+        "name": "Cool Worlds Podcast",
+        "url": "https://www.youtube.com/@CoolWorldsPodcast",
+        "handle": "@CoolWorldsPodcast"
+      },
+      "publishLabel": "2 weeks ago",
+      "publishDateText": "2 weeks ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/qI3DAXM0-do/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDCt9JSInbyV1HoZ9aykI2LZOn72Q",
+      "duration": "1:36:51",
+      "viewCount": 27000,
+      "viewCountLabel": "27K views",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "sourceKinds": [
+        "home"
+      ],
+      "source": "youtube",
+      "sourceCaptureFile": "data/tmp/youtube-home-cache-refresh-youtube-1777732563134.capture",
+      "captureRunId": "cache-refresh-youtube-1777732563134",
+      "sourceNotes": [],
+      "publishedAtMs": 1776523288657,
+      "fetchedAtMs": 1777732888657,
+      "expiresAtMs": 1778596888657
+    },
+    "fetchedAtMs": 1777732888657,
+    "expiresAtMs": 1778596888657,
+    "seenByCurationAtMs": 1777190119357
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-e16195b347",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "qI3DAXM0-do",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-13T17:18:39.316Z"
+  },
+  "historicalFeedRow": {
+    "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+    "url": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+    "excerpt": "Cool Worlds Podcast, 1:36:51.",
+    "text": "Video from Cool Worlds Podcast.",
+    "authorUsername": "CoolWorldsPodcast",
+    "authorDisplayName": "Cool Worlds Podcast",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/qI3DAXM0-do/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDCt9JSInbyV1HoZ9aykI2LZOn72Q"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+        "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/qI3DAXM0-do/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDCt9JSInbyV1HoZ9aykI2LZOn72Q",
+        "videoId": "qI3DAXM0-do"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "qI3DAXM0-do",
+        "canonicalUrl": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+        "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+        "channelName": "Cool Worlds Podcast",
+        "channelHandle": "CoolWorldsPodcast",
+        "thumbnailUrl": "https://i.ytimg.com/vi/qI3DAXM0-do/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDCt9JSInbyV1HoZ9aykI2LZOn72Q",
+        "publishDate": "2026-04-13T17:18:39.316Z",
+        "publishDateText": "8 days ago",
+        "url": "https://www.youtube.com/watch?v=qI3DAXM0-do"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+    "url": "https://www.youtube.com/watch?v=qI3DAXM0-do",
+    "excerpt": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+    "text": "#32 Chris Lintott - Technosignatures, Citizen Science, Scicomm",
+    "authorUsername": "@CoolWorldsPodcast",
+    "authorDisplayName": "Cool Worlds Podcast",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/qI3DAXM0-do/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDCt9JSInbyV1HoZ9aykI2LZOn72Q"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

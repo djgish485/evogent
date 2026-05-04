@@ -1,0 +1,187 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050444922327904735",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050444922327904735",
+    "url": "https://x.com/Jianfei_AI/status/2050444922327904735",
+    "title": "Jianfei Yang@Jianfei_AI: Excited to share a piece of work that I'm personally very proud of Our paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026. What's the id",
+    "authorUsername": "Jianfei_AI",
+    "authorDisplayName": "Jianfei Yang",
+    "publishedAtMs": 1777699139000,
+    "payload": {
+      "type": "tweet",
+      "source": "twitter",
+      "sourceId": "2050444922327904735",
+      "surface": "home",
+      "text": "Excited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of generating robot actions from random noise (slow), we start from past actions and directly map to",
+      "full_text": "Excited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of generating robot actions from random noise (slow), we start from past actions and directly map to",
+      "url": "https://x.com/Jianfei_AI/status/2050444922327904735",
+      "title": "Jianfei Yang@Jianfei_AI: Excited to share a piece of work that I'm personally very proud of Our paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026. What's the id",
+      "authorUsername": "Jianfei_AI",
+      "authorDisplayName": "Jianfei Yang",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1894290160725970944/qEyDjRFx_normal.jpg",
+      "publishedAt": "2026-05-02T05:18:59.000Z",
+      "publishedAtMs": 1777699139000,
+      "metrics": {
+        "replies": "1",
+        "reposts": "9",
+        "likes": "48",
+        "bookmarks": null,
+        "views": "0"
+      },
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHSki1YakAAPdoJ?format=jpg&name=small"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHSki1YakAAPdoJ?format=jpg&name=small"
+      ],
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "raw_data": {
+        "quotedTweet": null,
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": [],
+        "surface": "home",
+        "pass": 1,
+        "userNameBlock": "Jianfei Yang\n@Jianfei_AI\n·\n4h",
+        "articleText": "Jianfei Yang\n@Jianfei_AI\n·\n4h\nExcited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of generating robot actions from random noise (slow), we start from past actions and directly map to\nShow more\n1\n9\n48\n1.9K",
+        "capturedFromUrl": "https://x.com/home",
+        "cacheSurfaces": [
+          "home_for_you"
+        ]
+      },
+      "cacheSurfaces": [
+        "home_for_you"
+      ],
+      "cacheRefresh": {
+        "runId": "cache-refresh-twitter-1777713662993",
+        "fetchedAtMs": 1777714002028,
+        "expiresAtMs": 1777930002028,
+        "sourceMode": "browser",
+        "surfaces": [
+          "home_for_you"
+        ],
+        "captureFiles": [
+          "data/tmp/tweet-home-cache-refresh-twitter-1777713662993.capture",
+          "data/tmp/tweet-following-cache-refresh-twitter-1777713662993.capture"
+        ],
+        "ttlHours": 60
+      }
+    },
+    "fetchedAtMs": 1777714002028,
+    "expiresAtMs": 1777930002028,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-4b35a6c106",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050444922327904735",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T05:18:59.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Excited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of ge",
+    "url": "https://x.com/Jianfei_AI/status/2050444922327904735",
+    "excerpt": null,
+    "text": "Excited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of generating robot actions from random noise (slow), we start from past actions and directly map to",
+    "authorUsername": "Jianfei_AI",
+    "authorDisplayName": "Jianfei Yang",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1894290160725970944/qEyDjRFx_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHSki1YakAAPdoJ?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Jianfei Yang@Jianfei_AI: Excited to share a piece of work that I'm personally very proud of Our paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026. What's the id",
+    "url": "https://x.com/Jianfei_AI/status/2050444922327904735",
+    "excerpt": null,
+    "text": "Excited to share a piece of work that I'm personally very proud of \n\nOur paper \"Action-to-Action Flow Matching (A2A)\" has been accepted to RSS-2026.\n\nWhat's the idea?\nInstead of generating robot actions from random noise (slow), we start from past actions and directly map to",
+    "authorUsername": "Jianfei_AI",
+    "authorDisplayName": "Jianfei Yang",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1894290160725970944/qEyDjRFx_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHSki1YakAAPdoJ?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 48,
+      "reposts": 9,
+      "replies": 1,
+      "views": 0
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

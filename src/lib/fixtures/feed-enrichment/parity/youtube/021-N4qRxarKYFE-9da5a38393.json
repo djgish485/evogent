@@ -1,0 +1,169 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "N4qRxarKYFE",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "N4qRxarKYFE",
+    "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+    "title": "[vLLM Office Hours #48] vLLM Project and Tool Calling Update - April 30, 2026",
+    "authorUsername": "redhat",
+    "authorDisplayName": "Red Hat",
+    "publishedAtMs": 1777577954532,
+    "payload": {
+      "videoId": "N4qRxarKYFE",
+      "canonicalUrl": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+      "title": "[vLLM Office Hours #48] vLLM Project and Tool Calling Update - April 30, 2026",
+      "channelName": "Red Hat",
+      "channelUrl": "https://www.youtube.com/@redhat",
+      "channelHandle": "redhat",
+      "channel": {
+        "name": "Red Hat",
+        "url": "https://www.youtube.com/@redhat",
+        "handle": "redhat"
+      },
+      "publishLabel": "Streamed 1 hour ago",
+      "publishDateText": "Streamed 1 hour ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/N4qRxarKYFE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDxCxNIhxOfPZd3NODnvu5rJQpWcA",
+      "duration": "1:03:27",
+      "viewCount": 94,
+      "viewCountLabel": "94 views",
+      "sourceKind": "home",
+      "firstSeenPass": 2,
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+      "source": "youtube",
+      "sourceId": "N4qRxarKYFE",
+      "publishedAtMs": 1777577954532,
+      "extraction": {
+        "taskId": "cache-refresh-youtube-1777581322323",
+        "runId": "cache-refresh-youtube-1777581322323",
+        "sourceKinds": [
+          "home"
+        ],
+        "policy": "youtube-cache"
+      }
+    },
+    "fetchedAtMs": 1777581554532,
+    "expiresAtMs": 1778445554532,
+    "seenByCurationAtMs": 1777593113500
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-45db88f3cb",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "N4qRxarKYFE",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T19:39:14.532Z"
+  },
+  "historicalFeedRow": {
+    "title": "vLLM Project and Tool Calling Update - April 30, 2026",
+    "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+    "excerpt": "vLLM Project and Tool Calling Update - April 30, 2026",
+    "text": "1:03:27\nvLLM Project and Tool Calling Update - April 30, 2026\nRed Hat\n94 views",
+    "authorUsername": "redhat",
+    "authorDisplayName": "Red Hat",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/N4qRxarKYFE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDxCxNIhxOfPZd3NODnvu5rJQpWcA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 94
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+        "title": "vLLM Project and Tool Calling Update - April 30, 2026",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/N4qRxarKYFE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDxCxNIhxOfPZd3NODnvu5rJQpWcA",
+        "videoId": "N4qRxarKYFE"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "N4qRxarKYFE",
+        "canonicalUrl": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+        "title": "vLLM Project and Tool Calling Update - April 30, 2026",
+        "channelName": "Red Hat",
+        "channelHandle": "redhat",
+        "thumbnailUrl": "https://i.ytimg.com/vi/N4qRxarKYFE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDxCxNIhxOfPZd3NODnvu5rJQpWcA",
+        "publishDateText": "Streamed 1 hour ago",
+        "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+        "publishDate": "2026-04-30T19:39:14.532Z"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "[vLLM Office Hours #48] vLLM Project and Tool Calling Update - April 30, 2026",
+    "url": "https://www.youtube.com/watch?v=N4qRxarKYFE",
+    "excerpt": "[vLLM Office Hours #48] vLLM Project and Tool Calling Update - April 30, 2026",
+    "text": "[vLLM Office Hours #48] vLLM Project and Tool Calling Update - April 30, 2026",
+    "authorUsername": "redhat",
+    "authorDisplayName": "Red Hat",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/N4qRxarKYFE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDxCxNIhxOfPZd3NODnvu5rJQpWcA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "excerpt",
+    "text",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "FMdrD_jcYgE",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "FMdrD_jcYgE",
+    "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+    "title": "We Found Galaxies Too Old for the Universe",
+    "authorUsername": "@pbsspacetime",
+    "authorDisplayName": "PBS Space Time",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "FMdrD_jcYgE",
+      "canonicalUrl": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+      "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+      "title": "We Found Galaxies Too Old for the Universe",
+      "channelName": "PBS Space Time",
+      "channelUrl": "https://www.youtube.com/@pbsspacetime",
+      "channelHandle": "@pbsspacetime",
+      "channel": {
+        "name": "PBS Space Time",
+        "url": "https://www.youtube.com/@pbsspacetime",
+        "handle": "@pbsspacetime"
+      },
+      "publishLabel": "4 hours ago",
+      "publishDateText": "4 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/FMdrD_jcYgE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBBKAA21KefwoKryBG6ZvuDdvn9gA",
+      "duration": "20:20",
+      "viewCount": 65000,
+      "viewCountLabel": "65K views",
+      "sourceKind": "home",
+      "fetchKind": "home",
+      "fetchContexts": [
+        "home"
+      ],
+      "captureNotes": [],
+      "capturedAt": "2026-05-01T00:44:58.978Z"
+    },
+    "fetchedAtMs": 1777596298978,
+    "expiresAtMs": 1778460298978,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-ff34ad24f5",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "FMdrD_jcYgE",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T20:44:58.978Z"
+  },
+  "historicalFeedRow": {
+    "title": "We Found Galaxies Too Old for the Universe",
+    "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+    "excerpt": "PBS Space Time, 20:20.",
+    "text": "Video from PBS Space Time.",
+    "authorUsername": "@pbsspacetime",
+    "authorDisplayName": "PBS Space Time",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FMdrD_jcYgE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBBKAA21KefwoKryBG6ZvuDdvn9gA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+        "title": "We Found Galaxies Too Old for the Universe",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/FMdrD_jcYgE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBBKAA21KefwoKryBG6ZvuDdvn9gA",
+        "videoId": "FMdrD_jcYgE"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "FMdrD_jcYgE",
+        "canonicalUrl": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+        "title": "We Found Galaxies Too Old for the Universe",
+        "channelName": "PBS Space Time",
+        "channelHandle": "@pbsspacetime",
+        "thumbnailUrl": "https://i.ytimg.com/vi/FMdrD_jcYgE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBBKAA21KefwoKryBG6ZvuDdvn9gA",
+        "publishDate": "2026-04-30T20:44:58.978Z",
+        "publishDateText": "4 hours ago",
+        "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "We Found Galaxies Too Old for the Universe",
+    "url": "https://www.youtube.com/watch?v=FMdrD_jcYgE",
+    "excerpt": "We Found Galaxies Too Old for the Universe",
+    "text": "We Found Galaxies Too Old for the Universe",
+    "authorUsername": "@pbsspacetime",
+    "authorDisplayName": "PBS Space Time",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FMdrD_jcYgE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBBKAA21KefwoKryBG6ZvuDdvn9gA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

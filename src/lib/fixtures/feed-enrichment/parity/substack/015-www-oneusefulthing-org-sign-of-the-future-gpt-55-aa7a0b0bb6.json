@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.oneusefulthing.org:sign-of-the-future-gpt-55",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.oneusefulthing.org:sign-of-the-future-gpt-55",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "title": "Sign of the future: GPT-5.5",
+    "authorUsername": "www.oneusefulthing.org",
+    "authorDisplayName": "One Useful Thing",
+    "publishedAtMs": null,
+    "payload": {
+      "source": "substack",
+      "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+      "title": "Sign of the future: GPT-5.5",
+      "authorUsername": "www.oneusefulthing.org",
+      "authorDisplayName": "One Useful Thing",
+      "publishedAtMs": null,
+      "excerpt": null,
+      "fetchedAtMs": 1777377036368
+    },
+    "fetchedAtMs": 1777377036368,
+    "expiresAtMs": 1777593036368,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-6e6a95b649",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.oneusefulthing.org:sign-of-the-future-gpt-55",
+    "parentId": null,
+    "relationship": "parent",
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T11:50:36.368Z"
+  },
+  "historicalFeedRow": {
+    "title": "Sign of the future: GPT-5.5",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": "Sign of the future: GPT-5.5",
+    "text": "Sign of the future: GPT-5.5",
+    "authorUsername": "www.oneusefulthing.org",
+    "authorDisplayName": "One Useful Thing",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "expectedFeedRow": {
+    "title": "Sign of the future: GPT-5.5",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "www.oneusefulthing.org",
+    "authorDisplayName": "One Useful Thing",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": "parent"
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47962548",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47962548",
+    "url": "https://www.construction-physics.com/p/how-an-oil-refinery-works",
+    "title": "How an oil refinery works",
+    "authorUsername": "chmaynard",
+    "authorDisplayName": "chmaynard",
+    "publishedAtMs": 1777557260000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47962548",
+      "id": 47962548,
+      "type": "story",
+      "title": "How an oil refinery works",
+      "url": "https://www.construction-physics.com/p/how-an-oil-refinery-works",
+      "hnUrl": "https://news.ycombinator.com/item?id=47962548",
+      "canonicalUrl": "https://www.construction-physics.com/p/how-an-oil-refinery-works",
+      "author": "chmaynard",
+      "score": 528,
+      "commentCount": 191,
+      "descendants": 191,
+      "publishedAtMs": 1777557260000,
+      "time": 1777557260,
+      "text": null,
+      "kids": [
+        47970628,
+        47966317,
+        47965783,
+        47969385,
+        47964126,
+        47963774,
+        47965643,
+        47967566,
+        47964621,
+        47964489,
+        47972309,
+        47963039,
+        47972234,
+        47970568,
+        47970128,
+        47968599,
+        47978211,
+        47966926,
+        47970781,
+        47968875,
+        47968905,
+        47969844,
+        47969402,
+        47963819,
+        47968043
+      ],
+      "lists": [
+        "beststories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777625236062
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-8cf156014d",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47962548",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T13:54:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "How an Oil Refinery Works",
+    "url": "https://www.construction-physics.com/p/how-an-oil-refinery-works",
+    "excerpt": "How an Oil Refinery Works",
+    "text": "How an Oil Refinery Works",
+    "authorUsername": "chmaynard",
+    "authorDisplayName": "chmaynard",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 157,
+      "reposts": 0,
+      "replies": 34,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47962548"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How an oil refinery works",
+    "url": "https://www.construction-physics.com/p/how-an-oil-refinery-works",
+    "excerpt": "Hacker News discussion: 528 points, 191 comments.",
+    "text": "How an oil refinery works",
+    "authorUsername": "chmaynard",
+    "authorDisplayName": "chmaynard",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "excerpt",
+    "text",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.hnUrl"
+  ]
+}

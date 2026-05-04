@@ -1,0 +1,130 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "persuasion.community/p/ukraine-is-now-an-arms-superpower",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "persuasion.community/p/ukraine-is-now-an-arms-superpower",
+    "url": "https://www.persuasion.community/p/ukraine-is-now-an-arms-superpower",
+    "title": "Ukraine Is Now An Arms Superpower",
+    "authorUsername": "persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "publishedAtMs": 1777662300000,
+    "payload": {
+      "url": "https://www.persuasion.community/p/ukraine-is-now-an-arms-superpower",
+      "title": "Ukraine Is Now An Arms Superpower",
+      "subtitle": null,
+      "publicationName": "Persuasion",
+      "author": "Persuasion",
+      "authorUsername": "persuasion.community",
+      "authorDisplayName": "Persuasion",
+      "host": "persuasion.community",
+      "timestampLabel": "7:05 PM",
+      "publishedAtMs": 1777662300000,
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!hmSI!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffe4c6191-cec6-447c-b3f8-82fc7a52a4c4_1078x1078.png",
+      "discoverySurface": "inbox"
+    },
+    "fetchedAtMs": 1777667951008,
+    "expiresAtMs": 1777883951008,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-fdf431c63b",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "persuasion.community/p/ukraine-is-now-an-arms-superpower",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T19:05:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Ukraine Is Now An Arms Superpower",
+    "url": "https://www.persuasion.community/p/ukraine-is-now-an-arms-superpower",
+    "excerpt": "Persuasion",
+    "text": "Ukraine Is Now An Arms Superpower\n\nPersuasion",
+    "authorUsername": "persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!hmSI!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffe4c6191-cec6-447c-b3f8-82fc7a52a4c4_1078x1078.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "publicationName": "Persuasion",
+        "author": "Persuasion",
+        "imageUrl": "https://substackcdn.com/image/fetch/$s_!hmSI!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffe4c6191-cec6-447c-b3f8-82fc7a52a4c4_1078x1078.png"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Ukraine Is Now An Arms Superpower",
+    "url": "https://www.persuasion.community/p/ukraine-is-now-an-arms-superpower",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!hmSI!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffe4c6191-cec6-447c-b3f8-82fc7a52a4c4_1078x1078.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.article"
+  ]
+}

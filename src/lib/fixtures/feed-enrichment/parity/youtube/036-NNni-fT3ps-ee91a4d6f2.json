@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "_NNni_fT3ps",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "_NNni_fT3ps",
+    "url": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+    "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "authorUsername": "@AICodingDaily",
+    "authorDisplayName": "AI Coding Daily",
+    "publishedAtMs": 1777473202576,
+    "payload": {
+      "videoId": "_NNni_fT3ps",
+      "canonicalUrl": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+      "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+      "channelName": "AI Coding Daily",
+      "channelUrl": "https://www.youtube.com/@AICodingDaily",
+      "channelHandle": "@AICodingDaily",
+      "channel": {
+        "name": "AI Coding Daily",
+        "url": "https://www.youtube.com/@AICodingDaily",
+        "handle": "@AICodingDaily"
+      },
+      "publishLabel": "4 hours ago",
+      "publishDateText": "4 hours ago",
+      "publishedAtMs": 1777473202576,
+      "thumbnailUrl": "https://i.ytimg.com/vi/_NNni_fT3ps/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB7KsMBE7xqnfV4yMcACuJy4JcSYw",
+      "duration": "10:00",
+      "sourceKind": "search",
+      "sourceKinds": [
+        "search"
+      ],
+      "searchQuery": "GPT-5.5",
+      "searchQueries": [
+        "GPT-5.5"
+      ],
+      "fetchedBy": "youtube-cache",
+      "taskId": "cache-refresh-youtube-1777486262014"
+    },
+    "fetchedAtMs": 1777487602576,
+    "expiresAtMs": 1778351602576,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-2ff51dce64",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "_NNni_fT3ps",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T14:33:22.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "url": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+    "excerpt": null,
+    "text": "AI Coding Daily: I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "authorUsername": "AICodingDaily",
+    "authorDisplayName": "AI Coding Daily",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/_NNni_fT3ps/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB7KsMBE7xqnfV4yMcACuJy4JcSYw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+        "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/_NNni_fT3ps/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB7KsMBE7xqnfV4yMcACuJy4JcSYw",
+        "videoId": "_NNni_fT3ps"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "_NNni_fT3ps",
+        "canonicalUrl": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+        "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+        "channelName": "AI Coding Daily",
+        "channelHandle": "AICodingDaily",
+        "thumbnailUrl": "https://i.ytimg.com/vi/_NNni_fT3ps/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB7KsMBE7xqnfV4yMcACuJy4JcSYw",
+        "publishDate": "2026-04-29T14:33:22.000Z",
+        "publishDateText": "2026-04-29T14:33:22.000Z",
+        "url": "https://www.youtube.com/watch?v=_NNni_fT3ps"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "url": "https://www.youtube.com/watch?v=_NNni_fT3ps",
+    "excerpt": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "text": "I Tested GPT-5.5 Medium/High/xHigh Reasoning Levels: CLEAR Difference",
+    "authorUsername": "@AICodingDaily",
+    "authorDisplayName": "AI Coding Daily",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/_NNni_fT3ps/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB7KsMBE7xqnfV4yMcACuJy4JcSYw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

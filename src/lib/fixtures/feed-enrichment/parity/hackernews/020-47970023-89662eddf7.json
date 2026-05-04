@@ -1,0 +1,131 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47970023",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47970023",
+    "url": "https://biohub.org/news/virtual-biology-initiative/",
+    "title": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "authorUsername": "warbaker",
+    "authorDisplayName": "warbaker",
+    "publishedAtMs": 1777594844000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47970023",
+      "id": 47970023,
+      "type": "story",
+      "title": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+      "url": "https://biohub.org/news/virtual-biology-initiative/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47970023",
+      "author": "warbaker",
+      "score": 26,
+      "commentCount": 14,
+      "publishedAtMs": 1777594844000,
+      "time": 1777594844,
+      "text": null,
+      "kids": [
+        47970548,
+        47970296
+      ],
+      "lists": [
+        {
+          "name": "topstories",
+          "rank": 38
+        }
+      ]
+    },
+    "fetchedAtMs": 1777608321823,
+    "expiresAtMs": 1777737921823,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-ca34e79260",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47970023",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T00:20:44.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "url": "https://biohub.org/news/virtual-biology-initiative/",
+    "excerpt": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "text": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "authorUsername": "warbaker",
+    "authorDisplayName": "warbaker",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47970023"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "url": "https://biohub.org/news/virtual-biology-initiative/",
+    "excerpt": "Hacker News discussion: 26 points, 0 comments.",
+    "text": "$500M for Virtual Biology Initiative, Funded by Zuckerbergs",
+    "authorUsername": "warbaker",
+    "authorDisplayName": "warbaker",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

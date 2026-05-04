@@ -1,0 +1,130 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2047542187496227253",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2047542187496227253",
+    "url": "https://x.com/EugeneIntelx/status/2047542187496227253",
+    "title": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~",
+    "authorUsername": "EugeneIntelx",
+    "authorDisplayName": "EugeneIntelx",
+    "publishedAtMs": null,
+    "payload": {
+      "tweetId": "2047542187496227253",
+      "text": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~27% of V3.2’s inference FLOPs and ~10% of the KV cache  — via a hybrid Compressed + Heavily Compressed Sparse Attention stack.",
+      "authorUsername": "EugeneIntelx",
+      "authorDisplayName": "EugeneIntelx",
+      "authorAvatarUrl": null,
+      "publishedAt": "2026-04-24T05:04:33.000Z",
+      "publishedAtMs": null,
+      "url": "https://x.com/EugeneIntelx/status/2047542187496227253",
+      "media": [],
+      "engagement": null,
+      "quotedTweet": null,
+      "inReplyToHandle": null,
+      "inReplyToStatusId": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "capturedFrom": null,
+      "capturedFromHandle": null,
+      "capturedFromQuery": "DeepSeek V4"
+    },
+    "fetchedAtMs": 1777082913997,
+    "expiresAtMs": 1777255713997,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-6f07923f9e",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2047542187496227253",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-24T05:04:33.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~",
+    "url": "https://x.com/EugeneIntelx/status/2047542187496227253",
+    "excerpt": null,
+    "text": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~27% of V3.2’s inference FLOPs and ~10% of the KV cache — via a hybrid Compressed + Heavily Compressed Sparse Attention stack.",
+    "authorUsername": "EugeneIntelx",
+    "authorDisplayName": "EugeneIntelx",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~",
+    "url": "https://x.com/EugeneIntelx/status/2047542187496227253",
+    "excerpt": null,
+    "text": "#DeepSeek-V4 preview is out. 1M-token context, MoE. V4-Pro: 1.6T total / 49B active. V4-Flash: 284B / 13B active. At 1M context, Pro needs ~27% of V3.2’s inference FLOPs and ~10% of the KV cache  — via a hybrid Compressed + Heavily Compressed Sparse Attention stack.",
+    "authorUsername": "EugeneIntelx",
+    "authorDisplayName": "EugeneIntelx",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text"
+  ]
+}

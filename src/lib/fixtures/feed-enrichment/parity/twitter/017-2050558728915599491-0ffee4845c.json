@@ -1,0 +1,155 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050558728915599491",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050558728915599491",
+    "url": "https://x.com/DKThomp/status/2050558728915599491",
+    "title": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating fir",
+    "authorUsername": "dkthomp",
+    "authorDisplayName": "Derek Thompson",
+    "publishedAtMs": 1777726273000,
+    "payload": {
+      "id": "2050558728915599491",
+      "sourceId": "2050558728915599491",
+      "url": "https://x.com/DKThomp/status/2050558728915599491",
+      "text": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating firms than destroying jobs",
+      "full_text": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating firms than destroying jobs",
+      "authorUsername": "dkthomp",
+      "authorDisplayName": "Derek Thompson",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1605404261306679296/aq_L7W-z_normal.jpg",
+      "publishedAt": "2026-05-02T12:51:13.000Z",
+      "publishedAtMs": 1777726273000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHPL78XaMAAI9ii?format=png&name=small",
+          "altText": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHPL78XaMAAI9ii?format=png&name=small"
+      ],
+      "quotedTweet": {
+        "text": "Stripe Atlas just hit 100,000 all-time incorporations. Q1 2026 is +130% Y/Y.",
+        "authorUsername": null,
+        "authorDisplayName": null
+      },
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureSurface": "home",
+        "pass": 4,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "tweetTextCount": 2,
+        "visibleText": "Derek Thompson\n@DKThomp\n·\n36m\nStripe data shows \n(A) startups incorporations way up, and \n(B) startups in AI seeing faster-growing revenue than is historically normal\n\nFor now, AI agents are better at creating firms than destroying jobs\nQuote\nPatrick Collison\n@patrickc\n·\n23h\nStripe Atlas just hit 100,000 all-time incorporations.\n\nQ1 2026 is +130% Y/Y.\n3\n3\n25\n9.5K"
+      }
+    },
+    "fetchedAtMs": 1777728574342,
+    "expiresAtMs": 1777944574342,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-86e799c060",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050558728915599491",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:51:13.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating fir",
+    "url": "https://x.com/DKThomp/status/2050558728915599491",
+    "excerpt": null,
+    "text": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating firms than destroying jobs",
+    "authorUsername": "dkthomp",
+    "authorDisplayName": "Derek Thompson",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1605404261306679296/aq_L7W-z_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPL78XaMAAI9ii?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating fir",
+    "url": "https://x.com/DKThomp/status/2050558728915599491",
+    "excerpt": null,
+    "text": "Stripe data shows (A) startups incorporations way up, and (B) startups in AI seeing faster-growing revenue than is historically normal For now, AI agents are better at creating firms than destroying jobs",
+    "authorUsername": "dkthomp",
+    "authorDisplayName": "Derek Thompson",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1605404261306679296/aq_L7W-z_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPL78XaMAAI9ii?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Stripe Atlas just hit 100,000 all-time incorporations. Q1 2026 is +130% Y/Y.",
+        "author": {
+          "username": "unknown_quote_author"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.quotedTweet"
+  ]
+}

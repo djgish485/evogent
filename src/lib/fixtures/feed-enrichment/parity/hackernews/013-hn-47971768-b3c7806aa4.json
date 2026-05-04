@@ -1,0 +1,168 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "hn-47971768",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "hn-47971768",
+    "url": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/",
+    "title": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+    "authorUsername": "tosh",
+    "authorDisplayName": "tosh",
+    "publishedAtMs": 1777616433000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "hn-47971768",
+      "id": 47971768,
+      "hnId": "47971768",
+      "type": "story",
+      "title": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+      "text": null,
+      "url": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47971768",
+      "authorUsername": "tosh",
+      "authorDisplayName": "tosh",
+      "by": "tosh",
+      "time": 1777616433,
+      "publishedAtMs": 1777616433000,
+      "score": 65,
+      "commentCount": 44,
+      "descendants": 44,
+      "kids": [
+        47971912,
+        47971945,
+        47972017,
+        47972118,
+        47972033,
+        47971962,
+        47972345
+      ],
+      "canonicalUrl": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/",
+      "metadata": {
+        "hnUrl": "https://news.ycombinator.com/item?id=47971768",
+        "hackerNews": {
+          "id": "47971768",
+          "score": 65,
+          "commentCount": 44,
+          "hnUrl": "https://news.ycombinator.com/item?id=47971768"
+        },
+        "hnScore": 65,
+        "hnComments": 44,
+        "cacheRefreshTaskId": "cache-refresh-hackernews-1777623966027",
+        "cacheLists": [
+          "topstories"
+        ]
+      },
+      "raw": {
+        "by": "tosh",
+        "descendants": 44,
+        "id": 47971768,
+        "kids": [
+          47971912,
+          47971945,
+          47972017,
+          47972118,
+          47972033,
+          47971962,
+          47972345
+        ],
+        "score": 65,
+        "time": 1777616433,
+        "title": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+        "type": "story",
+        "url": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/"
+      }
+    },
+    "fetchedAtMs": 1777624039045,
+    "expiresAtMs": 1777753639045,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-fb014c66bc",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "hn-47971768",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T06:20:33.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+    "url": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/",
+    "excerpt": "Hacker News discussion: 65 points, 44 comments.",
+    "text": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+    "authorUsername": "tosh",
+    "authorDisplayName": "tosh",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47971768"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+    "url": "https://www.macrumors.com/2026/04/30/mac-studio-mac-mini-constrained-months/",
+    "excerpt": "Hacker News discussion: 65 points, 44 comments.",
+    "text": "Apple Says Mac Studio and Mac Mini Will Be in Short Supply for Months",
+    "authorUsername": "tosh",
+    "authorDisplayName": "tosh",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.hnUrl"
+  ]
+}

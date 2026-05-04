@@ -1,0 +1,166 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "7OeKYOJOp7o",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "7OeKYOJOp7o",
+    "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+    "title": "The Secret Art of Franz Kafka",
+    "authorUsername": "@SolarSands",
+    "authorDisplayName": "Solar Sands",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "7OeKYOJOp7o",
+      "canonicalUrl": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+      "title": "The Secret Art of Franz Kafka",
+      "channelName": "Solar Sands",
+      "channelUrl": "https://www.youtube.com/@SolarSands",
+      "channelHandle": "@SolarSands",
+      "channel": {
+        "name": "Solar Sands",
+        "url": "https://www.youtube.com/@SolarSands",
+        "handle": "@SolarSands"
+      },
+      "publishLabel": "13 hours ago",
+      "publishDateText": "13 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/7OeKYOJOp7o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC_dONVcErKNF46PeJbIPPiKBqPRA",
+      "duration": "38:09",
+      "viewCount": 39000,
+      "viewCountLabel": "39K views",
+      "sourceKind": "home",
+      "firstSeenPass": 2,
+      "rawTextLines": [
+        "38:09",
+        "The Secret Art of Franz Kafka",
+        "Solar Sands",
+        "39K views",
+        "•",
+        "13 hours ago"
+      ],
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+      "source": "youtube",
+      "sourceId": "7OeKYOJOp7o",
+      "cacheRefreshTaskId": "cache-refresh-youtube-1777631462305",
+      "cacheRefreshRunId": "cache-refresh-youtube-1777631462305"
+    },
+    "fetchedAtMs": 1777631645753,
+    "expiresAtMs": 1778495645753,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-1af93562f8",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "7OeKYOJOp7o",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T01:55:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The Secret Art of Franz Kafka",
+    "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+    "excerpt": "The Secret Art of Franz Kafka",
+    "text": "The Secret Art of Franz Kafka",
+    "authorUsername": "@SolarSands",
+    "authorDisplayName": "Solar Sands",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/7OeKYOJOp7o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC_dONVcErKNF46PeJbIPPiKBqPRA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+        "title": "The Secret Art of Franz Kafka",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/7OeKYOJOp7o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC_dONVcErKNF46PeJbIPPiKBqPRA",
+        "videoId": "7OeKYOJOp7o"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "7OeKYOJOp7o",
+        "canonicalUrl": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+        "title": "The Secret Art of Franz Kafka",
+        "channelName": "Solar Sands",
+        "channelHandle": "@SolarSands",
+        "thumbnailUrl": "https://i.ytimg.com/vi/7OeKYOJOp7o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC_dONVcErKNF46PeJbIPPiKBqPRA",
+        "publishDate": "2026-05-01T01:55:00.000Z",
+        "publishDateText": "13 hours ago",
+        "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The Secret Art of Franz Kafka",
+    "url": "https://www.youtube.com/watch?v=7OeKYOJOp7o",
+    "excerpt": "The Secret Art of Franz Kafka",
+    "text": "The Secret Art of Franz Kafka",
+    "authorUsername": "@SolarSands",
+    "authorDisplayName": "Solar Sands",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/7OeKYOJOp7o/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLC_dONVcErKNF46PeJbIPPiKBqPRA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "H9rYWAhGJ9s",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "H9rYWAhGJ9s",
+    "url": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+    "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "authorUsername": "ScienceCocktails",
+    "authorDisplayName": "The Science and Cocktails Foundation",
+    "publishedAtMs": 1774368969376,
+    "payload": {
+      "videoId": "H9rYWAhGJ9s",
+      "canonicalUrl": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+      "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+      "description": null,
+      "channelName": "The Science and Cocktails Foundation",
+      "channelHandle": "ScienceCocktails",
+      "channelUrl": "https://www.youtube.com/@ScienceCocktails",
+      "thumbnailUrl": "https://i.ytimg.com/vi/H9rYWAhGJ9s/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLALSrl4ApRX2fcKfArPSWKJn8rjfA",
+      "publishDate": null,
+      "publishDateText": "1 month ago",
+      "viewCount": null,
+      "viewCountText": null,
+      "duration": "1:18:22",
+      "durationSeconds": null,
+      "liveStatus": null,
+      "scheduledStartAt": null,
+      "scheduledStartText": null,
+      "sourceKind": "home",
+      "channel": {
+        "name": "The Science and Cocktails Foundation",
+        "url": "https://www.youtube.com/@ScienceCocktails",
+        "handle": "ScienceCocktails"
+      },
+      "publishLabel": "1 month ago",
+      "sourceKinds": [
+        "home"
+      ]
+    },
+    "fetchedAtMs": 1776960969371,
+    "expiresAtMs": 1778170569371,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-c46e984f29",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "H9rYWAhGJ9s",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-03-24T16:16:09.376Z"
+  },
+  "historicalFeedRow": {
+    "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "url": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+    "excerpt": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "text": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "authorUsername": "ScienceCocktails",
+    "authorDisplayName": "The Science and Cocktails Foundation",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/H9rYWAhGJ9s/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLALSrl4ApRX2fcKfArPSWKJn8rjfA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+        "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/H9rYWAhGJ9s/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLALSrl4ApRX2fcKfArPSWKJn8rjfA",
+        "videoId": "H9rYWAhGJ9s"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "H9rYWAhGJ9s",
+        "canonicalUrl": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+        "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+        "channelName": "The Science and Cocktails Foundation",
+        "channelHandle": "ScienceCocktails",
+        "thumbnailUrl": "https://i.ytimg.com/vi/H9rYWAhGJ9s/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLALSrl4ApRX2fcKfArPSWKJn8rjfA",
+        "publishDateText": "1 month ago",
+        "duration": "1:18:22",
+        "url": "https://www.youtube.com/watch?v=H9rYWAhGJ9s"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "url": "https://www.youtube.com/watch?v=H9rYWAhGJ9s",
+    "excerpt": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "text": "How Ancient DNA Changed Everything We Thought We Knew About Human History. With David Reich",
+    "authorUsername": "ScienceCocktails",
+    "authorDisplayName": "The Science and Cocktails Foundation",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/H9rYWAhGJ9s/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLALSrl4ApRX2fcKfArPSWKJn8rjfA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

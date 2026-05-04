@@ -1,0 +1,126 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "slowboring.com/p/should-we-miss-hypocritical-idealism",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "slowboring.com/p/should-we-miss-hypocritical-idealism",
+    "url": "https://www.slowboring.com/p/should-we-miss-hypocritical-idealism",
+    "title": "Should we miss hypocritical idealism in American foreign policy?",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "MATTHEW YGLESIAS",
+    "publishedAtMs": 1776945600000,
+    "payload": {
+      "url": "https://www.slowboring.com/p/should-we-miss-hypocritical-idealism",
+      "title": "Should we miss hypocritical idealism in American foreign policy?",
+      "subtitle": "The upside of Trump's cynical realism",
+      "publicationName": "SLOW BORING",
+      "author": "MATTHEW YGLESIAS",
+      "timestampLabel": "APR 23",
+      "publishedAtMs": 1776945600000,
+      "discoverySurface": "inbox",
+      "mediaUrls": [
+        "https://substackcdn.com/image/fetch/$s_!gzxV!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fceeb681e-a14d-4bbb-a8fe-951c29603e3f_256x256.png",
+        "https://substackcdn.com/image/fetch/$s_!vHDi!,w_160,h_84,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-video.s3.amazonaws.com%2Fvideo_upload%2Fpost%2F195038357%2F655f7b2f-10ab-4dcb-8970-0f267e31247c%2Ftranscoded-1776889385.png"
+      ],
+      "rawText": "SLOW BORING APR 23 Should we miss hypocritical idealism in American foreign policy? The upside of Trump's cynical realism PREVIEW∙MATTHEW YGLESIAS∙ 1 HR 3 MIN WATCH"
+    },
+    "fetchedAtMs": 1777645395837,
+    "expiresAtMs": 1777861395837,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-15d42056f0",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "slowboring.com/p/should-we-miss-hypocritical-idealism",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-25T06:41:40.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Should we miss hypocritical idealism in American foreign policy?",
+    "url": "https://www.slowboring.com/p/should-we-miss-hypocritical-idealism",
+    "excerpt": "The upside of Trump's cynical realism.",
+    "text": "The upside of Trump's cynical realism.",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "Matthew Yglesias",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Should we miss hypocritical idealism in American foreign policy?",
+    "url": "https://www.slowboring.com/p/should-we-miss-hypocritical-idealism",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "MATTHEW YGLESIAS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!gzxV!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fceeb681e-a14d-4bbb-a8fe-951c29603e3f_256x256.png",
+      "https://substackcdn.com/image/fetch/$s_!vHDi!,w_160,h_84,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-video.s3.amazonaws.com%2Fvideo_upload%2Fpost%2F195038357%2F655f7b2f-10ab-4dcb-8970-0f267e31247c%2Ftranscoded-1776889385.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

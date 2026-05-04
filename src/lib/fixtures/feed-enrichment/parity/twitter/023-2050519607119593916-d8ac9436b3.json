@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050519607119593916",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050519607119593916",
+    "url": "https://x.com/WarMonitor3/status/2050519607119593916",
+    "title": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "publishedAtMs": 1777716945000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050519607119593916",
+      "url": "https://x.com/WarMonitor3/status/2050519607119593916",
+      "title": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear",
+      "authorUsername": "WarMonitor3",
+      "authorDisplayName": "WarMonitor",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_normal.jpg",
+      "text": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear deal for later talks...",
+      "publishedAt": "2026-05-02T10:15:45.000Z",
+      "publishedAtMs": 1777716945000,
+      "media": [],
+      "metrics": {
+        "replyCountText": "81",
+        "repostCountText": "175",
+        "likeCountText": "1933",
+        "viewCountText": "72991",
+        "bookmarkCountText": "56",
+        "accessibleLabel": "Verified account | 3 hours ago | Grok actions | More | 81 replies, 175 reposts, 1933 likes, 56 bookmarks, 72991 views | 81 Replies. Reply | 175 reposts. Repost | 1933 Likes. Like | 72991 views. View post analytics | Bookmark | Share post"
+      },
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureKind": "following",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "articleIndex": 17
+      },
+      "cacheRunId": "cache-refresh-twitter-1777730463129",
+      "capturedFrom": "following",
+      "capturedAt": "2026-05-02T14:04:42.964Z"
+    },
+    "fetchedAtMs": 1777730772776,
+    "expiresAtMs": 1777946772776,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-a3fe317800",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050519607119593916",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T10:15:45.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear deal for later talks...",
+    "url": "https://x.com/WarMonitor3/status/2050519607119593916",
+    "excerpt": null,
+    "text": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear deal for later talks...",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear",
+    "url": "https://x.com/WarMonitor3/status/2050519607119593916",
+    "excerpt": null,
+    "text": "Trump has reportedly rejected the new Iranian peace proposal which would open the strait of Hormuz but leave the nuclear deal for later talks...",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title"
+  ]
+}

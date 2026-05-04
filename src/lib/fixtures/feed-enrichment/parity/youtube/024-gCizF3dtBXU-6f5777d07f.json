@@ -1,0 +1,157 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "gCizF3dtBXU",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "gCizF3dtBXU",
+    "url": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+    "title": "Everything Claude Code Shipped in the Last 90 Days",
+    "authorUsername": "@NicholasPuru",
+    "authorDisplayName": "Nick Puru | AI Automation",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "gCizF3dtBXU",
+      "canonicalUrl": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+      "url": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+      "title": "Everything Claude Code Shipped in the Last 90 Days",
+      "channelName": "Nick Puru | AI Automation",
+      "channelUrl": "https://www.youtube.com/@NicholasPuru",
+      "channelHandle": "@NicholasPuru",
+      "channel": {
+        "name": "Nick Puru | AI Automation",
+        "url": "https://www.youtube.com/@NicholasPuru",
+        "handle": "@NicholasPuru"
+      },
+      "publishLabel": "9 hours ago",
+      "publishDateText": "9 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/gCizF3dtBXU/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLD9K0vJwD1VgHjidSxu9MTTkQc6cg",
+      "duration": "17:51",
+      "viewCount": 306,
+      "viewCountLabel": "306 views",
+      "sourceKind": "home",
+      "fetchKind": "home",
+      "fetchContexts": [
+        "home"
+      ],
+      "captureNotes": [],
+      "capturedAt": "2026-05-01T00:44:58.978Z"
+    },
+    "fetchedAtMs": 1777596298978,
+    "expiresAtMs": 1778460298978,
+    "seenByCurationAtMs": 1777570685321
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-79e932b20a",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "gCizF3dtBXU",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T15:30:45.142Z"
+  },
+  "historicalFeedRow": {
+    "title": "Everything Claude Code Shipped in the Last 90 Days",
+    "url": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+    "excerpt": "Everything Claude Code Shipped in the Last 90 Days",
+    "text": "17:51\nEverything Claude Code Shipped in the Last 90 Days\nNick Puru | AI Automation\n69 views\n•\n54 minutes ago",
+    "authorUsername": "@NicholasPuru",
+    "authorDisplayName": "Nick Puru | AI Automation",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/gCizF3dtBXU/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLD9K0vJwD1VgHjidSxu9MTTkQc6cg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 69
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+        "title": "Everything Claude Code Shipped in the Last 90 Days",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/gCizF3dtBXU/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLD9K0vJwD1VgHjidSxu9MTTkQc6cg",
+        "videoId": "gCizF3dtBXU"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "gCizF3dtBXU",
+        "canonicalUrl": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+        "title": "Everything Claude Code Shipped in the Last 90 Days",
+        "channelName": "Nick Puru | AI Automation",
+        "channelHandle": "@NicholasPuru",
+        "thumbnailUrl": "https://i.ytimg.com/vi/gCizF3dtBXU/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLD9K0vJwD1VgHjidSxu9MTTkQc6cg",
+        "publishDateText": "54 minutes ago",
+        "url": "https://www.youtube.com/watch?v=gCizF3dtBXU"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Everything Claude Code Shipped in the Last 90 Days",
+    "url": "https://www.youtube.com/watch?v=gCizF3dtBXU",
+    "excerpt": "Everything Claude Code Shipped in the Last 90 Days",
+    "text": "Everything Claude Code Shipped in the Last 90 Days",
+    "authorUsername": "@NicholasPuru",
+    "authorDisplayName": "Nick Puru | AI Automation",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/gCizF3dtBXU/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLD9K0vJwD1VgHjidSxu9MTTkQc6cg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

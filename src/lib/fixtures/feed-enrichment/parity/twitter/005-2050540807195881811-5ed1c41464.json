@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050540807195881811",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050540807195881811",
+    "url": "https://x.com/haider1/status/2050540807195881811",
+    "title": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve mor",
+    "authorUsername": "haider1",
+    "authorDisplayName": "Haider.",
+    "publishedAtMs": 1777722000000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050540807195881811",
+      "tweetId": "2050540807195881811",
+      "id": "2050540807195881811",
+      "url": "https://x.com/haider1/status/2050540807195881811",
+      "title": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve mor",
+      "authorUsername": "haider1",
+      "authorDisplayName": "Haider.",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2047286007003848704/u2mzg86I_normal.jpg",
+      "text": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve more problems, including another 60-year-old conjecture Mathematician Jared Lichtman: \"this is perhaps one of the first examples of an AI-generated proof having downstream impacts, which we",
+      "full_text": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve more problems, including another 60-year-old conjecture Mathematician Jared Lichtman: \"this is perhaps one of the first examples of an AI-generated proof having downstream impacts, which we",
+      "publishedAt": "2026-05-02T11:40:00.000Z",
+      "publishedAtMs": 1777722000000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHTogA5a4AAlVlH?format=png&name=small",
+          "alt": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHTogA5a4AAlVlH?format=png&name=small"
+      ],
+      "quotedTweet": null,
+      "inReplyToStatusId": "2050540807195881811",
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "metrics": {
+        "replies": 2,
+        "reposts": 5,
+        "likes": 11,
+        "views": 569
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "timeline",
+        "capturedAt": "2026-05-02T12:13:19.284Z"
+      },
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777723863093"
+    },
+    "fetchedAtMs": 1777724170597,
+    "expiresAtMs": 1777940170597,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-e776841c1a",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050540807195881811",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T11:40:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve more problems, including another 60-year-old conjecture Mathematician Jared Lichtman: \"this i",
+    "url": "https://x.com/haider1/status/2050540807195881811",
+    "excerpt": null,
+    "text": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve more problems, including another 60-year-old conjecture Mathematician Jared Lichtman: \"this is perhaps one of the first examples of an AI-generated proof having downstream impacts, which we",
+    "authorUsername": "haider1",
+    "authorDisplayName": "Haider.",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2047286007003848704/u2mzg86I_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTogA5a4AAlVlH?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve mor",
+    "url": "https://x.com/haider1/status/2050540807195881811",
+    "excerpt": null,
+    "text": "another incredible milestone gpt-5.4 pro proof method was refined and adapted to solve more problems, including another 60-year-old conjecture Mathematician Jared Lichtman: \"this is perhaps one of the first examples of an AI-generated proof having downstream impacts, which we",
+    "authorUsername": "haider1",
+    "authorDisplayName": "Haider.",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/2047286007003848704/u2mzg86I_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTogA5a4AAlVlH?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 11,
+      "reposts": 5,
+      "replies": 2,
+      "views": 569
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "a0GesZXLwfc",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "a0GesZXLwfc",
+    "url": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+    "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "authorUsername": "@tech-practice9805",
+    "authorDisplayName": "Tech-Practice",
+    "publishedAtMs": 1777466355441,
+    "payload": {
+      "videoId": "a0GesZXLwfc",
+      "canonicalUrl": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+      "url": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+      "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+      "channelName": "Tech-Practice",
+      "channelUrl": "https://www.youtube.com/@tech-practice9805",
+      "channelHandle": "@tech-practice9805",
+      "channel": {
+        "name": "Tech-Practice",
+        "url": "https://www.youtube.com/@tech-practice9805",
+        "handle": "@tech-practice9805"
+      },
+      "publishLabel": "17 hours ago",
+      "publishDateText": "17 hours ago",
+      "publishedAtMs": 1777466355441,
+      "thumbnailUrl": "https://i.ytimg.com/vi/a0GesZXLwfc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAwdxwg3-5P1aLMr1YFptDkVtamaQ",
+      "duration": "6:28",
+      "viewCount": 1100,
+      "viewCountText": "1.1K views",
+      "viewCountLabel": "1.1K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshRunId": "cache-refresh-youtube-1777526162330"
+    },
+    "fetchedAtMs": 1777527555441,
+    "expiresAtMs": 1778391555441,
+    "seenByCurationAtMs": 1777548614503
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-30ff7eecb6",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "a0GesZXLwfc",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T12:39:15.441Z"
+  },
+  "historicalFeedRow": {
+    "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "url": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+    "excerpt": "Tech-Practice video.",
+    "text": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "authorUsername": "@tech-practice9805",
+    "authorDisplayName": "Tech-Practice",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/a0GesZXLwfc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAwdxwg3-5P1aLMr1YFptDkVtamaQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+        "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/a0GesZXLwfc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAwdxwg3-5P1aLMr1YFptDkVtamaQ",
+        "videoId": "a0GesZXLwfc"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "a0GesZXLwfc",
+        "canonicalUrl": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+        "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+        "channelName": "Tech-Practice",
+        "channelHandle": "@tech-practice9805",
+        "channelUrl": "https://www.youtube.com/@tech-practice9805",
+        "thumbnailUrl": "https://i.ytimg.com/vi/a0GesZXLwfc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAwdxwg3-5P1aLMr1YFptDkVtamaQ",
+        "publishDate": null,
+        "publishDateText": "17 hours ago",
+        "duration": "6:28",
+        "viewCountText": "1.1K views",
+        "url": "https://www.youtube.com/watch?v=a0GesZXLwfc"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "url": "https://www.youtube.com/watch?v=a0GesZXLwfc",
+    "excerpt": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "text": "Deepseek-V4-Flash on a MacBook M5 Max — Does It Actually Work? (Mac Apple silicon)",
+    "authorUsername": "@tech-practice9805",
+    "authorDisplayName": "Tech-Practice",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/a0GesZXLwfc/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAwdxwg3-5P1aLMr1YFptDkVtamaQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

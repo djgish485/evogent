@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "richardhanania.com/p/what-iran-won",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "richardhanania.com/p/what-iran-won",
+    "url": "https://www.richardhanania.com/p/what-iran-won",
+    "title": "What Iran Won",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "Richard Hanania",
+    "publishedAtMs": 1775649600000,
+    "payload": {
+      "url": "https://www.richardhanania.com/p/what-iran-won",
+      "title": "What Iran Won",
+      "subtitle": "They raised the costs enough to make war unthinkable for future US presidents",
+      "publicationName": "Richard Hanania's Newsletter",
+      "author": "Richard Hanania",
+      "timestampLabel": "APR 8",
+      "publishedAtMs": 1775649600000,
+      "discoverySurface": "inbox"
+    },
+    "fetchedAtMs": 1777067554360,
+    "expiresAtMs": 1777240354360,
+    "seenByCurationAtMs": 1777091608597
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-5fc6114def",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "richardhanania.com/p/what-iran-won",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-08T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "What Iran Won",
+    "url": "https://www.richardhanania.com/p/what-iran-won",
+    "excerpt": "The piece argues that Iran emerged with strategic gains from the conflict that Western coverage has under-weighted, and Hanania walks through the specific outcomes that support that read.",
+    "text": "The piece argues that Iran emerged with strategic gains from the conflict that Western coverage has under-weighted, and Hanania walks through the specific outcomes that support that read.",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "Richard Hanania",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "What Iran Won",
+    "url": "https://www.richardhanania.com/p/what-iran-won",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "richardhanania",
+    "authorDisplayName": "Richard Hanania",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+    "url": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+    "title": "Candidates shouldn’t release lots of “plans”",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+    "publishedAtMs": 1776772800000,
+    "payload": {
+      "url": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+      "title": "Candidates shouldn’t release lots of “plans”",
+      "excerpt": "Not for A.I. and the labor market or health care or anything else",
+      "publicationName": "SLOW BORING",
+      "publicationHost": "www.slowboring.com",
+      "author": "PREVIEW∙MATTHEW YGLESIAS",
+      "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+      "publishedLabel": "APR 21",
+      "publishedAtMs": 1776772800000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777128407039
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-ff44a22cc9",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-21T10:02:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Candidates shouldn’t release lots of “plans”",
+    "url": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+    "excerpt": null,
+    "text": "Not for A.I. and the labor market or health care or anything else",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "Matthew Yglesias",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!gzxV!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fceeb681e-a14d-4bbb-a8fe-951c29603e3f_256x256.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Candidates shouldn’t release lots of “plans”",
+    "url": "https://www.slowboring.com/p/candidates-shouldnt-release-lots",
+    "excerpt": "Not for A.I. and the labor market or health care or anything else",
+    "text": "",
+    "authorUsername": "www.slowboring.com",
+    "authorDisplayName": "PREVIEW∙MATTHEW YGLESIAS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

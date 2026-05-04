@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+    "url": "https://www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+    "title": "Scoring the Jensen-Dwarkesh debate",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "publishedAtMs": 1777464000000,
+    "payload": {
+      "url": "https://www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+      "host": "www.noahpinion.blog",
+      "slug": "scoring-the-jensen-dwarkesh-debate",
+      "title": "Scoring the Jensen-Dwarkesh debate",
+      "rawTitle": "NOAHPINION\nAPR 29\nScoring the Jensen-Dwarkesh debate\nExport controls are holding back Chinese AI. Should we keep them?\nPREVIEW∙NOAH SMITH∙17 MIN READ",
+      "publicationName": "Noahpinion",
+      "author": "Noah Smith",
+      "authorDisplayName": "Noah Smith",
+      "authorUsername": "noahpinion",
+      "summary": "Export controls are holding back Chinese AI. Should we keep them?",
+      "text": "Export controls are holding back Chinese AI. Should we keep them?",
+      "excerpt": "Export controls are holding back Chinese AI. Should we keep them?",
+      "timestampLabel": "APR 29",
+      "publishedAtMs": 1777464000000,
+      "readingMeta": "17 min read",
+      "discoverySurface": "inbox",
+      "mediaUrls": [
+        "https://substackcdn.com/image/fetch/$s_!l14h!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F04281755-2cd6-42e5-a496-e69153abebb2_281x281.png"
+      ],
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!l14h!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F04281755-2cd6-42e5-a496-e69153abebb2_281x281.png",
+      "visibleText": "NOAHPINION\nAPR 29\nScoring the Jensen-Dwarkesh debate\nExport controls are holding back Chinese AI. Should we keep them?\nPREVIEW∙NOAH SMITH∙17 MIN READ",
+      "extractedAtMs": 1777724969494,
+      "fetchedAtMs": 1777724969494,
+      "expiresAtMs": 1777940969494,
+      "cacheRunId": "cache-refresh-substack-1777724763099"
+    },
+    "fetchedAtMs": 1777724969494,
+    "expiresAtMs": 1777940969494,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-a92d141ff9",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Scoring the Jensen-Dwarkesh debate",
+    "url": "https://www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+    "excerpt": "Export controls are holding back Chinese AI. Should we keep them?",
+    "text": "Export controls are holding back Chinese AI. Should we keep them?",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!9NGm!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F483c296f-9479-42a0-81c3-d745d6006397_1296x721.jpeg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "publication": null,
+        "visibleDate": "APR 29",
+        "image": "https://substackcdn.com/image/fetch/$s_!9NGm!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F483c296f-9479-42a0-81c3-d745d6006397_1296x721.jpeg"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Scoring the Jensen-Dwarkesh debate",
+    "url": "https://www.noahpinion.blog/p/scoring-the-jensen-dwarkesh-debate",
+    "excerpt": "Export controls are holding back Chinese AI. Should we keep them?",
+    "text": "Export controls are holding back Chinese AI. Should we keep them?",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!l14h!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F04281755-2cd6-42e5-a496-e69153abebb2_281x281.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls",
+    "metadata.article"
+  ]
+}

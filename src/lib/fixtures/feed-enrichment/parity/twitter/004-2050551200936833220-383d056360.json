@@ -1,0 +1,153 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050551200936833220",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050551200936833220",
+    "url": "https://x.com/davidasinclair/status/2050551200936833220",
+    "title": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - e",
+    "authorUsername": "davidasinclair",
+    "authorDisplayName": "David Sinclair",
+    "publishedAtMs": 1777724478000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050551200936833220",
+      "url": "https://x.com/davidasinclair/status/2050551200936833220",
+      "title": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - e",
+      "authorUsername": "davidasinclair",
+      "authorDisplayName": "David Sinclair",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1742602125526351872/nEvgp9ac_normal.jpg",
+      "text": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - except for all those other forms...” \n\nCould AI be the solution?",
+      "publishedAt": "2026-05-02T12:21:18.000Z",
+      "publishedAtMs": 1777724478000,
+      "media": [],
+      "metrics": {
+        "replyCountText": "5",
+        "repostCountText": "1",
+        "likeCountText": "32",
+        "viewCountText": "6562",
+        "bookmarkCountText": "1",
+        "accessibleLabel": "Verified account | 1 hour ago | Grok actions | More | Verified account | 1 hour ago | 5 replies, 1 repost, 32 likes, 1 bookmark, 6562 views | 5 Replies. Reply | 1 repost. Repost | 32 Likes. Like | 6562 views. View post analytics | Bookmark | Share post"
+      },
+      "quotedTweet": {
+        "authorUsername": "davidasinclair",
+        "authorDisplayName": "David Sinclair",
+        "text": "Peer review rewards cronyism, conservatism & caution, not breakthroughs. Craig exemplified this:\n\n“…by the time grant reviewers got through [Craig’s] proposals & wrote why [it] was impossible, he had snagged the cover of Science or Nature.” x.com/evolvingjuan/s…"
+      },
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "captureKind": "home",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null,
+        "articleIndex": 2
+      },
+      "cacheRunId": "cache-refresh-twitter-1777730463129",
+      "capturedFrom": "home",
+      "capturedAt": "2026-05-02T14:03:32.086Z"
+    },
+    "fetchedAtMs": 1777730772776,
+    "expiresAtMs": 1777946772776,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-17b8ed06b1",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050551200936833220",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:21:18.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - except for all those other forms...” \n\nCould AI be the soluti",
+    "url": "https://x.com/davidasinclair/status/2050551200936833220",
+    "excerpt": null,
+    "text": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - except for all those other forms...” \n\nCould AI be the solution?",
+    "authorUsername": "davidasinclair",
+    "authorDisplayName": "David Sinclair",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1742602125526351872/nEvgp9ac_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - e",
+    "url": "https://x.com/davidasinclair/status/2050551200936833220",
+    "excerpt": null,
+    "text": "Peer review of grants is all we have for now. It’s like Churchill’s take on democracy; “the worst form of government - except for all those other forms...” \n\nCould AI be the solution?",
+    "authorUsername": "davidasinclair",
+    "authorDisplayName": "David Sinclair",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1742602125526351872/nEvgp9ac_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Peer review rewards cronyism, conservatism & caution, not breakthroughs. Craig exemplified this:\n\n“…by the time grant reviewers got through [Craig’s] proposals & wrote why [it] was impossible, he had snagged the cover of Science or Nature.” x.com/evolvingjuan/s…",
+        "author": {
+          "username": "davidasinclair",
+          "displayName": "David Sinclair"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metadata.quotedTweet"
+  ]
+}

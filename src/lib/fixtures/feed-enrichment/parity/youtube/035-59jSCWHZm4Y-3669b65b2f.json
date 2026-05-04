@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "59jSCWHZm4Y",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "59jSCWHZm4Y",
+    "url": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+    "title": "CATL's Ultra Charging Battery is a Game Changer.",
+    "authorUsername": "@ZirothTech",
+    "authorDisplayName": "Ziroth",
+    "publishedAtMs": 1777462797363,
+    "payload": {
+      "videoId": "59jSCWHZm4Y",
+      "canonicalUrl": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+      "title": "CATL's Ultra Charging Battery is a Game Changer.",
+      "channelName": "Ziroth",
+      "channelUrl": "https://www.youtube.com/@ZirothTech",
+      "channelHandle": "@ZirothTech",
+      "channel": {
+        "name": "Ziroth",
+        "url": "https://www.youtube.com/@ZirothTech",
+        "handle": "@ZirothTech"
+      },
+      "publishLabel": "11 hours ago",
+      "publishDateText": "11 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/59jSCWHZm4Y/hqdefault.jpg",
+      "duration": "10:05",
+      "sourceKind": "home",
+      "firstSeenPass": 2,
+      "source": "youtube",
+      "capture": {
+        "sourceKind": "home",
+        "pageUrl": "https://www.youtube.com/",
+        "searchQuery": null,
+        "completedScrollPasses": 3,
+        "requiredScrollPasses": 3,
+        "notes": []
+      }
+    },
+    "fetchedAtMs": 1777502397363,
+    "expiresAtMs": 1778366397363,
+    "seenByCurationAtMs": 1777526116838
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-a9405ee026",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "59jSCWHZm4Y",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T11:39:57.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "CATL's Ultra Charging Battery is a Game Changer.",
+    "url": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+    "excerpt": null,
+    "text": "Ziroth: CATL's Ultra Charging Battery is a Game Changer.",
+    "authorUsername": "ZirothTech",
+    "authorDisplayName": "Ziroth",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/59jSCWHZm4Y/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+        "title": "CATL's Ultra Charging Battery is a Game Changer.",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/59jSCWHZm4Y/hqdefault.jpg",
+        "videoId": "59jSCWHZm4Y"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "59jSCWHZm4Y",
+        "canonicalUrl": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+        "title": "CATL's Ultra Charging Battery is a Game Changer.",
+        "channelName": "Ziroth",
+        "channelHandle": "ZirothTech",
+        "thumbnailUrl": "https://i.ytimg.com/vi/59jSCWHZm4Y/hqdefault.jpg",
+        "publishDate": "2026-04-29T11:39:57.000Z",
+        "publishDateText": "2026-04-29T11:39:57.000Z",
+        "url": "https://www.youtube.com/watch?v=59jSCWHZm4Y"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "CATL's Ultra Charging Battery is a Game Changer.",
+    "url": "https://www.youtube.com/watch?v=59jSCWHZm4Y",
+    "excerpt": "CATL's Ultra Charging Battery is a Game Changer.",
+    "text": "CATL's Ultra Charging Battery is a Game Changer.",
+    "authorUsername": "@ZirothTech",
+    "authorDisplayName": "Ziroth",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/59jSCWHZm4Y/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

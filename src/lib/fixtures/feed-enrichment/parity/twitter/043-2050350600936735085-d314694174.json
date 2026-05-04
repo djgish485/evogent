@@ -1,0 +1,141 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050350600936735085",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050350600936735085",
+    "url": "https://x.com/littmath/status/2050350600936735085",
+    "title": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved comput",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "publishedAtMs": 1777676651000,
+    "payload": {
+      "surface": "following",
+      "sourceId": "2050350600936735085",
+      "url": "https://x.com/littmath/status/2050350600936735085",
+      "authorUsername": "littmath",
+      "authorDisplayName": "Daniel Litt",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+      "text": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved computation while sitting on the bus. (In this case, some technical thing about surfaces parametrizing lines on a nodal cubic threefold.)",
+      "title": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved comput",
+      "publishedAt": "2026-05-01T23:04:11.000Z",
+      "publishedAtMs": 1777676651000,
+      "media": [],
+      "metricsText": "Andrew Curran reposted Daniel Litt @littmath · 3h I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved computation while sitting on the bus. (In this case, some technical thing about surfaces parametrizing lines on a nodal cubic threefold.) 6 11 168 7.3K",
+      "quotedTweet": null,
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "surfaces": [
+        "following"
+      ],
+      "fetchedBy": "cache-refresh-twitter-1777689062818"
+    },
+    "fetchedAtMs": 1777689293190,
+    "expiresAtMs": 1777905293190,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-7da7f110c3",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050350600936735085",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T23:04:11.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved computation while sitting on the...",
+    "url": "https://x.com/littmath/status/2050350600936735085",
+    "excerpt": null,
+    "text": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved computation while sitting on the bus. (In this case, some technical thing about surfaces parametrizing lines on a nodal cubic threefold.)",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved comput",
+    "url": "https://x.com/littmath/status/2050350600936735085",
+    "excerpt": null,
+    "text": "I complain a lot about hype but I have to say it’s totally surreal to be able to talk ChatGPT through an involved computation while sitting on the bus. (In this case, some technical thing about surfaces parametrizing lines on a nodal cubic threefold.)",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title"
+  ]
+}

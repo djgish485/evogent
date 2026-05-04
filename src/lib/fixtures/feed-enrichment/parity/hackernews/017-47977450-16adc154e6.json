@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47977450",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47977450",
+    "url": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+    "title": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "publishedAtMs": 1777656336000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47977450",
+      "id": 47977450,
+      "type": "story",
+      "title": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+      "url": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+      "canonicalUrl": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+      "hnUrl": "https://news.ycombinator.com/item?id=47977450",
+      "discussionUrl": "https://news.ycombinator.com/item?id=47977450",
+      "authorUsername": "johnbarron",
+      "authorDisplayName": "johnbarron",
+      "by": "johnbarron",
+      "score": 164,
+      "descendants": 124,
+      "commentCount": 124,
+      "publishedAtMs": 1777656336000,
+      "publishedAt": "2026-05-01T17:25:36.000Z",
+      "fetchedAtMs": 1777668451461,
+      "expiresAtMs": 1777798051461,
+      "list": "top",
+      "kids": [
+        47977720,
+        47978321,
+        47978553,
+        47977844,
+        47977666,
+        47977628,
+        47978041,
+        47977641,
+        47979297,
+        47977715,
+        47979048
+      ],
+      "metadata": {
+        "hackerNews": {
+          "id": 47977450,
+          "score": 164,
+          "commentCount": 124,
+          "by": "johnbarron",
+          "hnUrl": "https://news.ycombinator.com/item?id=47977450",
+          "discussionUrl": "https://news.ycombinator.com/item?id=47977450"
+        },
+        "hnUrl": "https://news.ycombinator.com/item?id=47977450",
+        "discussionUrl": "https://news.ycombinator.com/item?id=47977450",
+        "canonicalUrl": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+        "sourceList": "top",
+        "mediaUrls": [],
+        "ogImageUrl": null
+      }
+    },
+    "fetchedAtMs": 1777668451461,
+    "expiresAtMs": 1777798051461,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-c1cfbccf86",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47977450",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T17:25:36.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+    "url": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+    "excerpt": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+    "text": "The linked video reports a case where Flock cameras kept telling police that a man without a warrant had a warrant. It is promoted here because it gives the thread a correction-failure mechanism, not because of HN score.",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47977450"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+    "url": "https://www.youtube.com/watch?v=nHwxV0Sd9V8",
+    "excerpt": "Hacker News discussion: 164 points, 124 comments.",
+    "text": "Flock cameras keep telling police a man who doesn't have a warrant has a warrant",
+    "authorUsername": "johnbarron",
+    "authorDisplayName": "johnbarron",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.hnUrl"
+  ]
+}

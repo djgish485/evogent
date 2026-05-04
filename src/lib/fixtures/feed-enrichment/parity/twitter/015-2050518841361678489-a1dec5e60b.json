@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050518841361678489",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050518841361678489",
+    "url": "https://x.com/rohanpaul_ai/status/2050518841361678489",
+    "title": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The st",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "publishedAtMs": 1777716763000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2050518841361678489",
+      "tweetId": "2050518841361678489",
+      "id": "2050518841361678489",
+      "url": "https://x.com/rohanpaul_ai/status/2050518841361678489",
+      "title": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The st",
+      "authorUsername": "rohanpaul_ai",
+      "authorDisplayName": "Rohan Paul",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+      "text": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The striking part is scale versus monetization, because Anthropic did this with about 134M monthly users while OpenAI had roughly 900M, pointing to much higher ARPU and much stronger reach into",
+      "full_text": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The striking part is scale versus monetization, because Anthropic did this with about 134M monthly users while OpenAI had roughly 900M, pointing to much higher ARPU and much stronger reach into",
+      "publishedAt": "2026-05-02T10:12:43.000Z",
+      "publishedAtMs": 1777716763000,
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHTm51xbEAA7zb5?format=png&name=small",
+          "alt": "Image"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHTm51xbEAA7zb5?format=png&name=small"
+      ],
+      "quotedTweet": null,
+      "inReplyToStatusId": "2050518841361678489",
+      "replyCapture": null,
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "metrics": {
+        "replies": 13,
+        "reposts": 5,
+        "likes": 31,
+        "views": 2275
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "surface": "timeline",
+        "capturedAt": "2026-05-02T12:13:01.259Z"
+      },
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777723863093"
+    },
+    "fetchedAtMs": 1777724170597,
+    "expiresAtMs": 1777940170597,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-4f82a637c9",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050518841361678489",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T10:12:43.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The striking part is scale versus monetization, because Anthropic did this with about 134M month",
+    "url": "https://x.com/rohanpaul_ai/status/2050518841361678489",
+    "excerpt": null,
+    "text": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The striking part is scale versus monetization, because Anthropic did this with about 134M monthly users while OpenAI had roughly 900M, pointing to much higher ARPU and much stronger reach into",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTm51xbEAA7zb5?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The st",
+    "url": "https://x.com/rohanpaul_ai/status/2050518841361678489",
+    "excerpt": null,
+    "text": "The register: Anthropic has lower user numbers, yet higher LLM revenue than OpenAI. The striking part is scale versus monetization, because Anthropic did this with about 134M monthly users while OpenAI had roughly 900M, pointing to much higher ARPU and much stronger reach into",
+    "authorUsername": "rohanpaul_ai",
+    "authorDisplayName": "Rohan Paul",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1816185267037859840/Fd18CH0v_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHTm51xbEAA7zb5?format=png&name=small"
+    ],
+    "metrics": {
+      "likes": 31,
+      "reposts": 5,
+      "replies": 13,
+      "views": 2275
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

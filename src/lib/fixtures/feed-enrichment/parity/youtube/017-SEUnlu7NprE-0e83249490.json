@@ -1,0 +1,166 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "SEUnlu7NprE",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "SEUnlu7NprE",
+    "url": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+    "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+    "authorUsername": "@scottmanley",
+    "authorDisplayName": "Scott Manley",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "SEUnlu7NprE",
+      "canonicalUrl": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+      "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+      "channelName": "Scott Manley",
+      "channelUrl": "https://www.youtube.com/@scottmanley",
+      "channelHandle": "@scottmanley",
+      "channel": {
+        "name": "Scott Manley",
+        "url": "https://www.youtube.com/@scottmanley",
+        "handle": "@scottmanley"
+      },
+      "publishLabel": "10 hours ago",
+      "publishDateText": "10 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/SEUnlu7NprE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLClu20oFmKZIX54LGF0yGKvl8_LwA",
+      "duration": "37:57",
+      "viewCount": 57000,
+      "viewCountLabel": "57K views",
+      "sourceKind": "home",
+      "rawTextLines": [
+        "37:57",
+        "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+        "Scott Manley",
+        "57K views",
+        "•",
+        "10 hours ago"
+      ],
+      "url": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+      "source": "youtube",
+      "sourceId": "SEUnlu7NprE",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshTaskId": "cache-refresh-youtube-1777623966027"
+    },
+    "fetchedAtMs": 1777624241839,
+    "expiresAtMs": 1778488241839,
+    "seenByCurationAtMs": 1777658903314
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-82b79e2071",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "SEUnlu7NprE",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T22:44:58.978Z"
+  },
+  "historicalFeedRow": {
+    "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+    "url": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+    "excerpt": "Scott Manley, 37:57.",
+    "text": "Video from Scott Manley.",
+    "authorUsername": "@scottmanley",
+    "authorDisplayName": "Scott Manley",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/SEUnlu7NprE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLClu20oFmKZIX54LGF0yGKvl8_LwA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+        "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/SEUnlu7NprE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLClu20oFmKZIX54LGF0yGKvl8_LwA",
+        "videoId": "SEUnlu7NprE"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "SEUnlu7NprE",
+        "canonicalUrl": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+        "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+        "channelName": "Scott Manley",
+        "channelHandle": "@scottmanley",
+        "thumbnailUrl": "https://i.ytimg.com/vi/SEUnlu7NprE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLClu20oFmKZIX54LGF0yGKvl8_LwA",
+        "publishDate": "2026-04-30T22:44:58.978Z",
+        "publishDateText": "2 hours ago",
+        "url": "https://www.youtube.com/watch?v=SEUnlu7NprE"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+    "url": "https://www.youtube.com/watch?v=SEUnlu7NprE",
+    "excerpt": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+    "text": "Soviet Space Propaganda Meets Engineering Reality - The Tragic Flight Of Soyuz 1",
+    "authorUsername": "@scottmanley",
+    "authorDisplayName": "Scott Manley",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/SEUnlu7NprE/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLClu20oFmKZIX54LGF0yGKvl8_LwA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

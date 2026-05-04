@@ -1,0 +1,197 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050431231183962311",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050431231183962311",
+    "url": "https://x.com/teortaxesTex/status/2050431231183962311",
+    "title": "@teortaxesTex: You know, looking at how V4-Flash (13BA) just keeps going, building from scratch",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "publishedAtMs": 1777695875000,
+    "payload": {
+      "source": "twitter",
+      "tweetId": "2050431231183962311",
+      "id": "2050431231183962311",
+      "sourceId": "2050431231183962311",
+      "url": "https://x.com/teortaxesTex/status/2050431231183962311",
+      "title": "@teortaxesTex: You know, looking at how V4-Flash (13BA) just keeps going, building from scratch",
+      "text": "You know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 270K tokens, 275K… Attention really was the magic trick, huh? We just had to keep chipping off the excess bulk of the MHA Vaswanisaur, for many long years.",
+      "visibleText": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)\n@teortaxesTex\n·\n5h\nYou know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 270K tokens, 275K… Attention really was the magic trick, huh? We just had to keep chipping off the excess bulk of the MHA Vaswanisaur, for many long years.\nQuote\nTeortaxes (DeepSeek 推特铁粉 2023 – ∞)\n@teortaxesTex\n·\nMay 8, 2024\nReplying to @teortaxesTex\nVaswani et. al (2017) after a new Transformer Killer paper drops\n«So what're your gimmicks? Better scaling law? Subquadratic complexity? O(1) memory? Modeling problems higher on Chomsky Hierarchy? It's laudable how far you pests can go… Even without having EVERYTHING AT HAND»\n1\n1\n49\n4.9K",
+      "authorUsername": "teortaxesTex",
+      "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1652169745037242368/KRPTShbG_normal.jpg",
+      "publishedAt": "2026-05-02T04:24:35.000Z",
+      "publishedAtMs": 1777695875000,
+      "metrics": {
+        "replies": 1,
+        "reposts": 1,
+        "likes": 49,
+        "views": null
+      },
+      "replies": 1,
+      "reposts": 1,
+      "likes": 49,
+      "viewCount": null,
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHSXZ8yWsAA5HRk?format=jpg&name=small",
+          "posterUrl": null
+        },
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/GNDNZi_WUAAfejY?format=jpg&name=240x240",
+          "posterUrl": null
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHSXZ8yWsAA5HRk?format=jpg&name=small",
+        "https://pbs.twimg.com/media/GNDNZi_WUAAfejY?format=jpg&name=240x240"
+      ],
+      "quotedTweet": {
+        "authorUsername": "teortaxesTex",
+        "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+        "text": "Vaswani et. al (2017) after a new Transformer Killer paper drops\n«So what're your gimmicks? Better scaling law? Subquadratic complexity? O(1) memory? Modeling problems higher on Chomsky Hierarchy? It's laudable how far you pests can go… Even without having EVERYTHING AT HAND»"
+      },
+      "inReplyToStatusId": "1788155044816191612",
+      "replyingTo": "@teortaxesTex",
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "textCapture": {
+        "textSource": "timeline_card",
+        "visibleText": "You know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 270K tokens, 275K… Attention really was the magic trick, huh? We just had to keep chipping off the excess bulk of the MHA Vaswanisaur, for many long years.",
+        "text": "You know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 270K tokens, 275K… Attention really was the magic trick, huh? We just had to keep chipping off the excess bulk of the MHA Vaswanisaur, for many long years."
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": null,
+        "requestedHandle": null
+      },
+      "raw_data": {
+        "quotedTweet": {
+          "authorUsername": "teortaxesTex",
+          "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+          "text": "Vaswani et. al (2017) after a new Transformer Killer paper drops\n«So what're your gimmicks? Better scaling law? Subquadratic complexity? O(1) memory? Modeling problems higher on Chomsky Hierarchy? It's laudable how far you pests can go… Even without having EVERYTHING AT HAND»"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "cacheCaptureKind": "following",
+      "fetchedAtMs": 1777716360628,
+      "expiresAtMs": 1777932360628
+    },
+    "fetchedAtMs": 1777716360628,
+    "expiresAtMs": 1777932360628,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-5715d04dda",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050431231183962311",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T04:24:35.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "You know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 27",
+    "url": "https://x.com/teortaxesTex/status/2050431231183962311",
+    "excerpt": null,
+    "text": "You know, looking at how V4-Flash (13BA) just keeps going, building from scratch a fairly complex app, trying things, 270K tokens, 275K… Attention really was the magic trick, huh? We just had to keep chipping off the excess bulk of the MHA Vaswanisaur, for many long years.",
+    "authorUsername": "teortaxesTex",
+    "authorDisplayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)",
+    "authorAvatarUrl": "https://abs.twimg.com/emoji/v2/svg/25b6.svg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHSXZ8yWsAA5HRk?format=jpg&name=small",
+      "https://pbs.twimg.com/media/GNDNZi_WUAAfejY?format=jpg&name=240x240"
+    ],
+    "metrics": {
+      "likes": 6,
+      "reposts": 0,
+      "replies": 1,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "Vaswani et. al (2017) after a new Transformer Killer paper drops «So what're your gimmicks? Better scaling law? Subquadratic complexity? O(1) memory? Modeling problems higher on Chomsky Hierarchy? It's laudable how far you pests can go… Even without having EVERYTHING AT HAND»",
+        "author": {
+          "username": "teortaxesTex",
+          "displayName": "Teortaxes (DeepSeek 推特铁粉 2023 – ∞)"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": null,
+    "url": null,
+    "excerpt": null,
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "url",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "authorAvatarUrl",
+    "mediaUrls",
+    "metrics.likes",
+    "metrics.replies",
+    "metadata.quotedTweet"
+  ]
+}

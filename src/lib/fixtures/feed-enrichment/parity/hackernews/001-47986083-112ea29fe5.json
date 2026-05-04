@@ -1,0 +1,156 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47986083",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47986083",
+    "url": "https://www.bettedangerous.com/p/russia-poisons-wikipedia",
+    "title": "Russia Poisons Wikipedia",
+    "authorUsername": "exceptione",
+    "authorDisplayName": "exceptione",
+    "publishedAtMs": 1777727270000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47986083",
+      "id": 47986083,
+      "type": "story",
+      "title": "Russia Poisons Wikipedia",
+      "url": "https://www.bettedangerous.com/p/russia-poisons-wikipedia",
+      "hnUrl": "https://news.ycombinator.com/item?id=47986083",
+      "canonicalUrl": "https://www.bettedangerous.com/p/russia-poisons-wikipedia",
+      "author": "exceptione",
+      "score": 87,
+      "commentCount": 49,
+      "descendants": 49,
+      "publishedAtMs": 1777727270000,
+      "time": 1777727270,
+      "text": null,
+      "kids": [
+        47986568,
+        47986487,
+        47986464,
+        47986551,
+        47986604,
+        47986611,
+        47986539,
+        47986819,
+        47986581,
+        47986669,
+        47986594,
+        47986362,
+        47986429,
+        47986503,
+        47986525,
+        47986526,
+        47986617,
+        47986788,
+        47986564
+      ],
+      "lists": [
+        "topstories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777733325021
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-50ce50fca4",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47986083",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T13:07:50.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Russia Poisons Wikipedia",
+    "url": "https://www.bettedangerous.com/p/russia-poisons-wikipedia",
+    "excerpt": null,
+    "text": "Russia Poisons Wikipedia",
+    "authorUsername": "exceptione",
+    "authorDisplayName": "exceptione",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "sourceName": "Hacker News",
+        "canonicalUrl": "https://www.bettedangerous.com/p/russia-poisons-wikipedia"
+      },
+      "hnUrl": "https://news.ycombinator.com/item?id=47986083"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Russia Poisons Wikipedia",
+    "url": "https://www.bettedangerous.com/p/russia-poisons-wikipedia",
+    "excerpt": "Hacker News discussion: 87 points, 49 comments.",
+    "text": "Russia Poisons Wikipedia",
+    "authorUsername": "exceptione",
+    "authorDisplayName": "exceptione",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.article",
+    "metadata.hnUrl"
+  ]
+}

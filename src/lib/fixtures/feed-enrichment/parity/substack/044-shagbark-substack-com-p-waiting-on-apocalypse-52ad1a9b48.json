@@ -1,0 +1,122 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+    "url": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+    "title": "Waiting on Apocalypse",
+    "authorUsername": "shagbark",
+    "authorDisplayName": "A.M. HICKMAN",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "url": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+      "title": "Waiting on Apocalypse",
+      "excerpt": "\"Was Jesus Christ a Survivalist?\"",
+      "publicationName": "HICKMAN'S HINTERLANDS",
+      "publicationHost": "shagbark.substack.com",
+      "author": "A.M. HICKMAN",
+      "authorDisplayName": "A.M. HICKMAN",
+      "publishedLabel": "APR 20",
+      "publishedAtMs": 1776686400000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777130228620
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-181c7b9894",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Waiting on Apocalypse",
+    "url": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+    "excerpt": null,
+    "text": "\"Was Jesus Christ a Survivalist?\"",
+    "authorUsername": "shagbark.substack.com",
+    "authorDisplayName": "A.M. Hickman",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!hs-r!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F42d51637-6b5a-41ee-ac29-4030e1b1f100_396x396.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Waiting on Apocalypse",
+    "url": "https://shagbark.substack.com/p/waiting-on-apocalypse",
+    "excerpt": "\"Was Jesus Christ a Survivalist?\"",
+    "text": "",
+    "authorUsername": "shagbark",
+    "authorDisplayName": "A.M. HICKMAN",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

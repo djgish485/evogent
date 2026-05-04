@@ -1,0 +1,152 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47976529",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47976529",
+    "url": "https://ij.org/police-have-reportedly-used-license-plate-readers-to-stalk-romantic-interests-at-least-14-times-in-recent-years/",
+    "title": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+    "authorUsername": "loteck",
+    "authorDisplayName": "loteck",
+    "publishedAtMs": 1777652275000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47976529",
+      "id": 47976529,
+      "type": "story",
+      "title": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+      "url": "https://ij.org/police-have-reportedly-used-license-plate-readers-to-stalk-romantic-interests-at-least-14-times-in-recent-years/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47976529",
+      "canonicalUrl": "https://ij.org/police-have-reportedly-used-license-plate-readers-to-stalk-romantic-interests-at-least-14-times-in-recent-years/",
+      "author": "loteck",
+      "score": 256,
+      "commentCount": 105,
+      "descendants": 105,
+      "publishedAtMs": 1777652275000,
+      "time": 1777652275,
+      "text": null,
+      "kids": [
+        47976741,
+        47976838,
+        47976688,
+        47978750,
+        47976863,
+        47977554,
+        47980367,
+        47978178,
+        47977120,
+        47985289,
+        47977647,
+        47976810,
+        47982255,
+        47977437,
+        47977185,
+        47976899,
+        47976756,
+        47976718
+      ],
+      "lists": [
+        "beststories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-d3b8256e6f",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47976529",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T16:17:55.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+    "url": "https://ij.org/police-have-reportedly-used-license-plate-readers-to-stalk-romantic-interests-at-least-14-times-in-recent-years/",
+    "excerpt": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+    "text": "The Institute for Justice item says police have reportedly used license plate readers at least 14 times to stalk romantic interests. HN engagement was high, which made it a useful technical-policy discussion anchor rather than a generic privacy headline.",
+    "authorUsername": "loteck",
+    "authorDisplayName": "loteck",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47976529"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+    "url": "https://ij.org/police-have-reportedly-used-license-plate-readers-to-stalk-romantic-interests-at-least-14-times-in-recent-years/",
+    "excerpt": "Hacker News discussion: 256 points, 105 comments.",
+    "text": "Police Have Used License Plate Readers at Least 14x to Stalk Romantic Interests",
+    "authorUsername": "loteck",
+    "authorDisplayName": "loteck",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.hnUrl"
+  ]
+}

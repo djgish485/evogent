@@ -1,0 +1,225 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2049920475019579487",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2049920475019579487",
+    "url": "https://x.com/TomChivers/status/2049920475019579487",
+    "title": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean...",
+    "authorUsername": "TomChivers",
+    "authorDisplayName": "Tom Chivers",
+    "publishedAtMs": 1777574101000,
+    "payload": {
+      "tweetId": "2049920475019579487",
+      "id": "2049920475019579487",
+      "url": "https://x.com/TomChivers/status/2049920475019579487",
+      "text": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean shortage. We just need to designate some beans as special cheap beans to bring prices down”",
+      "authorUsername": "TomChivers",
+      "authorDisplayName": "Tom Chivers",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1150687971760386048/Bxw2xVV4_normal.png",
+      "publishedAt": "2026-04-30T18:35:01.000Z",
+      "publishedAtMs": 1777574101000,
+      "metrics": {
+        "reply_count": 3,
+        "retweet_count": 10,
+        "like_count": 40,
+        "view_count": 1808
+      },
+      "media": [],
+      "quotedTweet": null,
+      "inReplyToStatusId": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/XCNkYbrOG6",
+        "title": "'Affordability, not shortage, causes London housing crisis'",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small",
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/XCNkYbrOG6",
+          "title": "'Affordability, not shortage, causes London housing crisis'",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small",
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/XCNkYbrOG6",
+          "expandedUrl": "https://t.co/XCNkYbrOG6",
+          "displayUrl": "t.co"
+        }
+      ],
+      "raw_data": {
+        "source": "home",
+        "textCapture": {
+          "text": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean shortage. We just need to designate some beans as special cheap beans to bring prices down”",
+          "textSource": "timeline_card"
+        },
+        "replyCapture": {
+          "source": "timeline",
+          "requestedHandle": null,
+          "inReplyToStatusId": null
+        },
+        "quotedTweet": null,
+        "linkCard": {
+          "type": "external",
+          "url": "https://t.co/XCNkYbrOG6",
+          "title": "'Affordability, not shortage, causes London housing crisis'",
+          "domain": "t.co",
+          "imageUrl": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small",
+          "description": null
+        },
+        "linkPreviews": [
+          {
+            "url": "https://t.co/XCNkYbrOG6",
+            "title": "'Affordability, not shortage, causes London housing crisis'",
+            "domain": "t.co",
+            "image": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small",
+            "description": null
+          }
+        ],
+        "urlEntities": [
+          {
+            "url": "https://t.co/XCNkYbrOG6",
+            "expandedUrl": "https://t.co/XCNkYbrOG6",
+            "displayUrl": "t.co"
+          }
+        ]
+      },
+      "source": "twitter",
+      "sourceKind": "home",
+      "surface": "home",
+      "cacheTags": [
+        "home"
+      ],
+      "cacheTaskId": "cache-refresh-twitter-1777576222279",
+      "fetchedAtMs": 1777576528689
+    },
+    "fetchedAtMs": 1777576528689,
+    "expiresAtMs": 1777792528689,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-3dee031195",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2049920475019579487",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T18:35:01.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean...",
+    "url": "https://x.com/TomChivers/status/2049920475019579487",
+    "excerpt": null,
+    "text": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean shortage. We just need to designate some beans as special cheap beans to bring prices down”",
+    "authorUsername": "TomChivers",
+    "authorDisplayName": "Tom Chivers",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1150687971760386048/Bxw2xVV4_normal.png",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/XCNkYbrOG6",
+        "title": "'Affordability, not shortage, causes London housing crisis'",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": [
+        {
+          "url": "https://t.co/XCNkYbrOG6",
+          "expandedUrl": "https://t.co/XCNkYbrOG6",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean...",
+    "url": "https://x.com/TomChivers/status/2049920475019579487",
+    "excerpt": null,
+    "text": "How can stuff like this get written? Imagine it for any other good! “Affordability is driving the chocolate price spike, not a cocoa bean shortage. We just need to designate some beans as special cheap beans to bring prices down”",
+    "authorUsername": "TomChivers",
+    "authorDisplayName": "Tom Chivers",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1150687971760386048/Bxw2xVV4_normal.png",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/XCNkYbrOG6",
+        "title": "'Affordability, not shortage, causes London housing crisis'",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/XCNkYbrOG6",
+          "title": "'Affordability, not shortage, causes London housing crisis'",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2047378563104378880/6tVJEMf7?format=jpg&name=small"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/XCNkYbrOG6",
+          "expandedUrl": "https://t.co/XCNkYbrOG6",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metadata.linkPreviews"
+  ]
+}

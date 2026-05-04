@@ -1,0 +1,198 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2049889086866145468",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2049889086866145468",
+    "url": "https://x.com/ChrisHayduk/status/2049889086866145468",
+    "title": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets",
+    "authorUsername": "ChrisHayduk",
+    "authorDisplayName": "Chris Hayduk",
+    "publishedAtMs": 1777566618000,
+    "payload": {
+      "source": "twitter",
+      "sourceId": "2049889086866145468",
+      "tweetId": "2049889086866145468",
+      "url": "https://x.com/ChrisHayduk/status/2049889086866145468",
+      "authorUsername": "ChrisHayduk",
+      "authorDisplayName": "Chris Hayduk",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1639273057549275141/2Tzi_HRI_normal.jpg",
+      "text": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets that have genetic supports are over twice as likely to succeed in the clinic. This is the single biggest lever we can pull to improve efficacy https:// nature.com/articles/s4158 6-024-07316-0 …",
+      "title": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets",
+      "publishedAt": "2026-04-30T16:30:18.000Z",
+      "publishedAtMs": 1777566618000,
+      "media": [],
+      "mediaUrls": [],
+      "metrics": {
+        "replies": 10,
+        "reposts": 4,
+        "likes": 48,
+        "views": 7421
+      },
+      "quotedTweet": {
+        "authorUsername": "MitoPsychoBio",
+        "authorDisplayName": "Martin Picard",
+        "text": "The idea that sequencing more genomes would lead to better medicine and better health was a good hypothesis in 2000. But 26 years later, evidence has quite convincingly disproven that hypothesis. The answer to most common chronic illnesses that plague us isn't written in genes. x.com/maxmarchione/s…"
+      },
+      "inReplyToStatusId": null,
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/WDyP15B4lL",
+        "title": "https://nature.com/articles/s41586-024-07316-0…",
+        "domain": "t.co",
+        "imageUrl": null,
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/WDyP15B4lL",
+          "title": "https://nature.com/articles/s41586-024-07316-0…",
+          "domain": "t.co",
+          "image": null,
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/WDyP15B4lL",
+          "expandedUrl": "https://t.co/WDyP15B4lL",
+          "displayUrl": "https://nature.com/articles/s41586-024-07316-0…"
+        }
+      ],
+      "raw_data": {
+        "surface": "home",
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "replyCapture": null
+      },
+      "surfaces": [
+        "home"
+      ],
+      "cacheRunId": "cache-refresh-twitter-1777630862298",
+      "fetchedFrom": "home"
+    },
+    "fetchedAtMs": 1777631221145,
+    "expiresAtMs": 1777847221145,
+    "seenByCurationAtMs": null
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-2f3995bd89",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2049889086866145468",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T16:30:18.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets",
+    "url": "https://x.com/ChrisHayduk/status/2049889086866145468",
+    "excerpt": null,
+    "text": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets that have genetic supports are over twice as likely to succeed in the clinic. This is the single biggest lever we can pull to improve efficacy https:// nature.com/articles/s4158 6-024-07316-0 …",
+    "authorUsername": "ChrisHayduk",
+    "authorDisplayName": "Chris Hayduk",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1639273057549275141/2Tzi_HRI_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets",
+    "url": "https://x.com/ChrisHayduk/status/2049889086866145468",
+    "excerpt": null,
+    "text": "I disagree pretty strongly here - genomic sequencing HAS led to better medicines! Drugs with targets that have genetic supports are over twice as likely to succeed in the clinic. This is the single biggest lever we can pull to improve efficacy https:// nature.com/articles/s4158 6-024-07316-0 …",
+    "authorUsername": "ChrisHayduk",
+    "authorDisplayName": "Chris Hayduk",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1639273057549275141/2Tzi_HRI_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 48,
+      "reposts": 4,
+      "replies": 10,
+      "views": 7421
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "The idea that sequencing more genomes would lead to better medicine and better health was a good hypothesis in 2000. But 26 years later, evidence has quite convincingly disproven that hypothesis. The answer to most common chronic illnesses that plague us isn't written in genes. x.com/maxmarchione/s…",
+        "author": {
+          "username": "MitoPsychoBio",
+          "displayName": "Martin Picard"
+        }
+      },
+      "linkCard": {
+        "type": "external",
+        "url": "https://t.co/WDyP15B4lL",
+        "title": "https://nature.com/articles/s41586-024-07316-0…",
+        "domain": "t.co"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/WDyP15B4lL",
+          "title": "https://nature.com/articles/s41586-024-07316-0…",
+          "domain": "t.co"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/WDyP15B4lL",
+          "expandedUrl": "https://t.co/WDyP15B4lL",
+          "displayUrl": "https://nature.com/articles/s41586-024-07316-0…"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views",
+    "metadata.quotedTweet",
+    "metadata.linkCard",
+    "metadata.linkPreviews",
+    "metadata.urlEntities"
+  ]
+}

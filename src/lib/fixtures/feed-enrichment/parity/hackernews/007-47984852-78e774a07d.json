@@ -1,0 +1,148 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47984852",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47984852",
+    "url": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/",
+    "title": "How fast is a macOS VM, and how small could it be?",
+    "authorUsername": "moosia",
+    "authorDisplayName": "moosia",
+    "publishedAtMs": 1777714249000,
+    "payload": {
+      "source": "hackernews",
+      "sourceId": "47984852",
+      "id": 47984852,
+      "type": "story",
+      "title": "How fast is a macOS VM, and how small could it be?",
+      "url": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/",
+      "hnUrl": "https://news.ycombinator.com/item?id=47984852",
+      "canonicalUrl": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/",
+      "author": "moosia",
+      "score": 118,
+      "commentCount": 41,
+      "descendants": 41,
+      "publishedAtMs": 1777714249000,
+      "time": 1777714249,
+      "text": null,
+      "kids": [
+        47985331,
+        47985724,
+        47985418,
+        47985824,
+        47985504,
+        47985132,
+        47985948,
+        47985101,
+        47985983,
+        47986549,
+        47985690
+      ],
+      "lists": [
+        "topstories"
+      ],
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      }
+    },
+    "fetchedAtMs": 1777733245065,
+    "expiresAtMs": 1777862845065,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-ab02f64f9b",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47984852",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T09:30:49.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "How fast is a macOS VM, and how small could it be?",
+    "url": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/",
+    "excerpt": null,
+    "text": "How fast is a macOS VM, and how small could it be?",
+    "authorUsername": "moosia",
+    "authorDisplayName": "moosia",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "sourceName": "Hacker News",
+        "canonicalUrl": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/"
+      },
+      "hnUrl": "https://news.ycombinator.com/item?id=47984852"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "How fast is a macOS VM, and how small could it be?",
+    "url": "https://eclecticlight.co/2026/05/02/how-fast-is-a-macos-vm-and-how-small-could-it-be/",
+    "excerpt": "Hacker News discussion: 118 points, 41 comments.",
+    "text": "How fast is a macOS VM, and how small could it be?",
+    "authorUsername": "moosia",
+    "authorDisplayName": "moosia",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.article",
+    "metadata.hnUrl"
+  ]
+}

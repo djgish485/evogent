@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "H1J8d2tIsxM",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "H1J8d2tIsxM",
+    "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+    "title": "We're Close to Harnessing the Power of a Star",
+    "authorUsername": "@astrumspace",
+    "authorDisplayName": "Astrum",
+    "publishedAtMs": 1777477155441,
+    "payload": {
+      "videoId": "H1J8d2tIsxM",
+      "canonicalUrl": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+      "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+      "title": "We're Close to Harnessing the Power of a Star",
+      "channelName": "Astrum",
+      "channelUrl": "https://www.youtube.com/@astrumspace",
+      "channelHandle": "@astrumspace",
+      "channel": {
+        "name": "Astrum",
+        "url": "https://www.youtube.com/@astrumspace",
+        "handle": "@astrumspace"
+      },
+      "publishLabel": "14 hours ago",
+      "publishDateText": "14 hours ago",
+      "publishedAtMs": 1777477155441,
+      "thumbnailUrl": "https://i.ytimg.com/vi/H1J8d2tIsxM/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBIZ6h_1BxlCZPEQTKBFhNMwy05uA",
+      "duration": "31:08",
+      "viewCount": 140000,
+      "viewCountText": "140K views",
+      "viewCountLabel": "140K views",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshRunId": "cache-refresh-youtube-1777526162330"
+    },
+    "fetchedAtMs": 1777527555441,
+    "expiresAtMs": 1778391555441,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-bc41b87a1b",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "H1J8d2tIsxM",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T15:39:57.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "We're Close to Harnessing the Power of a Star",
+    "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+    "excerpt": null,
+    "text": "Astrum: We're Close to Harnessing the Power of a Star",
+    "authorUsername": "astrumspace",
+    "authorDisplayName": "Astrum",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/H1J8d2tIsxM/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBIZ6h_1BxlCZPEQTKBFhNMwy05uA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+        "title": "We're Close to Harnessing the Power of a Star",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/H1J8d2tIsxM/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBIZ6h_1BxlCZPEQTKBFhNMwy05uA",
+        "videoId": "H1J8d2tIsxM"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "H1J8d2tIsxM",
+        "canonicalUrl": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+        "title": "We're Close to Harnessing the Power of a Star",
+        "channelName": "Astrum",
+        "channelHandle": "astrumspace",
+        "thumbnailUrl": "https://i.ytimg.com/vi/H1J8d2tIsxM/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBIZ6h_1BxlCZPEQTKBFhNMwy05uA",
+        "publishDate": "2026-04-29T15:39:57.000Z",
+        "publishDateText": "2026-04-29T15:39:57.000Z",
+        "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "We're Close to Harnessing the Power of a Star",
+    "url": "https://www.youtube.com/watch?v=H1J8d2tIsxM",
+    "excerpt": "We're Close to Harnessing the Power of a Star",
+    "text": "We're Close to Harnessing the Power of a Star",
+    "authorUsername": "@astrumspace",
+    "authorDisplayName": "Astrum",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/H1J8d2tIsxM/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBIZ6h_1BxlCZPEQTKBFhNMwy05uA"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

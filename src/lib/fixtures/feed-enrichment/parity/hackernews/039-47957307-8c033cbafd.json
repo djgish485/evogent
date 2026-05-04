@@ -1,0 +1,131 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47957307",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47957307",
+    "url": "https://twitter.com/natolambert/status/2049634340561436966",
+    "title": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "authorUsername": "jwzxgo",
+    "authorDisplayName": "jwzxgo",
+    "publishedAtMs": 1777515472000,
+    "payload": {
+      "id": 47957307,
+      "type": "story",
+      "by": "jwzxgo",
+      "title": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+      "url": "https://twitter.com/natolambert/status/2049634340561436966",
+      "score": 2,
+      "descendants": 0,
+      "time": 1777515472,
+      "kids": [
+        47957308
+      ],
+      "text": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47957307",
+      "canonicalUrl": "https://twitter.com/natolambert/status/2049634340561436966",
+      "flags": {
+        "ask": false,
+        "show": false,
+        "launch": false
+      },
+      "listMembership": [
+        "newstories"
+      ]
+    },
+    "fetchedAtMs": 1777522962443,
+    "expiresAtMs": 1777609362443,
+    "seenByCurationAtMs": 1777609414821
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-138e531b96",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47957307",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T02:17:52.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "url": "https://news.ycombinator.com/item?id=47957307",
+    "excerpt": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "text": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "authorUsername": "jwzxgo",
+    "authorDisplayName": "jwzxgo",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47957307"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "url": "https://twitter.com/natolambert/status/2049634340561436966",
+    "excerpt": "Hacker News discussion: 2 points, 0 comments.",
+    "text": "The China chip hype seems to be inference only. Is Jensen's worry true?",
+    "authorUsername": "jwzxgo",
+    "authorDisplayName": "jwzxgo",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "url",
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

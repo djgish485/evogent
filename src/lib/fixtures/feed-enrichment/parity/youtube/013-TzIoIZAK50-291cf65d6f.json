@@ -1,0 +1,150 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "_TzIoIZAK50",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "_TzIoIZAK50",
+    "url": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+    "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+    "authorUsername": "@HistoryMarche",
+    "authorDisplayName": "HistoryMarche",
+    "publishedAtMs": 1776174485301,
+    "payload": {
+      "videoId": "_TzIoIZAK50",
+      "canonicalUrl": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+      "url": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+      "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+      "channelName": "HistoryMarche",
+      "channelUrl": "https://www.youtube.com/@HistoryMarche",
+      "channelHandle": "@HistoryMarche",
+      "channel": {
+        "name": "HistoryMarche",
+        "url": "https://www.youtube.com/@HistoryMarche",
+        "handle": "@HistoryMarche"
+      },
+      "publishLabel": "8 days ago",
+      "publishDateText": "8 days ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/_TzIoIZAK50/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCEa7KUJidw5JDU5E9bB2yHAiVL5Q",
+      "duration": "26:37",
+      "sourceKind": "home"
+    },
+    "fetchedAtMs": 1776865685301,
+    "expiresAtMs": 1778075285301,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-feb3e6ae43",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "_TzIoIZAK50",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-14T13:48:05.301Z"
+  },
+  "historicalFeedRow": {
+    "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+    "url": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+    "excerpt": "HistoryMarche, 26:37.",
+    "text": "Video from HistoryMarche.",
+    "authorUsername": "@HistoryMarche",
+    "authorDisplayName": "HistoryMarche",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/_TzIoIZAK50/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCEa7KUJidw5JDU5E9bB2yHAiVL5Q"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+        "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/_TzIoIZAK50/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCEa7KUJidw5JDU5E9bB2yHAiVL5Q",
+        "videoId": "_TzIoIZAK50"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "_TzIoIZAK50",
+        "canonicalUrl": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+        "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+        "channelName": "HistoryMarche",
+        "channelHandle": "@HistoryMarche",
+        "thumbnailUrl": "https://i.ytimg.com/vi/_TzIoIZAK50/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCEa7KUJidw5JDU5E9bB2yHAiVL5Q",
+        "publishDate": "2026-04-14T13:48:05.301Z",
+        "publishDateText": "8 days ago",
+        "url": "https://www.youtube.com/watch?v=_TzIoIZAK50"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+    "url": "https://www.youtube.com/watch?v=_TzIoIZAK50",
+    "excerpt": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+    "text": "Masterclass That Still Shocks Military Academies - Battle of Fraustadt 1706 AD",
+    "authorUsername": "@HistoryMarche",
+    "authorDisplayName": "HistoryMarche",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/_TzIoIZAK50/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLCEa7KUJidw5JDU5E9bB2yHAiVL5Q"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

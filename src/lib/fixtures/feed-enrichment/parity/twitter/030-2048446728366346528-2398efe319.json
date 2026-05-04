@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2048446728366346528",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2048446728366346528",
+    "url": "https://x.com/0xSero/status/2048446728366346528",
+    "title": null,
+    "authorUsername": "0xSero",
+    "authorDisplayName": "0xSero",
+    "publishedAtMs": 1777222732000,
+    "payload": {
+      "tweetId": "2048446728366346528",
+      "url": "https://x.com/0xSero/status/2048446728366346528",
+      "text": "Deepseek-v4-flash continues to slam through all my benchmarks, puzzles, challenges, and work. \n\nVideo coming tomorrow full breakdown of the model capabilities, and costs to get running.",
+      "authorUsername": "0xSero",
+      "authorDisplayName": "0xSero",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1976266803211890688/JZffMMYs_normal.jpg",
+      "publishedAtMs": 1777222732000,
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "inReplyToStatusId": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2048446282033991680/img/x5jsHNKruzP34gQu.jpg"
+        },
+        {
+          "type": "video",
+          "url": "https://pbs.twimg.com/amplify_video_thumb/2048446282033991680/img/x5jsHNKruzP34gQu.jpg",
+          "posterUrl": "https://pbs.twimg.com/amplify_video_thumb/2048446282033991680/img/x5jsHNKruzP34gQu.jpg"
+        }
+      ],
+      "metrics": {
+        "reply": "14 ",
+        "retweet": "9 ",
+        "like": "178 "
+      },
+      "surface": "home"
+    },
+    "fetchedAtMs": 1777235351429,
+    "expiresAtMs": 1777451351429,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-00d8c48822",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2048446728366346528",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-26T16:58:52.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Deepseek-v4-flash continues to slam through all my benchmarks, puzzles, challenges, and work. Video coming tomorrow full",
+    "url": "https://x.com/0xSero/status/2048446728366346528",
+    "excerpt": null,
+    "text": "Deepseek-v4-flash continues to slam through all my benchmarks, puzzles, challenges, and work. Video coming tomorrow full breakdown of the model capabilities, and costs to get running.",
+    "authorUsername": "0xSero",
+    "authorDisplayName": "0xSero",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1976266803211890688/JZffMMYs_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2048446282033991680/img/x5jsHNKruzP34gQu.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": null,
+    "url": "https://x.com/0xSero/status/2048446728366346528",
+    "excerpt": null,
+    "text": "Deepseek-v4-flash continues to slam through all my benchmarks, puzzles, challenges, and work. \n\nVideo coming tomorrow full breakdown of the model capabilities, and costs to get running.",
+    "authorUsername": "0xSero",
+    "authorDisplayName": "0xSero",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1976266803211890688/JZffMMYs_normal.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/amplify_video_thumb/2048446282033991680/img/x5jsHNKruzP34gQu.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "text"
+  ]
+}

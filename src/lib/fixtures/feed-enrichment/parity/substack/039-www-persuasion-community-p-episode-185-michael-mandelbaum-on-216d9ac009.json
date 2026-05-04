@@ -1,0 +1,118 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+    "url": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+    "title": "Episode 185: Michael Mandelbaum on the American Way of Foreign Policy",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "RICHARD ALDOUS∙ 32 MIN LISTEN",
+    "publishedAtMs": 1776600000000,
+    "payload": {
+      "url": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+      "title": "Episode 185: Michael Mandelbaum on the American Way of Foreign Policy",
+      "excerpt": "Bookstack at Persuasion is delivered to you every other Sunday at 6am EST.",
+      "publicationName": "PERSUASION",
+      "publicationHost": "www.persuasion.community",
+      "author": "RICHARD ALDOUS∙ 32 MIN LISTEN",
+      "authorDisplayName": "RICHARD ALDOUS∙ 32 MIN LISTEN",
+      "publishedLabel": "APR 19",
+      "publishedAtMs": 1776600000000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777128407039
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-e59a3e9d1d",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-19T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Episode 185: Michael Mandelbaum on the American Way of Foreign Policy",
+    "url": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+    "excerpt": null,
+    "text": "Bookstack at Persuasion is delivered to you every other Sunday at 6am EST.",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "Richard Aldous",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Episode 185: Michael Mandelbaum on the American Way of Foreign Policy",
+    "url": "https://www.persuasion.community/p/episode-185-michael-mandelbaum-on",
+    "excerpt": "Bookstack at Persuasion is delivered to you every other Sunday at 6am EST.",
+    "text": "",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "RICHARD ALDOUS∙ 32 MIN LISTEN",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorDisplayName"
+  ]
+}

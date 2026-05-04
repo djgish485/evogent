@@ -1,0 +1,122 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+    "url": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+    "title": "⚠️ Regulate AI now—or else?",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "PREVIEW∙JAMES PETHOKOUKIS",
+    "publishedAtMs": 1776427200000,
+    "payload": {
+      "url": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+      "title": "⚠️ Regulate AI now—or else?",
+      "excerpt": "The political pressure for AI regulation is real. So is the case for keeping calm.",
+      "publicationName": "FASTER, PLEASE!",
+      "publicationHost": "fasterplease.substack.com",
+      "author": "PREVIEW∙JAMES PETHOKOUKIS",
+      "authorDisplayName": "PREVIEW∙JAMES PETHOKOUKIS",
+      "publishedLabel": "APR 17",
+      "publishedAtMs": 1776427200000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777130228620
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-0db7585c20",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-17T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "⚠️ Regulate AI now—or else?",
+    "url": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+    "excerpt": null,
+    "text": "The political pressure for AI regulation is real. So is the case for keeping calm.",
+    "authorUsername": "fasterplease.substack.com",
+    "authorDisplayName": "James Pethokoukis",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!t0TK!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2Fc277b9d8-c7b0-49e7-9e6a-281bb92a4682_500x500.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "⚠️ Regulate AI now—or else?",
+    "url": "https://fasterplease.substack.com/p/regulate-ai-nowor-else",
+    "excerpt": "The political pressure for AI regulation is real. So is the case for keeping calm.",
+    "text": "",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "PREVIEW∙JAMES PETHOKOUKIS",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

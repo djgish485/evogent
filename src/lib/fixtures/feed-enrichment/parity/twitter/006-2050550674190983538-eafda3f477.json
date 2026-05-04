@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050550674190983538",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050550674190983538",
+    "url": "https://x.com/littmath/status/2050550674190983538",
+    "title": "@littmath: Fully endorse this view. I have some worries about how AI tools will change the",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "publishedAtMs": 1777724352000,
+    "payload": {
+      "id": "2050550674190983538",
+      "tweetId": "2050550674190983538",
+      "source": "twitter",
+      "sourceId": "2050550674190983538",
+      "url": "https://x.com/littmath/status/2050550674190983538",
+      "title": "@littmath: Fully endorse this view. I have some worries about how AI tools will change the ",
+      "text": "Fully endorse this view. I have some worries about how AI tools will change the profession of mathematics, specifically around training. But the fundamental goal has to be to do good science, and clearly AI tools can help with that.",
+      "full_text": "Fully endorse this view. I have some worries about how AI tools will change the profession of mathematics, specifically around training. But the fundamental goal has to be to do good science, and clearly AI tools can help with that.",
+      "authorUsername": "littmath",
+      "authorDisplayName": "Daniel Litt",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+      "publishedAt": "2026-05-02T12:19:12.000Z",
+      "publishedAtMs": 1777724352000,
+      "media": [],
+      "mediaUrls": [],
+      "metrics": {
+        "raw": "2 1 30 1.3K"
+      },
+      "quotedTweet": {
+        "authorUsername": "AcerFur",
+        "authorDisplayName": "Acer",
+        "text": "The reason I do math is because I want to know what is true and understand why that’s the case, and it doesn’t matter to me whether that comes from a human or a machine. You are right that problems being solved spawns more problems, but those new problems are often much deeper!"
+      },
+      "inReplyToStatusId": null,
+      "replyCapture": {
+        "source": "timeline",
+        "requestedHandle": null
+      },
+      "textCapture": {
+        "textSource": "timeline_card"
+      },
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": {
+          "authorUsername": "AcerFur",
+          "authorDisplayName": "Acer",
+          "text": "The reason I do math is because I want to know what is true and understand why that’s the case, and it doesn’t matter to me whether that comes from a human or a machine. You are right that problems being solved spawns more problems, but those new problems are often much deeper!"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777726263109",
+      "captureSurface": "home"
+    },
+    "fetchedAtMs": 1777726488391,
+    "expiresAtMs": 1777942488391,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-9602d5658a",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050550674190983538",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:19:12.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Fully endorse this view. I have some worries about how AI tools will change the profession of mathematics, specifically around training. But the fundamental goal has to be to do go",
+    "url": "https://x.com/littmath/status/2050550674190983538",
+    "excerpt": null,
+    "text": "Fully endorse this view. I have some worries about how AI tools will change the profession of mathematics, specifically around training. But the fundamental goal has to be to do good science, and clearly AI tools can help with that.",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "@littmath: Fully endorse this view. I have some worries about how AI tools will change the",
+    "url": "https://x.com/littmath/status/2050550674190983538",
+    "excerpt": null,
+    "text": "Fully endorse this view. I have some worries about how AI tools will change the profession of mathematics, specifically around training. But the fundamental goal has to be to do good science, and clearly AI tools can help with that.",
+    "authorUsername": "littmath",
+    "authorDisplayName": "Daniel Litt",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1588888923081687045/KGL3lgvC_normal.jpg",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "The reason I do math is because I want to know what is true and understand why that’s the case, and it doesn’t matter to me whether that comes from a human or a machine. You are right that problems being solved spawns more problems, but those new problems are often much deeper!",
+        "author": {
+          "username": "AcerFur",
+          "displayName": "Acer"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metadata.quotedTweet"
+  ]
+}

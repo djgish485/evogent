@@ -1,0 +1,143 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "title": "Sign Of The Future Gpt 55",
+    "authorUsername": "oneusefulthing",
+    "authorDisplayName": "ONE USEFUL THING",
+    "publishedAtMs": 1776945600000,
+    "payload": {
+      "source": "substack",
+      "kind": "substack_post",
+      "surface": "inbox",
+      "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+      "canonicalUrl": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+      "host": "www.oneusefulthing.org",
+      "slug": "sign-of-the-future-gpt-55",
+      "title": "Sign Of The Future Gpt 55",
+      "publicationName": "ONE USEFUL THING",
+      "authorUsername": "oneusefulthing",
+      "authorDisplayName": "ONE USEFUL THING",
+      "publishedLabel": "APR 23",
+      "publishedAtMs": 1776945600000,
+      "excerpt": "curve ETHAN MOLLICK∙7 MIN READ",
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!hyZZ!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2Fcd2ee4f7-3e71-42f0-92eb-4d3018127e08_1024x1024.png",
+      "durationText": null,
+      "rawText": "ONE USEFUL THING APR 23 Sign of the future: GPT-5.5 One impressive step on the curve ETHAN MOLLICK∙7 MIN READ",
+      "fetchedFrom": "https://substack.com/inbox",
+      "fetchedAtMs": 1777595579539,
+      "expiresAtMs": 1777811579539,
+      "extractionRunId": "cache-refresh-substack-1777595122458"
+    },
+    "fetchedAtMs": 1777595579539,
+    "expiresAtMs": 1777811579539,
+    "seenByCurationAtMs": 1777128407039
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-8082e0b1b5",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-23T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Sign of the future: GPT-5.5",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": "One impressive step on the curve",
+    "text": "One impressive step on the curve",
+    "authorUsername": "ethanmollick",
+    "authorDisplayName": "ETHAN MOLLICK",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+        "title": "Sign of the future: GPT-5.5",
+        "author": "ETHAN MOLLICK",
+        "publication": "ONE USEFUL THING",
+        "visibleTime": "APR 23"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Sign Of The Future Gpt 55",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": "curve ETHAN MOLLICK∙7 MIN READ",
+    "text": "",
+    "authorUsername": "oneusefulthing",
+    "authorDisplayName": "ONE USEFUL THING",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!hyZZ!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2Fcd2ee4f7-3e71-42f0-92eb-4d3018127e08_1024x1024.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls",
+    "metadata.article"
+  ]
+}

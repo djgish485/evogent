@@ -1,0 +1,121 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "hackernews",
+  "sourceId": "47972683",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "hackernews",
+    "sourceId": "47972683",
+    "url": "https://arxiv.org/abs/2604.27906",
+    "title": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "authorUsername": "alex_petrov",
+    "authorDisplayName": "alex_petrov",
+    "publishedAtMs": 1777626935000,
+    "payload": {
+      "id": 47972683,
+      "type": "story",
+      "by": "alex_petrov",
+      "title": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+      "url": "https://arxiv.org/abs/2604.27906",
+      "score": 4,
+      "descendants": 0,
+      "time": 1777626935,
+      "kids": [
+        47972684
+      ],
+      "text": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47972683"
+    },
+    "fetchedAtMs": 1777643569907,
+    "expiresAtMs": 1777773169907,
+    "seenByCurationAtMs": 1777703573777
+  },
+  "preEngineFeedRow": {
+    "id": "parity-hackernews-560a5b5c6c",
+    "type": "article",
+    "source": "hackernews",
+    "sourceId": "47972683",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T09:15:35.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "url": "https://arxiv.org/abs/2604.27906",
+    "excerpt": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "text": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "authorUsername": "alex_petrov",
+    "authorDisplayName": "alex_petrov",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": "https://news.ycombinator.com/item?id=47972683"
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "url": "https://arxiv.org/abs/2604.27906",
+    "excerpt": "Hacker News discussion: 4 points, 0 comments.",
+    "text": "Xmemory: Benchmarking Structured AI Memory Against RAG and Hybrid RAG",
+    "authorUsername": "alex_petrov",
+    "authorDisplayName": "alex_petrov",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "metadata.hnUrl"
+  ]
+}

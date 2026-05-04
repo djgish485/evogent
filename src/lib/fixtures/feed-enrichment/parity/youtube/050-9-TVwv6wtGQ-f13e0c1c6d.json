@@ -1,0 +1,151 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "9-TVwv6wtGQ",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "9-TVwv6wtGQ",
+    "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+    "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "authorUsername": "@OpenAI",
+    "authorDisplayName": "OpenAI",
+    "publishedAtMs": 1777398325788,
+    "payload": {
+      "videoId": "9-TVwv6wtGQ",
+      "canonicalUrl": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+      "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+      "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+      "channelName": "OpenAI",
+      "channelUrl": "https://www.youtube.com/@OpenAI",
+      "channelHandle": "@OpenAI",
+      "channel": {
+        "name": "OpenAI",
+        "url": "https://www.youtube.com/@OpenAI",
+        "handle": "@OpenAI"
+      },
+      "publishLabel": "16 hours ago",
+      "publishDateText": "16 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/9-TVwv6wtGQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZwIHVTT9PwKZ_eEQ9neEHll0Faw",
+      "duration": "43:29",
+      "sourceKind": "home"
+    },
+    "fetchedAtMs": 1777455925788,
+    "expiresAtMs": 1778319925788,
+    "seenByCurationAtMs": 1777464288984
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-9d394d9bbf",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "9-TVwv6wtGQ",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T17:45:25.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+    "excerpt": null,
+    "text": "YouTube: What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "authorUsername": "OpenAI",
+    "authorDisplayName": "OpenAI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/9-TVwv6wtGQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZwIHVTT9PwKZ_eEQ9neEHll0Faw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+        "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/9-TVwv6wtGQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZwIHVTT9PwKZ_eEQ9neEHll0Faw",
+        "videoId": "9-TVwv6wtGQ"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "9-TVwv6wtGQ",
+        "canonicalUrl": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+        "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+        "channelName": "OpenAI",
+        "channelHandle": "OpenAI",
+        "thumbnailUrl": "https://i.ytimg.com/vi/9-TVwv6wtGQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZwIHVTT9PwKZ_eEQ9neEHll0Faw",
+        "publishDate": "2026-04-28T15:00:00.000Z",
+        "publishDateText": "2026-04-28T15:00:00.000Z",
+        "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "url": "https://www.youtube.com/watch?v=9-TVwv6wtGQ",
+    "excerpt": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "text": "What happens now that AI is good at math? — the OpenAI Podcast Ep. 17",
+    "authorUsername": "@OpenAI",
+    "authorDisplayName": "OpenAI",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/9-TVwv6wtGQ/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZwIHVTT9PwKZ_eEQ9neEHll0Faw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

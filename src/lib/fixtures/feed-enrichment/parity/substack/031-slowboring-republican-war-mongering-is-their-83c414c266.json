@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "slowboring-republican-war-mongering-is-their",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "slowboring-republican-war-mongering-is-their",
+    "url": "https://www.slowboring.com/p/republican-war-mongering-is-their",
+    "title": "Republican war-mongering is their worst economic policy",
+    "authorUsername": null,
+    "authorDisplayName": "Matthew Yglesias",
+    "publishedAtMs": 1775692800000,
+    "payload": {
+      "title": "Republican war-mongering is their worst economic policy",
+      "subtitle": "A repeated pattern of failure",
+      "url": "https://www.slowboring.com/p/republican-war-mongering-is-their",
+      "publication": "Slow Boring",
+      "author": "Matthew Yglesias",
+      "publishedAtMs": 1775692800000,
+      "source": "substack"
+    },
+    "fetchedAtMs": 1777030560697,
+    "expiresAtMs": 1777203360697,
+    "seenByCurationAtMs": 1777091608597
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-b3c51b87b7",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "slowboring-republican-war-mongering-is-their",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-09T00:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Republican war-mongering is their worst economic policy",
+    "url": "https://www.slowboring.com/p/republican-war-mongering-is-their",
+    "excerpt": "The piece argues that Republican war-mongering, including the recent Iran conflict, is the most economically damaging stance the party currently holds, with Yglesias breaking down the costs against the political returns.",
+    "text": "The piece argues that Republican war-mongering, including the recent Iran conflict, is the most economically damaging stance the party currently holds, with Yglesias breaking down the costs against the political returns.",
+    "authorUsername": "slowboring",
+    "authorDisplayName": "Matthew Yglesias",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Republican war-mongering is their worst economic policy",
+    "url": "https://www.slowboring.com/p/republican-war-mongering-is-their",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "Matthew Yglesias",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername"
+  ]
+}

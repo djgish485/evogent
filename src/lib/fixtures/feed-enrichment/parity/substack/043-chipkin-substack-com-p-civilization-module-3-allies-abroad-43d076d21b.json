@@ -1,0 +1,122 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+    "url": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+    "title": "Civilization, Module 3: Allies Abroad, Enemies at Home",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "CONJECTURE INSTITUTE",
+    "publishedAtMs": 1776686400000,
+    "payload": {
+      "url": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+      "title": "Civilization, Module 3: Allies Abroad, Enemies at Home",
+      "excerpt": "Many Westerners do not see us at war with China, as no bombs are dropping, no bullets flying, no blood spilling. But traditional war is just a special case of the more general battle of ideas.",
+      "publicationName": "CONJECTURE INSTITUTE",
+      "publicationHost": "chipkin.substack.com",
+      "author": "CONJECTURE INSTITUTE",
+      "authorDisplayName": "CONJECTURE INSTITUTE",
+      "publishedLabel": "APR 20",
+      "publishedAtMs": 1776686400000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777130228620
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-a2e47dbfa1",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Civilization, Module 3: Allies Abroad, Enemies at Home",
+    "url": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+    "excerpt": null,
+    "text": "Many Westerners do not see us at war with China, as no bombs are dropping, no bullets flying, no blood spilling. But traditional war is just a special case of the more general battle of ideas.",
+    "authorUsername": "chipkin.substack.com",
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Civilization, Module 3: Allies Abroad, Enemies at Home",
+    "url": "https://chipkin.substack.com/p/civilization-module-3-allies-abroad",
+    "excerpt": "Many Westerners do not see us at war with China, as no bombs are dropping, no bullets flying, no blood spilling. But traditional war is just a special case of the more general battle of ideas.",
+    "text": "",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "CONJECTURE INSTITUTE",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

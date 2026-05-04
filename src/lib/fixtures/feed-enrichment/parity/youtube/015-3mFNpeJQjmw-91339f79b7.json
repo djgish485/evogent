@@ -1,0 +1,150 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "3mFNpeJQjmw",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "3mFNpeJQjmw",
+    "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+    "title": "The physics behind Flow Matching models",
+    "authorUsername": "@juliaturc1",
+    "authorDisplayName": "Julia Turc",
+    "publishedAtMs": 1776012646913,
+    "payload": {
+      "videoId": "3mFNpeJQjmw",
+      "canonicalUrl": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+      "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+      "title": "The physics behind Flow Matching models",
+      "channelName": "Julia Turc",
+      "channelUrl": "https://www.youtube.com/@juliaturc1",
+      "channelHandle": "@juliaturc1",
+      "channel": {
+        "name": "Julia Turc",
+        "url": "https://www.youtube.com/@juliaturc1",
+        "handle": "@juliaturc1"
+      },
+      "publishLabel": "10 days ago",
+      "publishDateText": "10 days ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/3mFNpeJQjmw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBsZkirRhPAdYTsWVirC8aIQVgq7w",
+      "duration": "24:02",
+      "sourceKind": "home"
+    },
+    "fetchedAtMs": 1776876646913,
+    "expiresAtMs": 1778086246913,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-6aea56e98d",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "3mFNpeJQjmw",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-12T16:50:46.913Z"
+  },
+  "historicalFeedRow": {
+    "title": "The physics behind Flow Matching models",
+    "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+    "excerpt": "Julia Turc, 24:02.",
+    "text": "Video from Julia Turc.",
+    "authorUsername": "@juliaturc1",
+    "authorDisplayName": "Julia Turc",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/3mFNpeJQjmw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBsZkirRhPAdYTsWVirC8aIQVgq7w"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+        "title": "The physics behind Flow Matching models",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/3mFNpeJQjmw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBsZkirRhPAdYTsWVirC8aIQVgq7w",
+        "videoId": "3mFNpeJQjmw"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "3mFNpeJQjmw",
+        "canonicalUrl": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+        "title": "The physics behind Flow Matching models",
+        "channelName": "Julia Turc",
+        "channelHandle": "@juliaturc1",
+        "thumbnailUrl": "https://i.ytimg.com/vi/3mFNpeJQjmw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBsZkirRhPAdYTsWVirC8aIQVgq7w",
+        "publishDate": "2026-04-12T16:50:46.913Z",
+        "publishDateText": "10 days ago",
+        "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The physics behind Flow Matching models",
+    "url": "https://www.youtube.com/watch?v=3mFNpeJQjmw",
+    "excerpt": "The physics behind Flow Matching models",
+    "text": "The physics behind Flow Matching models",
+    "authorUsername": "@juliaturc1",
+    "authorDisplayName": "Julia Turc",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/3mFNpeJQjmw/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBsZkirRhPAdYTsWVirC8aIQVgq7w"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

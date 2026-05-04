@@ -1,0 +1,165 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "FLGgX3nyzWU",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "FLGgX3nyzWU",
+    "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+    "title": "The tech industry and the national security community",
+    "authorUsername": "@ASPICanberra",
+    "authorDisplayName": "ASPICanberra",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "FLGgX3nyzWU",
+      "canonicalUrl": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+      "title": "The tech industry and the national security community",
+      "channelName": "ASPICanberra",
+      "channelUrl": "https://www.youtube.com/@ASPICanberra",
+      "channelHandle": "@ASPICanberra",
+      "channel": {
+        "name": "ASPICanberra",
+        "url": "https://www.youtube.com/@ASPICanberra",
+        "handle": "@ASPICanberra"
+      },
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "thumbnailUrl": null,
+      "duration": "28:12",
+      "viewCount": 53,
+      "viewCountLabel": "53 views",
+      "sourceKind": "home",
+      "firstSeenPass": 1,
+      "rawTextLines": [
+        "28:12",
+        "The tech industry and the national security community",
+        "ASPICanberra",
+        "53 views",
+        "•",
+        "1 day ago"
+      ],
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+      "source": "youtube",
+      "sourceId": "FLGgX3nyzWU",
+      "cacheRefreshTaskId": "cache-refresh-youtube-1777631462305",
+      "cacheRefreshRunId": "cache-refresh-youtube-1777631462305"
+    },
+    "fetchedAtMs": 1777631645753,
+    "expiresAtMs": 1778495645753,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-fbe91c5e2b",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "FLGgX3nyzWU",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T14:55:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The tech industry and the national security community",
+    "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+    "excerpt": "The tech industry and the national security community",
+    "text": "The tech industry and the national security community",
+    "authorUsername": "@ASPICanberra",
+    "authorDisplayName": "ASPICanberra",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/FLGgX3nyzWU/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+        "title": "The tech industry and the national security community",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/FLGgX3nyzWU/hqdefault.jpg",
+        "videoId": "FLGgX3nyzWU"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "FLGgX3nyzWU",
+        "canonicalUrl": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+        "title": "The tech industry and the national security community",
+        "channelName": "ASPICanberra",
+        "channelHandle": "@ASPICanberra",
+        "thumbnailUrl": "https://i.ytimg.com/vi/FLGgX3nyzWU/hqdefault.jpg",
+        "publishDate": "2026-04-30T14:55:00.000Z",
+        "publishDateText": "1 day ago",
+        "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The tech industry and the national security community",
+    "url": "https://www.youtube.com/watch?v=FLGgX3nyzWU",
+    "excerpt": "The tech industry and the national security community",
+    "text": "The tech industry and the national security community",
+    "authorUsername": "@ASPICanberra",
+    "authorDisplayName": "ASPICanberra",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

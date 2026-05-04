@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050221973406699532",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050221973406699532",
+    "url": "https://x.com/sukh_saroy/status/2050221973406699532",
+    "title": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experi",
+    "authorUsername": "sukh_saroy",
+    "authorDisplayName": "Sukh Sroay",
+    "publishedAtMs": 1777645984000,
+    "payload": {
+      "source": "twitter",
+      "kind": "search",
+      "query": "AI coding agents",
+      "tweetId": "2050221973406699532",
+      "sourceId": "2050221973406699532",
+      "url": "https://x.com/sukh_saroy/status/2050221973406699532",
+      "title": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experi",
+      "text": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers",
+      "authorUsername": "sukh_saroy",
+      "authorDisplayName": "Sukh Sroay",
+      "authorAvatarUrl": null,
+      "publishedAtMs": 1777645984000,
+      "metrics": {
+        "replies": 0,
+        "reposts": 0,
+        "likes": 0,
+        "views": 0,
+        "bookmarks": 0
+      },
+      "media": [
+        {
+          "type": "image",
+          "url": "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+        }
+      ],
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+      ],
+      "quotedTweet": null,
+      "inReplyToHandle": null,
+      "inReplyToStatusId": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "quotedTweet": null,
+        "replyCapture": null,
+        "textCapture": {
+          "textSource": "timeline_card"
+        },
+        "cacheRefresh": {
+          "taskId": "cache-refresh-twitter-1777647362471",
+          "kind": "search",
+          "query": "AI coding agents",
+          "requestedHandle": null
+        }
+      },
+      "type": "tweet"
+    },
+    "fetchedAtMs": 1777647843455,
+    "expiresAtMs": 1777863843455,
+    "seenByCurationAtMs": 1777658903314
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-98de0f99be",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050221973406699532",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T14:33:04.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experi",
+    "url": "https://x.com/sukh_saroy/status/2050221973406699532",
+    "excerpt": null,
+    "text": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers",
+    "authorUsername": "sukh_saroy",
+    "authorDisplayName": "Sukh Sroay",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experi",
+    "url": "https://x.com/sukh_saroy/status/2050221973406699532",
+    "excerpt": null,
+    "text": "A new study just blew up the entire \"vibe coding\" movement. Researchers from UC San Diego and Cornell tracked 112 experienced software developers using AI agents in their actual jobs. The finding is the opposite of every viral demo on your timeline. Professional developers",
+    "authorUsername": "sukh_saroy",
+    "authorDisplayName": "Sukh Sroay",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHPaBOlaMAACttS?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 0
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metrics.views"
+  ]
+}

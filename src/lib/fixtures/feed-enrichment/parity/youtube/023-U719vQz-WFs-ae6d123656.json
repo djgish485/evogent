@@ -1,0 +1,167 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "U719vQz-WFs",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "U719vQz-WFs",
+    "url": "https://www.youtube.com/watch?v=U719vQz-WFs",
+    "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "authorUsername": "RyanLPeterman",
+    "authorDisplayName": "Ryan Peterman",
+    "publishedAtMs": 1772397554532,
+    "payload": {
+      "videoId": "U719vQz-WFs",
+      "canonicalUrl": "https://www.youtube.com/watch?v=U719vQz-WFs",
+      "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+      "channelName": "Ryan Peterman",
+      "channelUrl": "https://www.youtube.com/@RyanLPeterman",
+      "channelHandle": "RyanLPeterman",
+      "channel": {
+        "name": "Ryan Peterman",
+        "url": "https://www.youtube.com/@RyanLPeterman",
+        "handle": "RyanLPeterman"
+      },
+      "publishLabel": "2 months ago",
+      "publishDateText": "2 months ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/U719vQz-WFs/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAT6_khceSbiu1xnljpW8NhHZL2WQ",
+      "duration": "1:10:19",
+      "viewCount": 138000,
+      "viewCountLabel": "138K views",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "sourceKinds": [
+        "home"
+      ],
+      "url": "https://www.youtube.com/watch?v=U719vQz-WFs",
+      "source": "youtube",
+      "sourceId": "U719vQz-WFs",
+      "publishedAtMs": 1772397554532,
+      "extraction": {
+        "taskId": "cache-refresh-youtube-1777581322323",
+        "runId": "cache-refresh-youtube-1777581322323",
+        "sourceKinds": [
+          "home"
+        ],
+        "policy": "youtube-cache"
+      }
+    },
+    "fetchedAtMs": 1777581554532,
+    "expiresAtMs": 1778445554532,
+    "seenByCurationAtMs": 1777570685321
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-1ebffc3586",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "U719vQz-WFs",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-03-01T16:24:45.142Z"
+  },
+  "historicalFeedRow": {
+    "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "url": "https://www.youtube.com/watch?v=U719vQz-WFs",
+    "excerpt": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "text": "1:10:19\nTuring Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport\nRyan Peterman\n138K views\n•\n2 months ago",
+    "authorUsername": "@RyanLPeterman",
+    "authorDisplayName": "Ryan Peterman",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/U719vQz-WFs/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAT6_khceSbiu1xnljpW8NhHZL2WQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": 138000
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=U719vQz-WFs",
+        "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/U719vQz-WFs/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAT6_khceSbiu1xnljpW8NhHZL2WQ",
+        "videoId": "U719vQz-WFs"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "U719vQz-WFs",
+        "canonicalUrl": "https://www.youtube.com/watch?v=U719vQz-WFs",
+        "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+        "channelName": "Ryan Peterman",
+        "channelHandle": "@RyanLPeterman",
+        "thumbnailUrl": "https://i.ytimg.com/vi/U719vQz-WFs/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAT6_khceSbiu1xnljpW8NhHZL2WQ",
+        "publishDateText": "2 months ago",
+        "url": "https://www.youtube.com/watch?v=U719vQz-WFs"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "url": "https://www.youtube.com/watch?v=U719vQz-WFs",
+    "excerpt": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "text": "Turing Award Winner: Thinking Clearly, Paxos vs Raft, Working With Dijkstra | Leslie Lamport",
+    "authorUsername": "RyanLPeterman",
+    "authorDisplayName": "Ryan Peterman",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/U719vQz-WFs/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAT6_khceSbiu1xnljpW8NhHZL2WQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorUsername",
+    "metrics.views",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

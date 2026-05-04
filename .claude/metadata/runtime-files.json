@@ -1,0 +1,7 @@
+{
+  "preserveDuringMerge": [
+    "data/config.md",
+    "data/preferences-context.md",
+    "data/curation-prompt.md"
+  ]
+}

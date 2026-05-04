@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "substack-sign-of-the-future-gpt-55",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "substack-sign-of-the-future-gpt-55",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "title": "Sign of the future: GPT-5.5",
+    "authorUsername": null,
+    "authorDisplayName": "Ethan Mollick",
+    "publishedAtMs": 1776974400000,
+    "payload": {
+      "title": "Sign of the future: GPT-5.5",
+      "excerpt": "One impressive step on the curve",
+      "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+      "publication": "One Useful Thing",
+      "authorDisplayName": "Ethan Mollick",
+      "authorUsername": null,
+      "publishedAtMs": 1776974400000,
+      "fetchedAtMs": 1776979730201
+    },
+    "fetchedAtMs": 1776979730201,
+    "expiresAtMs": 1777152530201,
+    "seenByCurationAtMs": 1777112932202
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-26ebcb0e00",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "substack-sign-of-the-future-gpt-55",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-23T20:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Sign of the future: GPT-5.5",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": "One impressive step on the curve",
+    "text": "One impressive step on the curve",
+    "authorUsername": "oneusefulthing",
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Sign of the future: GPT-5.5",
+    "url": "https://www.oneusefulthing.org/p/sign-of-the-future-gpt-55",
+    "excerpt": "One impressive step on the curve",
+    "text": "",
+    "authorUsername": null,
+    "authorDisplayName": "Ethan Mollick",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorUsername"
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "INES BURRELL",
+    "publishedAtMs": 1776427200000,
+    "payload": {
+      "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+      "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+      "excerpt": "Putting economic pressure on Iran could work—provided it’s part of a genuine strategy.",
+      "publicationName": "PERSUASION",
+      "publicationHost": "www.persuasion.community",
+      "author": "INES BURRELL",
+      "authorDisplayName": "INES BURRELL",
+      "publishedLabel": "APR 17",
+      "publishedAtMs": 1776427200000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777128407039
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-ff875ed849",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-17T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "excerpt": null,
+    "text": "Putting economic pressure on Iran could work—provided it’s part of a genuine strategy.",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "Ines Burrell",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!hmSI!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffe4c6191-cec6-447c-b3f8-82fc7a52a4c4_1078x1078.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "excerpt": "Putting economic pressure on Iran could work—provided it’s part of a genuine strategy.",
+    "text": "",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "INES BURRELL",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}

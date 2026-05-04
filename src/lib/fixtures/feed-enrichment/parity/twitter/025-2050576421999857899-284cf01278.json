@@ -1,0 +1,235 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050576421999857899",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050576421999857899",
+    "url": "https://x.com/BBCWorld/status/2050576421999857899",
+    "title": "US warns ship firms could face sanctions if paying Iran tolls",
+    "authorUsername": "BBCWorld",
+    "authorDisplayName": "BBC News (World)",
+    "publishedAtMs": 1777730491000,
+    "payload": {
+      "tweetId": "2050576421999857899",
+      "sourceId": "2050576421999857899",
+      "authorUsername": "BBCWorld",
+      "authorDisplayName": "BBC News (World)",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1529107170448523264/q3VwEx38_200x200.jpg",
+      "text": "US warns ship firms could face sanctions if paying Iran tolls",
+      "visibleText": "US warns ship firms could face sanctions if paying Iran tolls",
+      "url": "https://x.com/BBCWorld/status/2050576421999857899",
+      "publishedAt": "2026-05-02T14:01:31.000Z",
+      "likes": 75,
+      "reposts": 32,
+      "replies": 48,
+      "viewCount": 48,
+      "mediaUrls": [
+        "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+      ],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+        }
+      ],
+      "quotedTweet": null,
+      "inReplyToUsername": null,
+      "inReplyToStatusId": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/U2GqhN5Vy9",
+        "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small",
+        "description": null
+      },
+      "linkPreviews": [
+        {
+          "url": "https://t.co/U2GqhN5Vy9",
+          "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small",
+          "description": null
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/U2GqhN5Vy9",
+          "expandedUrl": "https://t.co/U2GqhN5Vy9",
+          "displayUrl": "t.co"
+        }
+      ],
+      "raw_data": {
+        "source": "timeline",
+        "quotedTweet": null,
+        "linkCard": {
+          "type": "link",
+          "url": "https://t.co/U2GqhN5Vy9",
+          "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+          "domain": "t.co",
+          "imageUrl": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small",
+          "description": null
+        },
+        "linkPreviews": [
+          {
+            "url": "https://t.co/U2GqhN5Vy9",
+            "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+            "domain": "t.co",
+            "image": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small",
+            "description": null
+          }
+        ],
+        "urlEntities": [
+          {
+            "url": "https://t.co/U2GqhN5Vy9",
+            "expandedUrl": "https://t.co/U2GqhN5Vy9"
+          }
+        ]
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": "none",
+        "requestedHandle": null,
+        "authoredByRequestedAccount": null,
+        "visibleReplyBanner": false
+      },
+      "textCapture": {
+        "textSource": "timeline_card",
+        "collapsedCardDetected": false,
+        "statusPageAttempted": false,
+        "statusPageRecovered": false,
+        "diagnostic": null
+      },
+      "source": "twitter",
+      "sourceSurface": "following",
+      "fetchedBy": "cache-refresh",
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777732863134"
+    },
+    "fetchedAtMs": 1777733123283,
+    "expiresAtMs": 1777949123283,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-04a53082dd",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050576421999857899",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T14:01:31.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "US warns ship firms could face sanctions if paying Iran tolls",
+    "url": "https://x.com/BBCWorld/status/2050576421999857899",
+    "excerpt": null,
+    "text": "US warns ship firms could face sanctions if paying Iran tolls",
+    "authorUsername": "BBCWorld",
+    "authorDisplayName": "BBC News (World)",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1529107170448523264/q3VwEx38_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/U2GqhN5Vy9",
+        "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "US warns ship firms could face sanctions if paying Iran tolls",
+    "url": "https://x.com/BBCWorld/status/2050576421999857899",
+    "excerpt": null,
+    "text": "US warns ship firms could face sanctions if paying Iran tolls",
+    "authorUsername": "BBCWorld",
+    "authorDisplayName": "BBC News (World)",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1529107170448523264/q3VwEx38_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+    ],
+    "metrics": {
+      "likes": 75,
+      "reposts": 32,
+      "replies": 48,
+      "views": 48
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "link",
+        "url": "https://t.co/U2GqhN5Vy9",
+        "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+        "domain": "t.co",
+        "imageUrl": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+      },
+      "communityNote": null,
+      "linkPreviews": [
+        {
+          "url": "https://t.co/U2GqhN5Vy9",
+          "title": "Strait of Hormuz: US warns ship firms could face sanctions if paying Iran tolls",
+          "domain": "t.co",
+          "image": "https://pbs.twimg.com/card_img/2050576423459385344/UxPAyUb3?format=jpg&name=small"
+        }
+      ],
+      "urlEntities": [
+        {
+          "url": "https://t.co/U2GqhN5Vy9",
+          "expandedUrl": "https://t.co/U2GqhN5Vy9",
+          "displayUrl": "t.co"
+        }
+      ],
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views",
+    "metadata.linkPreviews",
+    "metadata.urlEntities"
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "publishedAtMs": 1777377600000,
+    "payload": {
+      "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+      "host": "chipkin.substack.com",
+      "slug": "civilization-module-4-knowledge-wealth",
+      "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+      "rawTitle": "CONJECTURE INSTITUTE\nAPR 28\nCivilization, Module 4: Knowledge, Wealth, and Institutions\nThe battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.\nCONJECTURE INSTITUTE∙7 MIN READ",
+      "publicationName": "Conjecture Institute",
+      "author": "Conjecture Institute",
+      "authorDisplayName": "Conjecture Institute",
+      "authorUsername": "chipkin",
+      "summary": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+      "text": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+      "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+      "timestampLabel": "APR 28",
+      "publishedAtMs": 1777377600000,
+      "readingMeta": "7 min read",
+      "discoverySurface": "inbox",
+      "mediaUrls": [
+        "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png"
+      ],
+      "imageUrl": "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png",
+      "visibleText": "CONJECTURE INSTITUTE\nAPR 28\nCivilization, Module 4: Knowledge, Wealth, and Institutions\nThe battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.\nCONJECTURE INSTITUTE∙7 MIN READ",
+      "extractedAtMs": 1777724969494,
+      "fetchedAtMs": 1777724969494,
+      "expiresAtMs": 1777940969494,
+      "cacheRunId": "cache-refresh-substack-1777724763099"
+    },
+    "fetchedAtMs": 1777724969494,
+    "expiresAtMs": 1777940969494,
+    "seenByCurationAtMs": 1777681200695
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-0d8b1327a8",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "text": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!u15g!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F119a26fa-70f7-4a44-ba27-6661cbfb2812_556x556.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "publication": null,
+        "visibleDate": "APR 28",
+        "image": "https://substackcdn.com/image/fetch/$s_!u15g!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F119a26fa-70f7-4a44-ba27-6661cbfb2812_556x556.png"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Civilization, Module 4: Knowledge, Wealth, and Institutions",
+    "url": "https://chipkin.substack.com/p/civilization-module-4-knowledge-wealth",
+    "excerpt": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "text": "The battle of civilizations can be thought of as an arms race in the most general sense, where knowledge and wealth are the most potent weapons one may obtain.",
+    "authorUsername": "chipkin",
+    "authorDisplayName": "Conjecture Institute",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!uvgQ!,w_20,h_20,c_fill,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F00d0c1cc-9dd3-4a6c-8381-243cc6f28f2f_556x556.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls",
+    "metadata.article"
+  ]
+}

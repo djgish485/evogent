@@ -1,0 +1,159 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "1ySBxK7viNs",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "1ySBxK7viNs",
+    "url": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+    "title": "Sam Altman in conversation with Patrick Collison",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "publishedAtMs": 1777521191092,
+    "payload": {
+      "videoId": "1ySBxK7viNs",
+      "canonicalUrl": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+      "url": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+      "title": "Sam Altman in conversation with Patrick Collison",
+      "channelName": "Stripe",
+      "channelUrl": "https://www.youtube.com/@stripe",
+      "channelHandle": "@stripe",
+      "channel": {
+        "name": "Stripe",
+        "url": "https://www.youtube.com/@stripe",
+        "handle": "@stripe"
+      },
+      "publishLabel": "4 hours ago",
+      "publishDateText": "4 hours ago",
+      "thumbnailUrl": null,
+      "duration": "58:20",
+      "viewCount": 4100,
+      "viewCountLabel": "4.1K views",
+      "sourceKind": "home",
+      "discoverySurfaces": [
+        "home"
+      ],
+      "firstSeenPass": 1,
+      "captureRunId": "cache-refresh-youtube-1777535283253",
+      "captureNotes": []
+    },
+    "fetchedAtMs": 1777535591092,
+    "expiresAtMs": 1778399591092,
+    "seenByCurationAtMs": 1777548614503
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-5124f6c42b",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "1ySBxK7viNs",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T03:53:11.092Z"
+  },
+  "historicalFeedRow": {
+    "title": "Sam Altman in conversation with Patrick Collison",
+    "url": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+    "excerpt": "Stripe video.",
+    "text": "Sam Altman in conversation with Patrick Collison",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/1ySBxK7viNs/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+        "title": "Sam Altman in conversation with Patrick Collison",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/1ySBxK7viNs/hqdefault.jpg",
+        "videoId": "1ySBxK7viNs"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "1ySBxK7viNs",
+        "canonicalUrl": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+        "title": "Sam Altman in conversation with Patrick Collison",
+        "channelName": "Stripe",
+        "channelHandle": "@stripe",
+        "channelUrl": "https://www.youtube.com/@stripe",
+        "thumbnailUrl": "https://i.ytimg.com/vi/1ySBxK7viNs/hqdefault.jpg",
+        "publishDate": null,
+        "publishDateText": "4 hours ago",
+        "duration": "58:20",
+        "viewCountText": "4.1K views",
+        "url": "https://www.youtube.com/watch?v=1ySBxK7viNs"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Sam Altman in conversation with Patrick Collison",
+    "url": "https://www.youtube.com/watch?v=1ySBxK7viNs",
+    "excerpt": "Sam Altman in conversation with Patrick Collison",
+    "text": "Sam Altman in conversation with Patrick Collison",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

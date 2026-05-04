@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "kX5YWH4CEB4",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "kX5YWH4CEB4",
+    "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+    "title": "Why Birds Are The Only Surviving Dinosaurs",
+    "authorUsername": "@NewScientist",
+    "authorDisplayName": "New Scientist",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "kX5YWH4CEB4",
+      "canonicalUrl": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+      "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+      "title": "Why Birds Are The Only Surviving Dinosaurs",
+      "channelName": "New Scientist",
+      "channelUrl": "https://www.youtube.com/@NewScientist",
+      "channelHandle": "@NewScientist",
+      "channel": {
+        "name": "New Scientist",
+        "url": "https://www.youtube.com/@NewScientist",
+        "handle": "@NewScientist"
+      },
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "thumbnailUrl": null,
+      "duration": "58:36",
+      "viewCount": 72000,
+      "viewCountLabel": "72K views",
+      "sourceKind": "home",
+      "fetchKind": "home",
+      "fetchContexts": [
+        "home"
+      ],
+      "captureNotes": [],
+      "capturedAt": "2026-05-01T00:44:58.978Z"
+    },
+    "fetchedAtMs": 1777596298978,
+    "expiresAtMs": 1778460298978,
+    "seenByCurationAtMs": 1777509385192
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-9b14643df2",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "kX5YWH4CEB4",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T17:39:57.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Why Birds Are The Only Surviving Dinosaurs",
+    "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+    "excerpt": null,
+    "text": "New Scientist: Why Birds Are The Only Surviving Dinosaurs",
+    "authorUsername": "NewScientist",
+    "authorDisplayName": "New Scientist",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/kX5YWH4CEB4/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAOhhI56povgRHDPdRzwn8hfpgzIQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+        "title": "Why Birds Are The Only Surviving Dinosaurs",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/kX5YWH4CEB4/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAOhhI56povgRHDPdRzwn8hfpgzIQ",
+        "videoId": "kX5YWH4CEB4"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "kX5YWH4CEB4",
+        "canonicalUrl": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+        "title": "Why Birds Are The Only Surviving Dinosaurs",
+        "channelName": "New Scientist",
+        "channelHandle": "NewScientist",
+        "thumbnailUrl": "https://i.ytimg.com/vi/kX5YWH4CEB4/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAOhhI56povgRHDPdRzwn8hfpgzIQ",
+        "publishDate": "2026-04-29T17:39:57.000Z",
+        "publishDateText": "2026-04-29T17:39:57.000Z",
+        "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Why Birds Are The Only Surviving Dinosaurs",
+    "url": "https://www.youtube.com/watch?v=kX5YWH4CEB4",
+    "excerpt": "Why Birds Are The Only Surviving Dinosaurs",
+    "text": "Why Birds Are The Only Surviving Dinosaurs",
+    "authorUsername": "@NewScientist",
+    "authorDisplayName": "New Scientist",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

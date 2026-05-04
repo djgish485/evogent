@@ -1,0 +1,218 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050567053963083870",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050567053963083870",
+    "url": "https://x.com/Dan_Jeffries1/status/2050567053963083870",
+    "title": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merg",
+    "authorUsername": "Dan_Jeffries1",
+    "authorDisplayName": "Daniel Jeffries",
+    "publishedAtMs": 1777728258000,
+    "payload": {
+      "tweetId": "2050567053963083870",
+      "sourceId": "2050567053963083870",
+      "authorUsername": "Dan_Jeffries1",
+      "authorDisplayName": "Daniel Jeffries",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1907351559689650176/xPWyoi5m_200x200.jpg",
+      "text": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merger would have led to fewer flights and higher fares.\" Now we have a bankrupt Spirit Airlines and NO flights for those people. She vowed",
+      "visibleText": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merger would have led to fewer flights and higher fares.\" Now we have a bankrupt Spirit Airlines and NO flights for those people. She vowed",
+      "url": "https://x.com/Dan_Jeffries1/status/2050567053963083870",
+      "publishedAt": "2026-05-02T13:24:18.000Z",
+      "likes": 15,
+      "reposts": 6,
+      "replies": 3,
+      "viewCount": 3,
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HHUQou7XoAETPDw?format=jpg&name=360x360",
+        "https://pbs.twimg.com/media/HHUQrRLWIAAzwwz?format=jpg&name=small",
+        "https://abs.twimg.com/emoji/v2/svg/1f9e2.svg",
+        "https://abs.twimg.com/emoji/v2/svg/2b06.svg",
+        "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg",
+        "https://abs.twimg.com/emoji/v2/svg/1f64f.svg"
+      ],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHUQou7XoAETPDw?format=jpg&name=360x360"
+        },
+        {
+          "type": "photo",
+          "url": "https://pbs.twimg.com/media/HHUQrRLWIAAzwwz?format=jpg&name=small"
+        },
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/1f9e2.svg"
+        },
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/2b06.svg"
+        },
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg"
+        },
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/1f64f.svg"
+        }
+      ],
+      "quotedTweet": {
+        "authorUsername": "AndrewYang",
+        "authorDisplayName": "Andrew Yang",
+        "text": "I’m going to miss Spirit Airlines. They weren’t fancy, but they were cheap and sometimes the only way to get someplace you needed to go. x.com/spiritairlines…"
+      },
+      "inReplyToUsername": null,
+      "inReplyToStatusId": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "source": "timeline",
+        "quotedTweet": {
+          "authorUsername": "AndrewYang",
+          "authorDisplayName": "Andrew Yang",
+          "text": "I’m going to miss Spirit Airlines. They weren’t fancy, but they were cheap and sometimes the only way to get someplace you needed to go. x.com/spiritairlines…"
+        },
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": "none",
+        "requestedHandle": null,
+        "authoredByRequestedAccount": null,
+        "visibleReplyBanner": false
+      },
+      "textCapture": {
+        "textSource": "timeline_card",
+        "collapsedCardDetected": false,
+        "statusPageAttempted": false,
+        "statusPageRecovered": false,
+        "diagnostic": null
+      },
+      "source": "twitter",
+      "sourceSurface": "following",
+      "fetchedBy": "cache-refresh",
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777732863134"
+    },
+    "fetchedAtMs": 1777733123283,
+    "expiresAtMs": 1777949123283,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-7fef817a56",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050567053963083870",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T13:24:18.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merger would have led to fewer flights and h",
+    "url": "https://x.com/Dan_Jeffries1/status/2050567053963083870",
+    "excerpt": null,
+    "text": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merger would have led to fewer flights and higher fares.\" Now we have a bankrupt Spirit Airlines and NO flights for those people. She vowed",
+    "authorUsername": "Dan_Jeffries1",
+    "authorDisplayName": "Daniel Jeffries",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1907351559689650176/xPWyoi5m_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHUQou7XoAETPDw?format=jpg&name=360x360",
+      "https://pbs.twimg.com/media/HHUQrRLWIAAzwwz?format=jpg&name=small",
+      "https://abs.twimg.com/emoji/v2/svg/1f9e2.svg",
+      "https://abs.twimg.com/emoji/v2/svg/2b06.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f64f.svg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merg",
+    "url": "https://x.com/Dan_Jeffries1/status/2050567053963083870",
+    "excerpt": null,
+    "text": "Thanks to Elizabeth Warren, who is now two for two for American consumers! She vowed to block the sales of Spirit Airlines because the \"merger would have led to fewer flights and higher fares.\" Now we have a bankrupt Spirit Airlines and NO flights for those people. She vowed",
+    "authorUsername": "Dan_Jeffries1",
+    "authorDisplayName": "Daniel Jeffries",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1907351559689650176/xPWyoi5m_200x200.jpg",
+    "mediaUrls": [
+      "https://pbs.twimg.com/media/HHUQou7XoAETPDw?format=jpg&name=360x360",
+      "https://pbs.twimg.com/media/HHUQrRLWIAAzwwz?format=jpg&name=small",
+      "https://abs.twimg.com/emoji/v2/svg/1f9e2.svg",
+      "https://abs.twimg.com/emoji/v2/svg/2b06.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f64f.svg"
+    ],
+    "metrics": {
+      "likes": 15,
+      "reposts": 6,
+      "replies": 3,
+      "views": 3
+    },
+    "metadata": {
+      "quotedTweet": {
+        "text": "I’m going to miss Spirit Airlines. They weren’t fancy, but they were cheap and sometimes the only way to get someplace you needed to go. x.com/spiritairlines…",
+        "author": {
+          "username": "AndrewYang",
+          "displayName": "Andrew Yang"
+        }
+      },
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views",
+    "metadata.quotedTweet"
+  ]
+}

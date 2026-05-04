@@ -1,0 +1,128 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.noahpinion.blog/updated-thoughts-on-industrial-policy",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.noahpinion.blog/updated-thoughts-on-industrial-policy",
+    "url": "https://www.noahpinion.blog/p/updated-thoughts-on-industrial-policy",
+    "title": "Updated thoughts on industrial policy",
+    "authorUsername": "noahpinion.blog",
+    "authorDisplayName": "NOAH SMITH",
+    "publishedAtMs": null,
+    "payload": {
+      "url": "https://www.noahpinion.blog/p/updated-thoughts-on-industrial-policy",
+      "title": "Updated thoughts on industrial policy",
+      "publication": "NOAHPINION\nAPR 20\nUpdated thoughts on industrial policy\nEconomic consensus is changing, but it has a long way to go.\nNOAH SMITH∙12 MIN READ",
+      "publicationHost": "www.noahpinion.blog",
+      "authorUsername": "noahpinion.blog",
+      "authorDisplayName": "NOAH SMITH",
+      "publishedAtText": "APR 20",
+      "excerpt": "Economic consensus is changing, but it has a long way to go.",
+      "footer": "NOAH SMITH∙12 MIN READ",
+      "rawLines": [
+        "NOAHPINION",
+        "APR 20",
+        "Updated thoughts on industrial policy",
+        "Economic consensus is changing, but it has a long way to go.",
+        "NOAH SMITH∙12 MIN READ"
+      ],
+      "surface": "browser_inbox"
+    },
+    "fetchedAtMs": 1777279597823,
+    "expiresAtMs": 1777495597823,
+    "seenByCurationAtMs": 1777373832373
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-68f6a66d7e",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.noahpinion.blog/updated-thoughts-on-industrial-policy",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-20T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Updated thoughts on industrial policyEconomic consensus is changing, but it has a long way to go.Noah Smith",
+    "url": "https://www.noahpinion.blog/p/updated-thoughts-on-industrial-policy",
+    "excerpt": null,
+    "text": "Updated thoughts on industrial policyEconomic consensus is changing, but it has a long way to go.Noah Smith",
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Updated thoughts on industrial policy",
+    "url": "https://www.noahpinion.blog/p/updated-thoughts-on-industrial-policy",
+    "excerpt": "Economic consensus is changing, but it has a long way to go.",
+    "text": "",
+    "authorUsername": "noahpinion.blog",
+    "authorDisplayName": "NOAH SMITH",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName"
+  ]
+}

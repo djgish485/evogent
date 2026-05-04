@@ -1,0 +1,154 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "uoEffocWP4A",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "uoEffocWP4A",
+    "url": "https://www.youtube.com/watch?v=uoEffocWP4A",
+    "title": "What Happens If You Zoom All The Way Out?",
+    "authorUsername": "@HistoryoftheUniverse",
+    "authorDisplayName": "History of the Universe",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "uoEffocWP4A",
+      "canonicalUrl": "https://www.youtube.com/watch?v=uoEffocWP4A",
+      "title": "What Happens If You Zoom All The Way Out?",
+      "channelName": "History of the Universe",
+      "channelUrl": "https://www.youtube.com/@HistoryoftheUniverse",
+      "channelHandle": "@HistoryoftheUniverse",
+      "channel": {
+        "name": "History of the Universe",
+        "url": "https://www.youtube.com/@HistoryoftheUniverse",
+        "handle": "@HistoryoftheUniverse"
+      },
+      "publishLabel": "20 hours ago",
+      "publishDateText": "20 hours ago",
+      "thumbnailUrl": null,
+      "duration": "56:42",
+      "viewCount": 98000,
+      "viewCountLabel": "98K views",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "source": "youtube",
+      "sourceId": "uoEffocWP4A",
+      "url": "https://www.youtube.com/watch?v=uoEffocWP4A",
+      "capturePath": "data/tmp/youtube-home-cache-refresh-youtube-1777653662513.capture",
+      "captureRunId": "cache-refresh-youtube-1777653662513"
+    },
+    "fetchedAtMs": 1777653862902,
+    "expiresAtMs": 1778517862902,
+    "seenByCurationAtMs": 1777647566579
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-9e3106e88d",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "uoEffocWP4A",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-30T20:55:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "What Happens If You Zoom All The Way Out?",
+    "url": "https://www.youtube.com/watch?v=uoEffocWP4A",
+    "excerpt": "What Happens If You Zoom All The Way Out?",
+    "text": "What Happens If You Zoom All The Way Out?",
+    "authorUsername": "@HistoryoftheUniverse",
+    "authorDisplayName": "History of the Universe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/uoEffocWP4A/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLA1sslAm0R8ZNrCml470Kuac07zaQ"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=uoEffocWP4A",
+        "title": "What Happens If You Zoom All The Way Out?",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/uoEffocWP4A/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLA1sslAm0R8ZNrCml470Kuac07zaQ",
+        "videoId": "uoEffocWP4A"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "uoEffocWP4A",
+        "canonicalUrl": "https://www.youtube.com/watch?v=uoEffocWP4A",
+        "title": "What Happens If You Zoom All The Way Out?",
+        "channelName": "History of the Universe",
+        "channelHandle": "@HistoryoftheUniverse",
+        "thumbnailUrl": "https://i.ytimg.com/vi/uoEffocWP4A/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLA1sslAm0R8ZNrCml470Kuac07zaQ",
+        "publishDate": "2026-04-30T20:55:00.000Z",
+        "publishDateText": "18 hours ago",
+        "url": "https://www.youtube.com/watch?v=uoEffocWP4A"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "What Happens If You Zoom All The Way Out?",
+    "url": "https://www.youtube.com/watch?v=uoEffocWP4A",
+    "excerpt": "What Happens If You Zoom All The Way Out?",
+    "text": "What Happens If You Zoom All The Way Out?",
+    "authorUsername": "@HistoryoftheUniverse",
+    "authorDisplayName": "History of the Universe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "Zxg38eUL5IY",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "Zxg38eUL5IY",
+    "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+    "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+    "authorUsername": "@scientificamerican",
+    "authorDisplayName": "Scientific American",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "Zxg38eUL5IY",
+      "canonicalUrl": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+      "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+      "channelName": "Scientific American",
+      "channelUrl": "https://www.youtube.com/@scientificamerican",
+      "channelHandle": "@scientificamerican",
+      "channel": {
+        "name": "Scientific American",
+        "url": "https://www.youtube.com/@scientificamerican",
+        "handle": "@scientificamerican"
+      },
+      "publishLabel": "9 hours ago",
+      "publishDateText": "9 hours ago",
+      "thumbnailUrl": null,
+      "duration": "20:08",
+      "viewCount": 1100,
+      "viewCountLabel": "1.1K views",
+      "sourceKind": "home",
+      "rawTextLines": [
+        "20:08",
+        "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+        "Scientific American",
+        "1.1K views",
+        "•",
+        "9 hours ago"
+      ],
+      "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+      "source": "youtube",
+      "sourceId": "Zxg38eUL5IY",
+      "sourceKinds": [
+        "home"
+      ],
+      "cacheRefreshTaskId": "cache-refresh-youtube-1777623966027"
+    },
+    "fetchedAtMs": 1777624241839,
+    "expiresAtMs": 1778488241839,
+    "seenByCurationAtMs": 1777658903314
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-e9f395c379",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "Zxg38eUL5IY",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T09:08:23.191Z"
+  },
+  "historicalFeedRow": {
+    "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+    "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+    "excerpt": "Scientific American · 9 hours ago",
+    "text": "Scientific American’s current interview item ties Venter’s career to AI, longevity, and the next phase of genomics. The cached row lacked a thumbnail, so the standard YouTube thumbnail URL is preserved here.",
+    "authorUsername": "@scientificamerican",
+    "authorDisplayName": "Scientific American",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/Zxg38eUL5IY/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+        "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/Zxg38eUL5IY/hqdefault.jpg",
+        "videoId": "Zxg38eUL5IY"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "Zxg38eUL5IY",
+        "canonicalUrl": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+        "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+        "channelName": "Scientific American",
+        "channelHandle": "@scientificamerican",
+        "thumbnailUrl": "https://i.ytimg.com/vi/Zxg38eUL5IY/hqdefault.jpg",
+        "publishDateText": "9 hours ago",
+        "viewCount": 1100,
+        "duration": "20:08",
+        "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+    "url": "https://www.youtube.com/watch?v=Zxg38eUL5IY",
+    "excerpt": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+    "text": "He changed genomics forever. He told us about that, AI, Trump, and immortality, just before he died",
+    "authorUsername": "@scientificamerican",
+    "authorDisplayName": "Scientific American",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

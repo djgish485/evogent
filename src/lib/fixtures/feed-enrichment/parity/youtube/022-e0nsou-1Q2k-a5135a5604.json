@@ -1,0 +1,157 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "e0nsou-1Q2k",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "e0nsou-1Q2k",
+    "url": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+    "title": "Prediction Markets Are a Scam (With a Chart)",
+    "authorUsername": "@PBoyle",
+    "authorDisplayName": "Patrick Boyle",
+    "publishedAtMs": 1776541790820,
+    "payload": {
+      "videoId": "e0nsou-1Q2k",
+      "canonicalUrl": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+      "title": "Prediction Markets Are a Scam (With a Chart)",
+      "channelName": "Patrick Boyle",
+      "channelUrl": "https://www.youtube.com/@PBoyle",
+      "channelHandle": "@PBoyle",
+      "channel": {
+        "name": "Patrick Boyle",
+        "url": "https://www.youtube.com/@PBoyle",
+        "handle": "@PBoyle"
+      },
+      "publishLabel": "3 days ago",
+      "publishDateText": "3 days ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/e0nsou-1Q2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqYD5px0S9hU9xxfjLD0sa0E_jfw",
+      "duration": "31:01",
+      "sourceKind": "home",
+      "firstSeenPass": 3,
+      "seenIn": [
+        "home"
+      ],
+      "captureNotes": [],
+      "source": "youtube",
+      "fetchedAtMs": 1776800990815,
+      "expiresAtMs": 1778010590815,
+      "publishDate": "2026-04-18T19:49:50.820Z"
+    },
+    "fetchedAtMs": 1776800990815,
+    "expiresAtMs": 1778010590815,
+    "seenByCurationAtMs": 1777593113500
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-3be3d8d035",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "e0nsou-1Q2k",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-18T19:49:50.820Z"
+  },
+  "historicalFeedRow": {
+    "title": "Prediction Markets Are a Scam (With a Chart)",
+    "url": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+    "excerpt": "Prediction Markets Are a Scam (With a Chart)",
+    "text": "31:01\nPrediction Markets Are a Scam (With a Chart)\nPatrick Boyle",
+    "authorUsername": "@PBoyle",
+    "authorDisplayName": "Patrick Boyle",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/e0nsou-1Q2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqYD5px0S9hU9xxfjLD0sa0E_jfw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+        "title": "Prediction Markets Are a Scam (With a Chart)",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/e0nsou-1Q2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqYD5px0S9hU9xxfjLD0sa0E_jfw",
+        "videoId": "e0nsou-1Q2k"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "e0nsou-1Q2k",
+        "canonicalUrl": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+        "title": "Prediction Markets Are a Scam (With a Chart)",
+        "channelName": "Patrick Boyle",
+        "channelHandle": "@PBoyle",
+        "thumbnailUrl": "https://i.ytimg.com/vi/e0nsou-1Q2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqYD5px0S9hU9xxfjLD0sa0E_jfw",
+        "publishDateText": "3 days ago",
+        "url": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+        "publishDate": "2026-04-18T19:49:50.820Z"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Prediction Markets Are a Scam (With a Chart)",
+    "url": "https://www.youtube.com/watch?v=e0nsou-1Q2k",
+    "excerpt": "Prediction Markets Are a Scam (With a Chart)",
+    "text": "Prediction Markets Are a Scam (With a Chart)",
+    "authorUsername": "@PBoyle",
+    "authorDisplayName": "Patrick Boyle",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/e0nsou-1Q2k/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLAqYD5px0S9hU9xxfjLD0sa0E_jfw"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

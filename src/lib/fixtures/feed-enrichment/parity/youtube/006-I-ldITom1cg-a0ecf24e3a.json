@@ -1,0 +1,158 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "I-ldITom1cg",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "I-ldITom1cg",
+    "url": "https://www.youtube.com/watch?v=I-ldITom1cg",
+    "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "publishedAtMs": null,
+    "payload": {
+      "videoId": "I-ldITom1cg",
+      "canonicalUrl": "https://www.youtube.com/watch?v=I-ldITom1cg",
+      "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+      "channelName": "Stripe",
+      "channelUrl": "https://www.youtube.com/@stripe",
+      "channelHandle": "@stripe",
+      "channel": {
+        "name": "Stripe",
+        "url": "https://www.youtube.com/@stripe",
+        "handle": "@stripe"
+      },
+      "publishLabel": "13 hours ago",
+      "publishDateText": "13 hours ago",
+      "thumbnailUrl": "https://i.ytimg.com/vi/I-ldITom1cg/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZ17SxcXV1dtOgLcpFNpZDt9uQ4w",
+      "duration": "55:59",
+      "viewCount": 4500,
+      "viewCountLabel": "4.5K views",
+      "sourceKind": "home",
+      "firstSeenPass": 1,
+      "source": "youtube",
+      "sourceId": "I-ldITom1cg",
+      "url": "https://www.youtube.com/watch?v=I-ldITom1cg",
+      "capturePath": "data/tmp/youtube-home-cache-refresh-youtube-1777653662513.capture",
+      "captureRunId": "cache-refresh-youtube-1777653662513"
+    },
+    "fetchedAtMs": 1777653862902,
+    "expiresAtMs": 1778517862902,
+    "seenByCurationAtMs": 1777658903314
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-df12c92786",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "I-ldITom1cg",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-01T05:08:23.107Z"
+  },
+  "historicalFeedRow": {
+    "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+    "url": "https://www.youtube.com/watch?v=I-ldITom1cg",
+    "excerpt": "Stripe · 13 hours ago",
+    "text": "Stripe’s current Sessions conversation with Nat Friedman, Daniel Gross, and the Collisons is included as a builder-context item around where agent workflows are actually heading.",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/I-ldITom1cg/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZ17SxcXV1dtOgLcpFNpZDt9uQ4w"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=I-ldITom1cg",
+        "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/I-ldITom1cg/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZ17SxcXV1dtOgLcpFNpZDt9uQ4w",
+        "videoId": "I-ldITom1cg"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "I-ldITom1cg",
+        "canonicalUrl": "https://www.youtube.com/watch?v=I-ldITom1cg",
+        "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+        "channelName": "Stripe",
+        "channelHandle": "@stripe",
+        "thumbnailUrl": "https://i.ytimg.com/vi/I-ldITom1cg/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZ17SxcXV1dtOgLcpFNpZDt9uQ4w",
+        "publishDateText": "13 hours ago",
+        "viewCount": 4500,
+        "duration": "55:59",
+        "url": "https://www.youtube.com/watch?v=I-ldITom1cg"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+    "url": "https://www.youtube.com/watch?v=I-ldITom1cg",
+    "excerpt": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+    "text": "Nat Friedman and Daniel Gross in conversation with John and Patrick Collison",
+    "authorUsername": "@stripe",
+    "authorDisplayName": "Stripe",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/I-ldITom1cg/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBZ17SxcXV1dtOgLcpFNpZDt9uQ4w"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

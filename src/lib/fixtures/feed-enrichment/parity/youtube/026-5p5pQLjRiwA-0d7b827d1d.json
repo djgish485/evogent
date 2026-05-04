@@ -1,0 +1,160 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "5p5pQLjRiwA",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "5p5pQLjRiwA",
+    "url": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+    "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "authorUsername": "@telegraph",
+    "authorDisplayName": "The Telegraph",
+    "publishedAtMs": 1777401202576,
+    "payload": {
+      "videoId": "5p5pQLjRiwA",
+      "canonicalUrl": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+      "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+      "channelName": "The Telegraph",
+      "channelUrl": "https://www.youtube.com/@telegraph",
+      "channelHandle": "@telegraph",
+      "channel": {
+        "name": "The Telegraph",
+        "url": "https://www.youtube.com/@telegraph",
+        "handle": "@telegraph"
+      },
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "publishedAtMs": 1777401202576,
+      "thumbnailUrl": null,
+      "duration": "41:24",
+      "sourceKind": "search",
+      "sourceKinds": [
+        "search"
+      ],
+      "searchQuery": "Iran Middle East analysis",
+      "searchQueries": [
+        "Iran Middle East analysis"
+      ],
+      "fetchedBy": "youtube-cache",
+      "taskId": "cache-refresh-youtube-1777486262014"
+    },
+    "fetchedAtMs": 1777487602576,
+    "expiresAtMs": 1778351602576,
+    "seenByCurationAtMs": 1777548614503
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-acb9f96b4c",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "5p5pQLjRiwA",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-28T18:33:22.576Z"
+  },
+  "historicalFeedRow": {
+    "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "url": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+    "excerpt": "The Telegraph video.",
+    "text": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "authorUsername": "@telegraph",
+    "authorDisplayName": "The Telegraph",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/5p5pQLjRiwA/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+        "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/5p5pQLjRiwA/hqdefault.jpg",
+        "videoId": "5p5pQLjRiwA"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "5p5pQLjRiwA",
+        "canonicalUrl": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+        "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+        "channelName": "The Telegraph",
+        "channelHandle": "@telegraph",
+        "channelUrl": "https://www.youtube.com/@telegraph",
+        "thumbnailUrl": "https://i.ytimg.com/vi/5p5pQLjRiwA/hqdefault.jpg",
+        "publishDate": null,
+        "publishDateText": "1 day ago",
+        "duration": "41:24",
+        "viewCountText": null,
+        "url": "https://www.youtube.com/watch?v=5p5pQLjRiwA"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "url": "https://www.youtube.com/watch?v=5p5pQLjRiwA",
+    "excerpt": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "text": "The true cost of America’s hidden missile crisis & why US-Iran talks are deadlocked",
+    "authorUsername": "@telegraph",
+    "authorDisplayName": "The Telegraph",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "mediaUrls",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

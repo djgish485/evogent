@@ -1,0 +1,175 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "2050557093082456324",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "2050557093082456324",
+    "url": "https://x.com/WarMonitor3/status/2050557093082456324",
+    "title": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germa",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "publishedAtMs": 1777725883000,
+    "payload": {
+      "tweetId": "2050557093082456324",
+      "sourceId": "2050557093082456324",
+      "authorUsername": "WarMonitor3",
+      "authorDisplayName": "WarMonitor",
+      "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_200x200.jpg",
+      "text": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germany.",
+      "visibleText": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germany.",
+      "url": "https://x.com/WarMonitor3/status/2050557093082456324",
+      "publishedAt": "2026-05-02T12:44:43.000Z",
+      "likes": 902,
+      "reposts": 67,
+      "replies": 75,
+      "viewCount": 75,
+      "mediaUrls": [
+        "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+        "https://abs.twimg.com/emoji/v2/svg/1f1ec-1f1e7.svg"
+      ],
+      "media": [
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg"
+        },
+        {
+          "type": "photo",
+          "url": "https://abs.twimg.com/emoji/v2/svg/1f1ec-1f1e7.svg"
+        }
+      ],
+      "quotedTweet": null,
+      "inReplyToUsername": null,
+      "inReplyToStatusId": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": [],
+      "raw_data": {
+        "source": "timeline",
+        "quotedTweet": null,
+        "linkCard": null,
+        "linkPreviews": [],
+        "urlEntities": []
+      },
+      "replyCapture": {
+        "source": "timeline",
+        "classification": "none",
+        "requestedHandle": null,
+        "authoredByRequestedAccount": null,
+        "visibleReplyBanner": false
+      },
+      "textCapture": {
+        "textSource": "timeline_card",
+        "collapsedCardDetected": false,
+        "statusPageAttempted": false,
+        "statusPageRecovered": false,
+        "diagnostic": null
+      },
+      "source": "twitter",
+      "sourceSurface": "following",
+      "fetchedBy": "cache-refresh",
+      "cacheRefreshTaskId": "cache-refresh-twitter-1777732863134"
+    },
+    "fetchedAtMs": 1777733123283,
+    "expiresAtMs": 1777949123283,
+    "seenByCurationAtMs": 1777733257049
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-0517a9311c",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "2050557093082456324",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-05-02T12:44:43.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germany.",
+    "url": "https://x.com/WarMonitor3/status/2050557093082456324",
+    "excerpt": null,
+    "text": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germany.",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_200x200.jpg",
+    "mediaUrls": [
+      "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f1ec-1f1e7.svg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germa",
+    "url": "https://x.com/WarMonitor3/status/2050557093082456324",
+    "excerpt": null,
+    "text": "German defence minister has called for Europeans to have greater responsibility for their own security amid US troops withdrawals from Germany.",
+    "authorUsername": "WarMonitor3",
+    "authorDisplayName": "WarMonitor",
+    "authorAvatarUrl": "https://pbs.twimg.com/profile_images/1523747009609572352/n4FiuzR7_200x200.jpg",
+    "mediaUrls": [
+      "https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1e6.svg",
+      "https://abs.twimg.com/emoji/v2/svg/1f1ec-1f1e7.svg"
+    ],
+    "metrics": {
+      "likes": 902,
+      "reposts": 67,
+      "replies": 75,
+      "views": 75
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "title",
+    "metrics.likes",
+    "metrics.reposts",
+    "metrics.replies",
+    "metrics.views"
+  ]
+}

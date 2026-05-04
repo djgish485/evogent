@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "www.persuasion.community:blockading-the-blockade-is-not-as",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "www.persuasion.community:blockading-the-blockade-is-not-as",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "publishedAtMs": null,
+    "payload": {
+      "source": "substack",
+      "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+      "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+      "authorUsername": "www.persuasion.community",
+      "authorDisplayName": "Persuasion",
+      "publishedAtMs": null,
+      "excerpt": null,
+      "fetchedAtMs": 1777377036368
+    },
+    "fetchedAtMs": 1777377036368,
+    "expiresAtMs": 1777593036368,
+    "seenByCurationAtMs": 1777625236062
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-8951c376f7",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "www.persuasion.community:blockading-the-blockade-is-not-as",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-17T14:00:51.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "excerpt": "Putting economic pressure on Iran could work, provided it is part of a genuine strategy.",
+    "text": "Putting economic pressure on Iran could work, provided it is part of a genuine strategy.",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Blockading the Blockade Is Not as Insane as It Sounds",
+    "url": "https://www.persuasion.community/p/blockading-the-blockade-is-not-as",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "www.persuasion.community",
+    "authorDisplayName": "Persuasion",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text"
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "i9yXrdQ6noo",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "i9yXrdQ6noo",
+    "url": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+    "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "authorUsername": null,
+    "authorDisplayName": "Nicholas Thompson",
+    "publishedAtMs": 1777455202576,
+    "payload": {
+      "videoId": "i9yXrdQ6noo",
+      "canonicalUrl": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+      "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+      "channelName": "Nicholas Thompson",
+      "channelUrl": null,
+      "channelHandle": null,
+      "channel": {
+        "name": "Nicholas Thompson",
+        "url": null,
+        "handle": null
+      },
+      "publishLabel": "9 hours ago",
+      "publishDateText": "9 hours ago",
+      "publishedAtMs": 1777455202576,
+      "thumbnailUrl": "https://i.ytimg.com/vi/i9yXrdQ6noo/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBL7kf4Q1Vw3RQ66wol_6dBh0_kBg",
+      "duration": "51:33",
+      "sourceKind": "home",
+      "sourceKinds": [
+        "home"
+      ],
+      "searchQuery": null,
+      "searchQueries": [],
+      "fetchedBy": "youtube-cache",
+      "taskId": "cache-refresh-youtube-1777486262014"
+    },
+    "fetchedAtMs": 1777487602576,
+    "expiresAtMs": 1778351602576,
+    "seenByCurationAtMs": 1777477575411
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-18dd1b9020",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "i9yXrdQ6noo",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-29T09:06:20.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "url": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+    "excerpt": null,
+    "text": "Nicholas Thompson: Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "authorUsername": "",
+    "authorDisplayName": "Nicholas Thompson",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/i9yXrdQ6noo/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBL7kf4Q1Vw3RQ66wol_6dBh0_kBg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+        "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+        "domain": "youtube.com",
+        "imageUrl": "https://i.ytimg.com/vi/i9yXrdQ6noo/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBL7kf4Q1Vw3RQ66wol_6dBh0_kBg",
+        "videoId": "i9yXrdQ6noo"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "i9yXrdQ6noo",
+        "canonicalUrl": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+        "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+        "channelName": "Nicholas Thompson",
+        "thumbnailUrl": "https://i.ytimg.com/vi/i9yXrdQ6noo/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBL7kf4Q1Vw3RQ66wol_6dBh0_kBg",
+        "publishDate": "2026-04-29T09:06:20.000Z",
+        "publishDateText": "2026-04-29T09:06:20.000Z",
+        "url": "https://www.youtube.com/watch?v=i9yXrdQ6noo"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "url": "https://www.youtube.com/watch?v=i9yXrdQ6noo",
+    "excerpt": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "text": "Can We Trust AI? Sam Altman Hopes So | The Most Interesting Thing in AI",
+    "authorUsername": null,
+    "authorDisplayName": "Nicholas Thompson",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://i.ytimg.com/vi/i9yXrdQ6noo/hq720.jpg?sqp=-oaymwEnCOgCEMoBSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLBL7kf4Q1Vw3RQ66wol_6dBh0_kBg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "noahpinion-the-moderately-easy-problem-of-consciousness",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "noahpinion-the-moderately-easy-problem-of-consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "title": "The moderately easy problem of consciousness",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "publishedAtMs": 1777283880000,
+    "payload": {
+      "title": "The moderately easy problem of consciousness",
+      "subtitle": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+      "publication": "Noahpinion",
+      "author": "Noah Smith",
+      "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+      "readTime": "14 min read",
+      "publishedDate": "Apr 27"
+    },
+    "fetchedAtMs": 1777287415724,
+    "expiresAtMs": 1777503415724,
+    "seenByCurationAtMs": 1777373832373
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-e98b448a74",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "noahpinion-the-moderately-easy-problem-of-consciousness",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-27T09:58:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "The moderately easy problem of consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "excerpt": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+    "text": "Before deciding if computers are self-aware, let's figure out how humans become self-aware.",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!ucy9!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F58eca23f-c355-486b-805c-f9c03e14ca00_825x413.jpeg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "The moderately easy problem of consciousness",
+    "url": "https://www.noahpinion.blog/p/the-moderately-easy-problem-of-consciousness",
+    "excerpt": null,
+    "text": "",
+    "authorUsername": "noahpinion",
+    "authorDisplayName": "Noah Smith",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "mediaUrls"
+  ]
+}

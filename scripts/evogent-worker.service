@@ -1,0 +1,24 @@
+[Unit]
+Description=Evogent Worker
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__WORKING_DIR__
+Environment=NODE_ENV=production
+Environment=HOME=/root
+Environment=XDG_CONFIG_HOME=/root/.config
+Environment=GH_CONFIG_DIR=/root/.config/gh
+Environment=GIT_TERMINAL_PROMPT=0
+Environment=PORT=3001
+Environment=PATH=__LOCAL_BIN__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/node worker.js
+KillMode=process
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

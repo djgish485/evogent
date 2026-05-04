@@ -1,0 +1,122 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-05-02T15:00:00.000Z",
+  "source": "substack",
+  "sourceId": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+  "generatedFrom": {
+    "feedOutputPath": "data/feed-output.jsonl",
+    "browseCacheTable": "browse_cache_items",
+    "sample": "50 most recent joined root feed/cache pairs per source as of capture time"
+  },
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+    "url": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+    "title": "🚀 FP! Week In Review, Briefly #29",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "PREVIEW",
+    "publishedAtMs": 1776513600000,
+    "payload": {
+      "url": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+      "title": "🚀 FP! Week In Review, Briefly #29",
+      "excerpt": "Also: Key Up Wing and Down Wing news from the previous two weeks that were",
+      "publicationName": "FASTER, PLEASE!",
+      "publicationHost": "fasterplease.substack.com",
+      "author": "PREVIEW",
+      "authorDisplayName": "PREVIEW",
+      "publishedLabel": "APR 18",
+      "publishedAtMs": 1776513600000
+    },
+    "fetchedAtMs": 1777278895096,
+    "expiresAtMs": 1777282495096,
+    "seenByCurationAtMs": 1777130228620
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-49613e5c0b",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2026-04-18T12:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "🚀 FP! Week In Review, Briefly #29",
+    "url": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+    "excerpt": null,
+    "text": "Also: Key Up Wing and Down Wing news from the previous two weeks that were",
+    "authorUsername": "fasterplease.substack.com",
+    "authorDisplayName": "Faster, Please!",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://substackcdn.com/image/fetch/$s_!t0TK!,w_20,h_20,c_fill,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2Fc277b9d8-c7b0-49e7-9e6a-281bb92a4682_500x500.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "🚀 FP! Week In Review, Briefly #29",
+    "url": "https://fasterplease.substack.com/p/fp-week-in-review-briefly-29",
+    "excerpt": "Also: Key Up Wing and Down Wing news from the previous two weeks that were",
+    "text": "",
+    "authorUsername": "fasterplease",
+    "authorDisplayName": "PREVIEW",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "excerpt",
+    "text",
+    "authorUsername",
+    "authorDisplayName",
+    "mediaUrls"
+  ]
+}
