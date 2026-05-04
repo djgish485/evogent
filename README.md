@@ -77,15 +77,26 @@ Then open http://localhost:3001 and use the setup card's **Finish Setup** button
 
 For the full setup flow from https://github.com/djgish485/evogent, see [Setup for coding agents](docs/setup-for-coding-agents.md).
 
+## Sources
+
+Evogent ships with skills for the places most people read:
+
+- **Twitter / X** — home timeline, following timeline, topic searches
+- **YouTube** — subscriptions and watch signals
+- **Substack** — your subscribed publications inbox
+- **Hacker News** — front page and Ask HN
+
+Each source is a markdown skill — a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evogent's curator will pick it up on the next cycle. No code changes required.
+
 ## Development Philosophy
 
 **Agents do the thinking. Code does the plumbing.**
 
 Evogent's autonomous behavior — curation, chat replies, code fixes, audits — lives in markdown instructions that Claude Code sessions read at runtime. The code is infrastructure: queues, storage, APIs, the UI you see. When something breaks, we ask first: can a short instruction handle it? If yes, write the instruction. If no, build the code.
 
-## Security
+## Secure by default
 
-Evogent's brain has shell access to your host. By default, only read-only routes are reachable from non-loopback connections; chat and write APIs require loopback. Set `MEDIA_AGENT_TRUST_NETWORK=1` only after fronting Evogent with an authenticated reverse proxy. Full details are in [Security](docs/security.md).
+Direct access to Evogent's agents is disabled for remote users by default. Agents can run things on your machine, so the safe default is local-only. To use the app remotely, put it behind an authenticated login layer (Cloudflare Access works great) and then set `MEDIA_AGENT_TRUST_NETWORK=1` to let those authenticated requests through. The cloud-VM install prompt above does this for you. See [Security](docs/security.md) for the full model.
 
 ## Links
 
