@@ -6,9 +6,9 @@
 
 Evogent is an AI curation agent that browses your social media for you and shows you what *you* want to see, not what the algorithm wants you to see.
 
-## Works with your subscriptions
+## Use your subscriptions
 
-Evogent runs through the Claude Code or Codex CLI you already use, so your Claude Pro or ChatGPT Plus subscription powers everything — curation, chat, code fixes, audits. API keys still work if you prefer; you just don't need any to get started.
+Evogent runs through the Claude Code or Codex CLI, so your Claude Pro or ChatGPT Plus subscription powers everything. API keys also work if you prefer.
 
 ## Install With A Coding Agent
 
@@ -44,16 +44,16 @@ On the VM, install Evogent from https://github.com/djgish485/evogent following d
 
 ## Cloud Coding Agent
 
-Evogent also works as a cloud coding agent — like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere.
+Evogent also works as a cloud coding agent, like Twitter for your repo. Install it on a small VM, open it on your phone or any browser, and drive Claude Code or Codex at any repo from anywhere.
 
 ```text
 Install Evogent in coding-agent-only mode on a small VM I can drive from my phone, gated by my email through Cloudflare Access.
 
-I have ready: a cloud provider account (Hetzner, DigitalOcean, Fly, etc.), a domain managed by Cloudflare with Zero Trust enabled, the hostname I want for Evogent (ask me), the email I want allowed through Access (ask me), and either Claude Code or Codex CLI authenticated on this local machine — install and authenticate the same one on the VM.
+I have ready: a cloud provider account (Hetzner, DigitalOcean, Fly, etc.), a domain managed by Cloudflare with Zero Trust enabled, the hostname I want for Evogent (ask me), the email I want allowed through Access (ask me), and either Claude Code or Codex CLI authenticated on this local machine; install and authenticate the same one on the VM.
 
 Provision a small Ubuntu VM, set up a Cloudflare tunnel routing my chosen hostname to the app at localhost:3001, and create a Cloudflare Access self-hosted application restricting access to my email. Lock the VM down so the only public reachable surface is the tunnel.
 
-On the VM, install Evogent from https://github.com/djgish485/evogent in minimum-install mode — just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated. Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely. Follow docs/setup-for-coding-agents.md but stop after the minimum install runs.
+On the VM, install Evogent from https://github.com/djgish485/evogent in minimum-install mode: just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated. Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely. Follow docs/setup-for-coding-agents.md but stop after the minimum install runs.
 
 When done, open the UI, create a chat session pointed at the repo I want to drive, and report the final hostname.
 ```
@@ -79,30 +79,16 @@ For the full setup flow from https://github.com/djgish485/evogent, see [Setup fo
 
 Evogent ships with skills for the places most people read:
 
-- **Twitter / X** — home timeline, following timeline, topic searches
-- **YouTube** — subscriptions and watch signals
-- **Substack** — your subscribed publications inbox
-- **Hacker News** — front page and Ask HN
+- **Twitter / X**: home timeline, following timeline, topic searches
+- **YouTube**: subscriptions and watch signals
+- **Substack**: your subscribed publications inbox
+- **Hacker News**: front page and Ask HN
 
-Each source is a markdown skill — a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evogent's curator will pick it up on the next cycle. No code changes required.
+Each source is a markdown skill: a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evogent's curator will pick it up on the next cycle. No code changes required.
 
 ## Development Philosophy
 
-This system runs full Claude Code sessions for every task — curation, chat, reflection, enrichment, dev agents. These are autonomous agents with tool use, file access, web search, browser, and full codebase reasoning. They don't need hand-holding.
-
-**1. Trust the agent runtime.** Before building custom code for any capability, ask: can the agent do this with a general instruction? Build product code for infrastructure (queues, storage, APIs, UI, WebSocket broadcast, dedup) — not for agent decision-making. A 10-line instruction in a skill file beats a 779-line orchestrator that tries to think for the agent.
-
-**2. General direction over prescriptive recipes.** Give agents problems and constraints, not step-by-step solutions. Describe what's broken and why it matters. Let the Claude Code session investigate the codebase and figure out the implementation.
-
-**3. General-purpose mechanisms over one-off fixes.** When something breaks, don't patch the symptom — ask what system should have prevented it. If a subsystem has 3+ narrow fixes, the real problem is a missing general capability. Build the capability, not another patch.
-
-**4. Strengthen diagnosis, not agent-specific patches.** If an agent hits something unexpected and works around it instead of investigating, the fix is not a custom patch for that case — it's better diagnostic instruction. These sessions can read code, query SQLite, inspect payloads, and reason through mismatches. When dispatching a fix for a bug an agent encountered, ask: what general detection capability would have caught this? Build that capability, and the specific bug should fall out as a side effect.
-
-**5. Prefer completion over time-boxing.** If work is still making real progress, prefer a longer-running task to a killed task. Use short deadlines for probes, liveness checks, and other operational safeguards, but raise or remove execution caps that terminate productive agent work without protecting correctness.
-
-**6. Render the same data the same way everywhere — suppress only what's actually duplicated.** When a component's behavior changes based on a context flag ('am I inside X?', 'am I in detail view?', 'was I given permission to render this?'), ask whether the flag is expressing a real duplication you can detect structurally (e.g., `parentId` is in the current render scope) or a blanket assumption that will drop useful content in common cases. Prefer the structural check; delete the flag where possible. A blanket flag-gated suppression is an invisible regression waiting to happen — every new place the component is rendered silently inherits the suppression.
-
-The practical test for any change: Am I writing code that does something only infrastructure can do (persist data, route messages, serve UI), or am I writing code that duplicates what a Claude Code session can already reason through or should be instructed to investigate before falling back? If it's the latter, write an instruction instead.
+This app is powered by extremely flexible and strong coding agents, so use their full capabilities. Coding agent instructions are preferred over brittle deterministic code whenever possible. This keeps the system flexible and able to correct any errors and problems that arise. Regular audits are performed by the agents to *evolve* and improve the app over time.
 
 ## Secure by default
 
