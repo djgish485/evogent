@@ -6,9 +6,9 @@
 
 Evogent is an AI curation agent that browses your social media for you and shows you what *you* want to see, not what the algorithm wants you to see.
 
-## No API Keys
+## Works with your subscriptions
 
-Evogent runs on the Claude Code or Codex CLI you already have authenticated. Your existing Claude Pro or ChatGPT Plus subscription powers curation, chat, code fixes, audits — everything. No API keys to provision, no per-token billing.
+Evogent runs through the Claude Code or Codex CLI you already use, so your Claude Pro or ChatGPT Plus subscription powers everything — curation, chat, code fixes, audits. API keys still work if you prefer; you just don't need any to get started.
 
 ## Install With A Coding Agent
 
