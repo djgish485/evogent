@@ -654,8 +654,10 @@ describe('ArticleCard', () => {
       title: 'Devin for Terminal',
       text: 'Devin for Terminal',
       excerpt: 'Devin for Terminal',
-      url: 'https://devin.ai/terminal',
-      metadata: null,
+      url: 'https://news.ycombinator.com/item?id=47897953',
+      metadata: {
+        canonicalUrl: 'https://devin.ai/terminal',
+      } as FeedItem['metadata'],
     });
 
     const markup = renderToStaticMarkup(createElement(ArticleCard, {

@@ -490,6 +490,19 @@ export function resolveSourceOpenLabel(source: string | null | undefined): strin
   }
 }
 
+function resolvePrimaryLinkUrl(
+  item: Pick<FeedItem, 'source' | 'url' | 'metadata'>,
+): string | null {
+  const sourceKey = normalizeSourceKey(item.source);
+  const canonical = readMetadataString(item.metadata, 'canonicalUrl')?.trim();
+  const itemUrl = item.url?.trim() ?? '';
+  if (sourceKey === 'hackernews' && canonical && canonical !== itemUrl) {
+    return canonical;
+  }
+
+  return item.url ?? null;
+}
+
 export function resolveSecondarySourceLink(
   item: Pick<FeedItem, 'source' | 'sourceId' | 'url' | 'metadata'>,
 ): { href: string; label: string } | null {
@@ -498,7 +511,8 @@ export function resolveSecondarySourceLink(
   }
 
   const hnUrl = resolveHackerNewsDiscussionUrl(item);
-  if (!hnUrl || hnUrl === item.url) {
+  const primaryUrl = resolvePrimaryLinkUrl(item)?.trim();
+  if (!hnUrl || !primaryUrl || hnUrl === primaryUrl) {
     return null;
   }
 
@@ -2896,7 +2910,7 @@ export function ArticleCard({
     : getTruncationState(body, expanded, MAIN_TEXT_TRUNCATION);
   const bodySearchQuery = usesSearchSnippet || !useSearchSnippet ? searchQuery : null;
   const isProminent = isProminentFeedItem(item);
-  const linkUrl = youtubeVideo?.canonicalUrl ?? item.url;
+  const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
     ? 'Watch live'
     : youtubeVideo?.liveStatus === 'upcoming'
@@ -3853,6 +3867,16 @@ export function ContentCard({
     const routeId = encodeURIComponent(resolvePostRouteId(feedItem));
     router.push(`/post/${routeId}`);
   }, [onOpenDetail, router]);
+  const openFeedItemPrimaryAction = useCallback((feedItem: FeedItem) => {
+    const primaryUrl = resolvePrimaryLinkUrl(feedItem);
+    const itemUrl = feedItem.url?.trim() ?? '';
+    if (isHackerNewsFeedItem(feedItem) && primaryUrl && primaryUrl.trim() !== itemUrl) {
+      window.open(primaryUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    openFeedItemDetail(feedItem);
+  }, [openFeedItemDetail]);
   const handleQuoteTweetClick = useCallback(async (quote: QuoteTweet) => {
     const quoteIdentifier = quote.id?.trim() || quote.url?.trim() || null;
     const fallbackUrl = quote.url?.trim() || (quote.id?.trim() ? `https://x.com/i/web/status/${quote.id.trim()}` : null);
@@ -3988,14 +4012,14 @@ export function ContentCard({
       className={`${cardClass} ${isCardInteractive ? 'cursor-pointer' : ''}`}
       onClick={() => {
         if (isCardInteractive && shouldOpenDetail()) {
-          openFeedItemDetail(item);
+          openFeedItemPrimaryAction(item);
         }
       }}
       onKeyDown={(event) => {
         if (!isCardInteractive) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          openFeedItemDetail(item);
+          openFeedItemPrimaryAction(item);
         }
       }}
     >
