@@ -3719,6 +3719,7 @@ export function ContentCard({
       return;
     }
 
+    setShowReasonInput('thumbsup');
     void handleVote('thumbsup');
   }, [handleVote, isLiked]);
 
