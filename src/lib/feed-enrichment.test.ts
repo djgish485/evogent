@@ -8,7 +8,6 @@ import { getDb } from './db/client';
 import { getFeedItemById, insertOrIgnoreFeedItem } from './db/feed';
 import {
   applyCachedItemEnrichment,
-  applyCachedTweetEnrichment,
   feedEnrichmentConverters,
   itemIsStillIncomplete,
   queueBatchEnrichment,
@@ -171,7 +170,7 @@ describe('cached tweet enrichment reconciliation', () => {
     });
     const blankAvatar = insertTweet('tweet-avatar-1', { authorAvatarUrl: null });
 
-    const patched = applyCachedTweetEnrichment(blankAvatar);
+    const patched = applyCachedItemEnrichment(blankAvatar);
     assert.equal(patched?.authorAvatarUrl, 'https://pbs.twimg.com/profile_images/cache-avatar.jpg');
 
     cacheTweet('tweet-avatar-2', {
@@ -181,7 +180,7 @@ describe('cached tweet enrichment reconciliation', () => {
       authorAvatarUrl: 'https://pbs.twimg.com/profile_images/existing-avatar.jpg',
     });
 
-    const unchanged = applyCachedTweetEnrichment(existingAvatar);
+    const unchanged = applyCachedItemEnrichment(existingAvatar);
     assert.equal(unchanged?.authorAvatarUrl, 'https://pbs.twimg.com/profile_images/existing-avatar.jpg');
   });
 
@@ -234,7 +233,7 @@ describe('cached tweet enrichment reconciliation', () => {
       },
     });
 
-    const patched = applyCachedTweetEnrichment(item);
+    const patched = applyCachedItemEnrichment(item);
     assert.equal(patched?.title, 'Cached title');
     assert.equal(patched?.url, 'https://x.com/author/status/tweet-rich-1');
     assert.equal(patched?.authorUsername, 'author');
@@ -269,7 +268,7 @@ describe('cached tweet enrichment reconciliation', () => {
       sourceId: '2046943557345550711', authorUsername: 'vlada_mc', authorDisplayName: null, authorAvatarUrl: null, metadata: { directBrowse: true },
     });
 
-    const patched = applyCachedTweetEnrichment('tw-2046943557345550711');
+    const patched = applyCachedItemEnrichment('tw-2046943557345550711');
     assert.equal(patched?.authorAvatarUrl, 'https://pbs.twimg.com/profile_images/new.jpg');
     assert.equal(patched?.authorDisplayName, 'Vladimir Milosevic');
     assert.equal(patched ? itemIsStillIncomplete(patched) : true, false);
@@ -307,7 +306,7 @@ describe('cached tweet enrichment reconciliation', () => {
     });
 
     assert.equal(itemIsStillIncomplete(item), true);
-    const patched = applyCachedTweetEnrichment('66f4db51-8722-4ad3-8c48-102aaa318b9e');
+    const patched = applyCachedItemEnrichment('66f4db51-8722-4ad3-8c48-102aaa318b9e');
 
     assert.equal(patched?.metadata?.bridge, 'keep me');
     assert.equal(patched?.metadata?.linkCard?.url, 'https://github.com/openclaw/clawsweeper');
@@ -390,7 +389,7 @@ describe('cached tweet enrichment reconciliation', () => {
     });
 
     assert.equal(itemIsStillIncomplete(item), true);
-    const patched = applyCachedTweetEnrichment(item);
+    const patched = applyCachedItemEnrichment(item);
 
     assert.equal(patched?.metadata?.media?.length, 1);
     assert.equal(patched?.metadata?.media?.[0]?.alt, 'Siemens SGT5-8000H gas turbine in assembly');
@@ -446,7 +445,7 @@ describe('cached tweet enrichment reconciliation', () => {
     });
 
     assert.equal(itemIsStillIncomplete(item), true);
-    const patched = applyCachedTweetEnrichment(item);
+    const patched = applyCachedItemEnrichment(item);
 
     assert.deepEqual(patched?.metadata?.communityNote, {
       text: 'Main tweet Readers added context.',
@@ -508,7 +507,7 @@ describe('cached tweet enrichment reconciliation', () => {
       publishedAt: '2026-04-25T09:04:00.000Z',
     });
 
-    const patched = applyCachedTweetEnrichment(item);
+    const patched = applyCachedItemEnrichment(item);
     assert.equal(patched?.authorAvatarUrl, 'https://pbs.twimg.com/profile_images/author-only.jpg');
     assert.equal(patched?.authorDisplayName, 'Vladimir Milosevic');
     assert.equal(patched?.title, null);
@@ -536,20 +535,20 @@ describe('cached tweet enrichment reconciliation', () => {
       authorDisplayName: 'Vladimir Milosevic',
       authorAvatarUrl: null,
     });
-    assert.equal(applyCachedTweetEnrichment(missingUsername)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(missingUsername)?.authorAvatarUrl, null);
 
     const mismatchedUsername = insertTweet('mismatched-username-target', {
       authorUsername: 'vlada_mc',
       authorDisplayName: 'Vladimir Milosevic',
       authorAvatarUrl: null,
     });
-    assert.equal(applyCachedTweetEnrichment(expired)?.authorAvatarUrl, null);
-    assert.equal(applyCachedTweetEnrichment(mismatchedUsername)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(expired)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(mismatchedUsername)?.authorAvatarUrl, null);
   });
 
   test('cache miss, malformed payload, non-twitter, and child tweet cases are no-ops', () => {
     const cacheMiss = insertTweet('tweet-cache-miss', { authorAvatarUrl: null });
-    assert.equal(applyCachedTweetEnrichment(cacheMiss)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(cacheMiss)?.authorAvatarUrl, null);
 
     getDb().prepare(`
       INSERT INTO browse_cache_items (
@@ -561,7 +560,7 @@ describe('cached tweet enrichment reconciliation', () => {
       ) VALUES (?, ?, ?, ?, ?)
     `).run('twitter', 'tweet-malformed', '{', Date.now(), Date.now() + 60_000);
     const malformed = insertTweet('tweet-malformed', { authorAvatarUrl: null });
-    assert.equal(applyCachedTweetEnrichment(malformed)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(malformed)?.authorAvatarUrl, null);
 
     cacheTweet('tweet-non-twitter', {
       authorAvatarUrl: 'https://pbs.twimg.com/profile_images/non-twitter.jpg',
@@ -570,7 +569,7 @@ describe('cached tweet enrichment reconciliation', () => {
       source: 'youtube',
       authorAvatarUrl: null,
     });
-    assert.equal(applyCachedTweetEnrichment(nonTwitter)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(nonTwitter)?.authorAvatarUrl, null);
 
     cacheTweet('tweet-child', {
       authorAvatarUrl: 'https://pbs.twimg.com/profile_images/child.jpg',
@@ -583,7 +582,7 @@ describe('cached tweet enrichment reconciliation', () => {
       relationship: 'child',
       authorAvatarUrl: null,
     });
-    assert.equal(applyCachedTweetEnrichment(child)?.authorAvatarUrl, null);
+    assert.equal(applyCachedItemEnrichment(child)?.authorAvatarUrl, null);
   });
 
   test('cache reconciliation can make a tweet complete for automatic enrichment checks', () => {
@@ -602,7 +601,7 @@ describe('cached tweet enrichment reconciliation', () => {
     });
 
     assert.equal(itemIsStillIncomplete(item), true);
-    const patched = applyCachedTweetEnrichment(item);
+    const patched = applyCachedItemEnrichment(item);
     assert.equal(patched ? itemIsStillIncomplete(patched) : true, false);
   });
 

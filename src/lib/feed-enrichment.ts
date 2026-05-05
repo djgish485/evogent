@@ -1448,10 +1448,6 @@ export function applyCachedItemEnrichment(
   return getFeedItemById(updated.id) ?? updated;
 }
 
-export function applyCachedTweetEnrichment(input: FeedItem | string): FeedItem | null {
-  return applyCachedItemEnrichment(input);
-}
-
 export async function queueFeedItemEnrichment(
   input: FeedItem | string,
   options: QueueFeedItemEnrichmentOptions = {},

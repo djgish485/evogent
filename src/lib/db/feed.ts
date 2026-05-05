@@ -2551,8 +2551,6 @@ export function listTopLevelItemsWithIncompleteEnrichment(limit = 30): FeedItem[
   return rows.map(rowToFeedItem);
 }
 
-export const listTopLevelTweetsWithIncompleteEnrichment = listTopLevelItemsWithIncompleteEnrichment;
-
 export function getFeedItemByTaskId(taskId: string): FeedItem | null {
   const trimmedTaskId = taskId.trim();
   if (!trimmedTaskId) {
