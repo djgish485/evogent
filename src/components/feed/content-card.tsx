@@ -177,8 +177,8 @@ export function shouldRenderContentCardParentTweetPreview(
 
 const TEXT_CHAR_LIMIT_MAIN = 280;
 const TEXT_LINE_LIMIT_MAIN = 6;
-const TEXT_CHAR_LIMIT_CHILD = 200;
-const TEXT_LINE_LIMIT_CHILD = 4;
+const TEXT_CHAR_LIMIT_CHILD = 140;
+const TEXT_LINE_LIMIT_CHILD = 3;
 const MAIN_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_MAIN, lineLimit: TEXT_LINE_LIMIT_MAIN } as const;
 const CHILD_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_CHILD, lineLimit: TEXT_LINE_LIMIT_CHILD } as const;
 const EXPAND_LABEL = 'More';
