@@ -16,6 +16,12 @@ Include content that explains, tests, or sharpens an idea: mechanism, causality,
 
 Skip content that is mostly vibe, outrage, tribal signaling, propaganda, snark, link-dropping, event transcription, celebrity churn, generic tutorials, shallow explainers, or easy-to-vary claims.
 
+Thread fit decides which thread an already-qualified item attaches to; it does not qualify the item past this gate. Low Hacker News engagement (score under 10 with zero or near-zero comments soon after submission) is a strong negative signal - do not invent override fields like `lowScoreHnOverride` to ship a sub-threshold item just because it matches a thread topic. If the cleanest thread cannot be filled with items that clear the gate on their own merits, ship a smaller thread or drop it. Curator metadata fields are not extension points for bypassing the gate.
+
+Vendor-owned promotional pages - pages whose primary purpose is to advertise the vendor's own product, service, or feature rather than make a falsifiable claim, report on something, or analyze something - fail this gate as link-dropping, regardless of how cleanly they fit a current thread. Use judgment per page; a vendor's research/postmortem/methodology post is fine, a vendor's marketing landing page is not.
+
+The bridge / reason field for any included item must reference at least one specific claim, mechanism, finding, number, or named actor from the linked content, not just thread membership. Generic bridges like "X becomes an operating question" are a tell that the curator did not actually read the linked content; treat that as a quality-gate fail and drop the item.
+
 For analysis posts, make a concrete claim, clearly mark uncertainty, and end with `## Sources` or `## References`.
 
 ## Analysis Style Preferences
