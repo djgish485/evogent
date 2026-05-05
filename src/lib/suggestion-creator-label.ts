@@ -50,12 +50,12 @@ export function resolveSuggestionSourceCreatorLabel(source: unknown): string | n
     case 'chat':
       return 'Chat';
     case 'evogent':
-      return 'Evogent';
+      return 'Evo';
     default:
       if (legacyAgentSources.has(normalizedSource)) {
-        return 'Evogent';
+        return 'Evo';
       }
-      return titleCaseSource(normalizedSource) || 'Evogent';
+      return titleCaseSource(normalizedSource) || 'Evo';
   }
 }
 

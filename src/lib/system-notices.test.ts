@@ -17,7 +17,7 @@ function buildFeedItem(overrides: Partial<FeedItem> = {}): FeedItem {
     url: null,
     excerpt: null,
     authorUsername: 'evogent',
-    authorDisplayName: 'Evogent',
+    authorDisplayName: 'Evo',
     reason: null,
     tags: ['reflection', 'meta'],
     mediaUrls: [],

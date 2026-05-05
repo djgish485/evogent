@@ -2131,7 +2131,7 @@ function ChildAnalysisPreview({
   onToggleExpand: () => void;
   searchQuery?: string | null;
 }) {
-  const analysisAuthorDisplayName = item.authorDisplayName?.trim() || agentName.trim() || 'Evogent';
+  const analysisAuthorDisplayName = item.authorDisplayName?.trim() || agentName.trim() || 'Evo';
   const sourceProfile = resolveAgentSourceProfile(analysisAuthorDisplayName);
   const timestamp = item.publishedAt ? formatRelativeTime(item.publishedAt) : null;
   const title = item.title?.trim() || null;
@@ -3217,7 +3217,7 @@ export function resolveAnalysisAuthorDisplayName(
   item: Pick<FeedItem, 'authorDisplayName'>,
   agentName: string,
 ): string {
-  return item.authorDisplayName?.trim() || agentName.trim() || 'Evogent';
+  return item.authorDisplayName?.trim() || agentName.trim() || 'Evo';
 }
 
 export function resolveAnalysisByline(
@@ -3234,7 +3234,7 @@ export function resolveAnalysisByline(
 
 function AnalysisCard({
   item,
-  agentName = 'Evogent',
+  agentName = 'Evo',
   childPreviews,
   detail = false,
   isLiked,
