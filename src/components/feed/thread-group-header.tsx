@@ -1,5 +1,6 @@
 'use client';
 
+import type { KeyboardEvent, SyntheticEvent } from 'react';
 import { ThreadFeedbackControl, type ThreadFeedbackVote } from '@/components/feed/thread-feedback-control';
 import type { ThreadTint } from '@/lib/thread-colors';
 import type { FeedbackProbeMetadata, FeedProminence } from '@/types/feed';
@@ -14,6 +15,9 @@ interface ThreadGroupHeaderProps {
   sourceItemIds?: string[];
   continuing: boolean;
   threadTint: ThreadTint;
+  isCollapsed: boolean;
+  contentsId: string;
+  onToggleCollapsed: () => void;
   onSubmitFeedback: (input: {
     threadId: string;
     cycleId: string;
@@ -35,6 +39,9 @@ export function ThreadGroupHeader({
   sourceItemIds = [],
   continuing,
   threadTint,
+  isCollapsed,
+  contentsId,
+  onToggleCollapsed,
   onSubmitFeedback,
 }: ThreadGroupHeaderProps) {
   const titleClassName = threadProminence?.level === 'lead'
@@ -42,10 +49,25 @@ export function ThreadGroupHeader({
     : threadProminence?.level === 'prominent'
       ? 'text-lg font-semibold leading-tight text-zinc-50 sm:text-xl'
       : 'text-base font-semibold text-zinc-100 sm:text-lg';
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    event.preventDefault();
+    onToggleCollapsed();
+  };
+  const stopFeedbackPropagation = (event: SyntheticEvent) => {
+    event.stopPropagation();
+  };
 
   return (
     <header
-      className="rounded-t-2xl border border-transparent p-4 sm:p-5"
+      role="button"
+      tabIndex={0}
+      aria-expanded={!isCollapsed}
+      aria-controls={contentsId}
+      onClick={onToggleCollapsed}
+      onKeyDown={handleKeyDown}
+      className="cursor-pointer rounded-t-2xl border border-transparent p-4 outline-none transition focus-visible:ring-2 focus-visible:ring-zinc-400/60 sm:p-5"
       style={{
         background: `linear-gradient(to bottom, ${threadTint.bg}, transparent) padding-box, linear-gradient(to bottom, ${threadTint.border}, transparent) border-box`,
       }}
@@ -62,14 +84,16 @@ export function ThreadGroupHeader({
             <span className="text-xs text-zinc-400">Continuing from earlier</span>
           ) : null}
         </div>
-        <ThreadFeedbackControl
-          threadId={threadId}
-          cycleId={cycleId}
-          threadTitle={threadTitle}
-          feedbackProbe={feedbackProbe}
-          sourceItemIds={sourceItemIds}
-          onSubmit={onSubmitFeedback}
-        />
+        <div onClick={stopFeedbackPropagation} onKeyDown={stopFeedbackPropagation}>
+          <ThreadFeedbackControl
+            threadId={threadId}
+            cycleId={cycleId}
+            threadTitle={threadTitle}
+            feedbackProbe={feedbackProbe}
+            sourceItemIds={sourceItemIds}
+            onSubmit={onSubmitFeedback}
+          />
+        </div>
       </div>
       <div className="mt-2 space-y-1">
         <h2 className={titleClassName} data-prominence={threadProminence?.level}>{threadTitle}</h2>

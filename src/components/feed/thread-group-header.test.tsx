@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { JSDOM } from 'jsdom';
+import { AppRouterContext, type AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
+import type { FeedItem } from '@/types/feed';
+import { ThreadGroup } from './thread-group';
 import { ThreadGroupHeader } from './thread-group-header';
 
 const threadTint = {
@@ -14,22 +19,207 @@ const threadTint = {
   text: '#93c5fd',
 };
 
+type HeaderProps = Parameters<typeof ThreadGroupHeader>[0];
+
+const defaultHeaderProps: HeaderProps = {
+  threadId: 'thread-1',
+  cycleId: 'cycle-1',
+  threadTitle: 'Ordinary thread',
+  threadRationale: null,
+  threadProminence: null,
+  continuing: false,
+  threadTint,
+  isCollapsed: false,
+  contentsId: 'thread-contents',
+  onToggleCollapsed: () => {},
+  onSubmitFeedback: async () => {},
+};
+
+function renderHeaderMarkup(overrides: Partial<HeaderProps> = {}): string {
+  return renderToStaticMarkup(createElement(ThreadGroupHeader, {
+    ...defaultHeaderProps,
+    ...overrides,
+  }));
+}
+
+type TestGlobal = typeof globalThis & {
+  IS_REACT_ACT_ENVIRONMENT?: boolean;
+};
+
+const reactActGlobal = globalThis as TestGlobal;
+reactActGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+function createFeedItem(id: string, title: string, type: FeedItem['type'] = 'article'): FeedItem {
+  return {
+    id,
+    type,
+    source: type === 'analysis' ? 'evogent' : 'web',
+    sourceId: id,
+    parentId: null,
+    relationship: type === 'analysis' ? 'analysis' : 'related',
+    title,
+    text: `${title} body text`,
+    url: null,
+    excerpt: `${title} excerpt`,
+    authorUsername: null,
+    authorDisplayName: null,
+    reason: null,
+    tags: [],
+    mediaUrls: [],
+    metrics: { likes: 0, reposts: 0, replies: 0 },
+    authorAvatarUrl: null,
+    isLiked: false,
+    isDisliked: false,
+    parentItem: null,
+    children: [],
+    childrenCount: 0,
+    suggestionChildren: [],
+    analysisPresentation: null,
+    metadata: {
+      thread: {
+        threadId: 'thread-1',
+        threadTitle: 'Collapsible thread',
+        color: 'blue',
+      },
+    },
+    publishedAt: '2026-04-01T00:00:00.000Z',
+    createdAt: '2026-04-01T00:00:00.000Z',
+  };
+}
+
+function createTestRouter(): AppRouterInstance {
+  return {
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+  };
+}
+
+function installDom() {
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+    url: 'http://localhost/',
+  });
+  const previous = {
+    document: globalThis.document,
+    window: globalThis.window,
+    navigator: globalThis.navigator,
+    HTMLElement: globalThis.HTMLElement,
+    SVGElement: globalThis.SVGElement,
+    Node: globalThis.Node,
+    Event: globalThis.Event,
+    MouseEvent: globalThis.MouseEvent,
+    KeyboardEvent: globalThis.KeyboardEvent,
+  };
+
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: dom.window.document });
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.window.navigator });
+  Object.defineProperty(globalThis, 'HTMLElement', { configurable: true, value: dom.window.HTMLElement });
+  Object.defineProperty(globalThis, 'SVGElement', { configurable: true, value: dom.window.SVGElement });
+  Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
+  Object.defineProperty(globalThis, 'Event', { configurable: true, value: dom.window.Event });
+  Object.defineProperty(globalThis, 'MouseEvent', { configurable: true, value: dom.window.MouseEvent });
+  Object.defineProperty(globalThis, 'KeyboardEvent', { configurable: true, value: dom.window.KeyboardEvent });
+
+  return () => {
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: previous.document });
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: previous.window });
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: previous.navigator });
+    Object.defineProperty(globalThis, 'HTMLElement', { configurable: true, value: previous.HTMLElement });
+    Object.defineProperty(globalThis, 'SVGElement', { configurable: true, value: previous.SVGElement });
+    Object.defineProperty(globalThis, 'Node', { configurable: true, value: previous.Node });
+    Object.defineProperty(globalThis, 'Event', { configurable: true, value: previous.Event });
+    Object.defineProperty(globalThis, 'MouseEvent', { configurable: true, value: previous.MouseEvent });
+    Object.defineProperty(globalThis, 'KeyboardEvent', { configurable: true, value: previous.KeyboardEvent });
+  };
+}
+
+async function renderThreadGroupForInteraction() {
+  const restoreDom = installDom();
+  const container = document.getElementById('root');
+  assert.ok(container);
+
+  const feedbackSubmissions: Array<{ vote: 'up' | 'down' }> = [];
+  const root = createRoot(container);
+
+  await act(async () => {
+    root.render(
+      <AppRouterContext.Provider value={createTestRouter()}>
+        <ThreadGroup
+          threadId="thread-1"
+          cycleId="cycle-1"
+          threadTitle="Collapsible thread"
+          threadRationale="A short reason for this thread."
+          threadProminence={{ level: 'prominent' }}
+          continuing={false}
+          analysisItems={[createFeedItem('analysis-1', 'Analysis item one', 'analysis')]}
+          items={[
+            createFeedItem('item-1', 'Regular item one'),
+            createFeedItem('item-2', 'Regular item two'),
+          ]}
+          agentName="Evogent"
+          onChat={() => {}}
+          onOpenDetail={() => {}}
+          onSubmitFeedback={async (input) => {
+            feedbackSubmissions.push({ vote: input.vote });
+          }}
+        />
+      </AppRouterContext.Provider>,
+    );
+  });
+
+  return {
+    container,
+    feedbackSubmissions,
+    async cleanup() {
+      await act(async () => {
+        root.unmount();
+      });
+      restoreDom();
+    },
+  };
+}
+
+function clickElement(element: Element) {
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+}
+
+function keyDownElement(element: Element, key: string) {
+  element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}
+
+function getHeader(container: Element): HTMLElement {
+  const header = container.querySelector<HTMLElement>('header[role="button"]');
+  assert.ok(header);
+  return header;
+}
+
+function getButton(container: Element, selector: string): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>(selector);
+  assert.ok(button);
+  return button;
+}
+
+function getButtonByText(container: Element, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    .find((candidate) => candidate.textContent?.trim() === text);
+  assert.ok(button);
+  return button;
+}
+
 describe('ThreadGroupHeader', () => {
   test('renders lead thread prominence with stronger title typography', () => {
-    const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
-      threadId: 'thread-1',
-      cycleId: 'cycle-1',
+    const markup = renderHeaderMarkup({
       threadTitle: 'Major homepage event',
-      threadRationale: null,
       threadProminence: {
         level: 'lead',
         source: 'homepage',
         evidence: 'Largest headline on the homepage.',
       },
-      continuing: false,
-      threadTint,
-      onSubmitFeedback: async () => {},
-    }));
+    });
 
     assert.match(markup, /data-prominence="lead"/);
     assert.match(markup, /text-\[22px\] font-semibold leading-tight text-zinc-50 sm:text-\[28px\]/);
@@ -38,16 +228,9 @@ describe('ThreadGroupHeader', () => {
   });
 
   test('keeps ordinary thread titles at the normal size', () => {
-    const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
-      threadId: 'thread-1',
-      cycleId: 'cycle-1',
+    const markup = renderHeaderMarkup({
       threadTitle: 'Ordinary thread',
-      threadRationale: null,
-      threadProminence: null,
-      continuing: false,
-      threadTint,
-      onSubmitFeedback: async () => {},
-    }));
+    });
 
     assert.doesNotMatch(markup, /data-prominence=/);
     assert.match(markup, /text-base font-semibold text-zinc-100 sm:text-lg/);
@@ -57,18 +240,17 @@ describe('ThreadGroupHeader', () => {
   });
 
   test('lets thread title and rationale sit below the feedback row at full width', () => {
-    const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
-      threadId: 'thread-1',
-      cycleId: 'cycle-1',
+    const markup = renderHeaderMarkup({
       threadTitle: 'Long ordinary thread title',
       threadRationale: 'This rationale should use the natural card width instead of a capped text column.',
-      threadProminence: null,
       continuing: true,
-      threadTint,
-      onSubmitFeedback: async () => {},
-    }));
+    });
 
-    assert.match(markup, /class="rounded-t-2xl border border-transparent p-4 sm:p-5"/);
+    assert.match(markup, /role="button"/);
+    assert.match(markup, /tabindex="0"/);
+    assert.match(markup, /aria-expanded="true"/);
+    assert.match(markup, /aria-controls="thread-contents"/);
+    assert.match(markup, /class="cursor-pointer rounded-t-2xl border border-transparent p-4 outline-none/);
     assert.match(markup, /class="flex flex-row items-start justify-between gap-3 sm:gap-4"/);
     assert.match(markup, /Continuing from earlier/);
     assert.match(markup, /<div class="mt-2 space-y-1"><h2/);
@@ -77,12 +259,8 @@ describe('ThreadGroupHeader', () => {
   });
 
   test('renders large A/B controls for feedback probe threads', () => {
-    const markup = renderToStaticMarkup(createElement(ThreadGroupHeader, {
-      threadId: 'thread-1',
-      cycleId: 'cycle-1',
+    const markup = renderHeaderMarkup({
       threadTitle: 'Borderline but good thread',
-      threadRationale: null,
-      threadProminence: null,
       feedbackProbe: {
         reason: 'High quality but uncertain lane fit.',
         uncertainty: 'source fatigue',
@@ -92,15 +270,108 @@ describe('ThreadGroupHeader', () => {
         },
       },
       sourceItemIds: ['item-1', 'item-2'],
-      continuing: false,
-      threadTint,
-      onSubmitFeedback: async () => {},
-    }));
+    });
 
     assert.match(markup, /Tune this lane/);
     assert.match(markup, /Keep pushing/);
     assert.match(markup, /Stop pushing/);
     assert.match(markup, /min-h-12/);
     assert.doesNotMatch(markup, /Optional reason/);
+  });
+
+  test('clicking the thread header toggles collapsed content with the hidden count', async () => {
+    const rendered = await renderThreadGroupForInteraction();
+
+    try {
+      const header = getHeader(rendered.container);
+      assert.equal(header.getAttribute('aria-expanded'), 'true');
+      assert.match(rendered.container.textContent ?? '', /Analysis item one/);
+      assert.match(rendered.container.textContent ?? '', /Regular item one/);
+
+      await act(async () => {
+        clickElement(header);
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'false');
+      assert.match(rendered.container.textContent ?? '', /3 items hidden - tap to expand/);
+      assert.doesNotMatch(rendered.container.textContent ?? '', /Analysis item one/);
+      assert.doesNotMatch(rendered.container.textContent ?? '', /Regular item one/);
+
+      await act(async () => {
+        clickElement(header);
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'true');
+      assert.doesNotMatch(rendered.container.textContent ?? '', /items hidden/);
+      assert.match(rendered.container.textContent ?? '', /Regular item two/);
+    } finally {
+      await rendered.cleanup();
+    }
+  });
+
+  test('feedback buttons submit without toggling the current collapsed state', async () => {
+    const rendered = await renderThreadGroupForInteraction();
+
+    try {
+      const header = getHeader(rendered.container);
+      const thumbsUp = getButton(rendered.container, 'button[aria-label="Thumbs up thread"]');
+
+      await act(async () => {
+        clickElement(thumbsUp);
+      });
+      await act(async () => {
+        clickElement(getButtonByText(rendered.container, 'Save'));
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'true');
+      assert.doesNotMatch(rendered.container.textContent ?? '', /items hidden/);
+      assert.deepEqual(rendered.feedbackSubmissions, [{ vote: 'up' }]);
+
+      await act(async () => {
+        clickElement(header);
+      });
+      assert.equal(header.getAttribute('aria-expanded'), 'false');
+
+      const thumbsDown = getButton(rendered.container, 'button[aria-label="Thumbs down thread"]');
+      await act(async () => {
+        clickElement(thumbsDown);
+      });
+      await act(async () => {
+        clickElement(getButtonByText(rendered.container, 'Save'));
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'false');
+      assert.match(rendered.container.textContent ?? '', /3 items hidden - tap to expand/);
+      assert.deepEqual(rendered.feedbackSubmissions, [{ vote: 'up' }, { vote: 'down' }]);
+    } finally {
+      await rendered.cleanup();
+    }
+  });
+
+  test('Enter and Space on the focused header toggle the collapsed state', async () => {
+    const rendered = await renderThreadGroupForInteraction();
+
+    try {
+      const header = getHeader(rendered.container);
+      header.focus();
+      assert.equal(document.activeElement, header);
+
+      await act(async () => {
+        keyDownElement(header, 'Enter');
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'false');
+      assert.match(rendered.container.textContent ?? '', /3 items hidden - tap to expand/);
+
+      await act(async () => {
+        keyDownElement(header, ' ');
+      });
+
+      assert.equal(header.getAttribute('aria-expanded'), 'true');
+      assert.doesNotMatch(rendered.container.textContent ?? '', /items hidden/);
+      assert.match(rendered.container.textContent ?? '', /Regular item one/);
+    } finally {
+      await rendered.cleanup();
+    }
   });
 });
