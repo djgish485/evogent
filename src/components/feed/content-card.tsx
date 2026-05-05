@@ -185,6 +185,7 @@ const EXPAND_LABEL = 'More';
 const COLLAPSE_LABEL = 'Less';
 const CHILD_ANALYSIS_EXPAND_LABEL = 'Read full article';
 const CHILD_ANALYSIS_COLLAPSE_LABEL = 'Collapse article';
+const EMBEDDED_CHILD_PREVIEW_TEXT_LIMIT = 100;
 const CHILD_ANALYSIS_BODY_CLASS_NAME = 'max-w-none text-[15px] leading-[1.55] text-zinc-200 [&_p]:my-3 [&_p]:text-[15px] [&_p]:leading-[1.55] [&_ul]:my-3 [&_ol]:my-3 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_li]:text-[15px] [&_li]:leading-[1.55] [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:text-zinc-100 [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-4 [&_blockquote]:text-zinc-300 [&_blockquote_p]:my-3 [&_blockquote_p]:text-[15px] [&_blockquote_p]:leading-[1.55] [&_h1]:mt-6 [&_h1]:text-[22px] [&_h1]:font-bold [&_h1]:leading-tight [&_h2]:mt-5 [&_h2]:text-[19px] [&_h2]:font-semibold [&_h2]:leading-tight [&_h3]:mt-4 [&_h3]:text-[17px] [&_h3]:font-semibold [&_h3]:leading-tight [&_h4]:mt-3 [&_h4]:text-[15px] [&_h4]:font-semibold [&_h4]:leading-tight [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0';
 
 interface SourceAvatarProfile {
@@ -590,6 +591,52 @@ function getTruncationState(
       charLimit,
       lineLimit,
     }),
+  };
+}
+
+function isLikelyEmbeddedChildAnalysisPreview(item: ChildPreview): boolean {
+  const text = item.text.trimEnd();
+  return item.type === 'analysis'
+    && text.length >= EMBEDDED_CHILD_PREVIEW_TEXT_LIMIT
+    && text.endsWith('...');
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
+async function fetchFullChildAnalysisPreview(
+  item: ChildPreview,
+  signal?: AbortSignal,
+): Promise<ChildPreview | null> {
+  const response = await fetch(`/api/feed/${encodeURIComponent(item.id)}`, {
+    cache: 'no-store',
+    signal,
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json() as { item?: Partial<FeedItem> | null };
+  const fullItem = payload.item;
+
+  if (!fullItem || fullItem.type !== 'analysis' || typeof fullItem.text !== 'string') {
+    return null;
+  }
+
+  return {
+    ...item,
+    title: fullItem.title ?? item.title,
+    text: fullItem.text,
+    source: fullItem.source ?? item.source,
+    authorUsername: fullItem.authorUsername ?? item.authorUsername,
+    authorDisplayName: fullItem.authorDisplayName ?? item.authorDisplayName,
+    authorAvatarUrl: fullItem.authorAvatarUrl ?? item.authorAvatarUrl,
+    publishedAt: fullItem.publishedAt ?? item.publishedAt,
   };
 }
 
@@ -2130,23 +2177,97 @@ function ChildAnalysisPreview({
   onToggleExpand: () => void;
   searchQuery?: string | null;
 }) {
-  const analysisAuthorDisplayName = item.authorDisplayName?.trim() || agentName.trim() || 'Evogent';
+  const [hydratedChildAnalysis, setHydratedChildAnalysis] = useState<ChildPreview | null>(null);
+  const hydratedItem = hydratedChildAnalysis?.id === item.id ? hydratedChildAnalysis : null;
+  const displayItem = hydratedItem ?? item;
+  const hasEmbeddedPreviewText = isLikelyEmbeddedChildAnalysisPreview(item);
+  const analysisAuthorDisplayName = displayItem.authorDisplayName?.trim() || agentName.trim() || 'Evogent';
   const sourceProfile = resolveAgentSourceProfile(analysisAuthorDisplayName);
-  const timestamp = item.publishedAt ? formatRelativeTime(item.publishedAt) : null;
-  const title = item.title?.trim() || null;
-  const searchSnippet = searchQuery ? buildSearchSnippet(item.text, searchQuery, 180, { prefer: 'last' }) : null;
+  const timestamp = displayItem.publishedAt ? formatRelativeTime(displayItem.publishedAt) : null;
+  const title = displayItem.title?.trim() || null;
+  const searchSnippet = searchQuery ? buildSearchSnippet(displayItem.text, searchQuery, 180, { prefer: 'last' }) : null;
   const usesSearchSnippet = searchSnippet?.hasMatch === true;
-  const { needsTruncation, displayText } = usesSearchSnippet
+  const truncationState = usesSearchSnippet
     ? { needsTruncation: false, displayText: searchSnippet.text }
-    : getTruncationState(item.text, expanded, CHILD_TEXT_TRUNCATION);
+    : getTruncationState(displayItem.text, expanded, CHILD_TEXT_TRUNCATION);
+  const needsTruncation = truncationState.needsTruncation
+    || (hasEmbeddedPreviewText && !hydratedItem && !usesSearchSnippet);
+  const displayText = truncationState.displayText;
+
+  useEffect(() => {
+    if (!hasEmbeddedPreviewText) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    void fetchFullChildAnalysisPreview(item, controller.signal)
+      .then((fullItem) => {
+        if (cancelled) return;
+        if (fullItem) {
+          setHydratedChildAnalysis(fullItem);
+          return;
+        }
+
+        setHydratedChildAnalysis((current) => (
+          current?.id === item.id
+            ? current
+            : null
+        ));
+      })
+      .catch((error: unknown) => {
+        if (cancelled || isAbortError(error)) return;
+        setHydratedChildAnalysis((current) => (
+          current?.id === item.id
+            ? current
+            : null
+        ));
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [hasEmbeddedPreviewText, item]);
+
+  const handleToggleAnalysisExpand = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!expanded && hasEmbeddedPreviewText && !hydratedItem) {
+      try {
+        const fullItem = await fetchFullChildAnalysisPreview(item);
+        if (!fullItem) {
+          setHydratedChildAnalysis((current) => (
+            current?.id === item.id
+              ? current
+              : null
+          ));
+          return;
+        }
+
+        setHydratedChildAnalysis(fullItem);
+      } catch {
+        setHydratedChildAnalysis((current) => (
+          current?.id === item.id
+            ? current
+            : null
+        ));
+        return;
+      }
+    }
+
+    onToggleExpand();
+  }, [expanded, hasEmbeddedPreviewText, hydratedItem, item, onToggleExpand]);
 
   return (
-    <div className="flex gap-3 py-1.5 text-sm text-zinc-400">
+    <div className="flex gap-3 overflow-visible py-1.5 text-sm text-zinc-400">
       <div className="flex-shrink-0">
         <SourceInitialAvatar profile={sourceProfile} compact />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-visible">
         <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[14px]">
           <p className="truncate font-semibold text-zinc-100">{sourceProfile.displayName}</p>
           {timestamp && (
@@ -2162,7 +2283,7 @@ function ChildAnalysisPreview({
         ) : null}
 
         {displayText ? (
-          <div className="relative mt-1 select-text touch-auto">
+          <div className="relative mt-1 overflow-visible select-text touch-auto">
             <article className={CHILD_ANALYSIS_BODY_CLASS_NAME}>
               {usesSearchSnippet ? (
                 <p>
@@ -2195,11 +2316,7 @@ function ChildAnalysisPreview({
                 type="button"
                 aria-expanded={expanded}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-700/40 bg-sky-500/10 px-3 py-1 text-sm font-medium text-sky-300 transition-colors hover:border-sky-500/60 hover:bg-sky-500/20 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onToggleExpand();
-                }}
+                onClick={handleToggleAnalysisExpand}
               >
                 <span>{expanded ? CHILD_ANALYSIS_COLLAPSE_LABEL : CHILD_ANALYSIS_EXPAND_LABEL}</span>
                 <svg
