@@ -41,6 +41,12 @@ export const dynamic = 'force-dynamic';
 
 const iso8601Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 const defaultChatNotifyUrl = `http://127.0.0.1:${process.env.PORT || '3001'}/api/internal/chat-notify`;
+const articleBodySourceSynopsisError = [
+  'Article body must carry the source\'s own synopsis (og:description, subtitle, or opening paragraph).',
+  'The body cannot be the article title or title + curator boilerplate.',
+  'Fetch the URL and use the source-owned text verbatim, or drop the candidate.',
+].join(' ');
+const minTitlePrefixRemainderLength = 100;
 
 type SubmitError = {
   scope: 'item' | 'candidate' | 'cycleSummary' | 'system';
@@ -610,6 +616,60 @@ function validateValidatedYouTubeItem(
   };
 }
 
+function normalizeArticleBodyComparisonText(value: string | null | undefined): string {
+  return typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').toLowerCase()
+    : '';
+}
+
+function isTitleOnlyArticleBody(value: string | null | undefined, title: string | null | undefined): boolean {
+  const normalizedTitle = normalizeArticleBodyComparisonText(title);
+  const normalizedValue = normalizeArticleBodyComparisonText(value);
+
+  if (!normalizedTitle || !normalizedValue) {
+    return false;
+  }
+
+  if (normalizedValue === normalizedTitle) {
+    return true;
+  }
+
+  if (!normalizedValue.startsWith(normalizedTitle)) {
+    return false;
+  }
+
+  const remainder = normalizedValue.slice(normalizedTitle.length).trim();
+  return remainder.length < minTitlePrefixRemainderLength;
+}
+
+function validateArticleBody(
+  item: FeedInsertInput,
+  index: number,
+): { ok: true; normalized: FeedInsertInput } | { ok: false; error: SubmitError } {
+  if (item.type !== 'article') {
+    return { ok: true, normalized: item };
+  }
+
+  const hasTitleOnlyText = isTitleOnlyArticleBody(item.text, item.title);
+  const hasTitleOnlyExcerpt = typeof item.excerpt === 'string' && item.excerpt.trim()
+    ? isTitleOnlyArticleBody(item.excerpt, item.title)
+    : false;
+
+  if (!hasTitleOnlyText && !hasTitleOnlyExcerpt) {
+    return { ok: true, normalized: item };
+  }
+
+  return {
+    ok: false,
+    error: {
+      scope: 'item',
+      index,
+      sourceId: item.sourceId ?? null,
+      error: articleBodySourceSynopsisError,
+    },
+  };
+}
+
 function getCachedTwitterPayloadForSubmitItem(item: FeedInsertInput): Record<string, unknown> | null {
   const candidateTweetId = item.sourceId
     ? extractTweetIdFromStatusUrl(item.sourceId) ?? normalizeTweetSourceId(item.sourceId)
@@ -720,6 +780,7 @@ export async function POST(request: Request) {
   const acceptedIds: string[] = [];
   const duplicateSourceIds = new Set<string>();
   const acceptedIdentifiers = new Map<string, string>();
+  let hasArticleBodyValidationError = false;
   let duplicates = 0;
   const requestOriginSessionId = typeof payload.originSessionId === 'string' && payload.originSessionId.trim()
     ? payload.originSessionId.trim()
@@ -762,7 +823,14 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const normalized = validatedYouTube.normalized;
+    const validatedArticleBody = validateArticleBody(validatedYouTube.normalized, index);
+    if (!validatedArticleBody.ok) {
+      errors.push(validatedArticleBody.error);
+      hasArticleBodyValidationError = true;
+      continue;
+    }
+
+    const normalized = validatedArticleBody.normalized;
     if (Array.isArray(normalized.mediaUrls)) {
       const seenMediaUrls = new Set<string>();
       const mediaUrls: string[] = [];
@@ -982,5 +1050,7 @@ export async function POST(request: Request) {
     errors,
     acceptedIds,
     duplicateSourceIds: Array.from(duplicateSourceIds),
+  }, {
+    status: hasArticleBodyValidationError ? 400 : 200,
   });
 }
