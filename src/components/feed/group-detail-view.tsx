@@ -38,7 +38,7 @@ interface GroupDetailViewProps {
 
 const overlayClass = 'fixed inset-0 z-[45] flex items-stretch justify-center bg-black/70 backdrop-blur-[2px]';
 const sheetClass = 'relative z-10 h-full w-full overflow-y-auto overscroll-contain bg-black pb-28 text-zinc-100 shadow-2xl sm:mx-auto sm:max-w-3xl sm:border-x sm:border-zinc-800';
-const headerClass = 'sticky top-0 z-20 border-b border-zinc-800/80 bg-black/95 backdrop-blur';
+const headerClass = 'sticky top-0 z-20 border-b border-zinc-800/80 bg-black/95 pt-[max(env(safe-area-inset-top),0.25rem)] backdrop-blur';
 const contentContainerClass = 'mx-auto w-full max-w-3xl px-0 sm:px-2';
 
 export function GroupDetailView({

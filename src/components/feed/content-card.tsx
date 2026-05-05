@@ -1224,7 +1224,8 @@ function ImageLightbox({
     >
       <button
         type="button"
-        className="absolute right-4 top-4 z-[120] rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
+        className="absolute z-[120] rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
+        style={{ top: 'max(env(safe-area-inset-top), 1rem)', right: 'max(env(safe-area-inset-right), 1rem)' }}
         onClick={(event) => {
           event.stopPropagation();
           onRequestClose();
