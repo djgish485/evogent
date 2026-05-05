@@ -215,6 +215,15 @@ export interface FeedMetadata {
   poll?: Poll;
   linkPreviews?: LinkPreview[];
   article?: Record<string, unknown>;
+  articleEnrichment?: {
+    status?: 'completed' | 'skipped' | 'failed';
+    completedAt?: string;
+    failedAt?: string;
+    retryEligible?: boolean;
+    skipReason?: string;
+    failureReason?: string;
+    sourceUrl?: string;
+  };
   suggestionType?: string;
   reflectionCycle?: boolean;
   configField?: string;

@@ -1,10 +1,10 @@
 import { pathToFileURL } from 'node:url';
 import {
-  listTopLevelTweetsWithIncompleteEnrichment,
+  listTopLevelItemsWithIncompleteEnrichment,
   resolveFeedItemByIdentifier,
 } from '../src/lib/db/feed';
 import {
-  applyCachedTweetEnrichment,
+  applyCachedItemEnrichment,
   itemIsStillIncomplete,
   queueFeedItemEnrichment,
   shouldAutoQueueFeedItemEnrichment,
@@ -70,7 +70,7 @@ export function parseArgs(argv: string[]): { id?: string } {
 }
 
 export function resolveBatchTargets(limit = 30): FeedItem[] {
-  return listTopLevelTweetsWithIncompleteEnrichment(limit * 3)
+  return listTopLevelItemsWithIncompleteEnrichment(limit * 3)
     .filter((item) => shouldAutoQueueFeedItemEnrichment(item) && itemIsStillIncomplete(item))
     .slice(0, limit);
 }
@@ -79,14 +79,14 @@ export async function processItem(
   item: FeedItem,
   queueEnrichment = queueFeedItemEnrichment,
 ): Promise<ProcessResult> {
-  const patched = applyCachedTweetEnrichment(item) ?? item;
+  const patched = applyCachedItemEnrichment(item) ?? item;
   const cacheDetail = describeCachePatch(item, patched);
 
   if (!shouldAutoQueueFeedItemEnrichment(patched)) {
     return {
       status: 'skipped',
       id: item.id,
-      detail: 'not a top-level tweet candidate',
+      detail: 'not a top-level enrichment candidate',
     };
   }
 

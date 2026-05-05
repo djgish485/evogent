@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach } from 'node:test';
-import { parseArgs, processItem } from '../scripts/intake-enrich';
+import { parseArgs, processItem, resolveBatchTargets } from '../scripts/intake-enrich';
 import { recordBrowseCacheRefresh } from '../src/lib/db/browse-cache';
 import { getFeedItemById, insertOrIgnoreFeedItem } from '../src/lib/db/feed';
 import {
@@ -76,8 +76,8 @@ describe('intake enrich fallback', () => {
     assert.deepStrictEqual(parseArgs([]), {});
   });
 
-  test('only top-level tweets are auto-queued for enrichment', () => {
-    assert.strictEqual(shouldAutoQueueFeedItemEnrichment({
+  test('top-level tweets and article URLs are auto-queued for enrichment', () => {
+    const topLevelTweet: FeedItem = {
       id: 'tweet-top-level',
       type: 'tweet',
       source: 'twitter',
@@ -104,36 +104,65 @@ describe('intake enrich fallback', () => {
       metadata: null,
       publishedAt: '2026-04-06T00:00:00.000Z',
       createdAt: '2026-04-06T00:00:00.000Z',
-    }), true);
+    };
 
+    assert.strictEqual(shouldAutoQueueFeedItemEnrichment(topLevelTweet), true);
     assert.strictEqual(shouldAutoQueueFeedItemEnrichment({
+      ...topLevelTweet,
       id: 'tweet-child',
-      type: 'tweet',
-      source: 'twitter',
       sourceId: 'tweet-2',
       parentId: 'feed-parent',
       relationship: 'reply',
-      title: null,
       text: 'Reply child',
       url: 'https://x.com/example/status/2',
-      excerpt: null,
-      authorUsername: 'example',
+    }), false);
+
+    assert.strictEqual(shouldAutoQueueFeedItemEnrichment({
+      ...topLevelTweet,
+      id: 'article-top-level',
+      type: 'article',
+      source: 'web',
+      sourceId: 'https://example.com/article',
+      relationship: null,
+      title: 'Article title',
+      text: 'Article synopsis from source.',
+      url: 'https://example.com/article',
+      authorUsername: null,
       authorDisplayName: 'Example',
-      reason: null,
-      tags: [],
-      mediaUrls: [],
+    }), true);
+
+    assert.strictEqual(shouldAutoQueueFeedItemEnrichment({
+      ...topLevelTweet,
+      id: 'article-no-url',
+      type: 'article',
+      source: 'web',
+      sourceId: 'article-no-url',
+      relationship: null,
+      title: 'Article title',
+      text: 'Article synopsis from source.',
+      url: null,
+    }), false);
+  });
+
+  test('batch target resolution includes top-level articles with URLs', () => {
+    insertOrIgnoreFeedItem({
+      id: 'article-batch-target',
+      type: 'article',
+      source: 'web',
+      sourceId: 'https://example.com/article-batch-target',
+      title: 'Article batch target',
+      text: 'A source-owned article synopsis.',
+      url: 'https://example.com/article-batch-target',
+      publishedAt: '2026-04-06T00:00:00.000Z',
       metrics: {
         likes: 0,
         reposts: 0,
         replies: 0,
       },
-      authorAvatarUrl: null,
-      isLiked: false,
-      isDisliked: false,
-      metadata: null,
-      publishedAt: '2026-04-06T00:00:00.000Z',
-      createdAt: '2026-04-06T00:00:00.000Z',
-    }), false);
+    });
+
+    const targets = resolveBatchTargets(10);
+    assert.ok(targets.some((item) => item.id === 'article-batch-target'));
   });
 
   test('processItem skips agent enrichment once exact cache facts make a tweet complete', async () => {
@@ -185,6 +214,39 @@ describe('intake enrich fallback', () => {
       mediaUrls: [],
       metadata: null,
     });
+    let queued = false;
+
+    const result = await processItem(item, async () => {
+      queued = true;
+      return {
+        ok: true,
+        alreadyRunning: false,
+        postId: item.id,
+      };
+    });
+
+    assert.strictEqual(result.status, 'queued');
+    assert.strictEqual(queued, true);
+  });
+
+  test('processItem queues top-level article URL enrichment', async () => {
+    insertOrIgnoreFeedItem({
+      id: 'article-process-target',
+      type: 'article',
+      source: 'web',
+      sourceId: 'https://example.com/article-process-target',
+      title: 'Article process target',
+      text: 'A source-owned article synopsis.',
+      url: 'https://example.com/article-process-target',
+      publishedAt: '2026-04-06T00:00:00.000Z',
+      metrics: {
+        likes: 0,
+        reposts: 0,
+        replies: 0,
+      },
+    });
+    const item = getFeedItemById('article-process-target');
+    assert.ok(item);
     let queued = false;
 
     const result = await processItem(item, async () => {

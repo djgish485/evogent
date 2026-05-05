@@ -97,7 +97,7 @@ function queueFeedItemEnrichmentInBackground(item: FeedItem) {
     trigger: 'feed_watcher_auto_queue',
   }).then((result) => {
     if (!result.ok) {
-      console.warn(`[watcher] failed to queue enrichment for tweet ${item.id}: ${result.error ?? 'unknown error'}`);
+      console.warn(`[watcher] failed to queue enrichment for item ${item.id}: ${result.error ?? 'unknown error'}`);
     }
   }).catch((error) => {
     console.error('[watcher] background enrichment queue error:', error instanceof Error ? error.message : String(error));

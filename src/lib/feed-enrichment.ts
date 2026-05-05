@@ -255,7 +255,9 @@ function resolveBatchEnrichmentTimeoutMs(itemCount: number): number {
 }
 
 export function shouldAutoQueueFeedItemEnrichment(item: FeedItem): boolean {
-  return item.type === 'tweet' && !item.parentId;
+  if (item.parentId) return false;
+  if (item.type === 'tweet') return true;
+  return item.type === 'article' && Boolean(trimToNull(item.url));
 }
 
 type MergeMode = 'fillIfBlank' | 'append-dedupe' | 'deepMerge' | 'fillIfZero';
@@ -1345,6 +1347,17 @@ function mediaMetadataNeedsBackfill(cachedMedia: Record<string, unknown>[], curr
 }
 
 export function itemIsStillIncomplete(item: FeedItem): boolean {
+  if (item.type === 'article') {
+    if (item.parentId || !trimToNull(item.url)) return false;
+    const articleEnrichment = isRecord(item.metadata?.articleEnrichment) ? item.metadata.articleEnrichment : null;
+    if (trimUnknownToNull(articleEnrichment?.skipReason)) return false;
+    if (articleEnrichment?.status === 'skipped') return false;
+    if (articleEnrichment?.status === 'completed' && articleEnrichment.retryEligible !== true) return false;
+    const batchEnrichment = isRecord(item.metadata?.batchEnrichment) ? item.metadata.batchEnrichment : null;
+    if (batchEnrichment?.status === 'completed' && batchEnrichment.retryEligible !== true) return false;
+    return true;
+  }
+
   if (item.type !== 'tweet') return false;
   if (!trimToNull(item.authorAvatarUrl)) return true;
 
