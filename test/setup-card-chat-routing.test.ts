@@ -222,7 +222,7 @@ test('/setup-wizard guidance keeps optional setup bundled after required choices
     /gitignored personal runtime config/i,
     /explicit concrete setup value/i,
     /Agent Name.*Bob/i,
-    /default `Evogent`|default Evogent/i,
+    /default `Evo`|default Evo/i,
     /manual Interests.*optional backup|Manual Interests are optional backup/i,
     /interest inference.*ready/i,
     /Source evidence/i,

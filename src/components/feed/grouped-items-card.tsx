@@ -138,7 +138,7 @@ function getGroupHeaderMeta(
   }
 
   return {
-    primary: 'Evogent',
+    primary: 'Evo',
     secondary: labelText,
   };
 }
