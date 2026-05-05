@@ -35,13 +35,24 @@ For analysis posts, make a concrete claim, clearly mark uncertainty, and end wit
 - When a cited source has no URL in the inputs, cite it without a link. Example: `- @gdb's introduction of ChatGPT for Clinicians`.
 - A source without a URL is a smell. It usually means the source was not actually in this cycle, and the analysis should probably be skipped.
 
+## Article Cards
+
+Article body cards quote the source, not the agent. Before submitting ANY article, fetch the URL. The fetch result decides whether the article ships at all:
+
+- Fetch returns 404, page-not-found, or page-unavailable: SKIP. Do not include it in the cycle. Do not invent a synonym URL.
+- Fetch returns a strict paywall with no visible blurb: SKIP. Strict paywall means login wall only, with no og:description, no visible standfirst, and no lede paragraph above the wall. The user does not have subscriptions to most paywalled outlets.
+- Fetch returns a partial paywall with a visible blurb: KEEP. Visible blurb means og:description is present, or there is a visible standfirst/dek, or there is a lede paragraph above the wall. Use that visible blurb verbatim as both `text` and `excerpt`. WSJ is the canonical case.
+- Fetch returns a clean public page: KEEP. Use og:description, standfirst, or the first real paragraph verbatim as `text` and `excerpt`.
+
+The `text` field MUST NOT be a paraphrase of the title. If you are tempted to write "X is doing Y" as the body when the title says "X did Y", you have not actually fetched the page. Stop, fetch, and use the page's own words.
+
 ## Front-page signal sources
 
 For every full /curate, directly browse the WSJ home page, the New York Times home page, and WSJ Opinion/editorials before final thread selection. I do not need subscription-only article bodies; headlines, decks, page placement, and editorial-page framing are useful signals. Treat bigger or more prominent home-page headlines as evidence that the event matters to me.
 
 When WSJ or NYT has a visually dominant current-event lead, treat it as a rare override signal, not a routine requirement. Ask: is this a live public event, policy shock, market shock, war/diplomacy turn, or major elite-institution story? If yes, prefer a fresh top-level thread/update unless there is a clear quality reason to drop it. If no, record the headline in `frontPageSignalAudit` and continue normally. Use direct story wording and `metadata.thread.prominence.level = "lead"` only for accepted lead-level threads.
 
-Use this signal to shape thread detection, follow-up searches, context attachments, and top-level update/probe decisions, especially for current events and elite-opinion shifts. When an accepted lead should affect display, put it on `metadata.thread.prominence` with `level: "lead"`, `source: "homepage"`, compact `evidence`, and optional `homepageUrl`; this emphasizes the thread title, not every child card. Accepted lead thread titles should use the story itself, not curation-status language, and accepted lead rationale should be one plain sentence about what happened. Only use top-level `metadata.prominence` when an individual item itself deserves larger card typography independent of the thread. Do not ship paywalled homepage items as standalone cards unless the URL, source synopsis, and thread fit clear the normal quality gate. Record `frontPageSignalAudit` with pages checked, major headline signals, WSJ editorial signals, and per-lead `{ headline, prominence, action, reason }`; a dropped visually dominant lead must include the headline and a concrete quality reason.
+Use this signal to shape thread detection, follow-up searches, context attachments, and top-level update/probe decisions, especially for current events and elite-opinion shifts. When an accepted lead should affect display, put it on `metadata.thread.prominence` with `level: "lead"`, `source: "homepage"`, compact `evidence`, and optional `homepageUrl`; this emphasizes the thread title, not every child card. Accepted lead thread titles should use the story itself, not curation-status language, and accepted lead rationale should be one plain sentence about what happened. Only use top-level `metadata.prominence` when an individual item itself deserves larger card typography independent of the thread. The article-card fetch rules above also apply to paywalled homepage items: front-page placement remains useful signal for thread shaping, but a standalone card still needs a fetchable URL and source-owned synopsis. Record `frontPageSignalAudit` with pages checked, major headline signals, WSJ editorial signals, and per-lead `{ headline, prominence, action, reason }`; a dropped visually dominant lead must include the headline and a concrete quality reason.
 
 ## Balance
 

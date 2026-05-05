@@ -47,6 +47,19 @@ const articleBodySourceSynopsisError = [
   'Fetch the URL and use the source-owned text verbatim, or drop the candidate.',
 ].join(' ');
 const minTitlePrefixRemainderLength = 100;
+const articleUrlValidationTimeoutMs = 6_000;
+const articleUrlValidationUserAgent = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+  'AppleWebKit/537.36 (KHTML, like Gecko)',
+  'Chrome/123.0.0.0 Safari/537.36',
+].join(' ');
+const nonTerminalArticleStatusCodes = new Set([401, 403, 408, 429]);
+const deadArticlePageDescriptions = [
+  'page not found',
+  'sorry this page is unavailable',
+  'this page does not exist',
+  'article not found',
+];
 
 type SubmitError = {
   scope: 'item' | 'candidate' | 'cycleSummary' | 'system';
@@ -670,6 +683,111 @@ function validateArticleBody(
   };
 }
 
+function normalizeDeadArticlePageText(value: string | null | undefined): string {
+  return typeof value === 'string'
+    ? value.toLowerCase().replace(/&(?:nbsp|#160);/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+    : '';
+}
+
+function decodeBasicHtmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/gi, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&#x22;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#160;/g, ' ');
+}
+
+function extractOgDescription(html: string): string | null {
+  const metaTags = html.match(/<meta\b[^>]*>/gi) ?? [];
+  for (const tag of metaTags) {
+    const descriptor = tag.match(/\b(?:property|name)\s*=\s*(['"])(.*?)\1/i)?.[2]?.trim().toLowerCase();
+    if (descriptor !== 'og:description') {
+      continue;
+    }
+    const content = tag.match(/\bcontent\s*=\s*(['"])(.*?)\1/i)?.[2]?.trim();
+    return content ? decodeBasicHtmlEntities(content).trim() : null;
+  }
+  return null;
+}
+
+function articlePageDescriptionLooksDead(value: string | null | undefined): boolean {
+  const normalized = normalizeDeadArticlePageText(value);
+  return Boolean(normalized) && deadArticlePageDescriptions.some((description) => (
+    normalized === description || normalized.startsWith(`${description} `)
+  ));
+}
+
+async function validateArticleUrl(
+  item: FeedInsertInput,
+  index: number,
+): Promise<{ ok: true } | { ok: false; error: SubmitError }> {
+  if (item.type !== 'article' || !item.url?.trim()) {
+    return { ok: true };
+  }
+
+  const url = item.url.trim();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), articleUrlValidationTimeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': articleUrlValidationUserAgent,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    if (response.status >= 400 && response.status < 500 && !nonTerminalArticleStatusCodes.has(response.status)) {
+      return {
+        ok: false,
+        error: {
+          scope: 'item',
+          index,
+          sourceId: item.sourceId ?? null,
+          error: `Article URL returned ${response.status}`,
+        },
+      };
+    }
+
+    if (response.status === 200) {
+      const contentType = response.headers.get('content-type') ?? '';
+      const normalizedContentType = contentType.toLowerCase();
+      if (!normalizedContentType || normalizedContentType.includes('html') || normalizedContentType.includes('xml')) {
+        const html = await response.text();
+        if (articlePageDescriptionLooksDead(extractOgDescription(html))) {
+          return {
+            ok: false,
+            error: {
+              scope: 'item',
+              index,
+              sourceId: item.sourceId ?? null,
+              error: 'Article URL returns Page Not Found body',
+            },
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[curate-submit] allowing article after transient URL validation failure', {
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  return { ok: true };
+}
+
 function getCachedTwitterPayloadForSubmitItem(item: FeedInsertInput): Record<string, unknown> | null {
   const candidateTweetId = item.sourceId
     ? extractTweetIdFromStatusUrl(item.sourceId) ?? normalizeTweetSourceId(item.sourceId)
@@ -792,6 +910,12 @@ export async function POST(request: Request) {
           ? payload.origin_conversation_id.trim()
       : null;
 
+  const pendingItems: Array<{
+    index: number;
+    normalized: FeedInsertInput;
+    canonicalSourceId: string | null;
+  }> = [];
+
   for (const [index, rawItem] of payload.items.entries()) {
     const parsed = parseFeedInsertInput(rawItem, index);
     if (!parsed.ok) {
@@ -889,6 +1013,34 @@ export async function POST(request: Request) {
       }
     }
 
+    pendingItems.push({
+      index,
+      normalized: normalizedWithProvenance,
+      canonicalSourceId,
+    });
+  }
+
+  const articleUrlValidationResults = await Promise.all(
+    pendingItems.map((pendingItem) => validateArticleUrl(pendingItem.normalized, pendingItem.index)),
+  );
+  const articleUrlValidationErrors = new Map<number, SubmitError>();
+  for (const [resultIndex, result] of articleUrlValidationResults.entries()) {
+    if (!result.ok) {
+      const pendingItem = pendingItems[resultIndex];
+      if (pendingItem) {
+        articleUrlValidationErrors.set(pendingItem.index, result.error);
+        errors.push(result.error);
+      }
+    }
+  }
+
+  for (const { index, normalized, canonicalSourceId } of pendingItems) {
+    if (articleUrlValidationErrors.has(index)) {
+      continue;
+    }
+
+    const normalizedWithProvenance = normalized;
+
     if (normalizedWithProvenance.parentId) {
       const resolvedParentId = resolveParentIdForBatchInsert(normalizedWithProvenance.parentId, acceptedIdentifiers);
       if (!resolvedParentId) {
@@ -896,7 +1048,7 @@ export async function POST(request: Request) {
           scope: 'item',
           index,
           sourceId: canonicalSourceId,
-          error: `Unable to resolve parentId "${normalized.parentId}"`,
+          error: `Unable to resolve parentId "${normalizedWithProvenance.parentId}"`,
         });
         continue;
       }

@@ -3744,7 +3744,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
     test('POST /api/internal/curate/submit queues one batch enrichment task for tweets and Hacker News items only', async () => {
       const db = getDb();
       const tweetId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-      const articleSourceId = `https://example.com/enrichment-${randomUUID()}`;
+      const articleSourceId = `https://example.com/?enrichment=${randomUUID()}`;
       const hackerNewsSourceId = `hn-submit-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
       const originSessionId = createValidationOriginSessionId('api-submit-enrich');
 
@@ -3805,7 +3805,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
                 title: 'Focused enrichment HN article',
                 text: 'A Hacker News item should be included in the batch enrichment task.',
                 excerpt: 'Queued Hacker News enrichment coverage',
-                url: `https://example.com/hn-story-${randomUUID()}`,
+                url: `https://example.com/?hn-story=${randomUUID()}`,
                 authorUsername: 'hn_user',
                 authorDisplayName: 'HN User',
                 authorAvatarUrl: null,
@@ -4115,7 +4115,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
                 relationship: 'parent',
                 title: 'Parent article',
                 text: 'A source synopsis for the parent item explains why this article anchors the related batch insert.',
-                url: `https://example.com/articles/${parentSourceId}`,
+                url: `https://example.com/?article=${parentSourceId}`,
                 excerpt: 'parent excerpt',
                 authorUsername: 'editor',
                 authorDisplayName: 'Editor',
@@ -4266,7 +4266,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       const threadId = `thread-submit-${randomUUID()}`;
       const cycleId = `curate-${randomUUID()}`;
       const tweetId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-      const articleSourceId = `https://example.com/articles/${randomUUID()}`;
+      const articleSourceId = `https://example.com/?article=${randomUUID()}`;
       const videoId = `video-${randomUUID().replace(/-/g, '').slice(0, 10)}`;
       const analysisSourceId = `analysis-${randomUUID()}`;
       const suggestionSourceId = `suggestion-${randomUUID()}`;
@@ -4507,8 +4507,8 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
     });
     test('POST /api/internal/curate/submit preserves heartbeat provenance metadata and rejects curator-chat items missing originSessionId', async () => {
       const db = getDb();
-      const heartbeatSourceId = `https://example.com/articles/${randomUUID()}`;
-      const missingOriginSourceId = `https://example.com/articles/${randomUUID()}`;
+      const heartbeatSourceId = `https://example.com/?heartbeat=${randomUUID()}`;
+      const missingOriginSourceId = `https://example.com/?missingOrigin=${randomUUID()}`;
 
       try {
         const heartbeatResponse = await requestJson('/api/internal/curate/submit', {
