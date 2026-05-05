@@ -2821,7 +2821,7 @@ export function getChildPreviewsForItems(parentIds: string[]): Record<string, { 
         type: row.type,
         relationship,
         title: row.title,
-        text: relationship === 'reply' ? row.text : toChildPreviewText(row.text),
+        text: (relationship === 'reply' || relationship === 'analysis') ? row.text : toChildPreviewText(row.text),
         source: row.source,
         authorUsername: row.author_username,
         authorDisplayName: row.author_display_name,
