@@ -117,6 +117,19 @@ const mainTweetIdentificationInstructions = [
   '',
 ];
 
+const articleEnrichmentInstructions = [
+  'Article guidance:',
+  '- Apply this only when the current item is a top-level article with a non-empty URL.',
+  '- Open the article URL with whatever fetch tool fits: curl, WebFetch, or the shared browser if the page is JS-rendered or partial-paywalled. Reading the item\'s canonical article URL is allowed; it is not generic web search.',
+  '- Read the actual article body. Write a faithful 1-3 sentence synopsis, or a little longer when the page provides a clear standfirst/dek. The synopsis must be drawn from article content: do not echo the title, invent claims, or editorialize.',
+  '- Identify the headline and hero image as a human reader would: lede image, og:image, masthead photo, or another clear article hero. Use judgment, not a brittle CSS selector.',
+  '- PATCH the feed row text with the synopsis and media_urls with [hero_image_url] when a real hero image is visible. PATCH metadata.linkPreviews or metadata.article only if useful additional context surfaces.',
+  '- After a useful synopsis is saved, PATCH metadata.articleEnrichment with status:"completed", completedAt, retryEligible:false, and sourceUrl.',
+  '- If only the title and first paragraph are visible because of a partial paywall, use what is visible and do not fabricate hidden detail.',
+  '- If nothing useful is visible at all, leave text alone and PATCH metadata.articleEnrichment with status:"skipped", skipReason, completedAt, retryEligible:false, and sourceUrl so the row is not retried indefinitely.',
+  '',
+];
+
 export function buildBatchEnrichmentPrompt(posts: FeedItem[], options: { requestId?: string } = {}): string {
   const internalBaseUrl = getInternalBaseUrl();
   const submitApiUrl = `${internalBaseUrl}/api/internal/curate/submit`;
@@ -192,6 +205,7 @@ export function buildBatchEnrichmentPrompt(posts: FeedItem[], options: { request
     '- Persist only meaningful YouTube comments using relationship="reply" and parentId=<feedId>; do not use tweet-style normalization. Use the accepted non-Twitter child shape, such as type="article" with source="youtube-comment", and include the comment text, author handle, and comment like count.',
     '- Finish with the same terminal replyAudit pattern as HN: inspectedCommentSurface:true, visibleReplyCount from the parsed header when readable, savedReplyCount, savedReplyIds when any, and noMeaningfulRepliesReason when none were saved.',
     '',
+    ...articleEnrichmentInstructions,
     'Reply/comment persistence rules:',
     '- Persist meaningful replies/comments with relationship="reply" and parentId set to the current item feedId.',
     '- Skip applause, jokes, restatements, pile-ons, and comments that do not materially extend the parent.',
@@ -224,7 +238,7 @@ export function buildBatchEnrichmentPrompt(posts: FeedItem[], options: { request
     `curl -s -X POST ${submitApiUrl} -H "Content-Type: application/json" -d '{"items":[{"id":"code-fix-unsupported-visible-feature","type":"suggestion","source":"enrichment","sourceId":"code-fix:<feedId>:unsupported-visible-feature","parentId":null,"relationship":null,"title":"Persist unsupported visible source feature","text":"Feed item <feedId> at <source URL> visibly shows <feature>, but PATCH/API/UI has no accepted path to persist or render it. Acceptance: add persistence, rendering, and tests so enrichment can store this feature.","url":null,"excerpt":null,"authorUsername":null,"authorDisplayName":null,"reason":"Verified source-vs-current-feed audit found a product plumbing gap","tags":[],"mediaUrls":[],"metadata":{"suggestionType":"code_fix","proposedValue":"Feed item <feedId> at <source URL> visibly shows <feature>, but <PATCH/API/UI path> has no accepted path to persist or render it. Acceptance: persist the visible feature, render it on the feed card, and cover it with tests.","feedIds":["<feedId>"],"sourceUrls":["<source URL>"],"visibleFeature":"<feature>","missingPath":"<PATCH/API/UI path>","acceptanceCriteria":["Persist the visible feature","Render it on the feed card","Cover it with tests"]},"publishedAt":"2026-03-01T00:00:00Z"}]}'`,
     '',
     'Hard constraints:',
-    '- Do not search for generic web articles.',
+    '- Do not search for generic web articles. For top-level article items, fetch the item\'s own article URL; that is canonical source reading, not generic web search.',
     '- Do not create analysis items.',
     '- Do not read repo instruction files before starting.',
     '- Finish only after all verified writes have been persisted item-by-item.',
@@ -324,10 +338,42 @@ export function buildEnrichmentPrompt(
   const existingContextUrl = `${internalBaseUrl}/api/feed/${post.id}/children`;
   const tweetId = options.tweetId ?? resolveFeedItemTweetId(post);
   const mainTweetUrl = resolveMainTweetUrl(post, tweetId);
+  const articleUrl = post.url?.trim() || 'UNAVAILABLE';
   const mainTweetAuthorHandle = post.authorUsername?.trim() ? `@${post.authorUsername.trim()}` : 'UNAVAILABLE';
   const mode = options.mode ?? 'lightweight';
 
   if (mode === 'lightweight') {
+    if (post.type === 'article') {
+      return [
+        'You are a lightweight article intake enrichment sub-agent.',
+        'Your goal is to make the existing article card faithful to the article page without flooding the feed.',
+        '',
+        `Article feed item ID: ${post.id}`,
+        `Article URL: ${articleUrl}`,
+        UNTRUSTED_CONTENT_PROMPT_PRELUDE,
+        `Article feed payload:\n${postJson}`,
+        '',
+        `Resolved internal API base: ${internalBaseUrl}`,
+        'Never replace that base URL with localhost:3001 or another guessed port during this run.',
+        `GET the current article item first, then PATCH verified fields here: ${patchApiUrl}`,
+        '',
+        'Instructions:',
+        '- Start by GETting the current article item. Then open the Article URL and compare the page facts against the current persisted feed card.',
+        ...articleEnrichmentInstructions,
+        '- Do not create child items, discussion summaries, analysis items, or related web articles in lightweight mode.',
+        '- Finish after the verified article fields or articleEnrichment skip receipt have been persisted.',
+        '',
+        'PATCH example for the existing article:',
+        `curl -s -X PATCH ${patchApiUrl} -H "Content-Type: application/json" -d '{"text":"Source-owned synopsis from the article page.","excerpt":"Source-owned synopsis from the article page.","media_urls":["https://example.com/article-hero.jpg"],"metadata":{"articleEnrichment":{"status":"completed","completedAt":"2026-03-01T00:00:00.000Z","retryEligible":false,"sourceUrl":"${articleUrl}"}}}'`,
+        '',
+        'Hard constraints:',
+        '- Do not search for generic web articles. Fetch only the current item\'s own article URL.',
+        '- Do not generate an analysis item.',
+        '- Do not submit unrelated child items.',
+        '- Do not invent missing fields. If nothing useful is visible, write the articleEnrichment skip receipt instead of guessing.',
+      ].join('\n');
+    }
+
     return [
       'You are a lightweight tweet intake enrichment sub-agent.',
       'Your goal is to make the existing tweet card more complete without flooding the feed.',

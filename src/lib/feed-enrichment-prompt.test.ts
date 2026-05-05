@@ -199,6 +199,27 @@ describe('feed enrichment prompt', () => {
     assert.match(prompt, /site:news\.ycombinator\.com/);
   });
 
+  test('lightweight article enrichment fetches the canonical article URL', () => {
+    const prompt = buildEnrichmentPrompt(buildHackerNewsItem({
+      source: 'web',
+      sourceId: 'https://example.com/article',
+      url: 'https://example.com/article',
+      metadata: null,
+    }), '/tmp/feed-output.jsonl', {
+      mode: 'lightweight',
+    });
+
+    assert.match(prompt, /lightweight article intake enrichment sub-agent/);
+    assert.match(prompt, /Article URL: https:\/\/example\.com\/article/);
+    assert.match(prompt, /Open the article URL with whatever fetch tool fits/);
+    assert.match(prompt, /Reading the item's canonical article URL is allowed; it is not generic web search/);
+    assert.match(prompt, /PATCH the feed row text with the synopsis and media_urls with \[hero_image_url\]/);
+    assert.match(prompt, /metadata\.articleEnrichment/);
+    assert.match(prompt, /skipReason/);
+    assert.doesNotMatch(prompt, /Visit the MAIN tweet URL in the browser/);
+    assert.match(prompt, /Fetch only the current item's own article URL/);
+  });
+
   test('batch enrichment prompt is trimmed and enforces immediate per-item patching', () => {
     delete process.env.MEDIA_AGENT_INTERNAL_BASE_URL;
     process.env.ORCHESTRATOR_INTERNAL_URL = 'http://127.0.0.1:3115';

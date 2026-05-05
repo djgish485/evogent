@@ -3144,6 +3144,8 @@ export function ArticleCard({
           {item.title || 'Untitled article'}
         </h1>
 
+        {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
+
         {displayText && (
           <div className="relative select-text touch-auto">
             <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[16px] leading-7' : 'text-[15px] leading-relaxed'}`}`}>

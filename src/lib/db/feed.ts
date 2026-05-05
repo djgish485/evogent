@@ -2511,7 +2511,7 @@ export function getFeedItemBySourceId(sourceId: string): FeedItem | null {
   return row ? rowToFeedItem(row) : null;
 }
 
-export function listTopLevelTweetsWithIncompleteEnrichment(limit = 30): FeedItem[] {
+export function listTopLevelItemsWithIncompleteEnrichment(limit = 30): FeedItem[] {
   const normalizedLimit = Number.isFinite(limit)
     ? Math.max(1, Math.min(200, Math.floor(limit)))
     : 30;
@@ -2519,12 +2519,30 @@ export function listTopLevelTweetsWithIncompleteEnrichment(limit = 30): FeedItem
   const rows = db.prepare(`
     SELECT *
     FROM feed
-    WHERE type = 'tweet'
-      AND parent_id IS NULL
+    WHERE parent_id IS NULL
       AND (
-        COALESCE(TRIM(author_avatar_url), '') = ''
-        OR COALESCE(media_urls, '[]') = '[]'
-        OR json_extract(metadata, '$.quotedTweet') IS NULL
+        (
+          type = 'tweet'
+          AND (
+            COALESCE(TRIM(author_avatar_url), '') = ''
+            OR COALESCE(media_urls, '[]') = '[]'
+            OR json_extract(metadata, '$.quotedTweet') IS NULL
+          )
+        )
+        OR (
+          type = 'article'
+          AND COALESCE(TRIM(url), '') <> ''
+          AND json_extract(metadata, '$.articleEnrichment.skipReason') IS NULL
+          AND COALESCE(json_extract(metadata, '$.articleEnrichment.status'), '') <> 'skipped'
+          AND (
+            COALESCE(json_extract(metadata, '$.articleEnrichment.status'), '') <> 'completed'
+            OR COALESCE(json_extract(metadata, '$.articleEnrichment.retryEligible'), 0) = 1
+          )
+          AND (
+            COALESCE(json_extract(metadata, '$.batchEnrichment.status'), '') <> 'completed'
+            OR COALESCE(json_extract(metadata, '$.batchEnrichment.retryEligible'), 0) = 1
+          )
+        )
       )
     ORDER BY created_at_ms DESC, created_at DESC, id DESC
     LIMIT @limit
@@ -2532,6 +2550,8 @@ export function listTopLevelTweetsWithIncompleteEnrichment(limit = 30): FeedItem
 
   return rows.map(rowToFeedItem);
 }
+
+export const listTopLevelTweetsWithIncompleteEnrichment = listTopLevelItemsWithIncompleteEnrichment;
 
 export function getFeedItemByTaskId(taskId: string): FeedItem | null {
   const trimmedTaskId = taskId.trim();
