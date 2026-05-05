@@ -2,6 +2,29 @@
 
 Use this when you want a public demo where anyone can browse the Evogent feed, with optional read-only chat history, but only the owner can send chat messages or write. Chat is tool use against the host: if chat sending is public, a stranger can ask the agent to read secrets, run shell commands, or exfiltrate browser-source cookies. Keep chat writes and every write or internal endpoint behind Cloudflare Access even when reads are public.
 
+## Paste Into a Coding Agent
+
+Paste the prompt below into Claude Code, Codex, or any other coding agent on a machine that can SSH to the VM you want to use for the demo. The agent will work through the full doc end-to-end.
+
+```text
+Set up a public-feed Evogent demo for me on a small VM behind Cloudflare Access. I want anyone to browse the feed, but only my email should be allowed to chat or write.
+
+I have ready: a Hetzner Cloud API token (or access to another VM provider), a domain managed by Cloudflare with Zero Trust enabled, the public hostname for the demo (ask me, e.g. `feed.example.com`), and the owner email allowed through Access (ask me). Confirm whether I also want anonymous visitors to read chat history (default: no).
+
+Provision a small Ubuntu VM (2 to 4 GB RAM is plenty), lock the firewall down to SSH only, then install Evogent by following docs/setup-for-coding-agents.md end-to-end. Browser-backed sources need the desktop layer (`scripts/setup-desktop-browser.sh` plus reboot) so Twitter, YouTube, and Substack logins survive Chrome restarts. Configure at least one source so the demo feed has content to show. Keep the app bound to localhost on port 3001.
+
+Then set up a Cloudflare tunnel from the chosen hostname to localhost:3001, and create the Cloudflare Access Applications described in docs/demo-vm-setup.md: multiple Public Bypass Applications covering the public destinations (the doc lists them) plus one Allow Owner Application for owner-only writes.
+
+Critical gotchas to follow exactly:
+- No more than 5 destinations per Cloudflare Access Application. Split the public destinations across multiple Bypass Applications.
+- Do NOT put `<hostname>/*` on the Allow Owner Application. Cloudflare's matcher can pick that wildcard over the root Bypass and break the public homepage. Scope Allow Owner to `/api/*` and `/ws/*` only.
+- Do NOT put the owner email on a Bypass policy. Bypass means no auth, period. The owner email goes on the Allow Owner policy.
+- Do NOT bind Evogent to `0.0.0.0` and do NOT set `MEDIA_AGENT_TRUST_NETWORK`. The tunnel reaches the app on localhost; the gate trusts Cloudflare-Access-authenticated tunnel requests by their headers.
+- If creating Access policies via API returns auth error 10000, use `PUT /accounts/{acct}/access/apps/{id}` with the `policies` array embedded instead of the dedicated policy endpoints.
+
+When done, run the logged-out and logged-in verification checks in `Phase 5 - Verify` of docs/demo-vm-setup.md and report the final hostname plus any verification step whose response did not match what the doc says.
+```
+
 ## Prerequisites
 
 - Hetzner Cloud API token, or equivalent access to another VM provider.
@@ -109,7 +132,7 @@ Each Bypass Application has one policy:
 
 Bypass means no Cloudflare login is required. Do not put the owner email on these policies.
 
-If you are running the public-chat-history variant after the public chat read allowlist change has merged, add a fourth Bypass Application with:
+If you want anonymous visitors to read chat history too (the public-chat-history variant), add a fourth Bypass Application with:
 
 - `<hostname>/api/chat/messages`
 - `<hostname>/api/chat/sessions`
