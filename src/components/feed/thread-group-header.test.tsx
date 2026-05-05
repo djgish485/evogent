@@ -160,7 +160,7 @@ async function renderThreadGroupForInteraction() {
             createFeedItem('item-1', 'Regular item one'),
             createFeedItem('item-2', 'Regular item two'),
           ]}
-          agentName="Evogent"
+          agentName="Evo"
           onChat={() => {}}
           onOpenDetail={() => {}}
           onSubmitFeedback={async (input) => {

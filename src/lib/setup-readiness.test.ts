@@ -47,7 +47,7 @@ function writeConfig(dataDir: string, provider = 'Claude Code'): void {
     '# Evogent Config',
     '',
     '## Agent Name',
-    'Evogent',
+    'Evo',
     '',
     '## Brain Provider',
     provider,
