@@ -183,6 +183,8 @@ const MAIN_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_MAIN, lineLimit: TEXT_
 const CHILD_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_CHILD, lineLimit: TEXT_LINE_LIMIT_CHILD } as const;
 const EXPAND_LABEL = 'More';
 const COLLAPSE_LABEL = 'Less';
+const CHILD_ANALYSIS_EXPAND_LABEL = 'Read full article';
+const CHILD_ANALYSIS_COLLAPSE_LABEL = 'Collapse article';
 const CHILD_ANALYSIS_BODY_CLASS_NAME = 'max-w-none text-[15px] leading-[1.55] text-zinc-200 [&_p]:my-3 [&_p]:text-[15px] [&_p]:leading-[1.55] [&_ul]:my-3 [&_ol]:my-3 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_li]:text-[15px] [&_li]:leading-[1.55] [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:text-zinc-100 [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-4 [&_blockquote]:text-zinc-300 [&_blockquote_p]:my-3 [&_blockquote_p]:text-[15px] [&_blockquote_p]:leading-[1.55] [&_h1]:mt-6 [&_h1]:text-[22px] [&_h1]:font-bold [&_h1]:leading-tight [&_h2]:mt-5 [&_h2]:text-[19px] [&_h2]:font-semibold [&_h2]:leading-tight [&_h3]:mt-4 [&_h3]:text-[17px] [&_h3]:font-semibold [&_h3]:leading-tight [&_h4]:mt-3 [&_h4]:text-[15px] [&_h4]:font-semibold [&_h4]:leading-tight [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0';
 
 interface SourceAvatarProfile {
@@ -2177,14 +2179,27 @@ function ChildAnalysisPreview({
             {needsTruncation && (
               <button
                 type="button"
-                className="mt-1 text-sm text-sky-400 hover:text-sky-300"
+                aria-expanded={expanded}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-700/40 bg-sky-500/10 px-3 py-1 text-sm font-medium text-sky-300 transition-colors hover:border-sky-500/60 hover:bg-sky-500/20 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   onToggleExpand();
                 }}
               >
-                {expanded ? COLLAPSE_LABEL : EXPAND_LABEL}
+                <span>{expanded ? CHILD_ANALYSIS_COLLAPSE_LABEL : CHILD_ANALYSIS_EXPAND_LABEL}</span>
+                <svg
+                  aria-hidden="true"
+                  className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
               </button>
             )}
           </div>
