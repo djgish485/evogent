@@ -715,7 +715,7 @@ describe('ArticleCard', () => {
     assert.match(markup, />365 pts</);
   });
 
-  test('renders compact prominence with larger responsive headline typography', () => {
+  test('renders list prominence with larger responsive headline typography', () => {
     const item = createArticleItem({
       metadata: {
         prominence: {
@@ -739,9 +739,10 @@ describe('ArticleCard', () => {
       showReasonInput: null,
       onReasonSubmit: () => {},
       onDismissReasonInput: () => {},
+      detail: false,
     }));
 
-    assert.match(markup, /mt-2 text-\[21px\] leading-tight sm:text-\[24px\]/);
+    assert.match(markup, /text-\[21px\] leading-tight sm:text-\[24px\]/);
     assert.match(markup, /text-\[16px\] leading-7/);
   });
 
@@ -774,11 +775,12 @@ describe('ArticleCard', () => {
       showReasonInput: null,
       onReasonSubmit: () => {},
       onDismissReasonInput: () => {},
+      detail: false,
     }));
 
-    assert.match(markup, /mt-0\.5 text-\[17px\] leading-tight/);
-    assert.match(markup, /text-\[15px\] leading-normal/);
-    assert.doesNotMatch(markup, /mt-2 text-\[21px\] leading-tight sm:text-\[24px\]/);
+    assert.match(markup, /text-\[17px\] leading-snug/);
+    assert.match(markup, /text-\[15px\] leading-relaxed/);
+    assert.doesNotMatch(markup, /text-\[21px\] leading-tight sm:text-\[24px\]/);
   });
 
   test('renders detail prominence with larger responsive headline typography', () => {
@@ -793,7 +795,6 @@ describe('ArticleCard', () => {
     const markup = renderToStaticMarkup(createElement(ArticleCard, {
       item,
       agentName: 'Agent',
-      fullWidth: true,
       isLiked: false,
       isDisliked: false,
       votePending: false,

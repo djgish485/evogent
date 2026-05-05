@@ -2834,8 +2834,7 @@ export function ArticleCard({
   item,
   agentName,
   childPreviews,
-  fullWidth = false,
-  detail = fullWidth,
+  detail = true,
   isLiked,
   isDisliked,
   votePending,
@@ -2853,7 +2852,6 @@ export function ArticleCard({
   item: FeedItem;
   agentName: string;
   childPreviews?: React.ReactNode;
-  fullWidth?: boolean;
   detail?: boolean;
   isLiked: boolean;
   isDisliked: boolean;
@@ -2909,9 +2907,7 @@ export function ArticleCard({
   const secondaryLink = resolveSecondarySourceLink(item);
   const hasChildPreviews = Boolean(childPreviews);
   const hackerNewsPoints = resolveHackerNewsPoints(item);
-  const actionBarClassName = fullWidth
-    ? 'mt-5 border-y border-zinc-800/80 py-2 text-zinc-400'
-    : 'mt-2 border-t border-zinc-800/80 pt-2 text-zinc-400';
+  const actionBarClassName = 'mt-5 border-y border-zinc-800/80 py-2 text-zinc-400';
   const metricsRow = (
     <div className="flex items-center gap-1">
       <MetricButton
@@ -2977,7 +2973,7 @@ export function ArticleCard({
   ) : null;
   const actionBar = (
     <div className={actionBarClassName}>
-      <div className={`flex items-center justify-between ${fullWidth ? 'flex-wrap gap-3' : ''}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {metricsRow}
         {openLinkRow}
       </div>
@@ -3113,174 +3109,88 @@ export function ArticleCard({
     );
   }
 
-  if (fullWidth) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0">
-            {articleAvatarUrl ? (
-              <ResilientImage
-                src={articleAvatarUrl}
-                alt={sourceProfile.displayName}
-                className="h-12 w-12 rounded-full object-cover"
-                loading="eager"
-              />
-            ) : (
-              <SourceInitialAvatar profile={sourceProfile} />
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-              <p className="truncate text-lg font-semibold text-zinc-100">{articleHeaderDisplayName}</p>
-              <span className="shrink-0 text-zinc-500">·</span>
-              <p className="shrink-0 text-sm text-zinc-500">{formatFeedTimestamp(item)}</p>
-            </div>
-            <p className="text-sm text-zinc-500">{item.source || 'Article'}</p>
-          </div>
-        </div>
-
-        <h1 className={`font-semibold text-zinc-100 ${detail ? (isProminent ? 'text-[34px] leading-[1.08] sm:text-5xl' : 'text-3xl leading-tight sm:text-4xl') : (isProminent ? 'text-[21px] leading-tight sm:text-[24px]' : 'text-[17px] leading-snug')}`}>
-          {item.title || 'Untitled article'}
-        </h1>
-
-        {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
-
-        {displayText && (
-          <div className="relative select-text touch-auto">
-            <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[16px] leading-7' : 'text-[15px] leading-relaxed'}`}`}>
-              <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
-              {needsTruncation && !expanded && (
-                <>
-                  {'... '}
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onToggleExpand();
-                    }}
-                    className="text-sky-400 hover:text-sky-300"
-                  >
-                    {EXPAND_LABEL}
-                  </button>
-                </>
-              )}
-              {needsTruncation && expanded && (
-                <>
-                  {' '}
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onToggleExpand();
-                    }}
-                    className="text-sky-400 hover:text-sky-300"
-                  >
-                    {COLLAPSE_LABEL}
-                  </button>
-                </>
-              )}
-            </p>
-          </div>
-        )}
-
-        {actionBar}
-
-        {showReasonInput && (
-          <ReasonInput
-            signalType={showReasonInput}
-            onSubmit={onReasonSubmit}
-            onDismiss={onDismissReasonInput}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
-    <>
-      <div className="flex gap-3">
+    <div className="space-y-4">
+      <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
           {articleAvatarUrl ? (
             <ResilientImage
               src={articleAvatarUrl}
               alt={sourceProfile.displayName}
-              className="h-11 w-11 rounded-full object-cover sm:h-12 sm:w-12"
+              className="h-12 w-12 rounded-full object-cover"
+              loading="eager"
             />
           ) : (
             <SourceInitialAvatar profile={sourceProfile} />
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[15px]">
-              <p className="truncate font-semibold text-zinc-100">{articleHeaderDisplayName}</p>
-              <span className="shrink-0 text-zinc-500">·</span>
-              <p className="shrink-0 text-zinc-500">{formatFeedTimestamp(item)}</p>
-            </div>
-            <p className="truncate text-[14px] text-zinc-500">{item.source || 'Article'}</p>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <p className="truncate text-lg font-semibold text-zinc-100">{articleHeaderDisplayName}</p>
+            <span className="shrink-0 text-zinc-500">·</span>
+            <p className="shrink-0 text-sm text-zinc-500">{formatFeedTimestamp(item)}</p>
           </div>
-
-          <h3 className={`font-semibold text-zinc-100 ${isProminent ? 'mt-2 text-[21px] leading-tight sm:text-[24px]' : 'mt-0.5 text-[17px] leading-tight'}`}>{item.title || 'Untitled article'}</h3>
-
-          {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
-
-          {displayText && (
-            <div className={`relative select-text touch-auto ${isProminent ? 'mt-2' : 'mt-1'}`}>
-              <p className={`whitespace-pre-wrap break-words text-zinc-300 ${isProminent ? 'text-[16px] leading-7' : 'text-[15px] leading-normal'}`}>
-                <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
-                {needsTruncation && !expanded && (
-                  <>
-                    {'... '}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onToggleExpand();
-                      }}
-                      className="text-sky-400 hover:text-sky-300"
-                    >
-                      {EXPAND_LABEL}
-                    </button>
-                  </>
-                )}
-                {needsTruncation && expanded && (
-                  <>
-                    {' '}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onToggleExpand();
-                      }}
-                      className="text-sky-400 hover:text-sky-300"
-                    >
-                      {COLLAPSE_LABEL}
-                    </button>
-                  </>
-                )}
-              </p>
-            </div>
-          )}
-
-          {actionBar}
-
-          {showReasonInput && (
-            <ReasonInput
-              signalType={showReasonInput}
-              onSubmit={onReasonSubmit}
-              onDismiss={onDismissReasonInput}
-            />
-          )}
+          <p className="text-sm text-zinc-500">{item.source || 'Article'}</p>
         </div>
       </div>
 
-    </>
+      <h1 className={`font-semibold text-zinc-100 ${detail ? (isProminent ? 'text-[34px] leading-[1.08] sm:text-5xl' : 'text-3xl leading-tight sm:text-4xl') : (isProminent ? 'text-[21px] leading-tight sm:text-[24px]' : 'text-[17px] leading-snug')}`}>
+        {item.title || 'Untitled article'}
+      </h1>
+
+      {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
+
+      {displayText && (
+        <div className="relative select-text touch-auto">
+          <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[16px] leading-7' : 'text-[15px] leading-relaxed'}`}`}>
+            <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
+            {needsTruncation && !expanded && (
+              <>
+                {'... '}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className="text-sky-400 hover:text-sky-300"
+                >
+                  {EXPAND_LABEL}
+                </button>
+              </>
+            )}
+            {needsTruncation && expanded && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className="text-sky-400 hover:text-sky-300"
+                >
+                  {COLLAPSE_LABEL}
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      {actionBar}
+
+      {showReasonInput && (
+        <ReasonInput
+          signalType={showReasonInput}
+          onSubmit={onReasonSubmit}
+          onDismiss={onDismissReasonInput}
+        />
+      )}
+    </div>
   );
 }
 
@@ -4141,7 +4051,6 @@ export function ContentCard({
           item={item}
           agentName={agentName}
           childPreviews={childPreviewContent}
-          fullWidth={true}
           detail={isFullWidthDetail}
           isLiked={isLiked}
           isDisliked={isDisliked}
@@ -4164,7 +4073,6 @@ export function ContentCard({
           item={item}
           agentName={agentName}
           childPreviews={childPreviewContent}
-          fullWidth={true}
           detail={false}
           isLiked={isLiked}
           isDisliked={isDisliked}
