@@ -8,7 +8,7 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 ## Use your subscriptions
 
-Evogent runs through the Claude Code or Codex CLI, so your Claude Pro or ChatGPT Plus subscription powers everything. API keys also work if you prefer.
+Evo runs through the Claude Code or Codex CLI, so your Claude Pro or ChatGPT Plus subscription powers everything. API keys also work if you prefer.
 
 ## Install With A Coding Agent
 
@@ -26,9 +26,9 @@ Respect platform boundaries: `scripts/setup.sh` is Linux/systemd-only; macOS and
 When finished, report the final app URL. If setup is not complete, report the remaining REQUIRED lines from `npm run setup:agent`.
 ```
 
-## Install on a Cloud VM (Public URL)
+## Install on a Cloud VM
 
-If you want a public URL gated by login that you can hit from any browser, including mobile, paste this into a coding agent on your local machine:
+If you want a public URL gated by login that you can hit from any browser, including mobile, paste this into a coding agent:
 
 ```text
 Install Evogent on a small Hetzner VM behind Cloudflare Access. I want to reach the URL from any device, but only my email should pass the auth gate.
@@ -44,9 +44,9 @@ On the VM, install Evogent from https://github.com/djgish485/evogent following d
 
 ## Cloud Coding Agent
 
-Evogent works beautifully as a cloud coding agent - more stable than Claude Code remote control, more user-friendly than SSH apps. It's like Twitter for your repo.
+Claude Code remote control not stable? SSH apps feeling janky? Evo works beautifully as a cloud coding agent. It's like Twitter for your repo.
 
-To use it as a stand-alone coding agent, paste these instructions into your coding agent:
+Stand-alone coding agent instructions:
 
 ```text
 Install Evogent in coding-agent-only mode (minimum-install mode: just PORT in .env.local and one of `claude` or `codex` on PATH and authenticated). Skip the Twitter/social-source setup, skill installs, preferences embedding, and curation cron entirely.
@@ -75,14 +75,14 @@ For the full setup flow from https://github.com/djgish485/evogent, see [Setup fo
 
 ## Sources
 
-Evogent ships with skills for the places most people read:
+Evo ships with skills for the places most people read:
 
-- **Twitter / X**: home timeline, following timeline, topic searches
-- **YouTube**: subscriptions and watch signals
-- **Substack**: your subscribed publications inbox
-- **Hacker News**: front page and Ask HN
+- **Twitter / X**
+- **YouTube**
+- **Substack**
+- **Hacker News**
 
-Each source is a markdown skill: a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evogent's curator will pick it up on the next cycle. No code changes required.
+Each source is a markdown skill: a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evo's curator will pick it up on the next cycle. No code changes required.
 
 ## Development Philosophy
 
@@ -90,7 +90,7 @@ This app is powered by extremely flexible and strong coding agents, so use their
 
 ## Secure by default
 
-Direct access to Evogent's agents is disabled for remote users by default. Agents can run things on your machine, so the safe default is local-only. To use the app remotely, put it behind an authenticated login layer (Cloudflare Access works great) and then set `MEDIA_AGENT_TRUST_NETWORK=1` to let those authenticated requests through. The cloud-VM install prompt above does this for you. See [Security](docs/security.md) for the full model.
+Direct access to Evo's agents is disabled for remote users by default. To use the app remotely, put it behind an authenticated login layer (Cloudflare Access works great) and then set `MEDIA_AGENT_TRUST_NETWORK=1` to let those authenticated requests through. The cloud-VM install prompt above does this for you. See [Security](docs/security.md) for the full model.
 
 ## Links
 
