@@ -8,6 +8,7 @@ import {
   resolveHackerNewsPoints,
 } from '@/components/feed/content-card';
 import { buildAnalysisRenderableEntries } from '@/lib/analysis-presentation';
+import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
 import { createReconnectingWs } from '@/lib/reconnecting-ws';
 import {
@@ -771,19 +772,22 @@ export function PostDetailView({
     setSuggestionFeedback(null);
     setSuggestionPendingAction('accept');
 
+    let applyResponse: Response | null = null;
     try {
       const applyRequest = buildSuggestionApplyRequest(suggestion);
-      const applyResponse = await fetch('/api/suggestions/batch-accept', {
+      applyResponse = await fetch('/api/suggestions/batch-accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(applyRequest),
       });
 
       if (!applyResponse.ok) {
-        throw new Error(await readSuggestionActionErrorMessage(
-          applyResponse,
-          `Failed to apply suggestion (${applyResponse.status}).`,
-        ));
+        throw new Error(isAuthFailure(applyResponse, null)
+          ? AUTH_REQUIRED_MESSAGE
+          : await readSuggestionActionErrorMessage(
+            applyResponse,
+            `Failed to apply suggestion (${applyResponse.status}).`,
+          ));
       }
 
       const applyResult = await applyResponse.json() as SuggestionApplyResponse;
@@ -801,9 +805,11 @@ export function PostDetailView({
       setSuggestionFeedback(getSuggestionApplySuccessMessage(applyResult));
     } catch (error) {
       setSuggestionFeedback(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : 'Failed to apply suggestion.',
+        isAuthFailure(applyResponse, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error && error.message.trim()
+            ? error.message
+            : 'Failed to apply suggestion.',
       );
     } finally {
       setSuggestionPendingAction(null);
@@ -818,8 +824,9 @@ export function PostDetailView({
     setSuggestionPendingAction('dismiss');
     setSuggestionStatusOverride('dismissed');
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/interactions', {
+      response = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -829,13 +836,15 @@ export function PostDetailView({
       });
 
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        throw new Error(isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`);
       }
 
       setSuggestionFeedback(previousStatus === 'accepted' ? 'Suggestion hidden from the feed.' : null);
-    } catch {
+    } catch (error) {
       setSuggestionStatusOverride(previousStatus);
-      setSuggestionFeedback('Failed to dismiss suggestion.');
+      setSuggestionFeedback(
+        isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Failed to dismiss suggestion.',
+      );
     } finally {
       setSuggestionPendingAction(null);
     }

@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createPortal } from 'react-dom';
 import { TextSelectionTooltip } from '@/components/feed/text-selection-tooltip';
+import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import {
   formatCompactCount as formatNumber,
   formatRelativeTimestamp as formatRelativeTime,
@@ -3607,6 +3608,7 @@ export function ContentCard({
   const [isDisliked, setIsDisliked] = useState(item.isDisliked);
   const [showReasonInput, setShowReasonInput] = useState<'thumbsup' | 'thumbsdown' | null>(null);
   const [votePending, setVotePending] = useState(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
   const [tweetLikeDelta, setTweetLikeDelta] = useState(0);
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -3642,6 +3644,7 @@ export function ContentCard({
 
   useEffect(() => {
     setShowReasonInput(null);
+    setVoteError(null);
   }, [item.id]);
 
   useEffect(() => {
@@ -3654,6 +3657,7 @@ export function ContentCard({
   ) => {
     if (votePending) return;
 
+    setVoteError(null);
     const previousLiked = isLiked;
     const previousDisliked = isDisliked;
     let nextLiked = previousLiked;
@@ -3686,8 +3690,9 @@ export function ContentCard({
 
     setVotePending(true);
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/interactions', {
+      response = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3698,7 +3703,11 @@ export function ContentCard({
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to update vote state (${response.status})`);
+        throw new Error(
+          isAuthFailure(response, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : `Failed to update vote state (${response.status})`,
+        );
       }
 
       const data = await response.json() as { shouldPassthroughLike?: boolean };
@@ -3711,9 +3720,12 @@ export function ContentCard({
           method: 'POST',
         }).catch(() => {});
       }
-    } catch {
+    } catch (error) {
       setIsLiked(previousLiked);
       setIsDisliked(previousDisliked);
+      if (isAuthFailure(response, error)) {
+        setVoteError(AUTH_REQUIRED_MESSAGE);
+      }
       if (shouldOptimisticallyIncrementTweetLike) {
         setTweetLikeDelta((current) => current - 1);
       }
@@ -3752,16 +3764,30 @@ export function ContentCard({
   }, [handleVote, isDisliked]);
 
   const handleReasonSubmit = useCallback((reason: string) => {
-    if (showReasonInput && reason.trim()) {
-      fetch('/api/interactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feedItemId: item.id,
-          action: showReasonInput,
-          reason: reason.trim(),
-        }),
-      }).catch(() => {});
+    const trimmedReason = reason.trim();
+    if (showReasonInput && trimmedReason) {
+      setVoteError(null);
+      void (async () => {
+        let response: Response | null = null;
+        try {
+          response = await fetch('/api/interactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              feedItemId: item.id,
+              action: showReasonInput,
+              reason: trimmedReason,
+            }),
+          });
+          if (!response.ok && isAuthFailure(response, null)) {
+            setVoteError(AUTH_REQUIRED_MESSAGE);
+          }
+        } catch (error) {
+          if (isAuthFailure(response, error)) {
+            setVoteError(AUTH_REQUIRED_MESSAGE);
+          }
+        }
+      })();
     }
     setShowReasonInput(null);
   }, [item.id, showReasonInput]);
@@ -4163,6 +4189,8 @@ export function ContentCard({
           </>
         )
       )}
+
+      {voteError ? <p className="mt-3 text-sm text-red-300">{voteError}</p> : null}
 
       <TextSelectionTooltip
         agentName={agentName}

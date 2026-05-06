@@ -22,6 +22,7 @@ import { PwaInstallBanner } from '@/components/pwa/PwaInstallBanner';
 import { SetupBanner } from '@/components/setup-banner';
 import { type AgentTranscriptData, type AgentTranscriptState, type AgentTranscriptTarget, type BrainTranscriptEvent, type CurationTaskState, getAgentEventMetadata, resolveTaskTranscriptTarget, type TaskTranscriptFallbackState } from '@/lib/agent-transcript';
 import { buildAnalysisRenderableEntries } from '@/lib/analysis-presentation';
+import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import { parseAutomaticCurationEnabled, parseBackgroundSourceBrowsingEnabled, updateAutomaticCurationConfigContent, updateBackgroundSourceBrowsingConfigContent } from '@/lib/automatic-curation-config';
 import { type BrainProviderAvailabilityState, type BrainProviderName, type BrainProviderStateResponse, canOpenChatSessionCompactPopover, type ClaudeReasoningEffort, type CodexReasoningEffort, type CurateCommand, formatCompactTokenCount, getChatSessionCompactButtonState, getChatSessionContextHeaderMetrics, getChatSessionHeaderProviderLabel, getChatSessionManualCompactionUnavailableReason, getProviderChipLabel, getProviderDisplayName, resolveBrainState } from '@/lib/brain-provider';
 import { CHAT_ATTACHMENT_ACCEPT } from '@/lib/chat-attachment-metadata';
@@ -90,12 +91,6 @@ type DetailViewEntry =
 
 // Chat session cards sit on a #050505 surface; keep the tint visible after compositing.
 
-const AUTH_REQUIRED_MESSAGE = "You don't have permission to do this. Sign in to continue.";
-
-function isAuthFailure(response: Response | null, error: unknown): boolean {
-  return error instanceof TypeError || response?.status === 401 || response?.status === 403;
-}
-
 function resolveChatFetchErrorMessage(response: Response | null, error: unknown, fallback: string): string {
   return isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : error instanceof Error ? error.message : fallback;
 }
@@ -110,19 +105,31 @@ interface OrchestratorCancelResponse {
 }
 
 async function cancelOrchestratorTaskFromClient(taskId?: string | null): Promise<OrchestratorCancelResponse> {
-  const response = await fetch('/api/orchestrator/cancel', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store',
-    body: JSON.stringify(taskId ? { taskId } : {}),
-  });
+  let response: Response | null = null;
+  try {
+    response = await fetch('/api/orchestrator/cancel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      body: JSON.stringify(taskId ? { taskId } : {}),
+    });
 
-  const text = await response.text();
-  return text
-    ? JSON.parse(text) as OrchestratorCancelResponse
-    : { ok: response.ok };
+    const text = await response.text();
+    const result = text
+      ? JSON.parse(text) as OrchestratorCancelResponse
+      : { ok: response.ok };
+    if (!response.ok && isAuthFailure(response, null)) {
+      return { ...result, ok: false, error: AUTH_REQUIRED_MESSAGE };
+    }
+    return result;
+  } catch (error) {
+    if (isAuthFailure(response, error)) {
+      return { ok: false, error: AUTH_REQUIRED_MESSAGE };
+    }
+    throw error;
+  }
 }
 
 function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/ws/agent-progress') {
@@ -1684,21 +1691,32 @@ export default function Home() {
 
     setIsSavingAutomaticCuration(true);
     setAutomaticCurationError(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch('/api/config', {
+      response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to update automatic curation');
+        throw new Error(
+          isAuthFailure(response, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : payload.error || 'Failed to update automatic curation',
+        );
       }
 
       setConfigContent(nextContent);
     } catch (error) {
-      setAutomaticCurationError(error instanceof Error ? error.message : 'Failed to update automatic curation');
+      setAutomaticCurationError(
+        isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to update automatic curation',
+      );
     } finally {
       setIsSavingAutomaticCuration(false);
     }
@@ -1715,21 +1733,32 @@ export default function Home() {
 
     setIsSavingBackgroundSourceBrowsing(true);
     setBackgroundSourceBrowsingError(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch('/api/config', {
+      response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to update background source browsing');
+        throw new Error(
+          isAuthFailure(response, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : payload.error || 'Failed to update background source browsing',
+        );
       }
 
       setConfigContent(nextContent);
     } catch (error) {
-      setBackgroundSourceBrowsingError(error instanceof Error ? error.message : 'Failed to update background source browsing');
+      setBackgroundSourceBrowsingError(
+        isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to update background source browsing',
+      );
     } finally {
       setIsSavingBackgroundSourceBrowsing(false);
     }
@@ -1746,22 +1775,33 @@ export default function Home() {
 
     setIsSavingCodeFixReasoning(true);
     setCodeFixReasoningError(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch('/api/config', {
+      response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to update code-fix reasoning effort');
+        throw new Error(
+          isAuthFailure(response, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : payload.error || 'Failed to update code-fix reasoning effort',
+        );
       }
 
       setConfigContent(nextContent);
       return true;
     } catch (error) {
-      setCodeFixReasoningError(error instanceof Error ? error.message : 'Failed to update code-fix reasoning effort');
+      setCodeFixReasoningError(
+        isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to update code-fix reasoning effort',
+      );
       return false;
     } finally {
       setIsSavingCodeFixReasoning(false);
@@ -5356,29 +5396,44 @@ export default function Home() {
 
       const normalizedTitle = input.threadTitle.trim() || 'Thread';
       const normalizedReason = input.reason.trim();
-      const response = await fetch('/api/interactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feedItemId: matchingThreadItem.id,
-          action: 'thread_feedback',
-          threadFeedback: {
-            threadId: input.threadId,
-            cycleId: input.cycleId,
-            vote: input.vote === 'up' ? 'more' : 'less',
-            threadTitle: normalizedTitle,
-            reason: normalizedReason,
-            category: input.feedbackProbe.category ?? null,
-            probeReason: input.feedbackProbe.reason ?? null,
-            probeUncertainty: input.feedbackProbe.uncertainty ?? null,
-            sourceItemIds: input.sourceItemIds ?? input.feedbackProbe.sourceItemIds ?? [],
-            originSessionId,
-          },
-        }),
-      });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'Unable to save thread feedback');
+      let response: Response | null = null;
+      try {
+        response = await fetch('/api/interactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feedItemId: matchingThreadItem.id,
+            action: 'thread_feedback',
+            threadFeedback: {
+              threadId: input.threadId,
+              cycleId: input.cycleId,
+              vote: input.vote === 'up' ? 'more' : 'less',
+              threadTitle: normalizedTitle,
+              reason: normalizedReason,
+              category: input.feedbackProbe.category ?? null,
+              probeReason: input.feedbackProbe.reason ?? null,
+              probeUncertainty: input.feedbackProbe.uncertainty ?? null,
+              sourceItemIds: input.sourceItemIds ?? input.feedbackProbe.sourceItemIds ?? [],
+              originSessionId,
+            },
+          }),
+        });
+        const data = (await response.json()) as { ok?: boolean; error?: string };
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            isAuthFailure(response, null)
+              ? AUTH_REQUIRED_MESSAGE
+              : data.error || 'Unable to save thread feedback',
+          );
+        }
+      } catch (error) {
+        const message = isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Unable to save thread feedback';
+        setChatStatus(message);
+        throw new Error(message);
       }
       setChatStatus(null);
       return;
@@ -5929,19 +5984,23 @@ export default function Home() {
       setSuggestionStatusOverrides((current) => ({ ...current, [suggestion.id]: 'dismissed' }));
     }
 
+    let actionResponse: Response | null = null;
     try {
       if (decision === 'accepted') {
-        const applyResponse = await fetch('/api/suggestions/batch-accept', {
+        actionResponse = await fetch('/api/suggestions/batch-accept', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ suggestionIds: [suggestion.id] }),
         });
+        const applyResponse = actionResponse;
 
         if (!applyResponse.ok) {
-          throw new Error(await readSuggestionActionErrorMessage(
-            applyResponse,
-            `Failed to apply suggestion (${applyResponse.status}).`,
-          ));
+          throw new Error(isAuthFailure(applyResponse, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : await readSuggestionActionErrorMessage(
+              applyResponse,
+              `Failed to apply suggestion (${applyResponse.status}).`,
+            ));
         }
 
         const applyResult = (await applyResponse.json()) as SuggestionApplyResponse;
@@ -5977,7 +6036,7 @@ export default function Home() {
         return;
       }
 
-      const response = await fetch('/api/interactions', {
+      actionResponse = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5985,9 +6044,10 @@ export default function Home() {
           action: 'dismiss_suggestion',
         }),
       });
+      const response = actionResponse;
 
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        throw new Error(isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`);
       }
 
       if (previousStatus === 'pending') {
@@ -5995,12 +6055,15 @@ export default function Home() {
       }
     } catch (error) {
       setSuggestionStatusOverrides((current) => ({ ...current, [suggestion.id]: previousStatus }));
-      const failureMessage = error instanceof Error && error.message.trim()
-        ? error.message
-        : (decision === 'accepted' ? 'Failed to apply suggestion.' : 'Failed to dismiss suggestion.');
+      const isAuthFailureMessage = isAuthFailure(actionResponse, error);
+      const failureMessage = isAuthFailureMessage
+        ? AUTH_REQUIRED_MESSAGE
+        : error instanceof Error && error.message.trim()
+          ? error.message
+          : (decision === 'accepted' ? 'Failed to apply suggestion.' : 'Failed to dismiss suggestion.');
       setSuggestionFeedback((current) => ({
         ...current,
-        [suggestion.id]: decision === 'accepted' ? failureMessage : 'Failed to dismiss suggestion.',
+        [suggestion.id]: decision === 'accepted' || isAuthFailureMessage ? failureMessage : 'Failed to dismiss suggestion.',
       }));
       setChatStatus(failureMessage);
     } finally {
@@ -6021,19 +6084,22 @@ export default function Home() {
     });
     setSuggestionPendingActions((current) => ({ ...current, [item.id]: 'accept' }));
 
+    let applyResponse: Response | null = null;
     try {
       const applyRequest = buildSuggestionApplyRequest(item);
-      const applyResponse = await fetch('/api/suggestions/batch-accept', {
+      applyResponse = await fetch('/api/suggestions/batch-accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(applyRequest),
       });
 
       if (!applyResponse.ok) {
-        throw new Error(await readSuggestionActionErrorMessage(
-          applyResponse,
-          `Failed to apply suggestion (${applyResponse.status}).`,
-        ));
+        throw new Error(isAuthFailure(applyResponse, null)
+          ? AUTH_REQUIRED_MESSAGE
+          : await readSuggestionActionErrorMessage(
+            applyResponse,
+            `Failed to apply suggestion (${applyResponse.status}).`,
+          ));
       }
 
       const applyResult = (await applyResponse.json()) as SuggestionApplyResponse;
@@ -6070,9 +6136,11 @@ export default function Home() {
     } catch (error) {
       setSuggestionFeedback((current) => ({
         ...current,
-        [item.id]: error instanceof Error && error.message.trim()
-          ? error.message
-          : 'Failed to apply suggestion.',
+        [item.id]: isAuthFailure(applyResponse, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error && error.message.trim()
+            ? error.message
+            : 'Failed to apply suggestion.',
       }));
     } finally {
       setSuggestionPendingActions((current) => ({ ...current, [item.id]: null }));
@@ -6087,8 +6155,9 @@ export default function Home() {
     setSuggestionPendingActions((current) => ({ ...current, [item.id]: 'dismiss' }));
     setSuggestionStatusOverrides((current) => ({ ...current, [item.id]: 'dismissed' }));
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/interactions', {
+      response = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6098,16 +6167,16 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        throw new Error(isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`);
       }
       if (previousStatus === 'pending') {
         adjustPendingCounts({ suggestion: -1 });
       }
-    } catch {
+    } catch (error) {
       setSuggestionStatusOverrides((current) => ({ ...current, [item.id]: previousStatus }));
       setSuggestionFeedback((current) => ({
         ...current,
-        [item.id]: 'Failed to dismiss suggestion.',
+        [item.id]: isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Failed to dismiss suggestion.',
       }));
     } finally {
       setSuggestionPendingActions((current) => ({ ...current, [item.id]: null }));
@@ -6121,14 +6190,17 @@ export default function Home() {
     const previousStatus = resolveSuggestionStatus(item);
     setSuggestionPendingActions((current) => ({ ...current, [item.id]: 'accept' }));
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/suggestions/retry', {
+      response = await fetch('/api/suggestions/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ suggestionId: item.id }),
       });
 
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      if (!response.ok) {
+        throw new Error(isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`);
+      }
 
       setSuggestionStatusOverrides((current) => ({ ...current, [item.id]: 'pending' }));
       if (previousStatus !== 'pending') {
@@ -6140,8 +6212,11 @@ export default function Home() {
         return next;
       });
       setSuggestionFeedback((current) => ({ ...current, [item.id]: 'Reset to pending. You can accept it again.' }));
-    } catch {
-      setSuggestionFeedback((current) => ({ ...current, [item.id]: 'Failed to retry suggestion.' }));
+    } catch (error) {
+      setSuggestionFeedback((current) => ({
+        ...current,
+        [item.id]: isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Failed to retry suggestion.',
+      }));
     } finally {
       setSuggestionPendingActions((current) => ({ ...current, [item.id]: null }));
     }
@@ -6154,14 +6229,17 @@ export default function Home() {
 
     setSuggestionPendingActions((current) => ({ ...current, [item.id]: 'dismiss' }));
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/internal/code-fix-orchestrator/cancel', {
+      response = await fetch('/api/internal/code-fix-orchestrator/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId }),
       });
 
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      if (!response.ok) {
+        throw new Error(isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`);
+      }
 
       setSuggestionStatusOverrides((current) => ({ ...current, [item.id]: 'failed' }));
       setCodeFixProgressMap((current) => {
@@ -6170,8 +6248,11 @@ export default function Home() {
         return next;
       });
       setSuggestionFeedback((current) => ({ ...current, [item.id]: 'Cancelled. You can retry when ready.' }));
-    } catch {
-      setSuggestionFeedback((current) => ({ ...current, [item.id]: 'Failed to cancel task.' }));
+    } catch (error) {
+      setSuggestionFeedback((current) => ({
+        ...current,
+        [item.id]: isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Failed to cancel task.',
+      }));
     } finally {
       setSuggestionPendingActions((current) => ({ ...current, [item.id]: null }));
     }
@@ -6208,8 +6289,9 @@ export default function Home() {
       return next;
     });
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/suggestions/batch-accept', {
+      response = await fetch('/api/suggestions/batch-accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6218,10 +6300,12 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error(await readSuggestionActionErrorMessage(
-          response,
-          `Failed to apply suggestion (${response.status}).`,
-        ));
+        throw new Error(isAuthFailure(response, null)
+          ? AUTH_REQUIRED_MESSAGE
+          : await readSuggestionActionErrorMessage(
+            response,
+            `Failed to apply suggestion (${response.status}).`,
+          ));
       }
 
       const result = await response.json() as { taskId?: string; suggestionStatus?: SuggestionStatus };
@@ -6246,9 +6330,11 @@ export default function Home() {
       });
 
     } catch (error) {
-      const failureMessage = error instanceof Error && error.message.trim()
-        ? error.message
-        : 'Failed to apply suggestion.';
+      const failureMessage = isAuthFailure(response, error)
+        ? AUTH_REQUIRED_MESSAGE
+        : error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Failed to apply suggestion.';
       setSuggestionFeedback((current) => {
         const next = { ...current };
         for (const item of pendingItems) {
