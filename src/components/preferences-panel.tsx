@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
+import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
 
 const PAGE_SIZE = 50;
@@ -288,12 +289,15 @@ export function PreferencesPanel({ open, onClose }: PreferencesPanelProps) {
     setUndoPendingId(item.id);
     setError(null);
 
+    let response: Response | null = null;
     try {
-      const response = await fetch(`/api/preferences/${encodeURIComponent(item.id)}`, {
+      response = await fetch(`/api/preferences/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        throw new Error(
+          isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`,
+        );
       }
 
       setItems((current) => current.filter((entry) => entry.id !== item.id));
@@ -313,8 +317,8 @@ export function PreferencesPanel({ open, onClose }: PreferencesPanelProps) {
           byType: nextByType,
         };
       });
-    } catch {
-      setError('Undo failed');
+    } catch (error) {
+      setError(isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Undo failed');
     } finally {
       setUndoPendingId(null);
       setUndoConfirmId(null);
@@ -341,15 +345,18 @@ export function PreferencesPanel({ open, onClose }: PreferencesPanelProps) {
     setReasonPendingId(editingReasonId);
     setError(null);
 
+    let response: Response | null = null;
     try {
-      const response = await fetch(`/api/preferences/${encodeURIComponent(editingReasonId)}`, {
+      response = await fetch(`/api/preferences/${encodeURIComponent(editingReasonId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: trimmedReason }),
       });
 
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        throw new Error(
+          isAuthFailure(response, null) ? AUTH_REQUIRED_MESSAGE : `Error ${response.status}`,
+        );
       }
 
       const payload = await response.json() as { item?: { reason?: unknown } };
@@ -364,8 +371,8 @@ export function PreferencesPanel({ open, onClose }: PreferencesPanelProps) {
       }));
       setEditingReasonId(null);
       setReasonDraft('');
-    } catch {
-      setError('Failed to save reason');
+    } catch (error) {
+      setError(isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : 'Failed to save reason');
     } finally {
       setReasonPendingId(null);
     }
