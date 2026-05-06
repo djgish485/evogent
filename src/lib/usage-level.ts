@@ -9,6 +9,7 @@ export interface UsageLevelConfig {
   subAgentModel: string;
   curatorModel: string;
   cacheRefreshEffort: 'low' | 'high';
+  postEnrichmentEffort: 'low' | 'high';
   enrichmentModel: string;
   reflectionModel: string;
   defaultMinInterval: number;
@@ -23,6 +24,7 @@ const USAGE_LEVEL_MAP: Record<UsageLevel, Omit<UsageLevelConfig, 'level'>> = {
     subAgentModel: 'claude-opus-4-7',
     curatorModel: 'claude-opus-4-7',
     cacheRefreshEffort: 'low',
+    postEnrichmentEffort: 'low',
     enrichmentModel: 'claude-opus-4-7',
     reflectionModel: 'claude-opus-4-7',
     defaultMinInterval: 4 * 60,
@@ -33,6 +35,7 @@ const USAGE_LEVEL_MAP: Record<UsageLevel, Omit<UsageLevelConfig, 'level'>> = {
     subAgentModel: 'claude-opus-4-7',
     curatorModel: 'claude-opus-4-7',
     cacheRefreshEffort: 'high',
+    postEnrichmentEffort: 'high',
     enrichmentModel: 'claude-opus-4-7',
     reflectionModel: 'claude-opus-4-7',
     defaultMinInterval: 90,
@@ -43,6 +46,7 @@ const USAGE_LEVEL_MAP: Record<UsageLevel, Omit<UsageLevelConfig, 'level'>> = {
     subAgentModel: 'opus',
     curatorModel: 'claude-opus-4-7[1m]',
     cacheRefreshEffort: 'high',
+    postEnrichmentEffort: 'high',
     enrichmentModel: 'opus',
     reflectionModel: 'opus',
     defaultMinInterval: 45,
