@@ -25,6 +25,7 @@ describe('ensureFeedSchema', () => {
       assert.ok(tables.has('feed'));
       assert.ok(tables.has('interactions'));
       assert.ok(tables.has('chat_messages'));
+      assert.ok(tables.has('claude_task_usage'));
       assert.ok(tables.has('user_activity'));
       assert.ok(tables.has('curation_log'));
       assert.ok(tables.has('preferences'));
@@ -675,6 +676,8 @@ describe('ensureFeedSchema', () => {
         'chat_messages_timestamp_idx',
         'chat_messages_in_reply_to_idx',
         'chat_messages_agent_task_reply_unique_idx',
+        'claude_task_usage_priority_started_idx',
+        'claude_task_usage_task_id_idx',
         'idx_user_activity_timestamp',
         'idx_user_activity_event_timestamp',
         'idx_curation_log_started_at',
