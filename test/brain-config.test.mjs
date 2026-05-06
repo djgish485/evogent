@@ -12,6 +12,7 @@ import {
   DEFAULT_CODE_FIX_REASONING_EFFORT,
   deriveCodexReasoningEffortFromUsageLevel,
   deriveCuratorModelFromUsageLevel,
+  derivePostEnrichmentEffortFromUsageLevel,
   parseBrainConfig,
   parseBackgroundSourceBrowsingEnabled,
   readAutomaticCurationEnabled,
@@ -54,6 +55,13 @@ test('parseBrainConfig derives cache refresh effort from usage level', () => {
   assert.equal(parseBrainConfig('# Evogent Config\n').cacheRefreshEffort, 'high');
 });
 
+test('parseBrainConfig derives post enrichment effort from usage level', () => {
+  assert.equal(parseBrainConfig('## Usage Level\nLow\n').postEnrichmentEffort, 'low');
+  assert.equal(parseBrainConfig('## Usage Level\nMedium\n').postEnrichmentEffort, 'high');
+  assert.equal(parseBrainConfig('## Usage Level\nHigh\n').postEnrichmentEffort, 'high');
+  assert.equal(parseBrainConfig('# Evogent Config\n').postEnrichmentEffort, 'high');
+});
+
 test('parseBrainConfig keeps explicit Codex reasoning effort over usage level', () => {
   const parsed = parseBrainConfig(`
 # Evogent Config
@@ -78,6 +86,12 @@ test('deriveCuratorModelFromUsageLevel maps install choices to Claude models', (
   assert.equal(deriveCuratorModelFromUsageLevel('Low'), 'claude-opus-4-7');
   assert.equal(deriveCuratorModelFromUsageLevel('Medium'), 'claude-opus-4-7');
   assert.equal(deriveCuratorModelFromUsageLevel('High'), 'claude-opus-4-7[1m]');
+});
+
+test('derivePostEnrichmentEffortFromUsageLevel maps low to low and higher tiers to high', () => {
+  assert.equal(derivePostEnrichmentEffortFromUsageLevel('Low'), 'low');
+  assert.equal(derivePostEnrichmentEffortFromUsageLevel('Medium'), 'high');
+  assert.equal(derivePostEnrichmentEffortFromUsageLevel('High'), 'high');
 });
 
 test('parseBrainConfig recognizes Claude reasoning effort levels', () => {
