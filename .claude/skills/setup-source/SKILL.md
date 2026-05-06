@@ -158,7 +158,7 @@ Source-specific guidance:
   - offer the three login paths above and let the user pick
   - direct login in Chrome is fine when they choose an interactive local profile path
   - browser-backed `tweet-cache` depends only on this Chrome profile
-  - do not ask for `AUTH_TOKEN` and `CT0` unless the user explicitly wants the separate `tweet-cache-bird` skill
+  - to install `tweet-cache-bird`, the user must have typed `tweet-cache-bird` verbatim or otherwise picked the bird path explicitly. Use `POST /api/skills/install` with `{"registry":"tweet-cache-bird","confirmExplicit":true}` only after that choice. The install API returns 400 without `confirmExplicit`; if you see that error, stop and ask the user to choose between repairing the browser stack and explicitly opting into bird. Never auto-pass `confirmExplicit` on your own initiative.
 - For YouTube or other Google properties:
   - require interactive login in Chrome
   - do not suggest CDP login automation, cookie injection, or user-agent spoofing
@@ -231,7 +231,7 @@ Extra checks:
   - enqueue the normal refresh with `POST "$API_BASE/api/internal/orchestrator/enqueue"`, source `setup-source`, metadata `{"cacheSource":"twitter","triggerSource":"setup-source","setupSourceSmoke":true}`, and message `/cache-refresh twitter`
   - verify rows through `GET "$API_BASE/api/internal/browse-cache/items?source=twitter&limit=5"` and, for validation, SQLite `browse_cache_refresh_runs` plus `browse_cache_items`
   - keep background source browsing off until this one setup-smoke run has finished, so no scheduled refresh competes for the same shared browser session
-  - only if the user explicitly chose `tweet-cache-bird`, run:
+  - only if the user explicitly chose `tweet-cache-bird`, install it with `curl -s -X POST "$API_BASE/api/skills/install" -H 'Content-Type: application/json' -d '{"registry":"tweet-cache-bird","confirmExplicit":true}'`, then run:
     ```bash
     source .env.local
     node node_modules/@steipete/bird/dist/cli.js whoami
@@ -257,3 +257,4 @@ Failure interpretation:
 - Do not recommend `--headless` for the persistent Chrome profile.
 - Do not use a one-off direct CDP extractor as source setup success. It is diagnostic only; the scheduler will use `/cache-refresh <source>`.
 - Do not turn source setup into repeated login-tab probes. Passive checks are acceptable after user confirmation; credential entry must be an uninterrupted browser interaction.
+- If the browser stack hangs (CDP unreachable, Chrome not running, login tab unresponsive), stop and surface the hang to the user. Do not install `tweet-cache-bird` as a silent workaround. Ask the user explicitly whether to repair the browser stack with `scripts/setup-desktop-browser.sh` or opt into bird by name.
