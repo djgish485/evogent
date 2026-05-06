@@ -10,6 +10,7 @@ import {
   normalizeTweetSourceId,
 } from '@/lib/db/feed';
 import { getDb } from '@/lib/db/client';
+import { getDataPath } from '@/lib/data-dir';
 import {
   appendAcceptedFeedItems,
   appendCurationCandidateEntries,
@@ -33,8 +34,10 @@ import {
   extractTweetIdFromStatusUrl,
 } from '@/lib/twitter-feed-canonicalization';
 import { pickNextThreadColor, sanitizeThreadColor } from '@/lib/thread-colors';
+import { readUsageLevelConfig } from '@/lib/usage-level';
 import type { FeedInsertInput } from '@/lib/db/feed';
 import type { FeedItem, LinkPreview } from '@/types/feed';
+import { readBrainConfig } from '../../../../../../lib/brain-config.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +51,7 @@ const articleBodySourceSynopsisError = [
 ].join(' ');
 const minTitlePrefixRemainderLength = 100;
 const articleUrlValidationTimeoutMs = 6_000;
+const maxBatchEnrichmentChunkSize = 4;
 const articleUrlValidationUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
   'AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -1116,25 +1120,39 @@ export async function POST(request: Request) {
     && (acceptedFeedItem.type === 'tweet' || acceptedFeedItem.source === 'hackernews')
   ));
 
-  if (acceptedEnrichmentTargets.length > 0) {
-    try {
-      const firstTargetId = acceptedEnrichmentTargets[0]?.id ?? 'unknown';
-      const requestId = acceptedEnrichmentTargets.length === 1
-        ? `curation-submit-enrichment-batch-${firstTargetId}`
-        : `curation-submit-enrichment-batch-${firstTargetId}-${acceptedEnrichmentTargets.length}`;
-      const result = await queueBatchEnrichment(acceptedEnrichmentTargets, {
-        endpoint: '/api/internal/curate/submit',
-        requestId,
-        routeId: firstTargetId,
-        source: 'curation_submit_feed_enrichment',
-        trigger: 'curation_submit_batch',
-      });
+  const brainConfig = readBrainConfig(getDataPath('config.md'));
+  const usageLevelConfig = readUsageLevelConfig();
+  const shouldSkipBulkEnrichment = brainConfig.provider === 'claude' && usageLevelConfig.level === 'low';
 
-      if (!result.ok) {
-        errors.push({
-          scope: 'system',
-          error: result.error ?? 'Failed to queue batch enrichment task',
+  if (acceptedEnrichmentTargets.length > 0 && !shouldSkipBulkEnrichment) {
+    try {
+      const chunks: FeedItem[][] = [];
+      for (let index = 0; index < acceptedEnrichmentTargets.length; index += maxBatchEnrichmentChunkSize) {
+        chunks.push(acceptedEnrichmentTargets.slice(index, index + maxBatchEnrichmentChunkSize));
+      }
+
+      for (const [chunkIndex, chunk] of chunks.entries()) {
+        const firstTargetId = chunk[0]?.id ?? 'unknown';
+        const requestId = [
+          'curation-submit-enrichment-batch',
+          firstTargetId,
+          acceptedEnrichmentTargets.length,
+          `chunk-${chunkIndex + 1}-of-${chunks.length}`,
+        ].join('-');
+        const result = await queueBatchEnrichment(chunk, {
+          endpoint: '/api/internal/curate/submit',
+          requestId,
+          routeId: firstTargetId,
+          source: 'curation_submit_feed_enrichment',
+          trigger: 'curation_submit_batch',
         });
+
+        if (!result.ok) {
+          errors.push({
+            scope: 'system',
+            error: result.error ?? 'Failed to queue batch enrichment task',
+          });
+        }
       }
     } catch (error) {
       errors.push({
