@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 interface InstallRequestBody {
   url?: string;
   registry?: string;
+  confirmExplicit?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     const result = await installSkill({
       url: payload.url,
       registry: payload.registry,
+      confirmExplicit: payload.confirmExplicit,
     });
 
     return NextResponse.json({
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
       || message.toLowerCase().includes('provide either')
       || message.toLowerCase().includes('provide only one')
       || message.toLowerCase().includes('frontmatter')
+      || message.toLowerCase().includes('requires explicit user opt-in')
       ? 400
       : 500;
 

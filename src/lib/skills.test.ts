@@ -282,18 +282,26 @@ body
     }
   });
 
-  test('installSkill installs tweet-cache-bird from registry', async () => {
+  test('installSkill rejects tweet-cache-bird without explicit opt-in', async () => {
+    await assert.rejects(
+      installSkill({ registry: 'tweet-cache-bird' }),
+      /requires explicit user opt-in/i
+    );
+  });
+
+  test('installSkill installs tweet-cache-bird from registry with explicit opt-in', async () => {
     const skillDir = path.join(process.cwd(), '.claude', 'skills', 'tweet-cache-bird');
     const restoreSkillDir = await preserveSkillDir(skillDir);
 
     try {
-      const result = await installSkill({ registry: 'tweet-cache-bird' });
+      const result = await installSkill({ registry: 'tweet-cache-bird', confirmExplicit: true });
 
       assert.strictEqual(result.source.type, 'registry');
       assert.strictEqual(result.source.value, 'tweet-cache-bird');
       assert.strictEqual(result.skill.slug, 'tweet-cache-bird');
       assert.strictEqual(result.skill.name, 'tweet-cache-bird');
       assert.strictEqual(result.skill.userInvocable, true);
+      assert.strictEqual(result.skill.metadata?.['evogent']?.installRequiresExplicitOptIn, true);
       assert.deepStrictEqual(result.skill.metadata?.['evogent']?.requires?.env, ['AUTH_TOKEN', 'CT0']);
     } finally {
       await restoreSkillDir();
