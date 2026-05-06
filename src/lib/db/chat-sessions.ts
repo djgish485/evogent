@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { getDb } from './client';
 import { shouldDisplayAgentEventInChat } from '@/lib/chat-agent-events';
 import {
-  DEFAULT_CURATOR_AGENT_SESSION_TITLE,
   DEFAULT_GENERAL_AGENT_SESSION_TITLE,
   generateSessionTitle as buildSessionTitle,
 } from '@/lib/chat-session-title';
@@ -89,8 +88,6 @@ export type BrainProviderName = 'claude' | 'codex';
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type ClaudeReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 const POST_CONTEXT_SEPARATOR = '\n\nContext — discussing this post:';
-export const DEFAULT_MAIN_CHAT_SESSION_ID = '00000000-0000-4000-8000-000000000001';
-export const DEFAULT_CURATOR_CHAT_SESSION_ID = '00000000-0000-4000-8000-000000000002';
 
 function isUuid(value: string | null | undefined): value is string {
   return typeof value === 'string'
@@ -410,124 +407,6 @@ export function createChatSession(input?: {
   }
 
   return existing;
-}
-
-type EnsureDefaultAppChatSessionsInput = {
-  provider: BrainProviderName | string | null;
-  workingDirectory?: string | null;
-  includeCurator?: boolean;
-};
-
-export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput & { includeCurator: false }): { main: ChatSessionRecord; curator: ChatSessionRecord | null };
-export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput & { includeCurator?: true }): { main: ChatSessionRecord; curator: ChatSessionRecord };
-export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput): { main: ChatSessionRecord; curator: ChatSessionRecord | null };
-export function ensureDefaultAppChatSessions(input: EnsureDefaultAppChatSessionsInput): { main: ChatSessionRecord; curator: ChatSessionRecord | null } {
-  const provider = normalizeBrainProvider(input.provider);
-  const workingDirectory = sanitizeWorkingDirectory(input.workingDirectory) ?? process.cwd();
-  const includeCurator = input.includeCurator !== false;
-  const claudeReasoningEffort = getDefaultClaudeReasoningEffort();
-  const codexReasoningEffort = getDefaultCodexReasoningEffort();
-  const db = getDb();
-
-  const upsertDefaultSession = db.prepare(`
-    INSERT INTO chat_sessions (
-      id,
-      provider,
-      provider_session_id,
-      claude_session_id,
-      title,
-      color,
-      session_type,
-      working_directory
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      provider = excluded.provider,
-      provider_session_id = excluded.provider_session_id,
-      claude_session_id = excluded.claude_session_id,
-      title = excluded.title,
-      color = excluded.color,
-      session_type = excluded.session_type,
-      working_directory = excluded.working_directory,
-      updated_at = datetime('now')
-    WHERE chat_sessions.provider IS NOT excluded.provider
-      OR chat_sessions.provider_session_id IS NOT excluded.provider_session_id
-      OR chat_sessions.claude_session_id IS NOT excluded.claude_session_id
-      OR chat_sessions.title IS NOT excluded.title
-      OR chat_sessions.color IS NOT excluded.color
-      OR chat_sessions.session_type IS NOT excluded.session_type
-      OR chat_sessions.working_directory IS NOT excluded.working_directory
-  `);
-  const upsertSettings = db.prepare(`
-    INSERT INTO chat_session_brain_settings (
-      session_id,
-      claude_reasoning_effort,
-      codex_reasoning_effort,
-      codex_fast_mode
-    )
-    SELECT ?, ?, ?, 0
-    WHERE EXISTS (
-      SELECT 1
-      FROM chat_sessions
-      WHERE id = ?
-    )
-    ON CONFLICT(session_id) DO UPDATE SET
-      claude_reasoning_effort = excluded.claude_reasoning_effort,
-      codex_reasoning_effort = excluded.codex_reasoning_effort,
-      codex_fast_mode = excluded.codex_fast_mode,
-      updated_at = datetime('now')
-    WHERE chat_session_brain_settings.claude_reasoning_effort IS NOT excluded.claude_reasoning_effort
-      OR chat_session_brain_settings.codex_reasoning_effort IS NOT excluded.codex_reasoning_effort
-      OR chat_session_brain_settings.codex_fast_mode IS NOT excluded.codex_fast_mode
-  `);
-
-  const ensureSession = (
-    id: string,
-    title: string,
-    color: SessionColorKey,
-    sessionType: ConversationSessionType,
-  ) => {
-    const claudeSessionId = provider === 'claude' ? id : '';
-    upsertDefaultSession.run(
-      id,
-      provider,
-      id,
-      claudeSessionId,
-      title,
-      color,
-      sessionType,
-      workingDirectory,
-    );
-    upsertSettings.run(id, claudeReasoningEffort, codexReasoningEffort, id);
-  };
-
-  db.transaction(() => {
-    ensureSession(
-      DEFAULT_MAIN_CHAT_SESSION_ID,
-      DEFAULT_GENERAL_AGENT_SESSION_TITLE,
-      'blue',
-      null,
-    );
-    if (includeCurator) {
-      ensureSession(
-        DEFAULT_CURATOR_CHAT_SESSION_ID,
-        DEFAULT_CURATOR_AGENT_SESSION_TITLE,
-        'purple',
-        'curator',
-      );
-    }
-  })();
-
-  const main = getChatSession(DEFAULT_MAIN_CHAT_SESSION_ID);
-  const curator = includeCurator ? getChatSession(DEFAULT_CURATOR_CHAT_SESSION_ID) : null;
-  if (!main) {
-    throw new Error('Failed to ensure first-run chat sessions');
-  }
-  if (includeCurator && !curator) {
-    throw new Error('Failed to ensure first-run chat sessions');
-  }
-
-  return { main, curator };
 }
 
 export function ensureChatSession(sessionId: string): ChatSessionRecord {
@@ -913,7 +792,7 @@ export function getMostRecentChatSessionForProvider(provider: BrainProviderName 
   return row ? rowToChatSession(row) : null;
 }
 
-export function getMostRecentCuratorChatSession(): ChatSessionRecord | null {
+function getMostRecentChatSessionBySessionType(sessionType: ConversationSessionType): ChatSessionRecord | null {
   const row = getDb().prepare(`
     SELECT
       s.id,
@@ -936,12 +815,23 @@ export function getMostRecentCuratorChatSession(): ChatSessionRecord | null {
     FROM chat_sessions AS s
     LEFT JOIN chat_session_brain_settings AS bs
       ON bs.session_id = s.id
-    WHERE s.session_type = 'curator'
+    WHERE (
+      (? IS NULL AND s.session_type IS NULL)
+      OR (? IS NOT NULL AND s.session_type = ?)
+    )
     ORDER BY datetime(s.updated_at) DESC, datetime(s.created_at) DESC
     LIMIT 1
-  `).get() as ChatSessionRow | undefined;
+  `).get(sessionType, sessionType, sessionType) as ChatSessionRow | undefined;
 
   return row ? rowToChatSession(row) : null;
+}
+
+export function getMostRecentGeneralChatSession(): ChatSessionRecord | null {
+  return getMostRecentChatSessionBySessionType(null);
+}
+
+export function getMostRecentCuratorChatSession(): ChatSessionRecord | null {
+  return getMostRecentChatSessionBySessionType('curator');
 }
 
 const CONVERSATION_SESSION_STATS_CTE = `

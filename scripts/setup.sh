@@ -217,6 +217,7 @@ if [ -f "/etc/systemd/system/${CHROME_BROWSE_SERVICE}" ]; then
 fi
 
 echo "  Services started"
+node "$APP_DIR/scripts/create-default-sessions.mjs"
 
 # ── 3. Cron jobs ──────────────────────────────────────────────────────────
 

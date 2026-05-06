@@ -16,8 +16,6 @@ import {
   type ProviderAvailability,
 } from './setup-readiness';
 import {
-  DEFAULT_CURATOR_CHAT_SESSION_ID,
-  DEFAULT_MAIN_CHAT_SESSION_ID,
   createChatSession,
   type BrainProviderName,
 } from './db/chat-sessions';
@@ -162,16 +160,24 @@ describe('first-run setup readiness', () => {
     }]);
   });
 
-  test('explicit default-session bootstrap is idempotent and does not churn updated_at', async () => {
+  test('readiness reports existing default sessions by type without changing them', async () => {
     await installSkill({ registry: 'tweet-cache' });
     process.env.MEDIA_AGENT_ROOT = '/root/evogent';
+    const main = createChatSession({
+      title: 'General Agent',
+      sessionType: null,
+    });
+    const curator = createChatSession({
+      title: 'Curator Agent',
+      sessionType: 'curator',
+      color: 'amber',
+    });
 
     const first = await getFirstRunReadiness({
       checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
-      bootstrapDefaultSessions: true,
     });
     const rowsAfterFirst = getDb().prepare(`
-      SELECT id, title, provider, session_type, working_directory, updated_at AS updatedAt
+      SELECT id, title, provider, session_type, updated_at AS updatedAt
       FROM chat_sessions
       ORDER BY title ASC
     `).all() as Array<{
@@ -179,15 +185,13 @@ describe('first-run setup readiness', () => {
       title: string;
       provider: string;
       session_type: string | null;
-      working_directory: string;
       updatedAt: string;
     }>;
     const second = await getFirstRunReadiness({
       checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
-      bootstrapDefaultSessions: true,
     });
     const rowsAfterSecond = getDb().prepare(`
-      SELECT id, title, provider, session_type, working_directory, updated_at AS updatedAt
+      SELECT id, title, provider, session_type, updated_at AS updatedAt
       FROM chat_sessions
       ORDER BY title ASC
     `).all() as typeof rowsAfterFirst;
@@ -196,28 +200,27 @@ describe('first-run setup readiness', () => {
     assert.strictEqual(second.sessions.ready, true);
     assert.match(first.ready.join('\n'), /Default General Agent and Curator Agent chat sessions exist\./);
     assert.deepStrictEqual(rowsAfterSecond, rowsAfterFirst);
-    assert.deepStrictEqual(rowsAfterSecond.map((row) => row.id).sort(), [
-      DEFAULT_MAIN_CHAT_SESSION_ID,
-      DEFAULT_CURATOR_CHAT_SESSION_ID,
-    ].sort());
+    assert.deepStrictEqual(rowsAfterSecond.map((row) => row.id).sort(), [main.id, curator.id].sort());
     assert.deepStrictEqual(rowsAfterSecond.map((row) => row.title).sort(), ['Curator Agent', 'General Agent']);
     assert.ok(rowsAfterSecond.every((row) => row.provider === 'codex'));
-    assert.ok(rowsAfterSecond.every((row) => row.working_directory === process.cwd()));
     assert.strictEqual(rowsAfterSecond.find((row) => row.title === 'Curator Agent')?.session_type, 'curator');
     assert.strictEqual(rowsAfterSecond.find((row) => row.title === 'General Agent')?.session_type, null);
   });
 
-  test('coding-agent-only default-session bootstrap creates only the General Agent', async () => {
+  test('coding-agent-only readiness accepts only the General Agent', async () => {
     process.env.MEDIA_AGENT_ROOT = '/root/evogent';
+    const main = createChatSession({
+      title: 'General Agent',
+      sessionType: null,
+    });
 
     const readiness = await getFirstRunReadiness({
       checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
       codingAgentOnly: true,
-      ensureSessions: true,
     });
 
     assert.strictEqual(readiness.sessions.ready, true);
-    assert.strictEqual(readiness.sessions.mainSessionId, DEFAULT_MAIN_CHAT_SESSION_ID);
+    assert.strictEqual(readiness.sessions.mainSessionId, main.id);
     assert.strictEqual(readiness.sessions.curatorSessionId, null);
     assert.match(readiness.ready.join('\n'), /Default General Agent chat session exists\./);
     assert.doesNotMatch(readiness.ready.join('\n'), /Curator Agent chat sessions exist/);
@@ -229,7 +232,7 @@ describe('first-run setup readiness', () => {
     `).all() as Array<{ id: string; title: string; session_type: string | null }>;
 
     assert.deepStrictEqual(rows, [{
-      id: DEFAULT_MAIN_CHAT_SESSION_ID,
+      id: main.id,
       title: 'General Agent',
       session_type: null,
     }]);
@@ -237,9 +240,9 @@ describe('first-run setup readiness', () => {
     const noFlagReadiness = await getFirstRunReadiness({
       checkProviderAvailability: providerAvailability({ claude: true, codex: true }),
     });
-    assert.strictEqual(noFlagReadiness.sessions.ready, true);
+    assert.strictEqual(noFlagReadiness.sessions.ready, false);
     assert.strictEqual(noFlagReadiness.sessions.curatorSessionId, null);
-    assert.doesNotMatch(noFlagReadiness.pending.join('\n'), /Default chat sessions/);
+    assert.match(noFlagReadiness.pending.join('\n'), /node scripts\/create-default-sessions\.mjs/);
   });
 
   test('does not create default sessions when no brain provider is runnable', async () => {
