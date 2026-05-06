@@ -18,11 +18,9 @@ import {
   hasPendingCurationCycle,
   insertCurationLogStart,
 } from '@/lib/db/activity';
-import { getDataPath } from '@/lib/data-dir';
-import { ensureDefaultAppChatSessions, getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
+import { getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
 import { getSourceReadiness } from '@/lib/setup-readiness';
 import { resolveRuntimeWorkingDirectory } from '@/lib/runtime-working-directory';
-import { readBrainConfig } from '../../lib/brain-config.js';
 const adaptiveHeartbeatDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
 
 export interface EvaluateAdaptiveHeartbeatInput {
@@ -80,17 +78,17 @@ function sanitizeTriggerSource(triggeredBy: string): string {
   return `adaptive_heartbeat:${trimmed}`.slice(0, 96);
 }
 
-function resolveCuratorAgentSession(): CuratorAgentSessionResolution {
+function resolveCuratorAgentSession(): CuratorAgentSessionResolution | null {
   const existing = getMostRecentCuratorChatSession();
-  console.info('[heartbeat] curator session lookup', existing ? {
-    id: existing.id,
-    title: existing.title,
-    sessionType: existing.sessionType,
-    workingDirectory: existing.workingDirectory,
-    createdAt: existing.createdAt,
-    updatedAt: existing.updatedAt,
-  } : null);
   if (existing) {
+    console.info('[heartbeat] curator session lookup', {
+      id: existing.id,
+      title: existing.title,
+      sessionType: existing.sessionType,
+      workingDirectory: existing.workingDirectory,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+    });
     return {
       sessionId: existing.id,
       reusedSessionId: existing.id,
@@ -98,24 +96,8 @@ function resolveCuratorAgentSession(): CuratorAgentSessionResolution {
     };
   }
 
-  const ensured = ensureDefaultAppChatSessions({
-    provider: readBrainConfig(getDataPath('config.md')).provider,
-    workingDirectory: resolveRuntimeWorkingDirectory(),
-  });
-  console.info('[heartbeat] created default curator session', {
-    id: ensured.curator.id,
-    title: ensured.curator.title,
-    sessionType: ensured.curator.sessionType,
-    workingDirectory: ensured.curator.workingDirectory,
-    createdAt: ensured.curator.createdAt,
-    updatedAt: ensured.curator.updatedAt,
-  });
-
-  return {
-    sessionId: ensured.curator.id,
-    reusedSessionId: null,
-    createdSessionId: ensured.curator.id,
-  };
+  console.info('[heartbeat] skipping automatic curation because no Curator Agent chat session exists');
+  return null;
 }
 
 export async function evaluateAdaptiveHeartbeat(
@@ -201,6 +183,16 @@ export async function evaluateAdaptiveHeartbeat(
 
   const heartbeatWorkingDirectory = resolveRuntimeWorkingDirectory();
   const sessionResolution = resolveCuratorAgentSession();
+  if (!sessionResolution) {
+    return {
+      triggered: false,
+      triggerReason: 'curator_session_missing',
+      decision,
+      requestId: null,
+      queueDepth: 0,
+    };
+  }
+
   const queueRequestId = `chat-queue-heartbeat-${randomUUID()}`;
   const triggerSource = sanitizeTriggerSource(input.triggeredBy);
   const curationTriggeredBy = `${triggerSource}:${decision.reason}`;

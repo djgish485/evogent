@@ -310,6 +310,14 @@ EOF_CONFIG
 
 If you used the local macOS or Windows path, make sure both `npm start` and `node worker.js` are still running before you verify.
 
+After Evogent is running, create the default chat sessions once:
+
+```bash
+node scripts/create-default-sessions.mjs
+```
+
+For coding-agent-only installs, use `node scripts/create-default-sessions.mjs --coding-agent-only` instead.
+
 ```bash
 # Verify
 curl -s http://localhost:3001/api/status | jq .

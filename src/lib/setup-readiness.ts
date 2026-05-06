@@ -3,10 +3,8 @@ import fs from 'node:fs';
 import { promisify } from 'node:util';
 import { getDataPath } from '@/lib/data-dir';
 import {
-  DEFAULT_CURATOR_CHAT_SESSION_ID,
-  DEFAULT_MAIN_CHAT_SESSION_ID,
-  ensureDefaultAppChatSessions,
-  getChatSession,
+  getMostRecentCuratorChatSession,
+  getMostRecentGeneralChatSession,
   type BrainProviderName,
 } from '@/lib/db/chat-sessions';
 import { listInstalledSkillsWithWarnings } from '@/lib/skills';
@@ -24,7 +22,6 @@ import {
 import { getLatestBrowseCacheSourceSetupRun, type BrowseCacheRefreshRunRecord } from './db/browse-cache';
 import { getFeedItemById, insertOrIgnoreFeedItem } from './db/feed';
 import { getDb } from './db/client';
-import { resolveRuntimeWorkingDirectory } from './runtime-working-directory';
 import type { FeedItem } from '@/types/feed';
 
 const execFileAsync = promisify(execFile);
@@ -122,8 +119,6 @@ export interface FirstRunReadiness {
 export interface ReadinessOptions {
   checkProviderAvailability?: (provider: BrainProviderName) => Promise<ProviderAvailability>;
   persistConfig?: boolean;
-  bootstrapDefaultSessions?: boolean;
-  ensureSessions?: boolean;
   codingAgentOnly?: boolean;
   notifyWelcomeNotification?: (item: FeedItem) => Promise<void> | void;
 }
@@ -412,33 +407,16 @@ export async function getFirstRunReadiness(options: ReadinessOptions = {}): Prom
     curatorSessionId: null,
   };
 
-  const shouldBootstrapDefaultSessions = options.bootstrapDefaultSessions === true
-    || options.ensureSessions === true;
   const codingAgentOnly = options.codingAgentOnly === true;
   let readySessionMessage = `Default ${DEFAULT_GENERAL_AGENT_SESSION_TITLE} and ${DEFAULT_CURATOR_AGENT_SESSION_TITLE} chat sessions exist.`;
 
-  if (provider.selected && shouldBootstrapDefaultSessions) {
-    const ensured = ensureDefaultAppChatSessions({
-      provider: provider.selected,
-      workingDirectory: resolveRuntimeWorkingDirectory(),
-      includeCurator: !codingAgentOnly,
-    });
-    sessions = {
-      ready: Boolean(ensured.main && (codingAgentOnly || ensured.curator)),
-      mainSessionId: ensured.main.id,
-      curatorSessionId: ensured.curator?.id ?? null,
-    };
-  } else {
-    const main = getChatSession(DEFAULT_MAIN_CHAT_SESSION_ID);
-    const curator = getChatSession(DEFAULT_CURATOR_CHAT_SESSION_ID);
-    const inferredCodingAgentOnly = Boolean(main && !curator);
-    const requireCurator = !codingAgentOnly && !inferredCodingAgentOnly;
-    sessions = {
-      ready: Boolean(main && (!requireCurator || curator)),
-      mainSessionId: main?.id ?? null,
-      curatorSessionId: curator?.id ?? null,
-    };
-  }
+  const main = getMostRecentGeneralChatSession();
+  const curator = getMostRecentCuratorChatSession();
+  sessions = {
+    ready: Boolean(main && (codingAgentOnly || curator)),
+    mainSessionId: main?.id ?? null,
+    curatorSessionId: curator?.id ?? null,
+  };
 
   if (sessions.ready && !sessions.curatorSessionId) {
     readySessionMessage = `Default ${DEFAULT_GENERAL_AGENT_SESSION_TITLE} chat session exists.`;
@@ -457,7 +435,9 @@ export async function getFirstRunReadiness(options: ReadinessOptions = {}): Prom
   if (sessions.ready) {
     ready.push(readySessionMessage);
   } else {
-    pending.push('Default chat sessions can be created with the explicit bootstrap action after a runnable brain provider is available.');
+    pending.push(codingAgentOnly
+      ? 'Run node scripts/create-default-sessions.mjs --coding-agent-only after Evogent is running.'
+      : 'Run node scripts/create-default-sessions.mjs after Evogent is running.');
   }
 
   if (sources.ready) {
