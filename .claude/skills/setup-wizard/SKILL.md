@@ -12,6 +12,8 @@ Verification-first onboarding. Detect existing setup before asking any questions
 
 ## Step 0: Collect Live Evidence
 
+For deploying Evogent to a fresh VM behind Cloudflare Access (the public-feed demo pattern), read `docs/deploy-vm-demo.md` before improvising.
+
 Run these checks first, before any interactive prompts:
 
 ```bash

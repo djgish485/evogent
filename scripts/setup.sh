@@ -24,7 +24,6 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SETUP_WORKING_DIRECTORY="$(pwd)"
 SERVICE_NAME="evogent"
 CHROME_BROWSE_SERVICE="chrome-browse.service"
 LEGACY_CHROME_SERVICE="chrome-twitter.service"
@@ -123,34 +122,6 @@ cleanup_legacy_agent_cron() {
   fi
 }
 
-ensure_default_chat_session() {
-  local sessions_json=""
-  local session_count
-  local session_payload
-
-  for _ in {1..30}; do
-    if sessions_json="$(curl -fsS --max-time 5 'http://127.0.0.1:3001/api/chat/sessions?limit=1' 2>/dev/null)"; then
-      break
-    fi
-    sleep 1
-  done
-
-  if [ -z "$sessions_json" ]; then
-    echo "  Default General Agent session not created; app API was not ready"
-    return
-  fi
-
-  session_count="$(node -e 'const fs = require("fs"); const payload = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(String(Array.isArray(payload.sessions) ? payload.sessions.length : -1));' <<< "$sessions_json" 2>/dev/null || echo -1)"
-  if [ "$session_count" != "0" ]; then
-    echo "  Chat session already exists, skipping default General Agent"
-    return
-  fi
-
-  session_payload="$(SETUP_WORKING_DIRECTORY="$SETUP_WORKING_DIRECTORY" node -e 'process.stdout.write(JSON.stringify({ title: "General Agent", sessionType: null, workingDirectory: process.env.SETUP_WORKING_DIRECTORY || process.cwd() }));')"
-  curl -fsS -X POST 'http://127.0.0.1:3001/api/chat/sessions' -H 'Content-Type: application/json' --data "$session_payload" >/dev/null
-  echo "  Created default General Agent chat session"
-}
-
 echo "=== Evogent Setup ==="
 echo "App directory: $APP_DIR"
 echo ""
@@ -246,7 +217,6 @@ if [ -f "/etc/systemd/system/${CHROME_BROWSE_SERVICE}" ]; then
 fi
 
 echo "  Services started"
-ensure_default_chat_session
 
 # ── 3. Cron jobs ──────────────────────────────────────────────────────────
 

@@ -5,6 +5,8 @@ user-invocable: true
 metadata:
   evogent:
     heartbeat-task: false
+    installRequiresExplicitOptIn: true
+    reasonForGate: "Bird is the deprecated cookie-token X path. Browser-based tweet-cache is the supported default. Only install bird when the user has typed 'tweet-cache-bird' verbatim or explicitly chose the bird path in setup-source."
     requires:
       env:
         - AUTH_TOKEN

@@ -57,6 +57,8 @@ export interface SkillMetadataEvogent {
   requires?: SkillRequires;
   'feed-source'?: string;
   'feed-source-label'?: string;
+  installRequiresExplicitOptIn?: boolean;
+  reasonForGate?: string;
 }
 
 export interface SkillMetadata {
@@ -97,6 +99,7 @@ export interface SkippedInstalledSkill {
 export interface InstallSkillInput {
   url?: string;
   registry?: string;
+  confirmExplicit?: boolean;
 }
 
 export interface InstallSkillResult {
@@ -447,6 +450,11 @@ export async function installSkill(input: InstallSkillInput): Promise<InstallSki
   const resolved = await resolveSkillMarkdown(input);
   const parsed = parseSkillMarkdown(resolved.markdown);
   const name = parsed.frontmatter.name;
+  const metadata = normalizeSkillMetadata(parsed.frontmatter.metadata);
+
+  if (metadata.evogent?.installRequiresExplicitOptIn === true && input.confirmExplicit !== true) {
+    throw new Error(`Skill ${name} requires explicit user opt-in. The user must request this skill by name. Pass confirmExplicit: true only after the user has explicitly chosen this path.`);
+  }
 
   const skillsRoot = getSkillsRoot();
   const skillDir = path.join(skillsRoot, name);

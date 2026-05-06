@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 require('dotenv').config({ path: '.env.local' });
+require('tsx/cjs');
 
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
@@ -23,6 +24,9 @@ const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
 const { stopDevAgentUnit } = require('./lib/agent-self-orchestrate');
+const { readBrainConfig } = require('./lib/brain-config');
+const { ensureDefaultAppChatSessions } = require('./src/lib/db/chat-sessions.ts');
+const { resolveRuntimeWorkingDirectory } = require('./src/lib/runtime-working-directory.ts');
 const {
   BACKGROUND_JOB_NAMES,
   enqueueBackgroundJob,
@@ -4310,6 +4314,10 @@ app.prepare().then(() => {
   });
 
   retireOrphanedQueuedChatMessagesOnStartup();
+  ensureDefaultAppChatSessions({
+    provider: readBrainConfig(dataPath('config.md')).provider,
+    workingDirectory: resolveRuntimeWorkingDirectory(),
+  });
 
   // Watchdog for silent dev-agent death: every 60s, scan code_fix_tasks rows
   // with status='running' and check whether their systemd unit is still active.
