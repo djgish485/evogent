@@ -148,6 +148,29 @@ CREATE TABLE IF NOT EXISTS chat_session_brain_settings (
 );
 `;
 
+const createClaudeTaskUsageTableSql = `
+CREATE TABLE IF NOT EXISTS claude_task_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  source_label TEXT,
+  model TEXT,
+  effort TEXT,
+  started_at_ms INTEGER NOT NULL,
+  completed_at_ms INTEGER NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_create_tokens INTEGER NOT NULL DEFAULT 0,
+  estimated_cost_usd REAL NOT NULL DEFAULT 0
+);
+`;
+
+const createClaudeTaskUsageIndexesSql = [
+  `CREATE INDEX IF NOT EXISTS claude_task_usage_priority_started_idx ON claude_task_usage (priority, started_at_ms DESC);`,
+  `CREATE INDEX IF NOT EXISTS claude_task_usage_task_id_idx ON claude_task_usage (task_id);`,
+];
+
 const alterChatSessionBrainSettingsTableSql = [
   `ALTER TABLE chat_session_brain_settings ADD COLUMN claude_reasoning_effort TEXT NOT NULL DEFAULT 'high';`,
   `ALTER TABLE chat_session_brain_settings ADD COLUMN codex_fast_mode INTEGER DEFAULT 0;`,
@@ -1536,6 +1559,7 @@ export function ensureFeedSchema(db: Database.Database): void {
   db.exec(createChatMessagesTableSql);
   db.exec(createChatSessionsTableSql);
   db.exec(createChatSessionBrainSettingsTableSql);
+  db.exec(createClaudeTaskUsageTableSql);
   for (const stmt of alterChatSessionBrainSettingsTableSql) {
     try {
       db.exec(stmt);
@@ -1561,6 +1585,9 @@ export function ensureFeedSchema(db: Database.Database): void {
     db.exec(stmt);
   }
   for (const stmt of createChatSessionIndexesSql) {
+    db.exec(stmt);
+  }
+  for (const stmt of createClaudeTaskUsageIndexesSql) {
     db.exec(stmt);
   }
   ensureChatSessionBrainSettingsConstraint(db);
