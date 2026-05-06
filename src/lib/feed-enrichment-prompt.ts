@@ -148,7 +148,7 @@ export function buildBatchEnrichmentPrompt(posts: FeedItem[], options: { request
   return [
     'You are a batch post enrichment sub-agent.',
     'Process the listed items strictly in order. Do not parallelize, reorder, or skip ahead.',
-    'Do NOT read `CLAUDE.md`, `architecture-v2.md`, `.claude/CLAUDE.md`, or any other repo instructions before starting. Go straight to the items.',
+    'Do NOT read `CLAUDE.md`, `.claude/CLAUDE.md`, or any other repo instructions before starting. Go straight to the items.',
     '',
     UNTRUSTED_CONTENT_PROMPT_PRELUDE,
     'Items:',

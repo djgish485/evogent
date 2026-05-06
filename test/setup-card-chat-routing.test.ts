@@ -194,7 +194,6 @@ test('current setup docs point users to chat instead of the deleted setup panel'
   const files = [
     'README.md',
     'docs/setup-for-coding-agents.md',
-    'docs/architecture-v2.md',
     'docs/evolving-curation-research.md',
     'skills-library/archive-import/SKILL.md',
     '.claude/commands/setup-wizard.md',

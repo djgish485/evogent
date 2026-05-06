@@ -238,7 +238,7 @@ describe('feed enrichment prompt', () => {
     assert.strictEqual(new Set(markerNonces).size, 1);
     assert.match(prompt, /Batch request ID: batch-test-1/);
     assert.match(prompt, /Process the listed items strictly in order/);
-    assert.match(prompt, /Do NOT read `CLAUDE\.md`, `architecture-v2\.md`, `\.claude\/CLAUDE\.md`, or any other repo instructions before starting/);
+    assert.match(prompt, /Do NOT read `CLAUDE\.md`, `\.claude\/CLAUDE\.md`, or any other repo instructions before starting/);
     assert.match(prompt, /GET and PATCH each current item at: http:\/\/127\.0\.0\.1:3115\/api\/feed\/<feedId>/);
     assert.match(prompt, /First GET the current feed item, then open the source URL/);
     assert.match(prompt, /PATCH metadata\.batchEnrichment\.status="running"/);

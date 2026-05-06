@@ -24,7 +24,7 @@ If the prompt includes `Task ID`, `Priority`, `Source`, and `Timestamp` headers 
 
 ### Developing the codebase
 
-If you are fixing or building product code in this repo, read `.claude/CLAUDE.md` and `docs/architecture-v2.md`, then work as a normal dev agent.
+If you are fixing or building product code in this repo, read `.claude/CLAUDE.md`, then work as a normal dev agent.
 
 # Evogent Runtime Instructions
 
