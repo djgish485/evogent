@@ -34,9 +34,9 @@ Low
 
     assert.deepStrictEqual(parsed, {
       level: 'low',
-      subAgentModel: 'haiku',
-      enrichmentModel: 'sonnet',
-      reflectionModel: 'sonnet',
+      subAgentModel: 'claude-opus-4-7',
+      enrichmentModel: 'claude-opus-4-7',
+      reflectionModel: 'claude-opus-4-7',
       defaultMinInterval: 240,
       defaultMaxInterval: 480,
       reflectionFrequency: 'weekly',
@@ -52,9 +52,9 @@ medium
 
     assert.deepStrictEqual(parsed, {
       level: 'medium',
-      subAgentModel: 'sonnet',
-      enrichmentModel: 'sonnet',
-      reflectionModel: 'sonnet',
+      subAgentModel: 'claude-opus-4-7',
+      enrichmentModel: 'claude-opus-4-7',
+      reflectionModel: 'claude-opus-4-7',
       defaultMinInterval: 90,
       defaultMaxInterval: 240,
       reflectionFrequency: 'daily',
@@ -88,7 +88,7 @@ Prioritize:
 `);
 
     assert.strictEqual(parsed.level, 'medium');
-    assert.strictEqual(parsed.subAgentModel, 'sonnet');
+    assert.strictEqual(parsed.subAgentModel, 'claude-opus-4-7');
   });
 
   test('falls back to medium when value is invalid', () => {

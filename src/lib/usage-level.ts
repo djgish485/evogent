@@ -18,17 +18,17 @@ const USAGE_LEVEL_DEFAULT: UsageLevel = 'medium';
 
 const USAGE_LEVEL_MAP: Record<UsageLevel, Omit<UsageLevelConfig, 'level'>> = {
   low: {
-    subAgentModel: 'haiku',
-    enrichmentModel: 'sonnet',
-    reflectionModel: 'sonnet',
+    subAgentModel: 'claude-opus-4-7',
+    enrichmentModel: 'claude-opus-4-7',
+    reflectionModel: 'claude-opus-4-7',
     defaultMinInterval: 4 * 60,
     defaultMaxInterval: 8 * 60,
     reflectionFrequency: 'weekly',
   },
   medium: {
-    subAgentModel: 'sonnet',
-    enrichmentModel: 'sonnet',
-    reflectionModel: 'sonnet',
+    subAgentModel: 'claude-opus-4-7',
+    enrichmentModel: 'claude-opus-4-7',
+    reflectionModel: 'claude-opus-4-7',
     defaultMinInterval: 90,
     defaultMaxInterval: 4 * 60,
     reflectionFrequency: 'daily',
