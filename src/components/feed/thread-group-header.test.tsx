@@ -233,7 +233,7 @@ describe('ThreadGroupHeader', () => {
     });
 
     assert.doesNotMatch(markup, /data-prominence=/);
-    assert.match(markup, /text-base font-semibold text-zinc-100 sm:text-lg/);
+    assert.match(markup, /text-lg font-semibold text-zinc-100 sm:text-xl/);
     assert.doesNotMatch(markup, /Optional reason/);
     assert.doesNotMatch(markup, /More like this/);
     assert.doesNotMatch(markup, /Tune this lane/);

@@ -2772,7 +2772,7 @@ export function TweetCard({
 
         {displayText && (
           <div className={`relative select-text touch-auto ${isProminent ? 'mt-4' : 'mt-3'}`}>
-            <p className={`whitespace-pre-wrap break-words text-zinc-200 ${isProminent ? 'text-[19px] leading-[1.28] sm:text-[20px]' : 'text-[17px] leading-snug'}`}>
+            <p className={`whitespace-pre-wrap break-words text-zinc-200 ${isProminent ? 'text-[18px] leading-[1.28] sm:text-[19px]' : 'text-[16px] leading-snug'}`}>
               <LinkifiedText text={displayText} searchQuery={bodySearchQuery} />
               {needsTruncation && !expanded && (
                 <>
@@ -3158,7 +3158,7 @@ export function ArticleCard({
 
       {displayText && (
         <div className="relative select-text touch-auto">
-          <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[16px] leading-7' : 'text-[15px] leading-relaxed'}`}`}>
+          <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}`}>
             <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
             {needsTruncation && !expanded && (
               <>
