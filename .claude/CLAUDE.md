@@ -3,8 +3,6 @@
 ## Read First
 
 - Read `CLAUDE.md` first. It is the single source of truth for runtime instructions, design philosophy, feed content model, and boundary review.
-- Read `docs/architecture-v2.md` before making feature, bug-fix, or architectural changes.
-- Reference `docs/test-report-v2.md` for test coverage and verification notes.
 
 ## Tech Stack
 
@@ -31,7 +29,6 @@
 | `data/config.md` | User preferences |
 | `data/preferences-context.md` | Learned user preferences |
 | `data/media-agent.db` | SQLite database |
-| `docs/architecture-v2.md` | Master v2 architecture blueprint |
 | `docs/reference/` | Runtime contracts, API references, and recipes |
 | `scripts/agents/` | Repo-local agent orchestration scripts and logs |
 | `.env.local` | Environment variables (not in git) |

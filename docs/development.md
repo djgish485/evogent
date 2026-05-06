@@ -38,5 +38,3 @@ Orchestrator queue
 - `data/chat-output.jsonl` is an audit log for chat replies already persisted through `/api/internal/chat/submit`.
 - `data/preference-insights.md` stores synthesized preference patterns maintained by reflection.
 - `data/tracked-events.json` stores current event tracking lifecycle data.
-
-See [architecture-v2.md](architecture-v2.md) for the full system design.
