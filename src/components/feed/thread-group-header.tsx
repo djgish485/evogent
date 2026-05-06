@@ -48,7 +48,7 @@ export function ThreadGroupHeader({
     ? 'text-[22px] font-semibold leading-tight text-zinc-50 sm:text-[28px]'
     : threadProminence?.level === 'prominent'
       ? 'text-lg font-semibold leading-tight text-zinc-50 sm:text-xl'
-      : 'text-base font-semibold text-zinc-100 sm:text-lg';
+      : 'text-lg font-semibold text-zinc-100 sm:text-xl';
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
 
