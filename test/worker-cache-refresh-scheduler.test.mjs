@@ -3,272 +3,178 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
-import Database from 'better-sqlite3';
 
-function extractLatestBrowseCacheRefresh(source) {
-  const start = source.indexOf('const BROWSE_CACHE_REFRESH_TIMESTAMP_SKEW_MS');
-  const end = source.indexOf('\n\nfunction getLatestUserActivityAtMs');
+function loadOnDemandModule({
+  backgroundSourceBrowsingEnabled = true,
+  sources = [],
+  hasPendingCacheRefreshJob = async () => false,
+  enqueueBackgroundJob = async () => ({ ok: true, jobId: 'job' }),
+} = {}) {
+  const source = fs.readFileSync(path.join(process.cwd(), 'lib/cache-refresh-on-demand.js'), 'utf8');
+  const cjsModule = { exports: {} };
+  const sandbox = {
+    module: cjsModule,
+    exports: cjsModule.exports,
+    process: { cwd: () => process.cwd() },
+    setTimeout,
+    require: (specifier) => {
+      if (specifier === './brain-config') {
+        return { readBackgroundSourceBrowsingEnabled: () => backgroundSourceBrowsingEnabled };
+      }
+      if (specifier === './cache-refresh-config') {
+        return { listInstalledCacheSources: () => sources };
+      }
+      if (specifier === './queue') {
+        return {
+          BACKGROUND_JOB_NAMES: { CACHE_REFRESH: 'cache_refresh' },
+          enqueueBackgroundJob,
+          hasPendingCacheRefreshJob,
+        };
+      }
+      throw new Error(`Unexpected require in on-demand cache refresh test: ${specifier}`);
+    },
+  };
 
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('Failed to locate latest browse-cache refresh helper in worker.js');
-  }
-
-  return source.slice(start, end);
+  vm.runInNewContext(source, sandbox, { filename: 'cache-refresh-on-demand.js' });
+  return cjsModule.exports;
 }
 
-function extractCacheRefreshScheduler(source) {
-  const start = source.indexOf('async function runCacheRefreshSchedulerCheck');
+function extractRunCurationTimerTick(source) {
+  const start = source.indexOf('async function runCurationTimerTick');
   const end = source.indexOf('\n\nfunction createBackgroundWorker', start);
 
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error('Failed to locate cache refresh scheduler in worker.js');
+    throw new Error('Failed to locate runCurationTimerTick in worker.js');
   }
 
   return source.slice(start, end);
 }
 
-function loadCacheRefreshScheduler(sandbox) {
-  const workerSource = fs.readFileSync(path.join(process.cwd(), 'worker.js'), 'utf8');
-  vm.runInNewContext(
-    `let cacheRefreshCheckInFlight = false;
-${extractCacheRefreshScheduler(workerSource)}
-globalThis.runCacheRefreshSchedulerCheck = runCacheRefreshSchedulerCheck;`,
-    sandbox,
-  );
-
-  return sandbox.runCacheRefreshSchedulerCheck;
-}
-
-function loadLatestBrowseCacheRefresh(sandbox) {
-  const workerSource = fs.readFileSync(path.join(process.cwd(), 'worker.js'), 'utf8');
-  vm.runInNewContext(
-    `${extractLatestBrowseCacheRefresh(workerSource)}
-globalThis.getLatestBrowseCacheRefreshAtMs = getLatestBrowseCacheRefreshAtMs;`,
-    sandbox,
-  );
-
-  return sandbox.getLatestBrowseCacheRefreshAtMs;
-}
-
-function createRefreshRunDb(rows) {
-  const db = new Database(':memory:');
-  db.exec(`
-    CREATE TABLE browse_cache_refresh_runs (
-      id TEXT PRIMARY KEY,
-      source TEXT NOT NULL,
-      triggered_by TEXT NOT NULL,
-      started_at_ms INTEGER,
-      completed_at_ms INTEGER,
-      status TEXT NOT NULL,
-      items_added INTEGER NOT NULL DEFAULT 0,
-      error TEXT
-    );
-  `);
-
-  const insert = db.prepare(`
-    INSERT INTO browse_cache_refresh_runs (
-      id,
-      source,
-      triggered_by,
-      started_at_ms,
-      completed_at_ms,
-      status,
-      items_added,
-      error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-  `);
-
-  for (const row of rows) {
-    insert.run(
-      row.id,
-      row.source,
-      row.triggeredBy ?? 'test',
-      row.startedAtMs ?? null,
-      row.completedAtMs ?? null,
-      row.status ?? 'completed',
-      row.itemsAdded ?? 0,
-    );
-  }
-
-  return db;
-}
-
-function createSchedulerSandbox({
-  now,
-  enqueued,
-  activityMultiplier = 1,
-  latestRefreshAtMs = null,
-  pending = false,
-  backgroundSourceBrowsingEnabled = true,
-  sources,
-  intervals,
-  db = null,
-}) {
-  return {
-    BACKGROUND_JOB_NAMES: { CACHE_REFRESH: 'cache_refresh' },
-    Date: { now: () => now },
-    console: { log: () => {}, warn: () => {} },
-    dataPath: () => '/tmp/config.md',
-    enqueueBackgroundJob: async (_name, payload) => { enqueued.push(payload); },
-    getCacheRefreshActivityMultiplier: () => activityMultiplier,
-    getChatStatusDb: () => db,
-    getLatestBrowseCacheRefreshAtMs: () => latestRefreshAtMs,
-    hasPendingCacheRefreshJob: async () => pending,
-    listInstalledCacheSources: () => sources,
-    process: { cwd: () => process.cwd() },
-    readBackgroundSourceBrowsingEnabled: () => backgroundSourceBrowsingEnabled,
-    readCacheRefreshIntervals: () => intervals,
-  };
-}
-
-test('runCacheRefreshSchedulerCheck keeps explicit cache interval overrides', async () => {
+test('enqueueCacheRefreshForCuration queues installed sources before /curate and reuses pending source jobs', async () => {
   const enqueued = [];
-  const now = 1_700_000_000_000;
-  const sandbox = createSchedulerSandbox({
-    now,
-    enqueued,
+  let youtubePendingInitialCheck = true;
+  const {
+    enqueueCacheRefreshForCuration,
+  } = loadOnDemandModule({
     sources: ['twitter', 'youtube'],
-    intervals: { twitter: 10, youtube: 240 },
-  });
-
-  const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-  await runCacheRefreshSchedulerCheck('timer');
-
-  assert.deepStrictEqual(
-    enqueued.map((job) => ({
-      source: job.metadata.cacheSource,
-      baseIntervalMinutes: job.metadata.baseIntervalMinutes,
-      intervalMinutes: job.metadata.intervalMinutes,
-    })),
-    [
-      { source: 'twitter', baseIntervalMinutes: 10, intervalMinutes: 10 },
-      { source: 'youtube', baseIntervalMinutes: 240, intervalMinutes: 240 },
-    ],
-  );
-});
-
-test('runCacheRefreshSchedulerCheck multiplies intervals during idle windows', async () => {
-  const now = 1_700_000_000_000;
-  const enqueued = [];
-  const sandbox = createSchedulerSandbox({
-    now,
-    enqueued,
-    activityMultiplier: 2,
-    latestRefreshAtMs: now - (59 * 60 * 1000),
-    sources: ['twitter'],
-    intervals: { twitter: 30 },
-  });
-
-  const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-  await runCacheRefreshSchedulerCheck('timer');
-
-  assert.strictEqual(enqueued.length, 0);
-});
-
-for (const [name, poisonedStartedAt] of [
-  ['future-start', '2026-05-02T02:39:16.471Z'],
-  ['inverted', '2026-04-27T08:00:00.000Z'],
-]) {
-  test(`runCacheRefreshSchedulerCheck ignores ${name} rows that would hide newer valid refreshes`, async () => {
-    const now = Date.parse('2026-04-27T08:01:00.000Z');
-    const db = createRefreshRunDb([
-      {
-        id: `browse-cache-refresh-${name}`,
-        source: 'substack',
-        startedAtMs: Date.parse(poisonedStartedAt),
-        completedAtMs: Date.parse('2026-04-25T06:41:28.870Z'),
-        itemsAdded: 60,
-      },
-      {
-        id: 'browse-cache-refresh-fresh',
-        source: 'substack',
-        startedAtMs: Date.parse('2026-04-27T07:54:42.000Z'),
-        completedAtMs: Date.parse('2026-04-27T07:55:12.043Z'),
-        itemsAdded: 12,
-      },
-    ]);
-    const enqueued = [];
-    const sandbox = createSchedulerSandbox({
-      now,
-      enqueued,
-      db,
-      sources: ['substack'],
-      intervals: { substack: 120 },
-    });
-
-    loadLatestBrowseCacheRefresh(sandbox);
-    const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-    await runCacheRefreshSchedulerCheck('timer');
-
-    assert.strictEqual(enqueued.length, 0);
-    db.close();
-  });
-}
-
-test('runCacheRefreshSchedulerCheck ignores setup-smoke rows when deciding cadence', async () => {
-  const now = Date.parse('2026-04-29T09:25:00.000Z');
-  const db = createRefreshRunDb([
-    {
-      id: 'setup-source-twitter-task-123',
-      source: 'twitter',
-      triggeredBy: 'setup-source-smoke',
-      startedAtMs: Date.parse('2026-04-29T09:18:00.000Z'),
-      completedAtMs: Date.parse('2026-04-29T09:18:55.000Z'),
-      itemsAdded: 4,
+    hasPendingCacheRefreshJob: async (source) => {
+      if (source === 'youtube' && youtubePendingInitialCheck) {
+        youtubePendingInitialCheck = false;
+        return true;
+      }
+      return false;
     },
-  ]);
-  const enqueued = [];
-  const sandbox = createSchedulerSandbox({
-    now,
-    enqueued,
-    db,
-    sources: ['twitter'],
-    intervals: { twitter: 30 },
+    enqueueBackgroundJob: async (name, payload, options) => {
+      enqueued.push({ name, payload, options });
+      return { ok: true, jobId: options.jobId };
+    },
   });
 
-  const getLatestBrowseCacheRefreshAtMs = loadLatestBrowseCacheRefresh(sandbox);
-  assert.strictEqual(getLatestBrowseCacheRefreshAtMs('twitter'), null);
-
-  const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-  await runCacheRefreshSchedulerCheck('timer');
-
-  assert.strictEqual(enqueued.length, 1);
-  assert.strictEqual(enqueued[0].metadata.cacheSource, 'twitter');
-  db.close();
-});
-
-test('runCacheRefreshSchedulerCheck skips enqueue when a cache job is already pending', async () => {
-  const now = 1_700_000_000_000;
-  const enqueued = [];
-  const sandbox = createSchedulerSandbox({
-    now,
-    enqueued,
-    pending: true,
-    sources: ['youtube'],
-    intervals: { youtube: 120 },
+  const result = await enqueueCacheRefreshForCuration({
+    id: 'curate-task-1',
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate' },
+  }, {
+    rootDir: '/repo',
+    configPath: '/repo/data/config.md',
+    timeoutMs: 10,
   });
 
-  const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-  await runCacheRefreshSchedulerCheck('timer');
-
-  assert.strictEqual(enqueued.length, 0);
+  assert.deepStrictEqual(enqueued.map((job) => ({
+    name: job.name,
+    message: job.payload.message,
+    priority: job.payload.priority,
+    cacheSource: job.payload.metadata.cacheSource,
+    triggerSource: job.payload.metadata.triggerSource,
+  })), [{
+    name: 'cache_refresh',
+    message: '/cache-refresh twitter',
+    priority: 'cache_refresh',
+    cacheSource: 'twitter',
+    triggerSource: 'pre_curation',
+  }]);
+  assert.deepStrictEqual([...result.queuedSources], ['twitter']);
+  assert.deepStrictEqual([...result.waitedSources], ['twitter', 'youtube']);
+  assert.strictEqual(result.timedOut, false);
 });
 
-test('runCacheRefreshSchedulerCheck skips automatic cache refreshes when background source browsing is disabled', async () => {
-  const now = 1_700_000_000_000;
-  const enqueued = [];
-  const sandbox = createSchedulerSandbox({
-    now,
-    enqueued,
+test('enqueueCacheRefreshForCuration skips non-cache curation and disabled source browsing', async () => {
+  const disabled = loadOnDemandModule({
     backgroundSourceBrowsingEnabled: false,
-    sources: ['twitter', 'hackernews'],
-    intervals: { twitter: 30, hackernews: 60 },
+    sources: ['twitter'],
+  });
+  const disabledResult = await disabled.enqueueCacheRefreshForCuration({
+    id: 'curate-task-2',
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate' },
+  });
+  assert.strictEqual(disabledResult.skipped, true);
+  assert.strictEqual(disabledResult.reason, 'background_source_browsing_disabled');
+  assert.deepStrictEqual([...disabledResult.queuedSources], []);
+  assert.deepStrictEqual([...disabledResult.waitedSources], []);
+
+  const enabled = loadOnDemandModule({
+    backgroundSourceBrowsingEnabled: true,
+    sources: ['twitter'],
+  });
+  const latestResult = await enabled.enqueueCacheRefreshForCuration({
+    id: 'latest-task-1',
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate-latest' },
+  });
+  assert.strictEqual(latestResult.skipped, true);
+  assert.strictEqual(latestResult.reason, 'not_cache_backed_curation');
+  assert.deepStrictEqual([...latestResult.queuedSources], []);
+  assert.deepStrictEqual([...latestResult.waitedSources], []);
+});
+
+test('waitForCacheRefreshSources returns timedOut instead of blocking curation indefinitely', async () => {
+  const {
+    waitForCacheRefreshSources,
+  } = loadOnDemandModule({
+    hasPendingCacheRefreshJob: async () => true,
   });
 
-  const runCacheRefreshSchedulerCheck = loadCacheRefreshScheduler(sandbox);
-  await runCacheRefreshSchedulerCheck('startup');
+  const result = await waitForCacheRefreshSources(['twitter'], {
+    timeoutMs: 5,
+    pollIntervalMs: 1,
+  });
 
-  assert.strictEqual(enqueued.length, 0);
+  assert.strictEqual(result.timedOut, true);
+  assert.deepStrictEqual([...result.pendingSources], ['twitter']);
+});
+
+test('cache-backed curation detection includes full /curate but excludes /curate-latest', () => {
+  const { isCacheBackedCurationTask } = loadOnDemandModule();
+
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate' },
+  }), true);
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate-latest' },
+  }), false);
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'heartbeat',
+    message: 'Heartbeat: run curation cycle',
+  }), true);
+});
+
+test('worker timer no longer runs periodic cache refresh checks', () => {
+  const workerSource = fs.readFileSync(path.join(process.cwd(), 'worker.js'), 'utf8');
+  const timerTickSource = extractRunCurationTimerTick(workerSource);
+
+  assert.doesNotMatch(workerSource, /runCacheRefreshSchedulerCheck/);
+  assert.doesNotMatch(timerTickSource, /CACHE_REFRESH|cache_refresh|Cache refresh/);
+  assert.doesNotMatch(workerSource, /Cache refresh timer enabled in worker/);
+});
+
+test('brain orchestrator runs pre-curation setup for chat-backed /curate', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'lib/brain-orchestrator.js'), 'utf8');
+
+  assert.match(source, /function isChatBackedCurateTask\(task\)/);
+  assert.match(source, /if \(isChatBackedCurateTask\(task\)\) \{\s+await regeneratePreferenceContextBeforeCuration\(task\);/);
 });
 
 test('pending worker restart drains cache-refresh work before checking idle state', () => {

@@ -13,8 +13,9 @@ const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
 const { regeneratePreferenceContext } = require('./src/lib/preferences-context-runtime.js');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
-const { readAutomaticCurationEnabled, readBackgroundSourceBrowsingEnabled } = require('./lib/brain-config');
-const { hasCurationCapability, listInstalledCacheSources, readCacheRefreshIntervals, readConfigUsageLevel } = require('./lib/cache-refresh-config');
+const { readAutomaticCurationEnabled } = require('./lib/brain-config');
+const { hasCurationCapability, readConfigUsageLevel } = require('./lib/cache-refresh-config');
+const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
@@ -26,7 +27,6 @@ const {
   drainStaleBackgroundJobs,
   enqueueBackgroundJob,
   hasPendingBackgroundJob,
-  hasPendingCacheRefreshJob,
 } = require('./lib/queue');
 
 const port = Number.parseInt(process.env.PORT || '3001', 10);
@@ -38,10 +38,6 @@ const REFLECTION_INTERVAL_MS_BY_FREQUENCY = Object.freeze({
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
 });
-const CACHE_REFRESH_IDLE_MULTIPLIERS = Object.freeze([
-  { idleMs: 6 * 60 * 60 * 1000, multiplier: 4 },
-  { idleMs: 2 * 60 * 60 * 1000, multiplier: 2 },
-]);
 const DEFAULT_QUIET_HOURS_UTC = Object.freeze([4, 5, 6, 7]);
 const EXECUTION_TASK_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const TASK_TIMEOUT_MS_BY_PRIORITY = Object.freeze({
@@ -103,7 +99,6 @@ const defaultDbPath = dataPath('media-agent.db');
 let chatStatusDb = null;
 let heartbeatCheckInFlight = false;
 let reflectionCheckInFlight = false;
-let cacheRefreshCheckInFlight = false;
 const timerHandles = [];
 const workerConnection = createQueueConnection({ forWorker: true });
 let backgroundWorker = null;
@@ -838,6 +833,25 @@ async function postOrchestratorStatus(status, trigger, event = null) {
 }
 
 async function regeneratePreferenceContextBeforeCuration(task) {
+  console.log(`[cache-refresh] pre-curation refresh starting for task ${task.id}`);
+  try {
+    const result = await enqueueCacheRefreshForCuration(task, {
+      rootDir: process.cwd(),
+      configPath: dataPath('config.md'),
+    });
+
+    if (result.skipped) {
+      console.log(`[cache-refresh] pre-curation refresh skipped for task ${task.id}: ${result.reason}`);
+    } else if (result.timedOut) {
+      console.warn(`[cache-refresh] pre-curation refresh timed out for task ${task.id}: ${result.pendingSources.join(', ')}`);
+    } else {
+      console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: ${result.waitedSources.join(', ') || 'no sources'}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[cache-refresh] pre-curation refresh failed for task ${task.id}: ${message}`);
+  }
+
   console.log(`[preferences] pre-curation context refresh starting for task ${task.id}`);
 
   try {
@@ -917,105 +931,6 @@ function getReflectionIntervalConfig() {
     minIntervalMs,
     minIntervalHours: Math.round(minIntervalMs / (60 * 60 * 1000)),
   };
-}
-
-const BROWSE_CACHE_REFRESH_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
-const SOURCE_SETUP_REFRESH_TRIGGERED_BY = 'setup-source-smoke';
-
-function getLatestBrowseCacheRefreshAtMs(source) {
-  try {
-    const maxTimestampMs = Date.now() + BROWSE_CACHE_REFRESH_TIMESTAMP_SKEW_MS;
-    const row = getChatStatusDb().prepare(`
-      SELECT completed_at_ms, started_at_ms
-      FROM browse_cache_refresh_runs
-      WHERE source = ?
-        AND triggered_by != ?
-        AND (
-          (
-            completed_at_ms IS NOT NULL
-            AND completed_at_ms >= 0
-            AND completed_at_ms <= ?
-            AND (
-              started_at_ms IS NULL
-              OR (
-                started_at_ms >= 0
-                AND started_at_ms <= ?
-                AND completed_at_ms + ? >= started_at_ms
-              )
-            )
-          )
-          OR (
-            completed_at_ms IS NULL
-            AND LOWER(status) != 'completed'
-            AND started_at_ms IS NOT NULL
-            AND started_at_ms >= 0
-            AND started_at_ms <= ?
-          )
-        )
-      ORDER BY COALESCE(completed_at_ms, started_at_ms) DESC, id DESC
-      LIMIT 1
-    `).get(
-      source,
-      SOURCE_SETUP_REFRESH_TRIGGERED_BY,
-      maxTimestampMs,
-      maxTimestampMs,
-      BROWSE_CACHE_REFRESH_TIMESTAMP_SKEW_MS,
-      maxTimestampMs,
-    );
-
-    const completedAtMs = Number.isFinite(row?.completed_at_ms) ? Number(row.completed_at_ms) : null;
-    const startedAtMs = Number.isFinite(row?.started_at_ms) ? Number(row.started_at_ms) : null;
-    return completedAtMs ?? startedAtMs;
-  } catch {
-    return null;
-  }
-}
-
-function getLatestUserActivityAtMs() {
-  let db = null;
-
-  try {
-    db = new Database(getDbPath(), { readonly: true });
-    const row = db.prepare(`
-      SELECT timestamp
-      FROM user_activity
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `).get();
-
-    if (typeof row?.timestamp !== 'string' || !row.timestamp.trim()) {
-      return null;
-    }
-
-    const latestUserActivityAtMs = Date.parse(row.timestamp);
-    return Number.isNaN(latestUserActivityAtMs) ? null : latestUserActivityAtMs;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[cache-refresh] failed to read latest user activity: ${message}`);
-    return null;
-  } finally {
-    db?.close();
-  }
-}
-
-function getCacheRefreshActivityMultiplier(now = Date.now()) {
-  const latestUserActivityAtMs = getLatestUserActivityAtMs();
-  if (!Number.isFinite(latestUserActivityAtMs)) {
-    return 1;
-  }
-
-  const idleMs = now - latestUserActivityAtMs;
-  if (!Number.isFinite(idleMs) || idleMs < 0) {
-    return 1;
-  }
-
-  for (const { idleMs: minimumIdleMs, multiplier } of CACHE_REFRESH_IDLE_MULTIPLIERS) {
-    if (idleMs >= minimumIdleMs) {
-      return multiplier;
-    }
-  }
-
-  return 1;
 }
 
 function sanitizeReflectionTriggerSource(triggeredBy) {
@@ -1728,58 +1643,6 @@ async function runReflectionSchedulerCheck(triggeredBy = 'timer') {
   }
 }
 
-async function runCacheRefreshSchedulerCheck(triggeredBy = 'timer') {
-  if (cacheRefreshCheckInFlight) return;
-  cacheRefreshCheckInFlight = true;
-
-  try {
-    const now = Date.now();
-    if (!readBackgroundSourceBrowsingEnabled(dataPath('config.md'))) {
-      console.log(`[cache-refresh] scheduler skipped (${triggeredBy}): background source browsing disabled in data/config.md`);
-      return;
-    }
-
-    const baseIntervalsBySource = readCacheRefreshIntervals(dataPath('config.md'));
-    const activityMultiplier = getCacheRefreshActivityMultiplier(now);
-    const sources = listInstalledCacheSources(process.cwd());
-
-    for (const source of sources) {
-      const baseIntervalMinutes = Number.isFinite(baseIntervalsBySource[source]) ? baseIntervalsBySource[source] : 60;
-      const intervalMinutes = Math.max(1, Math.floor(baseIntervalMinutes * activityMultiplier));
-      const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
-      const lastRefreshAtMs = getLatestBrowseCacheRefreshAtMs(source);
-
-      if (lastRefreshAtMs !== null && (now - lastRefreshAtMs) < intervalMs) {
-        continue;
-      }
-
-      if (await hasPendingCacheRefreshJob(source)) {
-        continue;
-      }
-
-      const requestId = `cache-refresh-${source}-${now}`;
-      await enqueueBackgroundJob(BACKGROUND_JOB_NAMES.CACHE_REFRESH, {
-        requestId,
-        message: `/cache-refresh ${source}`,
-        priority: 'cache_refresh',
-        source: `cache_scheduler:${triggeredBy}:${source}`.slice(0, 96),
-        metadata: {
-          cacheSource: source,
-          triggerSource: triggeredBy,
-          baseIntervalMinutes,
-          activityMultiplier,
-          intervalMinutes,
-        },
-      });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[cache-refresh] scheduler check failed: ${message}`);
-  } finally {
-    cacheRefreshCheckInFlight = false;
-  }
-}
-
 async function runCurationTimerTick(triggeredBy = 'timer') {
   if (!hasCurationCapability(process.cwd())) {
     if (triggeredBy === 'startup') {
@@ -1795,7 +1658,6 @@ async function runCurationTimerTick(triggeredBy = 'timer') {
   }
 
   await runReflectionSchedulerCheck(triggeredBy);
-  await runCacheRefreshSchedulerCheck(triggeredBy);
 }
 
 function createBackgroundWorker() {
@@ -1942,7 +1804,6 @@ async function start() {
 
   console.log('> Adaptive heartbeat timer enabled in worker (5 minute checks, respects data/config.md)');
   console.log('> Reflection timer enabled in worker (quiet-hour scheduling)');
-  console.log('> Cache refresh timer enabled in worker (5 minute checks, usage/activity-aware intervals from data/config.md)');
 }
 
 let shuttingDown = false;
