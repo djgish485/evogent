@@ -20,6 +20,7 @@ const { failStaleQueuedChatMessages } = require('./lib/chat-message-cleanup.js')
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { resolveBrainProviderByName } = require('./lib/brain-provider');
 const { dispatchCodeFixSuggestionsInBackground } = require('./lib/code-fix-dispatch');
+const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
@@ -3144,6 +3145,25 @@ async function postInternal(pathname, payload, { signal } = {}) {
 }
 
 async function regeneratePreferenceContextBeforeCuration(task) {
+  console.log(`[cache-refresh] pre-curation refresh starting for task ${task.id}`);
+  try {
+    const result = await enqueueCacheRefreshForCuration(task, {
+      rootDir: process.cwd(),
+      configPath: dataPath('config.md'),
+    });
+
+    if (result.skipped) {
+      console.log(`[cache-refresh] pre-curation refresh skipped for task ${task.id}: ${result.reason}`);
+    } else if (result.timedOut) {
+      console.warn(`[cache-refresh] pre-curation refresh timed out for task ${task.id}: ${result.pendingSources.join(', ')}`);
+    } else {
+      console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: ${result.waitedSources.join(', ') || 'no sources'}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[cache-refresh] pre-curation refresh failed for task ${task.id}: ${message}`);
+  }
+
   console.log(`[preferences] pre-curation context refresh starting for task ${task.id}`);
 
   try {
