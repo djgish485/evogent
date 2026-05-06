@@ -47,6 +47,13 @@ test('parseBrainConfig derives curator model from usage level', () => {
   assert.equal(parseBrainConfig('# Evogent Config\n').curatorModel, 'claude-opus-4-7');
 });
 
+test('parseBrainConfig derives cache refresh effort from usage level', () => {
+  assert.equal(parseBrainConfig('## Usage Level\nLow\n').cacheRefreshEffort, 'low');
+  assert.equal(parseBrainConfig('## Usage Level\nMedium\n').cacheRefreshEffort, 'high');
+  assert.equal(parseBrainConfig('## Usage Level\nHigh\n').cacheRefreshEffort, 'high');
+  assert.equal(parseBrainConfig('# Evogent Config\n').cacheRefreshEffort, 'high');
+});
+
 test('parseBrainConfig keeps explicit Codex reasoning effort over usage level', () => {
   const parsed = parseBrainConfig(`
 # Evogent Config
