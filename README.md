@@ -102,5 +102,4 @@ Direct access to Evo's agents is disabled for remote users by default. To use th
 - [Twitter/X access](docs/sources/twitter.md)
 - [Security](docs/security.md)
 - [Development](docs/development.md)
-- [Architecture](docs/architecture-v2.md)
 - [License](LICENSE)

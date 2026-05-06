@@ -8,7 +8,7 @@
 
 ## Summary
 
-Unit and API/WebSocket integration tests cover all 7 architecture-v2 features. Playwright E2E tests were removed (2026-03-19) — dev agents use Browser tool for interactive visual verification instead.
+Unit and API/WebSocket integration tests cover the orchestrator, chat, enrichment, heartbeat, post-detail, skills, and mobile-UX subsystems. Playwright E2E tests were removed (2026-03-19) — dev agents use Browser tool for interactive visual verification instead.
 
 ## Test Files
 
