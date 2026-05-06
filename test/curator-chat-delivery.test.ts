@@ -7,10 +7,7 @@ import test from 'node:test';
 import { POST as postChat } from '../src/app/api/chat/route';
 import { getDb } from '../src/lib/db/client';
 import { recordBrowseCacheRefresh } from '../src/lib/db/browse-cache';
-import {
-  DEFAULT_CURATOR_CHAT_SESSION_ID,
-  ensureDefaultAppChatSessions,
-} from '../src/lib/db/chat-sessions';
+import { createChatSession } from '../src/lib/db/chat-sessions';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -64,13 +61,13 @@ On
   return { dataDir, skillsDir, binDir };
 }
 
-async function postCurate(originView: 'feed' | 'feed/setup_card') {
+async function postCurate(sessionId: string, originView: 'feed' | 'feed/setup_card') {
   const response = await postChat(new Request('http://127.0.0.1/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message: '/curate',
-      sessionId: DEFAULT_CURATOR_CHAT_SESSION_ID,
+      sessionId,
       context: null,
       inReplyTo: null,
       contextKind: 'global',
@@ -160,6 +157,12 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
       throw new Error(`Unexpected fetch in curator chat delivery test: ${url}`);
     }) as typeof fetch;
 
+    const curatorSession = createChatSession({
+      title: 'Curator Agent',
+      sessionType: 'curator',
+      color: 'amber',
+    });
+
     const { evaluateAdaptiveHeartbeat } = await import('../src/lib/heartbeat-service');
     const heartbeat = await evaluateAdaptiveHeartbeat({
       triggeredBy: 'unit-test',
@@ -170,15 +173,10 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
     });
     assert.strictEqual(heartbeat.triggered, true);
 
-    ensureDefaultAppChatSessions({
-      provider: 'claude',
-      workingDirectory: process.cwd(),
-    });
-
-    const setupResponse = await postCurate('feed/setup_card');
-    const userResponse = await postCurate('feed');
-    assert.strictEqual(setupResponse.sessionId, DEFAULT_CURATOR_CHAT_SESSION_ID);
-    assert.strictEqual(userResponse.sessionId, DEFAULT_CURATOR_CHAT_SESSION_ID);
+    const setupResponse = await postCurate(curatorSession.id, 'feed/setup_card');
+    const userResponse = await postCurate(curatorSession.id, 'feed');
+    assert.strictEqual(setupResponse.sessionId, curatorSession.id);
+    assert.strictEqual(userResponse.sessionId, curatorSession.id);
 
     const db = getDb();
     const curatorSessions = db.prepare(`
@@ -188,7 +186,7 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
       ORDER BY id ASC
     `).all() as Array<{ id: string; title: string; session_type: string | null }>;
     assert.deepStrictEqual(curatorSessions, [{
-      id: DEFAULT_CURATOR_CHAT_SESSION_ID,
+      id: curatorSession.id,
       title: 'Curator Agent',
       session_type: 'curator',
     }]);
@@ -205,10 +203,10 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
       FROM chat_messages
       WHERE role = 'user'
         AND type = 'chat'
-        AND text = '/curate'
+      AND text = '/curate'
       ORDER BY session_id ASC
     `).all() as Array<{ session_id: string }>;
-    assert.deepStrictEqual(curateMessageSessions, [{ session_id: DEFAULT_CURATOR_CHAT_SESSION_ID }]);
+    assert.deepStrictEqual(curateMessageSessions, [{ session_id: curatorSession.id }]);
 
     const curateMessageCount = db.prepare(`
       SELECT COUNT(*) AS count
@@ -217,7 +215,7 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
         AND type = 'chat'
         AND text = '/curate'
         AND session_id = ?
-    `).get(DEFAULT_CURATOR_CHAT_SESSION_ID) as { count: number };
+    `).get(curatorSession.id) as { count: number };
     assert.strictEqual(curateMessageCount.count, 3);
 
     assert.strictEqual(enqueuedPayloads.length, 3);
@@ -225,7 +223,7 @@ test('heartbeat, setup-card, and user /curate all use one Curator Agent chat ses
       const metadata = payload.metadata as Record<string, unknown>;
       assert.strictEqual(payload.priority, 'user_chat');
       assert.strictEqual(metadata.endpoint, '/api/chat');
-      assert.strictEqual(metadata.sessionId, DEFAULT_CURATOR_CHAT_SESSION_ID);
+      assert.strictEqual(metadata.sessionId, curatorSession.id);
       assert.strictEqual(metadata.sessionType, 'curator');
       assert.strictEqual(metadata.requiresBrowserTools, true);
     }

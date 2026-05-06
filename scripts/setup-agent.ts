@@ -524,8 +524,8 @@ export function formatSetupAgentReport(
   const defaultSessionsMessage = readiness.sessions.ready
     ? readyDefaultSessions
     : options.codingAgentOnly
-      ? 'Create with npm run setup:agent -- --bootstrap-default-sessions --coding-agent-only after provider readiness is clean.'
-      : 'Create with npm run setup:agent -- --bootstrap-default-sessions after provider readiness is clean.';
+      ? 'Run node scripts/create-default-sessions.mjs --coding-agent-only after Evogent is running.'
+      : 'Run node scripts/create-default-sessions.mjs after Evogent is running.';
 
   lines.push(`${readiness.provider.ready ? 'READY' : 'REQUIRED'} brain_provider: ${readiness.provider.message}`);
   lines.push(`${readiness.sessions.ready ? 'READY' : 'PENDING'} default_sessions: ${defaultSessionsMessage}`);
@@ -543,12 +543,9 @@ export function formatSetupAgentReport(
 
 async function main() {
   const codingAgentOnly = process.argv.includes('--coding-agent-only');
-  const bootstrapDefaultSessions = process.argv.includes('--bootstrap-default-sessions')
-    || codingAgentOnly
-    || process.env.MEDIA_AGENT_BOOTSTRAP_DEFAULT_SESSIONS === '1';
   const [basicChecks, readiness] = await Promise.all([
     getBasicChecks(),
-    getFirstRunReadiness({ bootstrapDefaultSessions, codingAgentOnly }),
+    getFirstRunReadiness({ codingAgentOnly }),
   ]);
   const checks = [
     ...basicChecks,
