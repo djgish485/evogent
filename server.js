@@ -3328,6 +3328,7 @@ app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     const parsedUrl = parseUrl(req.url || '/');
 
+    // Non-public paths use one method-agnostic gate; CF Access must attach auth headers for every write method.
     if (!isPublicReadPath(req.method, parsedUrl.pathname) && !trustNetwork && !(await isTrustedSocket(req))) {
       res.statusCode = 403;
       res.setHeader('Content-Type', 'application/json');

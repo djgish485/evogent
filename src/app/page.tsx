@@ -3382,9 +3382,10 @@ export default function Home() {
     setChatSessionMenuOpen(false);
     setChatSessionReasoningPopover(null);
     setChatSessionCompactPopover(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
         cache: 'no-store',
       });
@@ -3394,7 +3395,7 @@ export default function Home() {
       };
 
       if (!response.ok) {
-        throw new Error(data.error || `Error ${response.status}`);
+        throw new Error(resolveChatFetchErrorMessage(response, null, data.error || `Error ${response.status}`));
       }
 
       const nextSessions = conversationSessionsRef.current.filter((session) => session.sessionId !== sessionId);
@@ -3404,7 +3405,7 @@ export default function Home() {
         ensureSessionId: data.nextSessionId ?? null,
       });
     } catch (error) {
-      setChatStatus(error instanceof Error ? error.message : 'Failed to delete session');
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to delete session'));
     } finally {
       setChatSessionActionPending(null);
     }
@@ -3616,9 +3617,10 @@ export default function Home() {
 
     setChatSessionReasoningPendingSessionId(sessionId);
     setChatStatus(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
@@ -3630,7 +3632,7 @@ export default function Home() {
       };
 
       if (!response.ok) {
-        throw new Error(data.error || `Error ${response.status}`);
+        throw new Error(resolveChatFetchErrorMessage(response, null, data.error || `Error ${response.status}`));
       }
 
       if (data.session) {
@@ -3643,7 +3645,7 @@ export default function Home() {
       setChatSessionReasoningPopover(null);
       setChatSessionCompactPopover(null);
     } catch (error) {
-      setChatStatus(error instanceof Error ? error.message : 'Failed to update session reasoning');
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to update session reasoning'));
     } finally {
       setChatSessionReasoningPendingSessionId(null);
     }
@@ -3678,9 +3680,10 @@ export default function Home() {
 
     setChatSessionReasoningPendingSessionId(sessionId);
     setChatStatus(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
@@ -3692,7 +3695,7 @@ export default function Home() {
       };
 
       if (!response.ok) {
-        throw new Error(data.error || `Error ${response.status}`);
+        throw new Error(resolveChatFetchErrorMessage(response, null, data.error || `Error ${response.status}`));
       }
 
       if (data.session) {
@@ -3705,7 +3708,7 @@ export default function Home() {
       setChatSessionReasoningPopover(null);
       setChatSessionCompactPopover(null);
     } catch (error) {
-      setChatStatus(error instanceof Error ? error.message : 'Failed to update session settings');
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to update session settings'));
     } finally {
       setChatSessionReasoningPendingSessionId(null);
     }
@@ -3731,9 +3734,10 @@ export default function Home() {
     setIsRenamingSession(true);
     setRenameSessionError(null);
     setChatStatus(null);
+    let response: Response | null = null;
 
     try {
-      const response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
@@ -3745,7 +3749,7 @@ export default function Home() {
       };
 
       if (!response.ok) {
-        throw new Error(data.error || `Error ${response.status}`);
+        throw new Error(resolveChatFetchErrorMessage(response, null, data.error || `Error ${response.status}`));
       }
 
       if (data.session) {
@@ -3758,7 +3762,7 @@ export default function Home() {
       setRenameSessionTitle('');
       setRenameSessionError(null);
     } catch (error) {
-      setRenameSessionError(error instanceof Error ? error.message : 'Failed to rename session');
+      setRenameSessionError(resolveChatFetchErrorMessage(response, error, 'Failed to rename session'));
     } finally {
       setIsRenamingSession(false);
     }
