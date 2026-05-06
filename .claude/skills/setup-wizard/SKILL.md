@@ -58,8 +58,11 @@ sqlite3 data/media-agent.db "SELECT id, source, triggered_by, status, items_adde
 sqlite3 data/media-agent.db "SELECT source, COUNT(*) FROM browse_cache_items GROUP BY source ORDER BY source;" 2>/dev/null || true
 sqlite3 data/media-agent.db "SELECT request_id, triggered_by, completion_status FROM curation_log ORDER BY started_at DESC LIMIT 5;" 2>/dev/null || true
 sqlite3 data/media-agent.db "SELECT source, COUNT(*) FROM feed GROUP BY source ORDER BY source;" 2>/dev/null || true
+sqlite3 data/media-agent.db "SELECT session_type, COUNT(*) FROM chat_sessions WHERE session_type IS NULL OR session_type = 'curator' GROUP BY session_type ORDER BY session_type;" 2>/dev/null || true
 test -s data/feed-output.jsonl && tail -n 3 data/feed-output.jsonl || true
 ```
+
+If the live evidence shows zero `chat_sessions` rows for the required role(s), run `node scripts/create-default-sessions.mjs` after Evogent is reachable. Add `--coding-agent-only` if the install is coding-agent-only.
 
 Also check provider availability without exposing credentials:
 

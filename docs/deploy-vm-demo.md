@@ -181,8 +181,6 @@ bash scripts/setup.sh
 
 If the user asked for a coding-agent install, follow `docs/setup-for-coding-agents.md` end-to-end.
 
-Important first-boot rule: the server creates the canonical default chat sessions at startup. Do not `POST /api/chat/sessions` to preemptively create "General Agent". That endpoint is for user-created sessions and will mint a fresh UUID.
-
 Verify local service health:
 
 ```bash
@@ -190,6 +188,8 @@ systemctl status evogent --no-pager
 systemctl status evogent-worker --no-pager
 curl -fsS http://127.0.0.1:3001/api/status
 ```
+
+After Evogent is reachable, run `node scripts/create-default-sessions.mjs` once.
 
 ## Source Bootstrap
 
@@ -241,6 +241,6 @@ Expected after sign-in:
 
 - The app loads with a friendly empty or populated feed state.
 - Chat/write paths return `200` or the expected app response.
-- The sessions list contains one canonical "General Agent" and one canonical "Curator Agent" on a fresh bring-up.
+- The sessions list contains one "General Agent" and one "Curator Agent" on a fresh bring-up.
 - Re-running `scripts/setup.sh` does not add duplicate default sessions.
 - Browser-backed source setup can populate rows before the first public demo.

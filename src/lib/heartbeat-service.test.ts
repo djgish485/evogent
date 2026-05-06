@@ -10,10 +10,7 @@ import { getOrchestratorStatus } from './orchestrator';
 import { getTriggerDecision } from './heartbeat';
 import { getDb } from './db/client';
 import { insertChatMessage, updateChatMessageStatus } from './db/chat';
-import {
-  createChatSession,
-  DEFAULT_CURATOR_CHAT_SESSION_ID,
-} from './db/chat-sessions';
+import { createChatSession } from './db/chat-sessions';
 import {
   completeCurationLogByRequestId,
   getCurationLogByRequestId,
@@ -447,7 +444,7 @@ On
     });
   });
 
-  test('evaluateAdaptiveHeartbeat creates the default Curator Agent session when none exists', async () => {
+  test('evaluateAdaptiveHeartbeat skips work when no Curator Agent session exists', async () => {
     process.env.MEDIA_AGENT_ROOT = '/root/evogent';
     const result = await evaluateAdaptiveHeartbeat({
       triggeredBy: 'unit-test-new-session',
@@ -457,7 +454,9 @@ On
       },
     });
 
-    assert.strictEqual(result.triggered, true);
+    assert.strictEqual(result.triggered, false);
+    assert.strictEqual(result.triggerReason, 'curator_session_missing');
+    assert.strictEqual(result.requestId, null);
 
     const sessionRows = getDb().prepare(`
       SELECT id, title, session_type, working_directory
@@ -466,24 +465,8 @@ On
       ORDER BY id ASC
     `).all() as Array<{ id: string; title: string; session_type: string | null; working_directory: string | null }>;
 
-    assert.deepStrictEqual(sessionRows, [{
-      id: DEFAULT_CURATOR_CHAT_SESSION_ID,
-      title: 'Curator Agent',
-      session_type: 'curator',
-      working_directory: process.cwd(),
-    }]);
-    assert.deepStrictEqual(
-      (enqueuePayload?.metadata as Record<string, unknown> | undefined)?.heartbeatSessionResolution,
-      {
-        reusedSessionId: null,
-        createdSessionId: DEFAULT_CURATOR_CHAT_SESSION_ID,
-        workingDirectory: process.cwd(),
-      },
-    );
-    assert.strictEqual(
-      (enqueuePayload?.metadata as Record<string, unknown> | undefined)?.sessionId,
-      DEFAULT_CURATOR_CHAT_SESSION_ID,
-    );
+    assert.deepStrictEqual(sessionRows, []);
+    assert.strictEqual(enqueuePayload, null);
   });
 
   test('evaluateAdaptiveHeartbeat skips if pending curation exists', async () => {
