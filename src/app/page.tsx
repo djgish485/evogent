@@ -88,20 +88,17 @@ type DetailViewEntry =
     items: FeedItem[];
   };
 
-
-
-
-
-
-
-
 // Chat session cards sit on a #050505 surface; keep the tint visible after compositing.
 
+const AUTH_REQUIRED_MESSAGE = "You don't have permission to do this. Sign in to continue.";
 
+function isAuthFailure(response: Response | null, error: unknown): boolean {
+  return error instanceof TypeError || response?.status === 401 || response?.status === 403;
+}
 
-
-
-
+function resolveChatFetchErrorMessage(response: Response | null, error: unknown, fallback: string): string {
+  return isAuthFailure(response, error) ? AUTH_REQUIRED_MESSAGE : error instanceof Error ? error.message : fallback;
+}
 
 interface OrchestratorCancelResponse {
   ok: boolean;
@@ -128,115 +125,10 @@ async function cancelOrchestratorTaskFromClient(taskId?: string | null): Promise
     : { ok: response.ok };
 }
 
-
-
-
-
-
-
-
-
-
 function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/ws/agent-progress') {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}${pathname}`;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function AgentUnavailableBanner({
   providerDisplayName,
@@ -4276,9 +4168,10 @@ export default function Home() {
   ): Promise<boolean> => {
     const openDetailOnSuccess = options?.openDetailOnSuccess ?? true;
     const selectOnSuccess = options?.selectOnSuccess ?? true;
+    let response: Response | null = null;
     try {
       setChatStatus(null);
-      const response = await fetch('/api/chat', {
+      response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4291,6 +4184,9 @@ export default function Home() {
           originView: options?.originView ?? (hasOpenDetailView ? 'post_detail' : 'feed'),
         }),
       });
+      if (isAuthFailure(response, null)) {
+        throw new Error(resolveChatFetchErrorMessage(response, null, 'Unable to start curation in this session'));
+      }
       const data = (await response.json()) as {
         ok?: boolean;
         message?: string;
@@ -4317,7 +4213,7 @@ export default function Home() {
       }
       return true;
     } catch (error) {
-      setChatStatus(error instanceof Error ? error.message : 'Failed to start curator session curation');
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to start curator session curation'));
       return false;
     } finally {
       setSessionPickerOpen(false);
@@ -5521,48 +5417,58 @@ export default function Home() {
       `Reason: ${normalizedReason || '(none)'}`,
     ].join('\n');
 
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        context,
-        inReplyTo: null,
-        sessionId: feedbackSessionId,
-        contextKind: 'global',
-        contextRefId: null,
-        originView: hasOpenDetailView ? 'post_detail' : 'feed',
-        metadata: {
-          threadFeedback: {
-            threadId: input.threadId,
-            cycleId: input.cycleId,
-            vote: input.vote,
-            threadTitle: normalizedTitle,
-            reason: normalizedReason,
+    let response: Response | null = null;
+    try {
+      response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          context,
+          inReplyTo: null,
+          sessionId: feedbackSessionId,
+          contextKind: 'global',
+          contextRefId: null,
+          originView: hasOpenDetailView ? 'post_detail' : 'feed',
+          metadata: {
+            threadFeedback: {
+              threadId: input.threadId,
+              cycleId: input.cycleId,
+              vote: input.vote,
+              threadTitle: normalizedTitle,
+              reason: normalizedReason,
+            },
           },
-        },
-      }),
-    });
+        }),
+      });
+      if (isAuthFailure(response, null)) {
+        throw new Error(resolveChatFetchErrorMessage(response, null, 'Unable to save thread feedback'));
+      }
 
-    const data = (await response.json()) as {
-      ok?: boolean;
-      message?: string;
-      userMessage?: ChatMessage;
-      sessionId?: string | null;
-    };
+      const data = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        userMessage?: ChatMessage;
+        sessionId?: string | null;
+      };
 
-    if (data.userMessage) {
-      setChatMessages((current) => mergeChatMessages(current, [data.userMessage as ChatMessage]));
-    }
+      if (data.userMessage) {
+        setChatMessages((current) => mergeChatMessages(current, [data.userMessage as ChatMessage]));
+      }
 
-    if (!response.ok || !data.ok) {
-      throw new Error(data.message || 'Unable to save thread feedback');
-    }
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'Unable to save thread feedback');
+      }
 
-    if (data.sessionId) {
-      hydratedConversationSessionIdsRef.current.delete(data.sessionId);
-      void refreshConversationSessionSummary(data.sessionId);
-      updateSelectedChatSession(data.sessionId, { pauseAutoCorrection: false });
+      if (data.sessionId) {
+        hydratedConversationSessionIdsRef.current.delete(data.sessionId);
+        void refreshConversationSessionSummary(data.sessionId);
+        updateSelectedChatSession(data.sessionId, { pauseAutoCorrection: false });
+      }
+    } catch (error) {
+      const message = resolveChatFetchErrorMessage(response, error, 'Unable to save thread feedback');
+      setChatStatus(message);
+      throw new Error(message);
     }
   }, [
     conversationSessions,
@@ -5592,8 +5498,9 @@ export default function Home() {
     setStreamingChat(null);
     setLastChatActivityAt(null);
 
+    let response: Response | null = null;
     try {
-      const response = await fetch('/api/chat', {
+      response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5607,6 +5514,9 @@ export default function Home() {
           attachments: chatAttachments,
         }),
       });
+      if (isAuthFailure(response, null)) {
+        throw new Error(resolveChatFetchErrorMessage(response, null, 'Unable to send chat message'));
+      }
 
       const data = (await response.json()) as {
         ok?: boolean;
@@ -5751,11 +5661,7 @@ export default function Home() {
     } catch (error) {
       setBrainTyping(false);
       setChatProgress(null);
-      if (error instanceof TypeError) {
-        setChatStatus("You don't have permission to do this. Sign in to continue.");
-      } else {
-        setChatStatus(error instanceof Error ? error.message : 'Failed to send chat message');
-      }
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to send chat message'));
     } finally {
       setIsSendingChat(false);
     }
