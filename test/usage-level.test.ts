@@ -35,6 +35,7 @@ Low
     assert.deepStrictEqual(parsed, {
       level: 'low',
       subAgentModel: 'claude-opus-4-7',
+      curatorModel: 'claude-opus-4-7',
       enrichmentModel: 'claude-opus-4-7',
       reflectionModel: 'claude-opus-4-7',
       defaultMinInterval: 240,
@@ -53,6 +54,7 @@ medium
     assert.deepStrictEqual(parsed, {
       level: 'medium',
       subAgentModel: 'claude-opus-4-7',
+      curatorModel: 'claude-opus-4-7',
       enrichmentModel: 'claude-opus-4-7',
       reflectionModel: 'claude-opus-4-7',
       defaultMinInterval: 90,
@@ -71,6 +73,7 @@ HIGH
     assert.deepStrictEqual(parsed, {
       level: 'high',
       subAgentModel: 'opus',
+      curatorModel: 'claude-opus-4-7[1m]',
       enrichmentModel: 'opus',
       reflectionModel: 'opus',
       defaultMinInterval: 45,
