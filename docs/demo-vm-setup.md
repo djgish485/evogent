@@ -104,6 +104,8 @@ Create one Allow Owner Application for authenticated owner traffic. Use only the
 
 Add one policy: action=Allow, include rule=`email == <owner email>`.
 
+The Allow Owner Application must require auth for all methods. The default `cloudflared access` and Cloudflare Access Application behavior covers every method, but if you customize include rules, ensure PATCH, PUT, and DELETE stay covered for owner-only paths.
+
 Do NOT use <hostname>/* on the Allow Owner Application. Cloudflare's path matcher can pick that wildcard over the root <hostname>/ Bypass destination and break the public homepage. Scope Allow Owner to /api/* and /ws/* only.
 
 ### Cloudflare API quirk
@@ -125,6 +127,7 @@ From a logged-out or incognito browser:
 
 Then sign in through Cloudflare as the owner email:
 - POST /api/chat returns 202 and enqueues chat work.
+- PATCH /api/chat/sessions/<id> returns 200 for a session owned by the signed-in user.
 - GET /ws/orchestrator as a WebSocket upgrade is allowed.
 
 ## Common pitfalls to avoid
