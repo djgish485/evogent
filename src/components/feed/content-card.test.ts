@@ -745,7 +745,7 @@ describe('ArticleCard', () => {
     }));
 
     assert.match(markup, /text-\[21px\] leading-tight sm:text-\[24px\]/);
-    assert.match(markup, /text-\[16px\] leading-7/);
+    assert.match(markup, /text-\[15px\] leading-7/);
   });
 
   test('keeps child card typography normal for thread-only homepage prominence', () => {
@@ -781,7 +781,7 @@ describe('ArticleCard', () => {
     }));
 
     assert.match(markup, /text-\[17px\] leading-snug/);
-    assert.match(markup, /text-\[15px\] leading-relaxed/);
+    assert.match(markup, /text-\[14px\] leading-relaxed/);
     assert.doesNotMatch(markup, /text-\[21px\] leading-tight sm:text-\[24px\]/);
   });
 
