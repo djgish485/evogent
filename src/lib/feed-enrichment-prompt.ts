@@ -120,6 +120,8 @@ const mainTweetIdentificationInstructions = [
   '',
 ];
 
+const replyAvatarLazyLoadInstruction = 'Lazy-loaded avatars: if a reply article shows a missing or placeholder src on its avatar img, scroll that reply into view (e.g. via mcp__playwright__browser_evaluate to scrollIntoView the article) and re-snapshot BEFORE extracting that reply. Do not submit a reply with authorAvatarUrl=null when a visible avatar element exists but is not yet loaded.';
+
 const articleEnrichmentInstructions = [
   'Article guidance:',
   '- Apply this only when the current item is a top-level article with a non-empty URL.',
@@ -190,7 +192,7 @@ export function buildBatchEnrichmentPrompt(posts: FeedItem[], options: { request
     '- X engagement counters often appear in button or aria-label text. Use readable on-page numbers only; skip metrics if they have not loaded.',
     '- If the main tweet is a reply, add the verified direct parent as relationship="parent" and older verified ancestors as relationship="thread".',
     '- Only keep replies that meaningfully extend the parent: a sharp counterpoint, a missing clarification, a from-the-source correction, or important evidence.',
-    '- Parent/thread/reply tweet child items must include authorAvatarUrl from the visible user-name block avatar <img> src when submitted.',
+    `- Parent/thread/reply tweet child items must include authorAvatarUrl from the visible user-name block avatar <img> src when submitted. ${replyAvatarLazyLoadInstruction}`,
     '- If the tweet has a readable nonzero reply counter, the item must not end ambiguously: submit meaningful replies immediately, or PATCH a terminal replyAudit explaining the inspected MAIN tweet reply surface and why no replies were saved.',
     '',
     'Hacker News guidance:',
@@ -307,12 +309,16 @@ function buildTweetStepInstructions(input: {
     );
   }
 
+  const childAvatarInstruction = '- Every relationship="parent", relationship="thread", or relationship="reply" tweet child item MUST carry authorAvatarUrl from the visible user-name block avatar <img> src. Treat a null or missing child avatar as a correctness failure, not a style issue.';
+
   instructions.push(
     '- Only append a relationship="parent" item when you have verified the MAIN tweet\'s direct parent in the upstream thread context.',
     '- Read data/curation-prompt.md and apply the same editorial bar you use during curation when deciding whether a reply is worth persisting.',
     '- Scroll the MAIN tweet reply section and only persist replies that meaningfully extend the parent.',
     '- If you find a reply that adds real value, such as a sharp counterpoint, a clarification the parent missed, or a from-the-source correction, submit it as a child with relationship="reply". Not every reply; only the ones that meaningfully add signal.',
-    '- Every relationship="parent", relationship="thread", or relationship="reply" tweet child item MUST carry authorAvatarUrl from the visible user-name block avatar <img> src. Treat a null or missing child avatar as a correctness failure, not a style issue.',
+    post.type === 'tweet' && tweetId
+      ? `${childAvatarInstruction} ${replyAvatarLazyLoadInstruction}`
+      : childAvatarInstruction,
     `- Replies should be @-mentioning the main tweet author (${mainTweetAuthorHandle}), not the quoted tweet author.`,
     `- If a reply is addressed to someone else or starts with an @-mention other than ${mainTweetAuthorHandle}, it may be a reply to the quoted tweet. Skip it.`,
     '- Append each curated reply immediately as type="tweet", relationship="reply", with reply authorUsername, authorDisplayName, and authorAvatarUrl populated.',
@@ -410,7 +416,7 @@ export function buildEnrichmentPrompt(
       '- Visit the MAIN tweet URL in the browser.',
       ...(post.type === 'tweet' && tweetId ? mainTweetIdentificationInstructions : []),
       '- If this is a reply, capture the direct parent tweet as relationship="parent". Capture older verified ancestors as relationship="thread", oldest ancestor first.',
-      '- Each parent/thread/reply child tweet item MUST carry authorAvatarUrl populated from the visible user-name block avatar <img> src on the rendered page. Treat null or missing avatars on relationship="reply", relationship="parent", and relationship="thread" tweet items as a correctness failure, not a style issue.',
+      `- Each parent/thread/reply child tweet item MUST carry authorAvatarUrl populated from the visible user-name block avatar <img> src on the rendered page. Treat null or missing avatars on relationship="reply", relationship="parent", and relationship="thread" tweet items as a correctness failure, not a style issue. ${replyAvatarLazyLoadInstruction}`,
       '- Before you PATCH, self-check author_avatar_url, media_urls, metadata.media alt text, quotedTweet, metadata.quotedTweet.linkCard, metadata.communityNote or metadata.quotedTweet.communityNote, metadata.linkCard/linkPreviews/urlEntities, metadata.poll, and any visible engagement metrics as examples of supported visible fields so you do not leave obviously available fields behind.',
       '- If the parent post is missing an author avatar, PATCH author_avatar_url onto the existing post.',
       '- If the tweet shows a photo, video, or GIF, capture the visible image src (photos), poster attribute (videos), or GIF thumbnail URL into media_urls as an array of absolute URLs. Also PATCH metadata.media entries with alt text from visible <img alt="..."> or accessible image descriptions when available. Do not fetch or follow media links; snapshot-visible URLs only.',

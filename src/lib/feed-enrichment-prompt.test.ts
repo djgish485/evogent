@@ -9,6 +9,7 @@ import type { FeedItem } from '@/types/feed';
 
 const originalOrchestratorInternalUrl = process.env.ORCHESTRATOR_INTERNAL_URL;
 const originalEvogentInternalBaseUrl = process.env.MEDIA_AGENT_INTERNAL_BASE_URL;
+const replyAvatarLazyLoadInstruction = 'Lazy-loaded avatars: if a reply article shows a missing or placeholder src on its avatar img, scroll that reply into view (e.g. via mcp__playwright__browser_evaluate to scrollIntoView the article) and re-snapshot BEFORE extracting that reply. Do not submit a reply with authorAvatarUrl=null when a visible avatar element exists but is not yet loaded.';
 
 afterEach(() => {
   if (originalOrchestratorInternalUrl === undefined) {
@@ -301,6 +302,31 @@ describe('feed enrichment prompt', () => {
       assert.match(prompt, /Do not PATCH text merely because a candidate is longer/);
       assert.doesNotMatch(prompt, /full\.length\s*>\s*current\.text\.length\s*\+\s*20/);
     }
+  });
+
+  test('tweet enrichment prompts require lazy-loaded reply avatar recovery', () => {
+    const prompts = [
+      buildBatchEnrichmentPrompt([buildFeedItem()], { requestId: 'batch-lazy-avatars' }),
+      buildEnrichmentPrompt(buildFeedItem(), '/tmp/feed-output.jsonl', {
+        mode: 'full',
+        tweetId: '987654321',
+      }),
+      buildEnrichmentPrompt(buildFeedItem(), '/tmp/feed-output.jsonl', {
+        mode: 'lightweight',
+        tweetId: '987654321',
+      }),
+    ];
+
+    for (const prompt of prompts) {
+      assert.match(prompt, /visible user-name block avatar <img> src/);
+      assert.ok(prompt.includes(replyAvatarLazyLoadInstruction));
+    }
+
+    const articlePrompt = buildEnrichmentPrompt(buildHackerNewsItem(), '/tmp/feed-output.jsonl', {
+      mode: 'full',
+    });
+
+    assert.ok(!articlePrompt.includes(replyAvatarLazyLoadInstruction));
   });
 
   test('batch enrichment resolves HN discussion URLs from sourceId when metadata omits hnUrl', () => {
