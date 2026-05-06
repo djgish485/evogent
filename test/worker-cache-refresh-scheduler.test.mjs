@@ -72,8 +72,9 @@ test('enqueueCacheRefreshForCuration queues installed sources before /curate and
 
   const result = await enqueueCacheRefreshForCuration({
     id: 'curate-task-1',
-    priority: 'user_chat',
-    metadata: { curationCommand: '/curate' },
+    priority: 'heartbeat',
+    message: 'Heartbeat: run curation cycle',
+    metadata: { curationCommand: '/curate', automatedCuration: true },
   }, {
     rootDir: '/repo',
     configPath: '/repo/data/config.md',
@@ -105,8 +106,9 @@ test('enqueueCacheRefreshForCuration skips non-cache curation and disabled sourc
   });
   const disabledResult = await disabled.enqueueCacheRefreshForCuration({
     id: 'curate-task-2',
-    priority: 'user_chat',
-    metadata: { curationCommand: '/curate' },
+    priority: 'heartbeat',
+    message: 'Heartbeat: run curation cycle',
+    metadata: { curationCommand: '/curate', automatedCuration: true },
   });
   assert.strictEqual(disabledResult.skipped, true);
   assert.strictEqual(disabledResult.reason, 'background_source_browsing_disabled');
@@ -144,21 +146,25 @@ test('waitForCacheRefreshSources returns timedOut instead of blocking curation i
   assert.deepStrictEqual([...result.pendingSources], ['twitter']);
 });
 
-test('cache-backed curation detection includes full /curate but excludes /curate-latest', () => {
+test('cache-backed curation detection only includes automated curation tasks', () => {
   const { isCacheBackedCurationTask } = loadOnDemandModule();
 
-  assert.strictEqual(isCacheBackedCurationTask({
-    priority: 'user_chat',
-    metadata: { curationCommand: '/curate' },
-  }), true);
-  assert.strictEqual(isCacheBackedCurationTask({
-    priority: 'user_chat',
-    metadata: { curationCommand: '/curate-latest' },
-  }), false);
   assert.strictEqual(isCacheBackedCurationTask({
     priority: 'heartbeat',
     message: 'Heartbeat: run curation cycle',
   }), true);
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'user_chat',
+    metadata: { curationCommand: '/curate' },
+  }), false);
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'user_ping',
+    metadata: { automatedCuration: true },
+  }), true);
+  assert.strictEqual(isCacheBackedCurationTask({
+    priority: 'user_chat',
+    message: '/curate-latest',
+  }), false);
 });
 
 test('worker timer no longer runs periodic cache refresh checks', () => {
