@@ -40,6 +40,17 @@ If you later switch this deployment to Bird-backed fetching, uninstall this skil
 
 See `.claude/commands/curate.md` for the cache-first curation workflow.
 
+## Cacher Mode
+
+- MANDATORY SURFACE COVERAGE: Every Cacher run MUST browse all four kinds of surface in this order before submitting: (1) MANDATORY FOR YOU: `https://x.com/home` For You tab, (2) MANDATORY FOLLOWING: `https://x.com/home` Following tab, (3) MANDATORY PRIORITY PROFILES: at least three priority-account profiles read from the 'Top Engaged Accounts' section of `data/preferences-context.md` (visit `https://x.com/<username>` for each), (4) MANDATORY PLANNED SEARCHES: any planned topic searches from `data/cache-hints.json` if present. Reporting fewer than the first three kinds in `cycleSummary.surfaces` is a HARD FAILURE - submit `status: "failed"` with `error: "surface_coverage_incomplete: <missing kinds>"` instead of `status: "completed"` with partial coverage.
+- Cacher runs use the same DOM selectors, the same field shape, and the same browser tactics from `data/tweet-cache-policy.json` `browserPrompt` as Curation Task. The ONLY difference between Cacher Mode and Curation Task is downstream destination - Cacher writes to `/api/internal/browse-cache/submit`, Curation submits feed items.
+- Do not invent a reduced extractor. If Curation Task would capture a field, Cacher Mode captures the same field into `payload`.
+- External linked-page cards are part of that field shape. When visible, preserve them in `payload.linkCard`, `payload.linkPreviews`, and `payload.urlEntities` using the shapes named in `data/tweet-cache-policy.json`.
+- Persist items through `/api/internal/browse-cache/submit` with source `twitter`.
+- Default cadence: every 15 minutes.
+- Auth/session requirement is unchanged: use the shared authenticated Chrome browse profile.
+- Never pre-judge `/root/.config/x-auth-cookies.json` or `.env.local` `AUTH_TOKEN`/`CT0` as stale based on file age, mtime, context labels, or other a-priori freshness heuristics; if the shared session is signed out and the repair fallback is available, attempt it and let the post-import `https://x.com/home` probe be the basis for declaring credentials stale.
+
 ## Main Tweet Identification
 
 MAIN-TWEET IDENTIFICATION:
