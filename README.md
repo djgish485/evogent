@@ -8,7 +8,7 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 ## Live demo
 
-[evo.dangish.net](https://evo.dangish.net). Demo is configured to curate an x.com account's For You & Following feeds, along with my preferences on latest news.
+[evo.dangish.net](https://evo.dangish.net) is configured to curate an x.com account's For You & Following feeds, along with my preferences on latest news.
 
 ## Use your subscriptions
 
