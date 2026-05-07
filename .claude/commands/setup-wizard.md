@@ -63,7 +63,12 @@ Report these six live diagnostic areas. Use `ready`, `missing`, `confirm`, or `o
 - If setup already looks complete, say what is ready and offer to run the first curation cycle.
 - If provider setup is missing, ask which brain should power Evogent: Claude Code or Codex CLI.
 - If Codex is selected but reasoning effort is missing, derive it from Usage Level. If Usage Level is also missing, ask for Usage Level first.
-- If usage level is missing, ask for Low, Medium, or High and recommend Medium.
+- If usage level is missing, ask exactly: "How much API usage should Evogent use?
+- **Low**: comfortable on $20/mo tiers (Claude Pro or ChatGPT Plus). Curates every 4-8 hours.
+- **Medium (recommended)**: comfortable on Claude Max 5x ($100/mo) or higher. Curates every 90 min to 4 hours.
+- **High**: best for Claude Max 20x or ChatGPT Pro ($200/mo), or direct API. Curates every 45 min to 2 hours.
+
+Choose Low, Medium, or High."
 - If no content source is configured, recommend starting with `/setup-source x.com` plus `tweet-cache`, unless the user prefers YouTube, Substack, or Hacker News.
 - After Brain Provider, Usage Level, and source setup are handled, ask one combined optional question: "Optional: name your agent (otherwise I'll pick one), add custom curation interests, or import a Twitter/X archive. You can also skip all three and set them up any time later from chat or by editing data/config.md."
 - If the optional answer is skip-all, write a sensible default Agent Name to `data/config.md`, do not add user-specific steering, and do not import an archive. If the answer is partial, persist only the mentioned name, steering, or archive import and skip the rest.
