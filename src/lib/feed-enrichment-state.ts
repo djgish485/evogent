@@ -34,21 +34,6 @@ function hasTerminalReplyAudit(item: FeedItemEnrichmentCarrier): boolean {
     && audit.inspectedAt.trim().length > 0;
 }
 
-export function isAwaitingFullEnrichmentMetrics(item: FeedItemEnrichmentCarrier): boolean {
-  if (
-    !item
-    || typeof item.metadata?.fullEnrichmentRequestId !== 'string'
-    || item.metadata.fullEnrichmentRequestId.trim().length === 0
-  ) {
-    return false;
-  }
-
-  const likes = typeof item.metrics.likes === 'number' ? item.metrics.likes : 0;
-  const views = item.metrics.views;
-
-  return likes <= 0 && (typeof views !== 'number' || views <= 0);
-}
-
 function parseTimestampMs(value: unknown): number | null {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
