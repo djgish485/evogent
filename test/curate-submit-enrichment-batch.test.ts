@@ -251,9 +251,9 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     assert.deepEqual(enqueuePayloads, []);
   });
 
-  test('still chunks bulk enrichment for Low Codex', async () => {
+  test('skips bulk enrichment for Low Codex', async () => {
     await submitTweets(5, 'codex', 'low');
 
-    assertEnqueueChunks([4, 1]);
+    assert.deepEqual(enqueuePayloads, []);
   });
 });
