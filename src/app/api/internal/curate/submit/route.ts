@@ -1122,7 +1122,7 @@ export async function POST(request: Request) {
 
   const brainConfig = readBrainConfig(getDataPath('config.md'));
   const usageLevelConfig = readUsageLevelConfig();
-  const shouldSkipBulkEnrichment = brainConfig.provider === 'claude' && usageLevelConfig.level === 'low';
+  const shouldSkipBulkEnrichment = usageLevelConfig.level === 'low';
 
   if (acceptedEnrichmentTargets.length > 0 && !shouldSkipBulkEnrichment) {
     try {
