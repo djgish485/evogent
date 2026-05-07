@@ -1,4 +1,4 @@
-# Evogent: Curation & Cloud Coding Agent
+# Evogent - Curation & Cloud Coding Agent
 
 <p align="center">
   <img src="docs/images/hero-feed.jpeg" alt="Evogent curated feed thread with the rationale visible" width="320">
@@ -8,7 +8,7 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 ## Live demo
 
-[evo.dangish.net](https://evo.dangish.net). Anyone can browse the curated feed; chat and write require login.
+[evo.dangish.net](https://evo.dangish.net) is configured to curate an x.com account's For You & Following feeds, along with my preferences on latest news.
 
 ## Use your subscriptions
 
