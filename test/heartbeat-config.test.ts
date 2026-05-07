@@ -101,7 +101,7 @@ Low
 `);
 
     assert.deepStrictEqual(readCurationScheduleConfig(configPath), {
-      minIntervalMinutes: 240,
+      minIntervalMinutes: 300,
       maxIntervalMinutes: 480,
     });
   });

@@ -40,7 +40,7 @@ Low
       postEnrichmentEffort: 'low',
       enrichmentModel: 'claude-opus-4-7',
       reflectionModel: 'claude-opus-4-7',
-      defaultMinInterval: 240,
+      defaultMinInterval: 300,
       defaultMaxInterval: 480,
       reflectionFrequency: 'weekly',
     });
