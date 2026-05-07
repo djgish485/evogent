@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { getFeedItemBatchEnrichmentState, isAwaitingFullEnrichmentMetrics } from './feed-enrichment-state';
+import { getFeedItemBatchEnrichmentState } from './feed-enrichment-state';
 import type { FeedItem } from '@/types/feed';
 
 function buildFeedItem(overrides: Partial<FeedItem> = {}): FeedItem {
@@ -32,47 +32,14 @@ function buildFeedItem(overrides: Partial<FeedItem> = {}): FeedItem {
 }
 
 describe('feed enrichment state helpers', () => {
-  test('treats zero-like, no-view full enrichment items as still enriching', () => {
+  test('ignores stale full enrichment request ids without batch enrichment', () => {
     const item = buildFeedItem({
       metadata: {
         fullEnrichmentRequestId: 'enrich-post-1',
       },
     });
 
-    assert.equal(isAwaitingFullEnrichmentMetrics(item), true);
-  });
-
-  test('clears the enriching state once visible metrics arrive', () => {
-    const withLikes = buildFeedItem({
-      metrics: {
-        likes: 4,
-        reposts: 0,
-        replies: 0,
-      },
-      metadata: {
-        fullEnrichmentRequestId: 'enrich-post-1',
-      },
-    });
-    const withViews = buildFeedItem({
-      metrics: {
-        likes: 0,
-        reposts: 0,
-        replies: 0,
-        views: 120,
-      },
-      metadata: {
-        fullEnrichmentRequestId: 'enrich-post-1',
-      },
-    });
-
-    assert.equal(isAwaitingFullEnrichmentMetrics(withLikes), false);
-    assert.equal(isAwaitingFullEnrichmentMetrics(withViews), false);
-  });
-
-  test('does not report awaiting enrichment without a full request id', () => {
-    const item = buildFeedItem();
-
-    assert.equal(isAwaitingFullEnrichmentMetrics(item), false);
+    assert.equal(getFeedItemBatchEnrichmentState(item), 'none');
   });
 
   test('reports automatic batch enrichment without a full request id', () => {
@@ -85,7 +52,6 @@ describe('feed enrichment state helpers', () => {
       },
     });
 
-    assert.equal(isAwaitingFullEnrichmentMetrics(item), false);
     assert.equal(getFeedItemBatchEnrichmentState(item), 'enriching');
   });
 

@@ -31,7 +31,7 @@ import {
   stripTrailingTweetMediaUrls,
   truncateTextForCollapsedDisplay,
 } from '@/lib/tweet-text';
-import { getFeedItemBatchEnrichmentState, isAwaitingFullEnrichmentMetrics } from '@/lib/feed-enrichment-state';
+import { getFeedItemBatchEnrichmentState } from '@/lib/feed-enrichment-state';
 import { isProminentFeedItem } from '@/lib/feed-prominence';
 import { getYouTubeFeedData, isYouTubeSource, type YouTubeFeedData } from '@/lib/youtube-feed';
 import { resolveHackerNewsDiscussionUrl } from '@/lib/hacker-news';
@@ -248,7 +248,6 @@ interface LinkPart {
 }
 
 const DUAL_TIMESTAMP_THRESHOLD_MS = 5 * 60 * 1000;
-const ENRICHMENT_COMPLETE_VISIBILITY_MS = 3_000;
 type CardEnrichmentIndicatorState = 'hidden' | 'enriching' | 'complete' | 'failed' | 'incomplete';
 
 function formatFeedTimestamp(item: Pick<FeedItem, 'publishedAt' | 'createdAt' | 'source' | 'type'>): string {
@@ -3644,13 +3643,9 @@ export function ContentCard({
     : batchEnrichmentState === 'enriching'
       ? 'enriching'
       : batchEnrichmentState;
-  const awaitingEnrichmentMetrics = (item.type === 'tweet' || item.type === 'article')
-    && batchIndicatorState === null
-    && isAwaitingFullEnrichmentMetrics(item);
   const [enrichmentIndicatorState, setEnrichmentIndicatorState] = useState<CardEnrichmentIndicatorState>(
-    batchIndicatorState ?? (awaitingEnrichmentMetrics ? 'enriching' : 'hidden'),
+    batchIndicatorState ?? 'hidden',
   );
-  const wasAwaitingEnrichmentMetricsRef = useRef(awaitingEnrichmentMetrics);
 
   useEffect(() => {
     setIsLiked(item.isLiked);
@@ -3928,37 +3923,17 @@ export function ContentCard({
     clearEnrichmentIndicatorTimer();
 
     if (!canShowEnrichmentState) {
-      wasAwaitingEnrichmentMetricsRef.current = false;
       setEnrichmentIndicatorState('hidden');
       return;
     }
 
-    const wasAwaitingEnrichmentMetrics = wasAwaitingEnrichmentMetricsRef.current;
-
     if (batchIndicatorState !== null) {
-      wasAwaitingEnrichmentMetricsRef.current = false;
       setEnrichmentIndicatorState(batchIndicatorState);
       return;
     }
 
-    if (awaitingEnrichmentMetrics) {
-      wasAwaitingEnrichmentMetricsRef.current = true;
-      setEnrichmentIndicatorState('enriching');
-      return;
-    }
-
-    wasAwaitingEnrichmentMetricsRef.current = false;
-    if (wasAwaitingEnrichmentMetrics) {
-      setEnrichmentIndicatorState('complete');
-      enrichmentIndicatorTimeoutRef.current = window.setTimeout(() => {
-        setEnrichmentIndicatorState('hidden');
-        enrichmentIndicatorTimeoutRef.current = null;
-      }, ENRICHMENT_COMPLETE_VISIBILITY_MS);
-      return;
-    }
-
     setEnrichmentIndicatorState('hidden');
-  }, [awaitingEnrichmentMetrics, batchIndicatorState, clearEnrichmentIndicatorTimer, item.type]);
+  }, [batchIndicatorState, clearEnrichmentIndicatorTimer, item.type]);
 
   useEffect(() => () => {
     clearEnrichmentIndicatorTimer();
