@@ -1,7 +1,7 @@
 'use client';
 
 import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
-import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton } from '@/components/chat/chat-control-panels';
+import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
 import { CuratorCurateButtons } from '@/components/chat/curator-curate-buttons';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
@@ -1211,7 +1211,9 @@ export default function Home() {
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [showPreferencesPanel, setShowPreferencesPanel] = useState(false);
   const [isBrainProviderModalOpen, setIsBrainProviderModalOpen] = useState(false);
+  const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
   const [isCodeFixReasoningModalOpen, setIsCodeFixReasoningModalOpen] = useState(false);
+  const usageSummaryLabels = useUsageSummaryLabels(isUsageModalOpen);
   const [activity, setActivity] = useState<{ sessionExists: boolean; working: boolean }>({ sessionExists: false, working: false });
   const [, setTick] = useState(0);
   const [orchestratorStatus, setOrchestratorStatus] = useState<OrchestratorStatusResponse | null>(null);
@@ -4116,6 +4118,10 @@ export default function Home() {
     setBrainProviderStatusError(null);
   }, [isSwitchingBrainProvider]);
 
+  const closeUsageModal = useCallback(() => {
+    setIsUsageModalOpen(false);
+  }, []);
+
   const openBrainProviderModal = useCallback(() => {
     setIsMobileMenuOpen(false);
     setSessionPickerOpen(false);
@@ -4131,6 +4137,14 @@ export default function Home() {
     brainProviderInfo.provider,
     loadBrainProviderStatus,
   ]);
+
+  const openUsageModal = useCallback(() => {
+    setIsMobileMenuOpen(false);
+    setSessionPickerOpen(false);
+    setCommandPickerOpen(false);
+    setChatSessionMenuOpen(false);
+    setIsUsageModalOpen(true);
+  }, []);
 
   const submitBrainProviderSwitch = useCallback(async () => {
     if (isSwitchingBrainProvider) {
@@ -7400,6 +7414,14 @@ export default function Home() {
                       </span>
                     </div>
                   </button>
+                  <button
+                    type="button"
+                    onClick={openUsageModal}
+                    data-testid="brain-provider-usage-button"
+                    className="ml-3 self-start rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    Usage
+                  </button>
                   <SidebarCodeFixReasoningButton
                     provider={brainProviderInfo.provider}
                     value={codeFixReasoningEffort}
@@ -8204,6 +8226,13 @@ export default function Home() {
         onTargetProviderChange={setPendingBrainProvider}
         onCodexReasoningEffortChange={setPendingCodexReasoningEffort}
         onSubmit={() => void submitBrainProviderSwitch()}
+      />
+      <UsageSummaryModal
+        isOpen={isUsageModalOpen}
+        onClose={closeUsageModal}
+        codexUsageLabel={usageSummaryLabels.codexUsageLabel}
+        codexUsageTitle={usageSummaryLabels.codexUsageTitle}
+        claudeUsageLabel={usageSummaryLabels.claudeUsageLabel}
       />
       <RenameSessionModal
         open={renameSessionId !== null}

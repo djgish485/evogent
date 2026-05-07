@@ -27,40 +27,14 @@ function formatUsagePercent(value: number | null | undefined): string {
     : '0%';
 }
 
-export function BrainProviderSwitcherModal({
-  open,
-  status,
-  error,
-  isLoading,
-  isSubmitting,
-  targetProvider,
-  codexReasoningEffort,
-  onClose,
-  onTargetProviderChange,
-  onCodexReasoningEffortChange,
-  onSubmit,
-}: {
-  open: boolean;
-  status: BrainProviderStateResponse | null;
-  error: string | null;
-  isLoading: boolean;
-  isSubmitting: boolean;
-  targetProvider: BrainProviderName;
-  codexReasoningEffort: CodexReasoningEffort;
-  onClose: () => void;
-  onTargetProviderChange: (provider: BrainProviderName) => void;
-  onCodexReasoningEffortChange: (effort: CodexReasoningEffort) => void;
-  onSubmit: () => void;
-}) {
+export function useUsageSummaryLabels(open: boolean): {
+  codexUsageLabel: string;
+  codexUsageTitle?: string;
+  claudeUsageLabel: string;
+} {
   const [usageSummary, setUsageSummary] = useState<UsageSummaryResponse | null>(null);
   const [usageSummaryError, setUsageSummaryError] = useState(false);
   const usageSummaryFetchedAtRef = useRef<number | null>(null);
-  const { backdropProps } = useOverlayDismiss({
-    enabled: open,
-    onClose,
-    closeOnBackdropPress: !isSubmitting,
-    closeOnEscape: !isSubmitting,
-  });
 
   useEffect(() => {
     if (!open) {
@@ -98,23 +72,6 @@ export function BrainProviderSwitcherModal({
     };
   }, [open]);
 
-  if (!open) {
-    return null;
-  }
-
-  const targetAvailability = status?.providers[targetProvider] ?? null;
-  const isNoop = Boolean(
-    status
-    && targetProvider === status.currentProvider
-    && (targetProvider !== 'codex' || codexReasoningEffort === status.codexReasoningEffort),
-  );
-  const isBusy = Boolean(status?.isProcessing);
-  const isSubmitDisabled = isLoading
-    || isSubmitting
-    || !status
-    || !targetAvailability?.available
-    || isBusy
-    || isNoop;
   const codexUsageLabel = usageSummary?.codex
     ? `Codex usage: 5h ${formatUsagePercent(usageSummary.codex.short.usedPercent)} · weekly ${formatUsagePercent(usageSummary.codex.weekly.usedPercent)}`
     : usageSummary
@@ -138,6 +95,63 @@ export function BrainProviderSwitcherModal({
       ? 'Claude usage: unavailable'
       : 'Claude usage: loading...';
 
+  return {
+    codexUsageLabel,
+    codexUsageTitle,
+    claudeUsageLabel,
+  };
+}
+
+export function BrainProviderSwitcherModal({
+  open,
+  status,
+  error,
+  isLoading,
+  isSubmitting,
+  targetProvider,
+  codexReasoningEffort,
+  onClose,
+  onTargetProviderChange,
+  onCodexReasoningEffortChange,
+  onSubmit,
+}: {
+  open: boolean;
+  status: BrainProviderStateResponse | null;
+  error: string | null;
+  isLoading: boolean;
+  isSubmitting: boolean;
+  targetProvider: BrainProviderName;
+  codexReasoningEffort: CodexReasoningEffort;
+  onClose: () => void;
+  onTargetProviderChange: (provider: BrainProviderName) => void;
+  onCodexReasoningEffortChange: (effort: CodexReasoningEffort) => void;
+  onSubmit: () => void;
+}) {
+  const { backdropProps } = useOverlayDismiss({
+    enabled: open,
+    onClose,
+    closeOnBackdropPress: !isSubmitting,
+    closeOnEscape: !isSubmitting,
+  });
+
+  if (!open) {
+    return null;
+  }
+
+  const targetAvailability = status?.providers[targetProvider] ?? null;
+  const isNoop = Boolean(
+    status
+    && targetProvider === status.currentProvider
+    && (targetProvider !== 'codex' || codexReasoningEffort === status.codexReasoningEffort),
+  );
+  const isBusy = Boolean(status?.isProcessing);
+  const isSubmitDisabled = isLoading
+    || isSubmitting
+    || !status
+    || !targetAvailability?.available
+    || isBusy
+    || isNoop;
+
   return (
     <div className="fixed inset-0 z-[90]">
       <div
@@ -155,7 +169,7 @@ export function BrainProviderSwitcherModal({
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">App Brain</p>
               <h2 className="mt-1 text-lg font-semibold text-zinc-50">Switch provider</h2>
               <p className="mt-1 text-sm text-zinc-400">
-                Choose which CLI powers chat, curation, reflection, and research next.
+                Choose which CLI powers the source browsing and default curation & chats.
               </p>
             </div>
             <button
@@ -277,24 +291,9 @@ export function BrainProviderSwitcherModal({
               })}
             </div>
 
-            <div
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm text-zinc-400"
-              data-testid="brain-provider-usage-summary"
-            >
-              <p className="flex min-h-8 items-center border-b border-zinc-800/70 py-1.5" title={codexUsageTitle}>
-                {codexUsageLabel}
-              </p>
-              <p className="flex min-h-8 items-center py-1.5">
-                {claudeUsageLabel}
-              </p>
-            </div>
-
             {targetProvider === 'codex' ? (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                 <p className="text-sm font-medium text-zinc-100">Codex reasoning</p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  Low is best for straightforward browsing work. Medium is the default balance. High spends more time thinking before it responds.
-                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {CODEX_REASONING_OPTIONS.map((option) => {
                     const isSelected = codexReasoningEffort === option.value;
@@ -360,6 +359,77 @@ export function BrainProviderSwitcherModal({
               >
                 {isSubmitting ? 'Switching...' : 'Switch provider'}
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function UsageSummaryModal({
+  isOpen,
+  onClose,
+  codexUsageLabel,
+  codexUsageTitle,
+  claudeUsageLabel,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  codexUsageLabel: string;
+  codexUsageTitle?: string;
+  claudeUsageLabel: string;
+}) {
+  const { backdropProps } = useOverlayDismiss({
+    enabled: isOpen,
+    onClose,
+  });
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90]">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/70"
+        {...backdropProps}
+      />
+      <div className="absolute inset-x-0 bottom-0 top-auto mx-auto flex max-h-[92vh] w-full max-w-md items-end justify-center p-4 sm:items-center">
+        <div
+          data-testid="brain-provider-usage-modal"
+          className="w-full overflow-hidden rounded-[1.5rem] border border-zinc-800 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+        >
+          <div className="flex items-start justify-between border-b border-zinc-800 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-50">Usage</h2>
+              <p className="mt-1 text-sm text-zinc-400">Coding agent usage so far</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
+              aria-label="Close usage summary"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="px-5 py-4">
+            <div
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm text-zinc-400"
+              data-testid="brain-provider-usage-summary"
+            >
+              <p className="flex min-h-8 items-center border-b border-zinc-800/70 py-1.5" title={codexUsageTitle}>
+                {codexUsageLabel}
+              </p>
+              <p className="flex min-h-8 items-center py-1.5">
+                {claudeUsageLabel}
+              </p>
             </div>
           </div>
         </div>
