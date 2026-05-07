@@ -67,13 +67,13 @@ export function DislikedItemTombstone({
               className="min-h-9 min-w-0 flex-1 rounded-md border border-zinc-800 bg-black/30 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-zinc-500"
               disabled={savingReason}
             />
-            <button
+            {pendingReason.trim().length > 0 ? <button
               type="submit"
               disabled={savingReason}
               className="inline-flex min-h-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/80 px-3 text-sm font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingReason ? 'Saving...' : 'Save'}
-            </button>
+            </button> : null}
           </form>
         )}
       </div>
