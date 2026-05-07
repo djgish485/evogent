@@ -17,7 +17,9 @@ interface ThreadGroupHeaderProps {
   threadTint: ThreadTint;
   isCollapsed: boolean;
   contentsId: string;
+  thumbsDownPending?: boolean;
   onToggleCollapsed: () => void;
+  onThumbsDownThread: () => void;
   onSubmitFeedback: (input: {
     threadId: string;
     cycleId: string;
@@ -41,7 +43,9 @@ export function ThreadGroupHeader({
   threadTint,
   isCollapsed,
   contentsId,
+  thumbsDownPending = false,
   onToggleCollapsed,
+  onThumbsDownThread,
   onSubmitFeedback,
 }: ThreadGroupHeaderProps) {
   const titleClassName = threadProminence?.level === 'lead'
@@ -91,6 +95,8 @@ export function ThreadGroupHeader({
             threadTitle={threadTitle}
             feedbackProbe={feedbackProbe}
             sourceItemIds={sourceItemIds}
+            thumbsDownDisabled={thumbsDownPending}
+            onThumbsDown={onThumbsDownThread}
             onSubmit={onSubmitFeedback}
           />
         </div>

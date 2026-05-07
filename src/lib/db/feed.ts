@@ -2958,6 +2958,12 @@ function buildFeedListWhereClause(
           AND i.action = 'suggestion_dismissed'
       )
     )`,
+    `NOT EXISTS (
+      SELECT 1
+      FROM interactions i
+      WHERE i.feed_item_id = f.id
+        AND i.action = 'dislike'
+    )`,
   ];
   const values: Array<string | number> = [];
   const effectiveTypes = options?.forcedTypes ?? query.types;
