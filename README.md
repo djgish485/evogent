@@ -1,4 +1,4 @@
-# Evogent: Curation & Cloud Coding Agent
+# Evogent - Curation & Cloud Coding Agent
 
 <p align="center">
   <img src="docs/images/hero-feed.jpeg" alt="Evogent curated feed thread with the rationale visible" width="320">
