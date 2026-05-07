@@ -1,9 +1,11 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { ContentCard } from '@/components/feed/content-card';
+import { DislikedItemTombstone } from '@/components/feed/disliked-item-tombstone';
 import { ThreadGroupHeader } from '@/components/feed/thread-group-header';
 import type { ThreadFeedbackVote } from '@/components/feed/thread-feedback-control';
+import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import { textMatchesSearchQuery } from '@/lib/search-utils';
 import { sanitizeThreadColor, THREAD_COLOR_PALETTE, type ThreadTint } from '@/lib/thread-colors';
 import type { FeedbackProbeMetadata, FeedItem, FeedProminence } from '@/types/feed';
@@ -133,6 +135,39 @@ function getItemBridge(item: FeedItem): string {
     : '';
 }
 
+function getThreadTombstoneLabel(threadTitle: string): string {
+  const title = threadTitle.trim();
+  return title ? `Thread: ${title}` : 'Thread';
+}
+
+function getThreadDislikeErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+async function postThreadDislikeInteraction(
+  feedItemId: string,
+  action: 'thumbsdown' | 'undo_thumbsdown',
+  reason?: string,
+): Promise<void> {
+  const response = await fetch('/api/interactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      feedItemId,
+      action,
+      reason: reason || undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      isAuthFailure(response, null)
+        ? AUTH_REQUIRED_MESSAGE
+        : `Failed to update thread feedback (${response.status})`,
+    );
+  }
+}
+
 function ThreadItemBridge({
   bridge,
   threadTint,
@@ -180,12 +215,93 @@ export function ThreadGroup({
   onSubmitFeedback,
 }: ThreadGroupProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isDismissedInSession, setIsDismissedInSession] = useState(false);
+  const [dismissPending, setDismissPending] = useState(false);
+  const [dismissError, setDismissError] = useState<string | null>(null);
+  const [tombstoneReason, setTombstoneReason] = useState('');
+  const [tombstoneReasonSaved, setTombstoneReasonSaved] = useState(false);
+  const [tombstoneSavingReason, setTombstoneSavingReason] = useState(false);
+  const [tombstoneError, setTombstoneError] = useState<string | null>(null);
   const contentsId = useId();
   const pinnedAnalysisIds = analysisItems.map((item) => item.id);
+  const threadFeedItemIds = useMemo(() => Array.from(new Set(
+    [...analysisItems, ...items].map((item) => item.id).filter(Boolean),
+  )), [analysisItems, items]);
   const threadColor = sanitizeThreadColor(items[0]?.metadata?.thread?.color);
   const threadTint = threadColor ? THREAD_COLOR_PALETTE[threadColor] : NEUTRAL_THREAD_TINT;
   const hiddenItemCount = analysisItems.length + items.length;
   const hiddenItemLabel = hiddenItemCount === 1 ? 'item' : 'items';
+  const postThreadDislike = useCallback(async (
+    action: 'thumbsdown' | 'undo_thumbsdown',
+    reason?: string,
+  ) => {
+    if (threadFeedItemIds.length === 0) {
+      throw new Error('Unable to find thread items to update.');
+    }
+
+    await Promise.all(threadFeedItemIds.map((feedItemId) => (
+      postThreadDislikeInteraction(feedItemId, action, reason)
+    )));
+  }, [threadFeedItemIds]);
+  const handleThumbsDownThread = useCallback(() => {
+    if (dismissPending || isDismissedInSession) return;
+
+    setDismissPending(true);
+    setDismissError(null);
+    setTombstoneError(null);
+    setTombstoneReason('');
+    setTombstoneReasonSaved(false);
+    setIsDismissedInSession(true);
+
+    void (async () => {
+      try {
+        await postThreadDislike('thumbsdown');
+      } catch (error) {
+        setIsDismissedInSession(false);
+        setDismissError(getThreadDislikeErrorMessage(error, 'Failed to remove thread from the feed.'));
+      } finally {
+        setDismissPending(false);
+      }
+    })();
+  }, [dismissPending, isDismissedInSession, postThreadDislike]);
+  const handleUndoThreadDislike = useCallback(async () => {
+    if (dismissPending || tombstoneSavingReason) return;
+
+    setDismissPending(true);
+    setTombstoneError(null);
+    setIsDismissedInSession(false);
+
+    try {
+      await postThreadDislike('undo_thumbsdown');
+      setTombstoneReason('');
+      setTombstoneReasonSaved(false);
+    } catch (error) {
+      setIsDismissedInSession(true);
+      setTombstoneError(getThreadDislikeErrorMessage(error, 'Failed to undo thread removal.'));
+    } finally {
+      setDismissPending(false);
+    }
+  }, [dismissPending, postThreadDislike, tombstoneSavingReason]);
+  const handleThreadTombstoneReasonSubmit = useCallback(async (reason: string) => {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      setTombstoneError(null);
+      setTombstoneReasonSaved(true);
+      return;
+    }
+
+    setTombstoneSavingReason(true);
+    setTombstoneError(null);
+    try {
+      await postThreadDislike('thumbsdown', trimmedReason);
+      setTombstoneReason(trimmedReason);
+      setTombstoneReasonSaved(true);
+    } catch (error) {
+      setTombstoneError(getThreadDislikeErrorMessage(error, 'Failed to save reason.'));
+    } finally {
+      setTombstoneSavingReason(false);
+    }
+  }, [postThreadDislike]);
   const headerProps = {
     threadId,
     cycleId,
@@ -198,15 +314,35 @@ export function ThreadGroup({
     threadTint,
     isCollapsed,
     contentsId,
+    thumbsDownPending: dismissPending,
     onToggleCollapsed: () => setIsCollapsed((current) => !current),
+    onThumbsDownThread: handleThumbsDownThread,
     onSubmitFeedback,
   };
   const visibleAnalysisItems = sortThreadItemsForSearch(analysisItems, searchQuery);
   const visibleItems = sortThreadItemsForSearch(items, searchQuery);
 
+  if (isDismissedInSession) {
+    return (
+      <section className="pt-4">
+        <DislikedItemTombstone
+          label={getThreadTombstoneLabel(threadTitle)}
+          pendingReason={tombstoneReason}
+          savingReason={dismissPending || tombstoneSavingReason}
+          error={tombstoneError}
+          reasonSaved={tombstoneReasonSaved}
+          onPendingReasonChange={setTombstoneReason}
+          onUndo={handleUndoThreadDislike}
+          onSubmitReason={handleThreadTombstoneReasonSubmit}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="pt-4">
       <ThreadGroupHeader {...headerProps} />
+      {dismissError ? <p className="mt-2 px-4 text-sm text-red-300">{dismissError}</p> : null}
       <div id={contentsId}>
         {isCollapsed ? (
           <button

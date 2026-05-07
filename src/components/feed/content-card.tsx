@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createPortal } from 'react-dom';
+import { DislikedItemTombstone } from '@/components/feed/disliked-item-tombstone';
 import { TextSelectionTooltip } from '@/components/feed/text-selection-tooltip';
 import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import {
@@ -1710,6 +1711,22 @@ function ReasonInput({
       </button>
     </form>
   );
+}
+
+function getDislikedItemTombstoneLabel(item: FeedItem): string {
+  if (item.type === 'tweet') {
+    const username = item.authorUsername?.trim();
+    const displayName = item.authorDisplayName?.trim();
+    if (username) return `Tweet by @${username}`;
+    if (displayName) return `Tweet by ${displayName}`;
+    return 'Tweet';
+  }
+
+  if (item.title?.trim()) {
+    return `${item.type} item: ${item.title.trim()}`;
+  }
+
+  return `${item.type} item`;
 }
 
 function MediaDisplay({
@@ -3606,9 +3623,14 @@ export function ContentCard({
   const [expandedChildPreviews, setExpandedChildPreviews] = useState<Record<string, boolean>>({});
   const [isLiked, setIsLiked] = useState(item.isLiked);
   const [isDisliked, setIsDisliked] = useState(item.isDisliked);
+  const [dismissedInSession, setDismissedInSession] = useState(false);
   const [showReasonInput, setShowReasonInput] = useState<'thumbsup' | 'thumbsdown' | null>(null);
   const [votePending, setVotePending] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [tombstoneReason, setTombstoneReason] = useState('');
+  const [tombstoneReasonSaved, setTombstoneReasonSaved] = useState(false);
+  const [tombstoneSavingReason, setTombstoneSavingReason] = useState(false);
+  const [tombstoneError, setTombstoneError] = useState<string | null>(null);
   const [tweetLikeDelta, setTweetLikeDelta] = useState(0);
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -3645,6 +3667,11 @@ export function ContentCard({
   useEffect(() => {
     setShowReasonInput(null);
     setVoteError(null);
+    setDismissedInSession(false);
+    setTombstoneReason('');
+    setTombstoneReasonSaved(false);
+    setTombstoneSavingReason(false);
+    setTombstoneError(null);
   }, [item.id]);
 
   useEffect(() => {
@@ -3655,11 +3682,13 @@ export function ContentCard({
     action: 'thumbsup' | 'thumbsdown' | 'undo_thumbsup' | 'undo_thumbsdown',
     reason?: string,
   ) => {
-    if (votePending) return;
+    if (votePending) return false;
 
     setVoteError(null);
+    setTombstoneError(null);
     const previousLiked = isLiked;
     const previousDisliked = isDisliked;
+    const previousDismissedInSession = dismissedInSession;
     let nextLiked = previousLiked;
     let nextDisliked = previousDisliked;
 
@@ -3681,6 +3710,15 @@ export function ContentCard({
       && !previousLiked;
     setIsLiked(nextLiked);
     setIsDisliked(nextDisliked);
+    if (action === 'thumbsdown') {
+      setDismissedInSession(true);
+      setTombstoneReason('');
+      setTombstoneReasonSaved(false);
+    } else if (action === 'undo_thumbsdown') {
+      setDismissedInSession(false);
+      setTombstoneReason('');
+      setTombstoneReasonSaved(false);
+    }
     if (shouldOptimisticallyIncrementTweetLike) {
       setTweetLikeDelta((current) => current + 1);
     }
@@ -3721,10 +3759,19 @@ export function ContentCard({
         }).catch(() => {});
       }
     } catch (error) {
+      const message = isAuthFailure(response, error)
+        ? AUTH_REQUIRED_MESSAGE
+        : action === 'undo_thumbsdown'
+          ? 'Failed to undo thumbs down.'
+          : 'Failed to update vote state.';
       setIsLiked(previousLiked);
       setIsDisliked(previousDisliked);
-      if (isAuthFailure(response, error)) {
-        setVoteError(AUTH_REQUIRED_MESSAGE);
+      setVoteError(message);
+      if (action === 'thumbsdown') {
+        setDismissedInSession(false);
+      } else if (action === 'undo_thumbsdown') {
+        setDismissedInSession(previousDismissedInSession);
+        setTombstoneError(message);
       }
       if (shouldOptimisticallyIncrementTweetLike) {
         setTweetLikeDelta((current) => current - 1);
@@ -3732,10 +3779,12 @@ export function ContentCard({
       if (action === 'thumbsup' || action === 'thumbsdown') {
         setShowReasonInput(null);
       }
+      return false;
     } finally {
       setVotePending(false);
     }
-  }, [isDisliked, isHackerNewsItem, isLiked, item.id, item.type, votePending]);
+    return true;
+  }, [dismissedInSession, isDisliked, isHackerNewsItem, isLiked, item.id, item.type, votePending]);
 
   const handleThumbsUp = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -3759,7 +3808,6 @@ export function ContentCard({
       return;
     }
 
-    setShowReasonInput('thumbsdown');
     void handleVote('thumbsdown');
   }, [handleVote, isDisliked]);
 
@@ -3791,6 +3839,51 @@ export function ContentCard({
     }
     setShowReasonInput(null);
   }, [item.id, showReasonInput]);
+
+  const handleTombstoneReasonSubmit = useCallback(async (reason: string) => {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      setTombstoneReasonSaved(true);
+      setTombstoneError(null);
+      return;
+    }
+
+    setTombstoneSavingReason(true);
+    setTombstoneError(null);
+    let response: Response | null = null;
+    try {
+      response = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedItemId: item.id,
+          action: 'thumbsdown',
+          reason: trimmedReason,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          isAuthFailure(response, null)
+            ? AUTH_REQUIRED_MESSAGE
+            : `Failed to save reason (${response.status})`,
+        );
+      }
+
+      setTombstoneReason(trimmedReason);
+      setTombstoneReasonSaved(true);
+    } catch (error) {
+      setTombstoneError(
+        isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to save reason.',
+      );
+    } finally {
+      setTombstoneSavingReason(false);
+    }
+  }, [item.id]);
 
   const clearLightboxCloseTimeout = useCallback(() => {
     if (lightboxCloseTimeoutRef.current === null) return;
@@ -4020,6 +4113,21 @@ export function ContentCard({
       )}
     </div>
   ) : null;
+
+  if (dismissedInSession) {
+    return (
+      <DislikedItemTombstone
+        label={getDislikedItemTombstoneLabel(item)}
+        pendingReason={tombstoneReason}
+        savingReason={votePending || tombstoneSavingReason}
+        error={tombstoneError}
+        reasonSaved={tombstoneReasonSaved}
+        onPendingReasonChange={setTombstoneReason}
+        onUndo={() => { void handleVote('undo_thumbsdown'); }}
+        onSubmitReason={handleTombstoneReasonSubmit}
+      />
+    );
+  }
 
   return (
     <article

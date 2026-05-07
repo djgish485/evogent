@@ -915,6 +915,35 @@ describe('feed timestamp persistence and ordering', () => {
     assert.deepStrictEqual(createdPage.items.map((item) => item.id), ['feed-space-newer', 'feed-iso-older']);
   });
 
+  test('getFeedPage excludes items with persisted dislikes', () => {
+    const db = getDb();
+
+    db.prepare(`
+      INSERT INTO feed (id, type, source, text, published_at, created_at)
+      VALUES ('kept-item', 'article', 'unit_test', 'kept article', ?, ?)
+    `).run('2026-03-02T12:00:00.000Z', '2026-03-02T12:00:00.000Z');
+    db.prepare(`
+      INSERT INTO feed (id, type, source, text, published_at, created_at)
+      VALUES ('disliked-item', 'article', 'unit_test', 'disliked article', ?, ?)
+    `).run('2026-03-02T13:00:00.000Z', '2026-03-02T13:00:00.000Z');
+    db.prepare(`
+      INSERT INTO interactions (feed_item_id, action)
+      VALUES ('disliked-item', 'dislike')
+    `).run();
+
+    const page = getFeedPage({
+      offset: 0,
+      limit: 10,
+      types: [],
+      sources: [],
+      sort: 'created',
+      search: null,
+    });
+
+    assert.deepStrictEqual(page.items.map((item) => item.id), ['kept-item']);
+    assert.strictEqual(page.total, 1);
+  });
+
   test('getFeedPage includes child suggestions while still excluding child articles', () => {
     const db = getDb();
 
