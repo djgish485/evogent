@@ -8231,6 +8231,7 @@ export default function Home() {
         isOpen={isUsageModalOpen}
         onClose={closeUsageModal}
         codexUsageLabel={usageSummaryLabels.codexUsageLabel}
+        codexUsageResetLabel={usageSummaryLabels.codexUsageResetLabel}
         codexUsageTitle={usageSummaryLabels.codexUsageTitle}
         claudeUsageLabel={usageSummaryLabels.claudeUsageLabel}
       />

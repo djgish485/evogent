@@ -9,6 +9,8 @@ import { formatChatTimestamp } from '@/lib/timestamps';
 import { useEffect, useRef, useState } from 'react';
 
 const USAGE_SUMMARY_CACHE_MS = 60_000;
+const USAGE_RESET_NEAR_MS = 24 * 60 * 60 * 1000;
+const USAGE_RESET_MINUTE_MS = 60 * 1000;
 
 type UsageSummaryResponse = {
   totalCostUsd?: number;
@@ -27,8 +29,40 @@ function formatUsagePercent(value: number | null | undefined): string {
     : '0%';
 }
 
+function formatUsageResetTime(resetsAt: string | null | undefined): string {
+  if (!resetsAt) {
+    return 'unknown';
+  }
+
+  const resetTime = new Date(resetsAt).getTime();
+  if (!Number.isFinite(resetTime)) {
+    return 'unknown';
+  }
+
+  const diffMs = resetTime - Date.now();
+  if (diffMs >= 0 && diffMs <= USAGE_RESET_NEAR_MS) {
+    const totalMinutes = Math.max(0, Math.ceil(diffMs / USAGE_RESET_MINUTE_MS));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+      return minutes > 0 ? `in ${hours}h ${minutes}m` : `in ${hours}h`;
+    }
+
+    return `in ${totalMinutes} min`;
+  }
+
+  return new Date(resetTime).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function useUsageSummaryLabels(open: boolean): {
   codexUsageLabel: string;
+  codexUsageResetLabel?: string;
   codexUsageTitle?: string;
   claudeUsageLabel: string;
 } {
@@ -82,6 +116,9 @@ export function useUsageSummaryLabels(open: boolean): {
   const codexUsageTitle = usageSummary?.codex
     ? `5h resets ${usageSummary.codex.short.resetsAt ?? 'unknown'} · weekly resets ${usageSummary.codex.weekly.resetsAt ?? 'unknown'}`
     : undefined;
+  const codexUsageResetLabel = usageSummary?.codex
+    ? `5h window resets ${formatUsageResetTime(usageSummary.codex.short.resetsAt)} · weekly resets ${formatUsageResetTime(usageSummary.codex.weekly.resetsAt)}`
+    : undefined;
   const claudeBreakdown = Array.isArray(usageSummary?.breakdown) ? usageSummary.breakdown : [];
   const claudeRuns = claudeBreakdown.reduce((sum, row) => (
     sum + (typeof row.runs === 'number' && Number.isFinite(row.runs) ? row.runs : 0)
@@ -97,6 +134,7 @@ export function useUsageSummaryLabels(open: boolean): {
 
   return {
     codexUsageLabel,
+    codexUsageResetLabel,
     codexUsageTitle,
     claudeUsageLabel,
   };
@@ -371,12 +409,14 @@ export function UsageSummaryModal({
   isOpen,
   onClose,
   codexUsageLabel,
+  codexUsageResetLabel,
   codexUsageTitle,
   claudeUsageLabel,
 }: {
   isOpen: boolean;
   onClose: () => void;
   codexUsageLabel: string;
+  codexUsageResetLabel?: string;
   codexUsageTitle?: string;
   claudeUsageLabel: string;
 }) {
@@ -424,9 +464,16 @@ export function UsageSummaryModal({
               className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm text-zinc-400"
               data-testid="brain-provider-usage-summary"
             >
-              <p className="flex min-h-8 items-center border-b border-zinc-800/70 py-1.5" title={codexUsageTitle}>
-                {codexUsageLabel}
-              </p>
+              <div className="border-b border-zinc-800/70 py-1.5">
+                <p className="flex min-h-8 items-center">
+                  {codexUsageLabel}
+                </p>
+                {codexUsageResetLabel ? (
+                  <p className="pb-1 text-xs leading-5 text-zinc-500" title={codexUsageTitle}>
+                    {codexUsageResetLabel}
+                  </p>
+                ) : null}
+              </div>
               <p className="flex min-h-8 items-center py-1.5">
                 {claudeUsageLabel}
               </p>
