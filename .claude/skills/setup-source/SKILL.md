@@ -84,7 +84,15 @@ Before opening the login page:
 
 ### X/Twitter Login Path Options
 
-If `SOURCE=twitter`, tell the user there are three equivalent login paths and let them choose. Do not present one as the correct path; choose by trade-off:
+If `SOURCE=twitter`, choose the first-line path from the Step 0 platform checks before giving detailed options.
+
+Recommended path by platform:
+
+- Mac/Windows local install: interactive login in the runtime Chrome. Have the user log in once when the runtime Chrome opens. Skip cookie-copy steps below unless they explicitly want to avoid a second X login event.
+- Linux VM with desktop: cookie-copy from local Chrome is the simplest and avoids the noVNC + desktop/keyring chain. noVNC interactive login also works if the user prefers logging in on the VM directly.
+- Linux VM without desktop: cookie-copy from local Chrome, using either the DevTools recipe or local-agent Playwright MCP. This is the only viable path without the desktop stack.
+
+The table below is reference for the cookie-copy and noVNC options when applicable:
 
 | Path | Use when | Trade-off |
 |------|----------|-----------|
@@ -125,6 +133,8 @@ Cookie staleness note: do not judge `/root/.config/x-auth-cookies.json` by age o
 
 Use the native Chrome GUI. Do not route the user through `Xvfb`, `dbus`, or `gnome-keyring` instructions.
 
+For local installs, just have the user log in once in the runtime Chrome that opens. Do not route them through DevTools cookie copy unless they explicitly want to avoid a second X login event.
+
 Guide them to:
 
 1. Open the Chrome profile Evogent will use with remote debugging on `CDP_URL`.
@@ -155,8 +165,8 @@ After the user confirms login is complete, restart that Evogent Chrome profile a
 Source-specific guidance:
 
 - For X/Twitter:
-  - offer the three login paths above and let the user pick
-  - direct login in Chrome is fine when they choose an interactive local profile path
+  - recommend direct login in the runtime Chrome as the first-line path
+  - offer cookie copy only if they explicitly want to avoid a second X login event
   - browser-backed `tweet-cache` depends only on this Chrome profile
   - to install `tweet-cache-bird`, the user must have typed `tweet-cache-bird` verbatim or otherwise picked the bird path explicitly. Use `POST /api/skills/install` with `{"registry":"tweet-cache-bird","confirmExplicit":true}` only after that choice. The install API returns 400 without `confirmExplicit`; if you see that error, stop and ask the user to choose between repairing the browser stack and explicitly opting into bird. Never auto-pass `confirmExplicit` on your own initiative.
 - For YouTube or other Google properties:
@@ -182,7 +192,7 @@ Rules for this flow:
 Source-specific guidance:
 
 - For X/Twitter:
-  - offer the three login paths above and let the user pick
+  - recommend cookie copy from local Chrome first
   - if they choose noVNC, guide interactive login through the desktop Chrome session
   - if they choose cookie copy, write `/root/.config/x-auth-cookies.json`, import it with `restore-x-auth.ts`, and then verify the shared Chrome session
 - For YouTube or Google:
