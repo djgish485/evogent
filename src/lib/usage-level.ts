@@ -27,7 +27,7 @@ const USAGE_LEVEL_MAP: Record<UsageLevel, Omit<UsageLevelConfig, 'level'>> = {
     postEnrichmentEffort: 'low',
     enrichmentModel: 'claude-opus-4-7',
     reflectionModel: 'claude-opus-4-7',
-    defaultMinInterval: 4 * 60,
+    defaultMinInterval: 5 * 60,
     defaultMaxInterval: 8 * 60,
     reflectionFrequency: 'weekly',
   },
