@@ -121,9 +121,9 @@ Ask one visible question and include these option descriptions in the question t
 
 Subscription guidance:
 
-- **Low**: designed for Pro/Plus ($20/mo) tiers.
-- **Medium**: designed for Max 5x ($100/mo) or ChatGPT Pro at lower volume.
-- **High**: designed for Max 20x or ChatGPT Pro ($200/mo), or direct API use.
+- **Low**: comfortable on $20/mo tiers (Claude Pro or ChatGPT Plus).
+- **Medium**: comfortable on Claude Max 5x ($100/mo) or higher.
+- **High**: best for Claude Max 20x or ChatGPT Pro ($200/mo), or direct API use.
 
 Observed token usage on HIGH mode, from a heavily-tested install: about 70 curation-related tasks/day, about 180M input tokens with 88%+ served from prompt cache, about 60K output tokens, and about $130/day at Sonnet API rates. Lower tiers scale roughly 30%/60%/100% of HIGH cadence.
 
