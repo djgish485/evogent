@@ -11,6 +11,8 @@ interface ThreadFeedbackControlProps {
   threadTitle: string;
   feedbackProbe?: FeedbackProbeMetadata | null;
   sourceItemIds?: string[];
+  thumbsDownDisabled?: boolean;
+  onThumbsDown: () => void;
   onSubmit: (input: {
     threadId: string;
     cycleId: string;
@@ -39,23 +41,22 @@ export function ThreadFeedbackControl({
   threadTitle,
   feedbackProbe = null,
   sourceItemIds = [],
+  thumbsDownDisabled = false,
+  onThumbsDown,
   onSubmit,
 }: ThreadFeedbackControlProps) {
   const [reason, setReason] = useState('');
-  const [pendingVote, setPendingVote] = useState<ThreadFeedbackVote | null>(null);
-  const [savingVote, setSavingVote] = useState<ThreadFeedbackVote | null>(null);
+  const [showReasonForm, setShowReasonForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<'success' | 'error'>('success');
-  const isSaving = savingVote !== null;
 
-  const chooseVote = (vote: ThreadFeedbackVote) => { setPendingVote(vote); setStatusMessage(null); };
-  const handleCancel = () => { setPendingVote(null); setReason(''); };
+  const handleCancel = () => { setShowReasonForm(false); setReason(''); };
 
   const handleSubmit = async () => {
-    if (!pendingVote || isSaving) return;
+    if (!showReasonForm || saving) return;
 
-    const vote = pendingVote;
-    setSavingVote(vote);
+    setSaving(true);
     setStatusMessage(null);
 
     try {
@@ -63,33 +64,33 @@ export function ThreadFeedbackControl({
         threadId,
         cycleId,
         threadTitle,
-        vote,
+        vote: 'up',
         reason: reason.trim(),
         feedbackProbe,
         sourceItemIds,
       });
       setReason('');
-      setPendingVote(null);
+      setShowReasonForm(false);
       setStatusTone('success');
       setStatusMessage(feedbackProbe ? 'Feedback saved.' : 'Feedback saved to chat.');
     } catch (error) {
-      setPendingVote(null);
+      setShowReasonForm(false);
       setStatusTone('error');
       setStatusMessage(error instanceof Error ? error.message : 'Failed to save feedback.');
     } finally {
-      setSavingVote(null);
+      setSaving(false);
     }
   };
 
   const moreLabel = feedbackProbe?.options?.moreLabel ?? feedbackProbe?.options?.positiveLabel ?? 'More like this';
   const lessLabel = feedbackProbe?.options?.lessLabel ?? feedbackProbe?.options?.negativeLabel ?? 'Less like this';
-  const reasonForm = pendingVote ? (
+  const reasonForm = showReasonForm ? (
     <div className={feedbackProbe ? 'mt-2 rounded-md border border-amber-400/20 bg-black/20 p-2' : 'w-56 rounded-lg border border-zinc-800 bg-black/30 p-2 sm:w-64'}>
       <form onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}>
         <input type="text" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Optional reason" className={`w-full rounded-md border bg-black/30 px-3 py-2 text-xs text-zinc-100 outline-none transition ${feedbackProbe ? 'border-zinc-700 focus:border-amber-300/60' : 'border-zinc-800 focus:border-emerald-500/60'}`} />
         <div className="mt-2 flex justify-end gap-2">
-          <button type="submit" disabled={isSaving} className="inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-400/35 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={handleCancel} disabled={isSaving} className="inline-flex min-h-11 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/90 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+          <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-400/35 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Saving...' : 'Save'}</button>
+          <button type="button" onClick={handleCancel} disabled={saving} className="inline-flex min-h-11 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/90 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
         </div>
       </form>
     </div>
@@ -104,8 +105,8 @@ export function ThreadFeedbackControl({
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">Tune this lane</span>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button type="button" onClick={() => chooseVote('up')} disabled={isSaving} className="inline-flex min-h-12 items-center justify-center rounded-md border border-emerald-400/45 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60">{moreLabel}</button>
-            <button type="button" onClick={() => chooseVote('down')} disabled={isSaving} className="inline-flex min-h-12 items-center justify-center rounded-md border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60">{lessLabel}</button>
+            <button type="button" onClick={() => { setShowReasonForm(true); setStatusMessage(null); }} disabled={saving} className="inline-flex min-h-12 items-center justify-center rounded-md border border-emerald-400/45 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60">{moreLabel}</button>
+            <button type="button" onClick={onThumbsDown} disabled={saving || thumbsDownDisabled} className="inline-flex min-h-12 items-center justify-center rounded-md border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60">{lessLabel}</button>
           </div>
           {reasonForm}
           {status}
@@ -117,10 +118,10 @@ export function ThreadFeedbackControl({
   return (
     <div className="flex shrink-0 flex-col items-end gap-2">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => chooseVote('up')} disabled={isSaving} aria-label="Thumbs up thread" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60">
+        <button type="button" onClick={() => { setShowReasonForm(true); setStatusMessage(null); }} disabled={saving} aria-label="Thumbs up thread" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60">
           <ThumbIcon direction="up" />
         </button>
-        <button type="button" onClick={() => chooseVote('down')} disabled={isSaving} aria-label="Thumbs down thread" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/80 text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/90 disabled:cursor-not-allowed disabled:opacity-60">
+        <button type="button" onClick={onThumbsDown} disabled={saving || thumbsDownDisabled} aria-label="Thumbs down thread" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/80 text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/90 disabled:cursor-not-allowed disabled:opacity-60">
           <ThumbIcon direction="down" />
         </button>
       </div>
