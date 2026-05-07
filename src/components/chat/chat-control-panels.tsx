@@ -6,7 +6,26 @@ import { type OrchestratorStatusResponse } from '@/lib/orchestrator';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
 import { CODEX_REASONING_OPTIONS } from '@/lib/reasoning-effort';
 import { formatChatTimestamp } from '@/lib/timestamps';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+const USAGE_SUMMARY_CACHE_MS = 60_000;
+
+type UsageSummaryResponse = {
+  totalCostUsd?: number;
+  breakdown?: Array<{ runs?: number | null }>;
+  codex?: {
+    short: { usedPercent?: number | null; resetsAt?: string | null };
+    weekly: { usedPercent?: number | null; resetsAt?: string | null };
+  } | null;
+  codexUnavailable?: string;
+};
+
+function formatUsagePercent(value: number | null | undefined): string {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue)
+    ? `${Number.isInteger(numberValue) ? numberValue : numberValue.toFixed(1).replace(/\.0$/, '')}%`
+    : '0%';
+}
 
 export function BrainProviderSwitcherModal({
   open,
@@ -33,12 +52,51 @@ export function BrainProviderSwitcherModal({
   onCodexReasoningEffortChange: (effort: CodexReasoningEffort) => void;
   onSubmit: () => void;
 }) {
+  const [usageSummary, setUsageSummary] = useState<UsageSummaryResponse | null>(null);
+  const [usageSummaryError, setUsageSummaryError] = useState(false);
+  const usageSummaryFetchedAtRef = useRef<number | null>(null);
   const { backdropProps } = useOverlayDismiss({
     enabled: open,
     onClose,
     closeOnBackdropPress: !isSubmitting,
     closeOnEscape: !isSubmitting,
   });
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const fetchedAt = usageSummaryFetchedAtRef.current;
+    if (fetchedAt !== null && Date.now() - fetchedAt < USAGE_SUMMARY_CACHE_MS) {
+      return;
+    }
+
+    let cancelled = false;
+    usageSummaryFetchedAtRef.current = Date.now();
+    void fetch('/api/usage/summary?since=24h', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load usage summary');
+        }
+        return response.json() as Promise<UsageSummaryResponse>;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setUsageSummary(data);
+          setUsageSummaryError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsageSummaryError(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   if (!open) {
     return null;
@@ -57,6 +115,28 @@ export function BrainProviderSwitcherModal({
     || !targetAvailability?.available
     || isBusy
     || isNoop;
+  const codexUsageLabel = usageSummary?.codex
+    ? `Codex usage: 5h ${formatUsagePercent(usageSummary.codex.short.usedPercent)} · weekly ${formatUsagePercent(usageSummary.codex.weekly.usedPercent)}`
+    : usageSummary
+      ? `Codex usage: unavailable${usageSummary.codexUnavailable ? ` (${usageSummary.codexUnavailable})` : ''}`
+      : usageSummaryError
+        ? 'Codex usage: unavailable'
+        : 'Codex usage: loading...';
+  const codexUsageTitle = usageSummary?.codex
+    ? `5h resets ${usageSummary.codex.short.resetsAt ?? 'unknown'} · weekly resets ${usageSummary.codex.weekly.resetsAt ?? 'unknown'}`
+    : undefined;
+  const claudeBreakdown = Array.isArray(usageSummary?.breakdown) ? usageSummary.breakdown : [];
+  const claudeRuns = claudeBreakdown.reduce((sum, row) => (
+    sum + (typeof row.runs === 'number' && Number.isFinite(row.runs) ? row.runs : 0)
+  ), 0);
+  const claudeCost = typeof usageSummary?.totalCostUsd === 'number' && Number.isFinite(usageSummary.totalCostUsd)
+    ? usageSummary.totalCostUsd
+    : 0;
+  const claudeUsageLabel = usageSummary
+    ? `Claude usage: $${claudeCost.toFixed(2)} · ${claudeRuns} runs (since 24h)`
+    : usageSummaryError
+      ? 'Claude usage: unavailable'
+      : 'Claude usage: loading...';
 
   return (
     <div className="fixed inset-0 z-[90]">
@@ -195,6 +275,18 @@ export function BrainProviderSwitcherModal({
                   </button>
                 );
               })}
+            </div>
+
+            <div
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm text-zinc-400"
+              data-testid="brain-provider-usage-summary"
+            >
+              <p className="flex min-h-8 items-center border-b border-zinc-800/70 py-1.5" title={codexUsageTitle}>
+                {codexUsageLabel}
+              </p>
+              <p className="flex min-h-8 items-center py-1.5">
+                {claudeUsageLabel}
+              </p>
             </div>
 
             {targetProvider === 'codex' ? (
