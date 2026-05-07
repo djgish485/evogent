@@ -96,7 +96,12 @@ Ask only about the earliest missing required item first: Brain Provider, then Us
 
 Missing-item prompts:
 - **No brain provider**: "Which brain should power Evogent: Claude Code or Codex CLI?"
-- **No usage level**: "How much API usage should Evogent use? Choose Low, Medium (recommended), or High."
+- **No usage level**: "How much API usage should Evogent use?
+- **Low**: comfortable on $20/mo tiers (Claude Pro or ChatGPT Plus). Curates every 4-8 hours.
+- **Medium (recommended)**: comfortable on Claude Max 5x ($100/mo) or higher. Curates every 90 min to 4 hours.
+- **High**: best for Claude Max 20x or ChatGPT Pro ($200/mo), or direct API. Curates every 45 min to 2 hours.
+
+Choose Low, Medium, or High."
 - **No source health evidence**: "Which source should we set up first? I recommend `/setup-source x.com` with `tweet-cache`, unless you prefer YouTube, Substack, or Hacker News."
 - **Browser-backed source lacks smoke evidence**: "Please run `/setup-source <site>` and complete the shared Chrome login; credentials stay in the browser, never in chat."
 - **Optional etc available**: "Optional: name your agent (otherwise I'll pick one), add custom curation interests, or import a Twitter/X archive. You can also skip all three and set them up any time later from chat or by editing data/config.md."
