@@ -7729,13 +7729,14 @@ export default function Home() {
                   submitCurateToSession={submitCurateToSession}
                   onOpen={() => {
                     updateSelectedChatSession(conversation.sessionId);
-                    if (conversation.searchMatchMessageId) {
+                    if (searchQuery && conversation.searchMatchMessageId) {
                       setConversationScrollToBottomId(null);
                       setConversationScrollToMessage({
                         sessionId: conversation.sessionId,
                         messageId: conversation.searchMatchMessageId,
                       });
                     } else {
+                      setConversationScrollToMessage(null);
                       setConversationScrollToBottomId(conversation.sessionId);
                     }
                     openConversationDetail(
