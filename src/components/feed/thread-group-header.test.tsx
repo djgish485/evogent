@@ -32,6 +32,7 @@ const defaultHeaderProps: HeaderProps = {
   isCollapsed: false,
   contentsId: 'thread-contents',
   onToggleCollapsed: () => {},
+  onThumbsDownThread: () => {},
   onSubmitFeedback: async () => {},
 };
 
@@ -112,6 +113,7 @@ function installDom() {
     Event: globalThis.Event,
     MouseEvent: globalThis.MouseEvent,
     KeyboardEvent: globalThis.KeyboardEvent,
+    fetch: globalThis.fetch,
   };
 
   Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
@@ -134,6 +136,7 @@ function installDom() {
     Object.defineProperty(globalThis, 'Event', { configurable: true, value: previous.Event });
     Object.defineProperty(globalThis, 'MouseEvent', { configurable: true, value: previous.MouseEvent });
     Object.defineProperty(globalThis, 'KeyboardEvent', { configurable: true, value: previous.KeyboardEvent });
+    Object.defineProperty(globalThis, 'fetch', { configurable: true, value: previous.fetch });
   };
 }
 
@@ -143,7 +146,20 @@ async function renderThreadGroupForInteraction() {
   assert.ok(container);
 
   const feedbackSubmissions: Array<{ vote: 'up' | 'down' }> = [];
+  const interactionRequests: Array<{ feedItemId: string; action: string; reason?: string }> = [];
   const root = createRoot(container);
+  Object.defineProperty(globalThis, 'fetch', {
+    configurable: true,
+    value: async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === 'string') {
+        interactionRequests.push(JSON.parse(init.body) as { feedItemId: string; action: string; reason?: string });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
 
   await act(async () => {
     root.render(
@@ -174,6 +190,7 @@ async function renderThreadGroupForInteraction() {
   return {
     container,
     feedbackSubmissions,
+    interactionRequests,
     async cleanup() {
       await act(async () => {
         root.unmount();
@@ -336,13 +353,16 @@ describe('ThreadGroupHeader', () => {
       await act(async () => {
         clickElement(thumbsDown);
       });
-      await act(async () => {
-        clickElement(getButtonByText(rendered.container, 'Save'));
-      });
 
-      assert.equal(header.getAttribute('aria-expanded'), 'false');
-      assert.match(rendered.container.textContent ?? '', /3 items hidden - tap to expand/);
-      assert.deepEqual(rendered.feedbackSubmissions, [{ vote: 'up' }, { vote: 'down' }]);
+      assert.match(rendered.container.textContent ?? '', /Undo/);
+      assert.match(rendered.container.textContent ?? '', /Optional reason/);
+      assert.doesNotMatch(rendered.container.textContent ?? '', /3 items hidden - tap to expand/);
+      assert.doesNotMatch(rendered.container.textContent ?? '', /Regular item one/);
+      assert.deepEqual(rendered.feedbackSubmissions, [{ vote: 'up' }]);
+      assert.deepEqual(
+        rendered.interactionRequests.filter((request) => request.action === 'thumbsdown').map((request) => request.feedItemId).sort(),
+        ['analysis-1', 'item-1', 'item-2'],
+      );
     } finally {
       await rendered.cleanup();
     }
