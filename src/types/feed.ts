@@ -205,7 +205,6 @@ export interface FeedMetadata {
   currentInterestReason?: string;
   bridge?: string;
   prominence?: FeedProminence;
-  cardVariant?: string | null;
   feedbackProbe?: FeedbackProbeMetadata;
   replyCapture?: ReplyCaptureMetadata;
   media?: MediaItem[];
