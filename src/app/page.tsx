@@ -13,7 +13,6 @@ import { GroupDetailView } from '@/components/feed/group-detail-view';
 import { type GroupType } from '@/components/feed/grouped-items-card';
 import { AsyncGroupedItemsCard } from '@/components/feed/grouped-items-card-async';
 import { NotificationCard } from '@/components/feed/notification-card';
-import { OpenClawVariantCard, resolveOpenClawCardVariant } from '@/components/feed/openclaw-variant-card';
 import { PostDetailView } from '@/components/feed/post-detail-view';
 import { type CodeFixProgress, SuggestionCard } from '@/components/feed/suggestion-card';
 import { SuggestionStatusLane } from '@/components/feed/suggestion-status-lane';
@@ -7996,22 +7995,6 @@ export default function Home() {
             }
 
             const { item } = entry;
-            const openClawVariant = resolveOpenClawCardVariant(item);
-            if (openClawVariant) {
-              return (
-                <OpenClawVariantCard
-                  key={item.id}
-                  item={item}
-                  variant={openClawVariant}
-                  onOpenDetail={openPostDetail}
-                  searchQuery={searchQuery}
-                  pendingNotificationAction={notificationPendingActions[item.id] ?? null}
-                  notificationFeedback={notificationFeedback[item.id]}
-                  onNotificationDismiss={handleNotificationDismiss}
-                />
-              );
-            }
-
             if (item.type === 'notification') {
               return (
                 <NotificationCard
