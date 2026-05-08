@@ -41,6 +41,7 @@ import { isProminentFeedItem } from '@/lib/feed-prominence';
 import { getYouTubeFeedData, isYouTubeSource, type YouTubeFeedData } from '@/lib/youtube-feed';
 import { resolveHackerNewsDiscussionUrl } from '@/lib/hacker-news';
 import { buildSearchSnippet, splitSearchHighlightParts, textMatchesSearchQuery } from '@/lib/search-utils';
+import { getSessionTint } from '@/lib/session-tints';
 
 interface ContentCardProps {
   item: FeedItem;
@@ -411,6 +412,30 @@ function readMetadataBoolean(metadata: FeedItem['metadata'], key: string): boole
     : null;
   const articleValue = article?.[key];
   return articleValue === true || (typeof articleValue === 'string' && articleValue.trim().toLowerCase() === 'true');
+}
+
+function isAgentSessionArticleLayout(item: Pick<FeedItem, 'metadata'>): boolean {
+  return readMetadataString(item.metadata, 'layoutMode') === 'agent-session';
+}
+
+function resolveAgentSessionTint(item: Pick<FeedItem, 'id' | 'metadata'>) {
+  const thread = item.metadata?.thread;
+  return getSessionTint(thread?.threadId ?? item.id, thread?.color ?? null);
+}
+
+function resolveAgentSessionChildCountLabel(item: Pick<FeedItem, 'title' | 'childrenCount' | 'metadata'>, visibleChildCount: number): string | null {
+  const childCount = Math.max(visibleChildCount, item.childrenCount ?? 0);
+  if (childCount <= 0) {
+    return null;
+  }
+
+  const labelBasis = `${item.title ?? ''} ${resolveArticleHeaderSubline({ metadata: item.metadata, source: null })}`.toLowerCase();
+  const noun = labelBasis.includes('email')
+    ? 'email'
+    : labelBasis.includes('brief') || labelBasis.includes('daily')
+      ? 'section'
+      : 'item';
+  return `${childCount} ${noun}${childCount === 1 ? '' : 's'}`;
 }
 
 function readPositiveInteger(value: unknown): number | null {
@@ -3014,6 +3039,101 @@ export function ArticleCard({
       {hasChildPreviews && childPreviews}
     </div>
   );
+  if (isAgentSessionArticleLayout(item)) {
+    const sessionTint = resolveAgentSessionTint(item);
+    const agentChildren = item.children ?? [];
+    const footerParts = [
+      articleHeaderDisplayName,
+      resolveArticleHeaderSubline(item),
+      resolveAgentSessionChildCountLabel(item, agentChildren.length),
+      formatRelativeTime(item.createdAt),
+    ].filter(Boolean);
+
+    return (
+      <div data-testid="agent-session-article-card" className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border"
+            style={{ borderColor: sessionTint.iconBorder, backgroundColor: sessionTint.icon, color: sessionTint.text }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4.5 w-4.5">
+              <path
+                d="M5 7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16H11l-4 3v-3.1A2.5 2.5 0 0 1 5 13.5v-6Z"
+                className="fill-none stroke-current"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+          </div>
+          <h1 className={`min-w-0 flex-1 font-semibold text-zinc-100 ${detail ? 'text-2xl leading-tight sm:text-3xl' : isProminent ? 'text-[22px] leading-tight sm:text-[24px]' : 'text-[19px] leading-tight sm:text-[21px]'}`}>
+            {item.title || 'Untitled update'}
+          </h1>
+        </div>
+
+        {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
+
+        {agentChildren.length === 0 && displayText && (
+          <div className="relative select-text touch-auto">
+            {shouldRenderMarkdownBody ? (
+              <FeedMarkdown
+                text={displayText}
+                searchQuery={bodySearchQuery}
+                className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+              />
+            ) : (
+              <p className={`whitespace-pre-wrap break-words text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}>
+                <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
+              </p>
+            )}
+            {needsTruncation && (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className="text-sm text-sky-400 hover:text-sky-300"
+                >
+                  {expanded ? COLLAPSE_LABEL : EXPAND_LABEL}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {agentChildren.length > 0 && (
+          <div className="space-y-1.5">
+            {agentChildren.map((child) => {
+              const label = child.title?.trim() || child.authorDisplayName?.trim() || child.source?.trim() || 'Update';
+              const preview = child.text.trim() || label;
+              return (
+                <div key={child.id} className="flex items-start gap-2 text-sm leading-5 text-zinc-300">
+                  <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+                    [{label}]
+                  </span>
+                  <p className="min-w-0 flex-1 truncate">
+                    <HighlightedSearchText text={preview} searchQuery={searchQuery} />
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+          {footerParts.map((part, index) => (
+            <span key={`${part}-${index}`} className="contents">
+              {index > 0 && <span>•</span>}
+              <span>{part}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (youtubeVideo) {
     const channelLabel = youtubeVideo.channelName || youtubeVideo.channelHandle || 'YouTube';
     const scheduledLabel = formatYouTubeScheduledLabel(youtubeVideo);
@@ -3930,6 +4050,9 @@ export function ContentCard({
     relationship: item.relationship,
     detailMainItemId,
   });
+  const agentSessionTint = item.type === 'article' && isAgentSessionArticleLayout(item)
+    ? resolveAgentSessionTint(item)
+    : null;
 
   const metricsLikes = Math.max(0, item.metrics.likes + tweetLikeDelta);
   const shouldOpenDetail = () => {
@@ -4098,12 +4221,14 @@ export function ContentCard({
       data-feed-item-type={item.type}
       data-detail={detail ? 'true' : 'false'}
       data-detail-layout={detailLayout}
+      data-layout-mode={readMetadataString(item.metadata, 'layoutMode') ?? undefined}
       data-prominence={item.metadata?.prominence?.level}
       data-liked={String(isLiked)}
       data-disliked={String(isDisliked)}
       role={isCardInteractive ? 'link' : undefined}
       tabIndex={isCardInteractive ? 0 : undefined}
       className={`${cardClass} ${isCardInteractive ? 'cursor-pointer' : ''}`}
+      style={agentSessionTint ? { backgroundColor: agentSessionTint.bg, borderColor: agentSessionTint.border } : undefined}
       onClick={() => {
         if (isCardInteractive && shouldOpenDetail()) {
           openFeedItemPrimaryAction(item);

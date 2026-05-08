@@ -215,6 +215,7 @@ export interface FeedMetadata {
   poll?: Poll;
   linkPreviews?: LinkPreview[];
   article?: Record<string, unknown>;
+  layoutMode?: 'agent-session' | string;
   articleEnrichment?: {
     status?: 'completed' | 'skipped' | 'failed';
     completedAt?: string;
