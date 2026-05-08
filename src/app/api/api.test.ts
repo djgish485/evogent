@@ -683,7 +683,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
         assert.ok('parentItem' in item, 'Expected parentItem field on feed item');
         assert.ok(Array.isArray(item.children), 'Expected children to be an array');
         assert.strictEqual(typeof item.childrenCount, 'number', 'Expected childrenCount to be a number');
-        assert.ok(item.children.length <= 3, 'Expected children previews to be capped at 3');
+        assert.ok(item.children.length <= 6, 'Expected children previews to be capped at 6');
       }
     });
 

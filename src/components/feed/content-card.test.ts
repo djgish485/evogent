@@ -11,6 +11,7 @@ import {
   resolveAnalysisByline,
   resolveAnalysisDisplayTitle,
   resolveArticleHeaderDisplayName,
+  resolveArticleHeaderSubline,
   getTweetLinkPreviews,
   resolveHackerNewsPoints,
   resolveOgDescriptionSubtitle,
@@ -236,6 +237,17 @@ describe('resolveArticleHeaderDisplayName', () => {
       resolveArticleHeaderDisplayName(item, { displayName: 'Substack' }),
       'Jack Clark',
     );
+  });
+});
+
+describe('resolveArticleHeaderSubline', () => {
+  test('prefers metadata authorHandle over the duplicated source label', () => {
+    const item = createArticleItem({
+      source: 'OpenClaw',
+      metadata: { authorHandle: 'via Email skill' },
+    });
+
+    assert.equal(resolveArticleHeaderSubline(item), 'via Email skill');
   });
 });
 
@@ -647,6 +659,34 @@ describe('resolveHackerNewsPoints', () => {
 });
 
 describe('ArticleCard', () => {
+  test('renders article body markdown when metadata opts in', () => {
+    const item = createArticleItem({
+      text: '## Decision\n\n**Move** embeddings to pgvector.',
+      excerpt: null,
+      metadata: { renderMarkdown: true },
+    });
+
+    const markup = renderToStaticMarkup(createElement(ArticleCard, {
+      item,
+      agentName: 'Agent',
+      isLiked: false,
+      isDisliked: false,
+      votePending: false,
+      onThumbsUp: () => {},
+      onThumbsDown: () => {},
+      expanded: false,
+      onToggleExpand: () => {},
+      showReasonInput: null,
+      onReasonSubmit: () => {},
+      onDismissReasonInput: () => {},
+      detail: false,
+    }));
+
+    assert.match(markup, /<h2/);
+    assert.match(markup, /<strong>Move<\/strong>/);
+    assert.doesNotMatch(markup, /## Decision/);
+  });
+
   test('renders analysis list-card body markdown instead of raw markdown characters', () => {
     const item = createAnalysisItem({
       title: 'Email digest',

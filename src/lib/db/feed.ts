@@ -346,6 +346,7 @@ interface QuotedTweetMatch {
 }
 
 const EMBEDDED_QUOTED_TWEET_REASON = 'Quoted tweet embedded in parent post';
+const CHILD_PREVIEW_LIMIT = 6;
 
 function toChildPreviewText(text: string, maxLength = 100): string {
   const collapsed = text.replace(/\s+/g, ' ').trim();
@@ -2815,7 +2816,7 @@ export function getChildPreviewsForItems(parentIds: string[]): Record<string, { 
     current.total += 1;
     const relationship = normalizeRelationship(row.relationship) ?? row.relationship ?? '';
 
-    if (current.children.length < 3) {
+    if (current.children.length < CHILD_PREVIEW_LIMIT) {
       current.children.push({
         id: row.id,
         type: row.type,

@@ -110,13 +110,16 @@ function labelForRelationship(relationship: string): string {
 
 function previewLineText(child: ChildPreview): string {
   const title = child.title?.trim();
-  if (title) return title;
   let text = child.text;
   if (child.relationship === 'reply') {
     text = stripLeadingReplyMentions(text);
   }
-  if (text.length <= 80) return text;
-  return `${text.slice(0, 80).trimEnd()}...`;
+  const previewText = text.length <= 80 ? text : `${text.slice(0, 80).trimEnd()}...`;
+  if (child.type === 'article' && title && previewText && previewText !== title) {
+    return `${title}: ${previewText}`;
+  }
+  if (title) return title;
+  return previewText;
 }
 
 function getChildPreviewSearchText(child: ChildPreview): string {
@@ -188,6 +191,7 @@ const TEXT_CHAR_LIMIT_CHILD = 140;
 const TEXT_LINE_LIMIT_CHILD = 3;
 const MAIN_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_MAIN, lineLimit: TEXT_LINE_LIMIT_MAIN } as const;
 const CHILD_TEXT_TRUNCATION = { charLimit: TEXT_CHAR_LIMIT_CHILD, lineLimit: TEXT_LINE_LIMIT_CHILD } as const;
+const CHILD_PREVIEW_LIMIT = 6;
 const EXPAND_LABEL = 'More';
 const COLLAPSE_LABEL = 'Less';
 const CHILD_ANALYSIS_EXPAND_LABEL = 'Read full article';
@@ -386,6 +390,27 @@ function readMetadataString(metadata: FeedItem['metadata'], key: string): string
     : null;
   const articleValue = typeof article?.[key] === 'string' ? article[key].trim() : '';
   return articleValue || null;
+}
+
+function readMetadataBoolean(metadata: FeedItem['metadata'], key: string): boolean {
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const directValue = record[key];
+  if (directValue === true) {
+    return true;
+  }
+  if (typeof directValue === 'string' && directValue.trim().toLowerCase() === 'true') {
+    return true;
+  }
+
+  const article = record.article && typeof record.article === 'object' && !Array.isArray(record.article)
+    ? record.article as Record<string, unknown>
+    : null;
+  const articleValue = article?.[key];
+  return articleValue === true || (typeof articleValue === 'string' && articleValue.trim().toLowerCase() === 'true');
 }
 
 function readPositiveInteger(value: unknown): number | null {
@@ -691,6 +716,18 @@ export function resolveArticleHeaderDisplayName(
   }
 
   return sourceProfile.displayName;
+}
+
+export function resolveArticleHeaderSubline(
+  item: Pick<FeedItem, 'metadata' | 'source'>,
+): string {
+  const metadataHandle = readMetadataString(item.metadata, 'authorHandle')
+    ?? readMetadataString(item.metadata, 'sourceHandle');
+  if (metadataHandle) {
+    return metadataHandle;
+  }
+
+  return item.source?.trim() || 'Article';
 }
 
 function trimUrlPunctuation(value: string): { url: string; trailing: string } {
@@ -2891,7 +2928,7 @@ export function ArticleCard({
     ? { needsTruncation: false, displayText: searchSnippet.text }
     : getTruncationState(body, expanded, MAIN_TEXT_TRUNCATION);
   const bodySearchQuery = usesSearchSnippet || !useSearchSnippet ? searchQuery : null;
-  const shouldRenderMarkdownBody = item.type === 'analysis' && !usesSearchSnippet;
+  const shouldRenderMarkdownBody = (item.type === 'analysis' || readMetadataBoolean(item.metadata, 'renderMarkdown')) && !usesSearchSnippet;
   const isProminent = isProminentFeedItem(item);
   const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
@@ -3128,7 +3165,7 @@ export function ArticleCard({
             <span className="shrink-0 text-zinc-500">·</span>
             <p className="shrink-0 text-sm text-zinc-500">{formatFeedTimestamp(item)}</p>
           </div>
-          <p className="text-sm text-zinc-500">{item.source || 'Article'}</p>
+          <p className="text-sm text-zinc-500">{resolveArticleHeaderSubline(item)}</p>
         </div>
       </div>
 
@@ -3965,7 +4002,7 @@ export function ContentCard({
     return true;
   });
   const searchAwareChildPreviews = sortChildPreviewsForSearch(filteredChildPreviews, searchQuery);
-  const visibleChildPreviews = searchAwareChildPreviews.slice(0, 3);
+  const visibleChildPreviews = searchAwareChildPreviews.slice(0, CHILD_PREVIEW_LIMIT);
   const renderedChildPreviews = visibleChildPreviews;
   const suppressedChildPreviewCount = childPreviews.length - filteredChildPreviews.length;
   const resolvedChildPreviewTotal = Math.max(
