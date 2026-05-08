@@ -16,6 +16,7 @@ const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
 const { regeneratePreferenceContext } = require('./src/lib/preferences-context-runtime.js');
 const { failStaleQueuedChatMessages } = require('./lib/chat-message-cleanup.js');
+const { recoverClaudeSessionPoison } = require('./lib/chat-session-repair');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { resolveBrainProviderByName } = require('./lib/brain-provider');
 const { dispatchCodeFixSuggestionsInBackground } = require('./lib/code-fix-dispatch');
@@ -1435,6 +1436,7 @@ function getChatSessionRuntimeInfo(sessionId) {
     const row = db.prepare(`
       SELECT
         id,
+        title,
         provider,
         provider_session_id,
         claude_session_id,
@@ -1462,6 +1464,9 @@ function getChatSessionRuntimeInfo(sessionId) {
 
     return {
       sessionId,
+      title: typeof row.title === 'string' && row.title.trim()
+        ? row.title.trim()
+        : null,
       provider,
       providerSessionId: isUuid(providerSessionId) ? providerSessionId : null,
       workingDirectory: typeof row.working_directory === 'string' && row.working_directory.trim()
@@ -1653,6 +1658,7 @@ async function appendAgentEventToChatOutput({
   id,
   text,
   sessionId = null,
+  inReplyTo = null,
   metadata = null,
 }) {
   const normalizedText = sanitizeChatEventText(text);
@@ -1664,6 +1670,7 @@ async function appendAgentEventToChatOutput({
     type: 'agent_event',
     text: normalizedText,
     timestamp: new Date().toISOString(),
+    ...(typeof inReplyTo === 'string' && inReplyTo.trim() ? { inReplyTo: inReplyTo.trim() } : {}),
     ...(isUuid(sessionId) ? { sessionId: sessionId.trim() } : {}),
   };
 
@@ -2312,6 +2319,7 @@ const BrainOrchestrator = createBrainOrchestrator({
   formatTranscriptLines,
   fs,
   getChatStatusDb,
+  getChatSessionRuntimeInfo,
   getProviderSessionIdForChatSession,
   getRecentChatMessages,
   getTaskChatMessageId,
@@ -2337,6 +2345,7 @@ const BrainOrchestrator = createBrainOrchestrator({
   readReflectionStatus,
   readStoredChatProviderSessionId,
   regeneratePreferenceContextBeforeCuration,
+  recoverClaudeSessionPoison,
   resolveBackgroundTaskKind,
   resolveResearchFeedItemId,
   resolveTaskTimeoutMs,
