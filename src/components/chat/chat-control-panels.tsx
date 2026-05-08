@@ -11,10 +11,15 @@ import { useEffect, useRef, useState } from 'react';
 const USAGE_SUMMARY_CACHE_MS = 60_000;
 const USAGE_RESET_NEAR_MS = 24 * 60 * 60 * 1000;
 const USAGE_RESET_MINUTE_MS = 60 * 1000;
+const CLAUDE_USAGE_PLAN_LIMITS_LABEL = {
+  leadText: 'Claude usage: see plan limits at',
+  linkText: 'claude.ai/settings/usage',
+  linkHref: 'https://claude.ai/settings/usage',
+} as const;
+
+type ClaudeUsageLabel = typeof CLAUDE_USAGE_PLAN_LIMITS_LABEL;
 
 type UsageSummaryResponse = {
-  totalCostUsd?: number;
-  breakdown?: Array<{ runs?: number | null }>;
   codex?: {
     short: { usedPercent?: number | null; resetsAt?: string | null };
     weekly: { usedPercent?: number | null; resetsAt?: string | null };
@@ -64,7 +69,7 @@ export function useUsageSummaryLabels(open: boolean): {
   codexUsageLabel: string;
   codexUsageResetLabel?: string;
   codexUsageTitle?: string;
-  claudeUsageLabel: string;
+  claudeUsageLabel: ClaudeUsageLabel;
 } {
   const [usageSummary, setUsageSummary] = useState<UsageSummaryResponse | null>(null);
   const [usageSummaryError, setUsageSummaryError] = useState(false);
@@ -119,18 +124,7 @@ export function useUsageSummaryLabels(open: boolean): {
   const codexUsageResetLabel = usageSummary?.codex
     ? `5h window resets ${formatUsageResetTime(usageSummary.codex.short.resetsAt)} · weekly resets ${formatUsageResetTime(usageSummary.codex.weekly.resetsAt)}`
     : undefined;
-  const claudeBreakdown = Array.isArray(usageSummary?.breakdown) ? usageSummary.breakdown : [];
-  const claudeRuns = claudeBreakdown.reduce((sum, row) => (
-    sum + (typeof row.runs === 'number' && Number.isFinite(row.runs) ? row.runs : 0)
-  ), 0);
-  const claudeCost = typeof usageSummary?.totalCostUsd === 'number' && Number.isFinite(usageSummary.totalCostUsd)
-    ? usageSummary.totalCostUsd
-    : 0;
-  const claudeUsageLabel = usageSummary
-    ? `Claude usage: $${claudeCost.toFixed(2)} · ${claudeRuns} runs (since 24h)`
-    : usageSummaryError
-      ? 'Claude usage: unavailable'
-      : 'Claude usage: loading...';
+  const claudeUsageLabel = CLAUDE_USAGE_PLAN_LIMITS_LABEL;
 
   return {
     codexUsageLabel,
@@ -418,7 +412,7 @@ export function UsageSummaryModal({
   codexUsageLabel: string;
   codexUsageResetLabel?: string;
   codexUsageTitle?: string;
-  claudeUsageLabel: string;
+  claudeUsageLabel: ClaudeUsageLabel;
 }) {
   const { backdropProps } = useOverlayDismiss({
     enabled: isOpen,
@@ -475,7 +469,15 @@ export function UsageSummaryModal({
                 ) : null}
               </div>
               <p className="flex min-h-8 items-center py-1.5">
-                {claudeUsageLabel}
+                {claudeUsageLabel.leadText}{' '}
+                <a
+                  href={claudeUsageLabel.linkHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sky-300 underline-offset-2 hover:underline"
+                >
+                  {claudeUsageLabel.linkText}
+                </a>
               </p>
             </div>
           </div>
