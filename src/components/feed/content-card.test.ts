@@ -647,6 +647,35 @@ describe('resolveHackerNewsPoints', () => {
 });
 
 describe('ArticleCard', () => {
+  test('renders analysis list-card body markdown instead of raw markdown characters', () => {
+    const item = createAnalysisItem({
+      title: 'Email digest',
+      text: '## Priority\n\n**Sarah Kim** needs a reply.\n\n- Review the brief',
+    });
+
+    const markup = renderToStaticMarkup(createElement(ArticleCard, {
+      item,
+      agentName: 'Agent',
+      isLiked: false,
+      isDisliked: false,
+      votePending: false,
+      onThumbsUp: () => {},
+      onThumbsDown: () => {},
+      expanded: false,
+      onToggleExpand: () => {},
+      showReasonInput: null,
+      onReasonSubmit: () => {},
+      onDismissReasonInput: () => {},
+      detail: false,
+    }));
+
+    assert.match(markup, /<h2/);
+    assert.match(markup, /<strong>Sarah Kim<\/strong>/);
+    assert.match(markup, /<li/);
+    assert.doesNotMatch(markup, /## Priority/);
+    assert.doesNotMatch(markup, /\*\*Sarah Kim\*\*/);
+  });
+
   test('renders Hacker News discussion and original article actions separately', () => {
     const item = createArticleItem({
       source: 'hackernews',

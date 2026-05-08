@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { FeedMarkdown, FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME } from '@/components/feed/feed-markdown';
 import {
   canHideSuggestion,
   getFeedSuggestionAcceptLabel,
@@ -330,23 +331,36 @@ function SuggestionDetailModal({
           {item.text.trim() ? (
             <section>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Summary</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-100">{item.text}</p>
+              <div className="mt-2">
+                <FeedMarkdown
+                  text={item.text}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
+              </div>
             </section>
           ) : null}
 
           {item.reason?.trim() ? (
             <section>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Reason</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{item.reason.trim()}</p>
+              <div className="mt-2">
+                <FeedMarkdown
+                  text={item.reason.trim()}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
+              </div>
             </section>
           ) : null}
 
           {proposedValue ? (
             <section>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Underlying Detail</p>
-              <pre className="mt-2 overflow-x-auto rounded-2xl border border-zinc-800 bg-black/35 p-3 text-xs leading-5 text-zinc-200 whitespace-pre-wrap">
-                {proposedValue}
-              </pre>
+              <div className="mt-2 rounded-2xl border border-zinc-800 bg-black/35 p-3">
+                <FeedMarkdown
+                  text={proposedValue}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
+              </div>
             </section>
           ) : null}
 

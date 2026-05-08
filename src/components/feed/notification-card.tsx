@@ -1,5 +1,6 @@
 'use client';
 
+import { FeedMarkdown, FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME } from '@/components/feed/feed-markdown';
 import { formatCompactTimestamp, getFeedItemCompactTimestampSource } from '@/lib/compact-timestamp';
 import { splitSearchHighlightParts } from '@/lib/search-utils';
 import type { FeedItem, NotificationSeverity, NotificationTaskContext } from '@/types/feed';
@@ -165,13 +166,21 @@ export function NotificationCard({
                   </time>
                 ) : null}
               </div>
-              <p className="mt-1 text-sm leading-relaxed text-zinc-200">
-                <HighlightedSearchText text={item.text} searchQuery={searchQuery} />
-              </p>
+              <div className="mt-1">
+                <FeedMarkdown
+                  text={item.text}
+                  searchQuery={searchQuery}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
+              </div>
               {item.excerpt && (
-                <p className="mt-1 text-xs text-zinc-400">
-                  <HighlightedSearchText text={item.excerpt} searchQuery={searchQuery} />
-                </p>
+                <div className="mt-1">
+                  <FeedMarkdown
+                    text={item.excerpt}
+                    searchQuery={searchQuery}
+                    className="max-w-none text-xs leading-5 text-zinc-400 [&_p]:my-1 [&_p]:text-xs [&_p]:leading-5 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_li]:text-xs [&_li]:leading-5 [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-200 [&_em]:text-zinc-300 [&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-400 [&_a]:text-sky-400 [&_a]:underline-offset-2 hover:[&_a]:text-sky-300 hover:[&_a]:underline [&_h1]:mt-2 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:text-xs [&_h4]:font-semibold [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0"
+                  />
+                </div>
               )}
               {taskContext && (taskContext.summary || taskContext.lines.length > 0) ? (
                 <div className="mt-2 rounded-xl border border-zinc-800/80 bg-black/25 px-3 py-2">
@@ -191,16 +200,23 @@ export function NotificationCard({
                     ) : null}
                   </div>
                   {taskContext.summary ? (
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-300">
-                      <HighlightedSearchText text={taskContext.summary} searchQuery={searchQuery} />
-                    </p>
+                    <div className="mt-1">
+                      <FeedMarkdown
+                        text={taskContext.summary}
+                        searchQuery={searchQuery}
+                        className="max-w-none text-xs leading-relaxed text-zinc-300 [&_p]:my-1 [&_p]:text-xs [&_p]:leading-relaxed [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_li]:text-xs [&_li]:leading-relaxed [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:text-zinc-200 [&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-300 [&_a]:text-sky-400 [&_a]:underline-offset-2 hover:[&_a]:text-sky-300 hover:[&_a]:underline [&_h1]:mt-2 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:text-xs [&_h4]:font-semibold [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0"
+                      />
+                    </div>
                   ) : null}
                   {taskContext.lines.length > 0 ? (
                     <div className="mt-2 space-y-1">
                       {taskContext.lines.map((line, index) => (
-                        <p key={`${taskContext.taskId}:${index}`} className="text-xs leading-relaxed text-zinc-400">
-                          <HighlightedSearchText text={line} searchQuery={searchQuery} />
-                        </p>
+                        <FeedMarkdown
+                          key={`${taskContext.taskId}:${index}`}
+                          text={line}
+                          searchQuery={searchQuery}
+                          className="max-w-none text-xs leading-relaxed text-zinc-400 [&_p]:my-0 [&_p]:text-xs [&_p]:leading-relaxed [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_li]:text-xs [&_li]:leading-relaxed [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-200 [&_em]:text-zinc-300 [&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-400 [&_a]:text-sky-400 [&_a]:underline-offset-2 hover:[&_a]:text-sky-300 hover:[&_a]:underline [&_h1]:mt-2 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:text-xs [&_h4]:font-semibold [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0"
+                        />
                       ))}
                     </div>
                   ) : null}

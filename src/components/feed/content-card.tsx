@@ -1,11 +1,16 @@
 'use client';
 
-import { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createPortal } from 'react-dom';
 import { DislikedItemTombstone } from '@/components/feed/disliked-item-tombstone';
+import {
+  FeedMarkdown,
+  FEED_MARKDOWN_BODY_CLASS_NAME,
+  FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME,
+} from '@/components/feed/feed-markdown';
 import { TextSelectionTooltip } from '@/components/feed/text-selection-tooltip';
 import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import {
@@ -187,7 +192,7 @@ const EXPAND_LABEL = 'More';
 const COLLAPSE_LABEL = 'Less';
 const CHILD_ANALYSIS_EXPAND_LABEL = 'Read full article';
 const CHILD_ANALYSIS_COLLAPSE_LABEL = 'Collapse article';
-const CHILD_ANALYSIS_BODY_CLASS_NAME = 'max-w-none text-[15px] leading-[1.55] text-zinc-200 [&_p]:my-3 [&_p]:text-[15px] [&_p]:leading-[1.55] [&_ul]:my-3 [&_ol]:my-3 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_li]:text-[15px] [&_li]:leading-[1.55] [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:text-zinc-100 [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-4 [&_blockquote]:text-zinc-300 [&_blockquote_p]:my-3 [&_blockquote_p]:text-[15px] [&_blockquote_p]:leading-[1.55] [&_h1]:mt-6 [&_h1]:text-[22px] [&_h1]:font-bold [&_h1]:leading-tight [&_h2]:mt-5 [&_h2]:text-[19px] [&_h2]:font-semibold [&_h2]:leading-tight [&_h3]:mt-4 [&_h3]:text-[17px] [&_h3]:font-semibold [&_h3]:leading-tight [&_h4]:mt-3 [&_h4]:text-[15px] [&_h4]:font-semibold [&_h4]:leading-tight [&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0';
+const CHILD_ANALYSIS_BODY_CLASS_NAME = FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME;
 
 interface SourceAvatarProfile {
   initials: string;
@@ -1456,29 +1461,6 @@ function HighlightedSearchText({ text, searchQuery }: { text: string; searchQuer
   );
 }
 
-function highlightReactTextChildren(children: ReactNode, searchQuery?: string | null): ReactNode {
-  if (!searchQuery) {
-    return children;
-  }
-
-  return Children.map(children, (child) => {
-    if (typeof child === 'string') {
-      return <HighlightedSearchText text={child} searchQuery={searchQuery} />;
-    }
-
-    if (isValidElement<{ children?: ReactNode }>(child)) {
-      const childChildren = child.props.children;
-      if (!childChildren) {
-        return child;
-      }
-
-      return cloneElement(child, undefined, highlightReactTextChildren(childChildren, searchQuery));
-    }
-
-    return child;
-  });
-}
-
 function LinkifiedText({ text, searchQuery }: { text: string; searchQuery?: string | null }) {
   const parts = useMemo(() => linkifyText(text), [text]);
 
@@ -2181,33 +2163,15 @@ function ChildAnalysisPreview({
 
         {displayText ? (
           <div className="relative mt-1 select-text touch-auto">
-            <article className={CHILD_ANALYSIS_BODY_CLASS_NAME}>
-              {usesSearchSnippet ? (
+            {usesSearchSnippet ? (
+              <article className={CHILD_ANALYSIS_BODY_CLASS_NAME}>
                 <p>
                   <HighlightedSearchText text={displayText} searchQuery={searchQuery} />
                 </p>
-              ) : (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ href, children, ...props }) => (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sky-400 hover:text-sky-300 hover:underline"
-                        onClick={(event) => event.stopPropagation()}
-                        {...props}
-                      >
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
-                  {displayText}
-                </ReactMarkdown>
-              )}
-            </article>
+              </article>
+            ) : (
+              <FeedMarkdown text={displayText} className={CHILD_ANALYSIS_BODY_CLASS_NAME} />
+            )}
             {needsTruncation && (
               <button
                 type="button"
@@ -2927,6 +2891,7 @@ export function ArticleCard({
     ? { needsTruncation: false, displayText: searchSnippet.text }
     : getTruncationState(body, expanded, MAIN_TEXT_TRUNCATION);
   const bodySearchQuery = usesSearchSnippet || !useSearchSnippet ? searchQuery : null;
+  const shouldRenderMarkdownBody = item.type === 'analysis' && !usesSearchSnippet;
   const isProminent = isProminentFeedItem(item);
   const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
@@ -3175,41 +3140,66 @@ export function ArticleCard({
 
       {displayText && (
         <div className="relative select-text touch-auto">
-          <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}`}>
-            <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
-            {needsTruncation && !expanded && (
-              <>
-                {'... '}
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onToggleExpand();
-                  }}
-                  className="text-sky-400 hover:text-sky-300"
-                >
-                  {EXPAND_LABEL}
-                </button>
-              </>
-            )}
-            {needsTruncation && expanded && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onToggleExpand();
-                  }}
-                  className="text-sky-400 hover:text-sky-300"
-                >
-                  {COLLAPSE_LABEL}
-                </button>
-              </>
-            )}
-          </p>
+          {shouldRenderMarkdownBody ? (
+            <>
+              <FeedMarkdown
+                text={displayText}
+                searchQuery={bodySearchQuery}
+                className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+              />
+              {needsTruncation && (
+                <div className="mt-1">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className="text-sm text-sky-400 hover:text-sky-300"
+                  >
+                    {expanded ? COLLAPSE_LABEL : EXPAND_LABEL}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}`}>
+              <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
+              {needsTruncation && !expanded && (
+                <>
+                  {'... '}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className="text-sky-400 hover:text-sky-300"
+                  >
+                    {EXPAND_LABEL}
+                  </button>
+                </>
+              )}
+              {needsTruncation && expanded && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className="text-sky-400 hover:text-sky-300"
+                  >
+                    {COLLAPSE_LABEL}
+                  </button>
+                </>
+              )}
+            </p>
+          )}
         </div>
       )}
 
@@ -3298,7 +3288,7 @@ function AnalysisCard({
   const isProminent = isProminentFeedItem(item);
   const bodyMarginTopClass = isProminent ? 'mt-5' : 'mt-4';
   const titleClassName = `mt-1 font-bold leading-tight text-zinc-100 ${isProminent ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl'}`;
-  const articleBodyClassName = 'max-w-none text-zinc-200 [&_p]:my-4 [&_p]:text-[17px] [&_p]:leading-[1.45] sm:[&_p]:text-[18px] [&_ul]:my-4 [&_ol]:my-4 [&_li]:text-[17px] [&_li]:leading-[1.45] sm:[&_li]:text-[18px] [&_li]:marker:text-zinc-500 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:text-zinc-100 [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-4 [&_blockquote]:text-zinc-300 [&_blockquote_p]:text-[17px] [&_blockquote_p]:leading-[1.45] sm:[&_blockquote_p]:text-[18px] [&_h1]:mt-8 [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:leading-tight sm:[&_h1]:text-4xl [&_h2]:mt-8 [&_h2]:text-[22px] [&_h2]:font-semibold [&_h2]:leading-tight sm:[&_h2]:text-[24px] [&_h3]:mt-6 [&_h3]:text-[18px] [&_h3]:font-semibold [&_h3]:leading-tight sm:[&_h3]:text-[20px] [&_h4]:mt-6 [&_h4]:text-[18px] [&_h4]:font-semibold [&_h4]:leading-tight sm:[&_h4]:text-[20px]';
+  const articleBodyClassName = FEED_MARKDOWN_BODY_CLASS_NAME;
   const hasChildPreviews = Boolean(childPreviews);
   const actionBarClassName = 'mt-6 border-t border-zinc-800/80 pt-3 text-zinc-400';
   const metricsRow = (
@@ -3371,44 +3361,6 @@ function AnalysisCard({
 
     printDocumentWithIframe(printableDocument);
   }, [analysisSourcePreviews, printableTitle]);
-  const markdownComponents = useMemo(() => ({
-    a: ({ href, children, ...props }: React.ComponentProps<'a'>) => (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-sky-400 hover:text-sky-300 hover:underline"
-        onClick={(event) => event.stopPropagation()}
-        {...props}
-      >
-        {highlightReactTextChildren(children, bodySearchQuery)}
-      </a>
-    ),
-    p: ({ children, ...props }: React.ComponentProps<'p'>) => (
-      <p {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</p>
-    ),
-    li: ({ children, ...props }: React.ComponentProps<'li'>) => (
-      <li {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</li>
-    ),
-    strong: ({ children, ...props }: React.ComponentProps<'strong'>) => (
-      <strong {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</strong>
-    ),
-    em: ({ children, ...props }: React.ComponentProps<'em'>) => (
-      <em {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</em>
-    ),
-    h1: ({ children, ...props }: React.ComponentProps<'h1'>) => (
-      <h1 {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</h1>
-    ),
-    h2: ({ children, ...props }: React.ComponentProps<'h2'>) => (
-      <h2 {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</h2>
-    ),
-    h3: ({ children, ...props }: React.ComponentProps<'h3'>) => (
-      <h3 {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</h3>
-    ),
-    h4: ({ children, ...props }: React.ComponentProps<'h4'>) => (
-      <h4 {...props}>{highlightReactTextChildren(children, bodySearchQuery)}</h4>
-    ),
-  }), [bodySearchQuery]);
   const openLinkRow = (
     <div className="flex items-center justify-end gap-2">
       {detail && (
@@ -3433,17 +3385,12 @@ function AnalysisCard({
         </div>
 
         <div className={`relative select-text touch-auto ${bodyMarginTopClass}`}>
-          <article
-            data-testid="analysis-article-body"
+          <FeedMarkdown
+            text={displayText || ''}
+            searchQuery={bodySearchQuery}
             className={articleBodyClassName}
-          >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {displayText || ''}
-            </ReactMarkdown>
-          </article>
+            testId="analysis-article-body"
+          />
         </div>
 
         <div hidden aria-hidden="true">
