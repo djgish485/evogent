@@ -127,7 +127,9 @@ export function renderChatMarkdown(text: string, searchQuery: string | null = nu
   const isMarkdownTableContentLine = (line: string) => line.includes('|')
     && !/^(#{1,4})\s+/.test(line)
     && !/^\s*[-*]\s+/.test(line);
-  const isMarkdownTableSeparator = (line: string) => line.includes('|') && /^[\s|:-]+$/.test(line);
+  const isMarkdownTableSeparator = (line: string) => /[|│┼┤├]/u.test(line) && /^[\s|│┼┤├─\-:]+$/u.test(line);
+  const isMarkdownTableFenceStart = (line: string) => /^```[\w-]*\s*$/.test(line);
+  const isMarkdownTableFenceEnd = (line: string) => /^```\s*$/.test(line);
   const parseMarkdownTableRow = (line: string) => {
     const trimmedLine = line.trim();
     const withoutLeadingPipe = trimmedLine.startsWith('|') ? trimmedLine.slice(1) : trimmedLine;
@@ -162,9 +164,23 @@ export function renderChatMarkdown(text: string, searchQuery: string | null = nu
     blocks.push({ type: 'table', tableLines, startLineIndex });
   }
 
+  const hiddenFenceLineIndexes = new Set<number>();
+  for (const block of blocks) {
+    if (block.type !== 'table') {
+      continue;
+    }
+
+    const previousLineIndex = block.startLineIndex - 1;
+    const nextLineIndex = block.startLineIndex + block.tableLines.length;
+    if (isMarkdownTableFenceStart(lines[previousLineIndex] ?? '') && isMarkdownTableFenceEnd(lines[nextLineIndex] ?? '')) {
+      hiddenFenceLineIndexes.add(previousLineIndex);
+      hiddenFenceLineIndexes.add(nextLineIndex);
+    }
+  }
+
   return (
     <>
-      {blocks.map((block) => {
+      {blocks.filter((block) => block.type === 'table' || !hiddenFenceLineIndexes.has(block.lineIndex)).map((block) => {
         if (block.type === 'table') {
           const headerCells = parseMarkdownTableRow(block.tableLines[0]);
           const bodyRows = block.tableLines
