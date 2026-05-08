@@ -7418,7 +7418,7 @@ export default function Home() {
                     type="button"
                     onClick={openUsageModal}
                     data-testid="brain-provider-usage-button"
-                    className="self-end shrink-0 rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                    className="self-end shrink-0 mr-3 rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
                   >
                     Usage
                   </button>
