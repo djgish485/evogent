@@ -12,6 +12,8 @@ npm run setup:agent
 
 Run it after dependency/build setup and again before declaring the install complete. It prints `READY`, `PENDING`, and `REQUIRED` lines and exits nonzero while a runnable brain provider or content source is missing. Do not call the install complete until it has no `REQUIRED` lines.
 
+In `.evogent-mode.md`, `mergeTarget: <branch>` retargets `suggestion-remote` auto-merge and push from `main` to that branch when `mergeAfterGates: true`.
+
 ### Phase 1: System Setup
 
 Choose the platform path that matches the machine. `scripts/setup.sh` is Linux-only because it installs systemd services and cron jobs.
