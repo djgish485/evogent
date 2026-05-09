@@ -90,7 +90,18 @@ For each triggered source, run these probes in order and stop when a probe gives
    - Inspect `data/agent-state/active-tasks.json` or the current equivalent task-state file, plus recent `browse_cache_refresh_runs`.
    - Look for any `cache_refresh` task for the source enqueued within the latest expected-cadence window.
    - If nothing was enqueued, identify the heartbeat or pre-curation scheduler as the gap, not the source skill.
-   - End the source bullet with `Suggested fix: investigate heartbeat scheduler coverage for <source>` unless a later live test points to a different cause.
+   - End the source bullet with `Suggested fix: investigate heartbeat scheduler coverage for <source>` unless probe 2.5 or a later live test points to a different cause.
+2.5. Hook-vs-worker reconciliation:
+   - Run this only after probe 2 found no enqueue or no run for this source within the expected-cadence window.
+   - Read at most one bounded journal slice from each service: `journalctl -u media-agent.service` and `journalctl -u media-agent-worker.service`, using the last hour or the latest expected-cadence window, whichever is more relevant.
+   - From the newest `pre-curation refresh completed` app log, parse `task <id>: <comma-separated sources>`.
+   - If no completed hook line exists, or it does not name this source, keep the probe 2 scheduler-gap diagnosis.
+   - For each claimed source in that line, look in the worker slice for `[worker] completed cache_refresh job cache-refresh-<source>-<task-id>` or a matching failed `cache_refresh` job for the same source and task id.
+   - If the worker has a matching failure, report that failure normally and use the pattern map below.
+   - If the hook claimed this source but the worker has no completion or failure record for that job id, call it `hook claimed but worker missing`: `Hook claimed <Source> refresh, worker has no record. Silent drop.`
+   - If the hook line cannot be parsed into a task id and sources, say `This looks like a code bug in the pre-curation observability layer. Want me to file a code_fix?`
+   - When several claimed sources are missing worker records, name each broken source separately but reuse the same bounded journal slices.
+   - End the source bullet with `Suggested fix: drain stuck BullMQ cache_refresh job for <source> and re-enqueue`; do not inspect Redis or execute the fix unless the user explicitly asks.
 3. Browser stack health for browser-backed sources only (`twitter`, `youtube`, `substack`):
    - Resolve `CDP_URL` from `CDP_URL`, `MEDIA_AGENT_SHARED_BROWSER_CDP_URL`, `SHARED_BROWSER_CDP_URL`, or `http://127.0.0.1:9222`.
    - Run one bounded CDP probe: `curl -fsS "$CDP_URL/json/version"`.
@@ -107,6 +118,7 @@ For each triggered source, run these probes in order and stop when a probe gives
    - `signed-out`, `login`, `interstitial`: Suggested fix: run `/setup-source <source>` to re-authenticate the shared Chrome profile.
    - `429`, `rate limit`, `Pro cap`: Suggested fix: wait for the provider window to reset and check `/api/usage/summary`.
    - `network`, `DNS`, `tls`: Suggested fix: check VM connectivity with `curl -fsS https://x.com`.
+   - `hook claimed but worker missing`: Suggested fix: drain stuck BullMQ cache_refresh job for <source> and re-enqueue; investigate `lib/cache-refresh-on-demand.js` wait-loop observability.
 
 When a clear operational cause is identified, end that source bullet with one `Suggested fix:` line naming the next action. When the cause looks like a code bug, such as heartbeat scheduling missing an installed source or runtime rejecting a correct source skill, end the diagnosis with: `This looks like a code bug in <subsystem>. Want me to file a code_fix?`
 
