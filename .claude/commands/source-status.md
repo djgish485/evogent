@@ -71,6 +71,45 @@ FROM browse_cache_items
 WHERE source = ?;
 ```
 
+## Deeper Diagnosis When A Source Looks Broken
+
+Run this pass automatically for any source where one or more of these are true:
+
+- latest run age is older than 4x the expected cadence
+- the latest 3 runs all failed
+- recent completed runs repeatedly have `items_added=0`
+- an installed source skill has no DB refresh or cache rows
+
+For each triggered source, run these probes in order and stop when a probe gives a clear root cause. Do not execute fixes, restart services, install skills, submit code_fix suggestions, or make follow-up changes unless the user explicitly asks.
+
+1. Skill installation cross-check:
+   - Check `.claude/skills/<source>-cache/SKILL.md` and the discovered skill path, if different.
+   - Parse frontmatter and confirm `metadata.evogent.feed-source` equals the source id.
+   - If the latest error says `not installed` but the skill file now exists with matching frontmatter, call it a stale error and continue diagnosis.
+2. Orchestrator scheduling check:
+   - Inspect `data/agent-state/active-tasks.json` or the current equivalent task-state file, plus recent `browse_cache_refresh_runs`.
+   - Look for any `cache_refresh` task for the source enqueued within the latest expected-cadence window.
+   - If nothing was enqueued, identify the heartbeat or pre-curation scheduler as the gap, not the source skill.
+   - End the source bullet with `Suggested fix: investigate heartbeat scheduler coverage for <source>` unless a later live test points to a different cause.
+3. Browser stack health for browser-backed sources only (`twitter`, `youtube`, `substack`):
+   - Resolve `CDP_URL` from `CDP_URL`, `MEDIA_AGENT_SHARED_BROWSER_CDP_URL`, `SHARED_BROWSER_CDP_URL`, or `http://127.0.0.1:9222`.
+   - Run one bounded CDP probe: `curl -fsS "$CDP_URL/json/version"`.
+   - If CDP is unreachable, suggest restarting `chrome-browse.service` or running `scripts/setup-desktop-browser.sh`.
+   - For `twitter`, check `/root/.config/x-auth-cookies.json` mtime and run the available runtime auth probe, preferring `node scripts/x-browser/whoami.ts` when present; if auth fails, suggest `/setup-source twitter`.
+4. Live test refresh:
+   - Only run this for a direct user `/source-status` invocation, not for scheduled audits or when merely reading this command.
+   - POST `{"message":"/cache-refresh <source>","priority":"cache_refresh","source":"source-status-probe"}` to `$API_BASE/api/internal/orchestrator/enqueue`.
+   - Poll the resulting task or refresh run for up to 60 seconds total.
+   - If it fails immediately with the same error pattern, say the failure is reproducible in product code. If it succeeds after no recent enqueue, say the scheduler/heartbeat coverage is the bug.
+5. Failure-error pattern map:
+   - `not installed`, `unsupported_provider_cli`: Suggested fix: reinstall with `POST /api/skills/install registry=<source>-cache`, or verify skill frontmatter has `feed-source: <source>`.
+   - `shared browser navigated away`, `CDP unreachable`: Suggested fix: restart `chrome-browse.service` or run `scripts/setup-desktop-browser.sh`.
+   - `signed-out`, `login`, `interstitial`: Suggested fix: run `/setup-source <source>` to re-authenticate the shared Chrome profile.
+   - `429`, `rate limit`, `Pro cap`: Suggested fix: wait for the provider window to reset and check `/api/usage/summary`.
+   - `network`, `DNS`, `tls`: Suggested fix: check VM connectivity with `curl -fsS https://x.com`.
+
+When a clear operational cause is identified, end that source bullet with one `Suggested fix:` line naming the next action. When the cause looks like a code bug, such as heartbeat scheduling missing an installed source or runtime rejecting a correct source skill, end the diagnosis with: `This looks like a code bug in <subsystem>. Want me to file a code_fix?`
+
 ## Unknown Or Mismatch Section
 
 Include a short "Unknown/mismatch" section when any of these appear:
@@ -89,4 +128,5 @@ Keep the answer compact:
 
 - Start with one sentence summarizing overall source health.
 - Then include one bullet per discovered source with the source id/label, health opinion, latest run, item counts, freshness, unseen count, and notable errors.
+- When deeper diagnosis runs for a broken source, that source bullet may expand by 1-3 extra lines for latest error text, probe result, and suggested fix.
 - End with the unknown/mismatch section only when needed.
