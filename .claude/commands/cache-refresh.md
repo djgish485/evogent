@@ -7,7 +7,8 @@ Usage: `/cache-refresh <source>`
 - Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"`.
 - Refresh only the requested source for this run.
 - If `MEDIA_AGENT_CACHE_REFRESH_SOURCE` is set, it is the requested source and must match the invocation source.
-- Read the matching source skill in `.claude/skills/*/SKILL.md` and follow its **Cacher Mode** instructions.
+- Read the matching source skill directly at `.claude/skills/<source>-cache/SKILL.md`, where `<source>` is the source argument or `MEDIA_AGENT_CACHE_REFRESH_SOURCE`, and follow its **Cacher Mode** instructions.
+  Use a direct read (`cat` or Read tool). Do not use `rg`, `find`, or any tool that respects `.gitignore` for skill discovery, because the cache-skill directories are runtime-installed and gitignored.
 - Cacher Mode must use the same selectors, extracted fields, and quality thresholds as that skill's Curation Mode.
 
 ## Setup Smoke Mode
