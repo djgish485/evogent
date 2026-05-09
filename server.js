@@ -3162,7 +3162,13 @@ async function regeneratePreferenceContextBeforeCuration(task) {
     } else if (result.timedOut) {
       console.warn(`[cache-refresh] pre-curation refresh timed out for task ${task.id}: ${result.pendingSources.join(', ')}`);
     } else {
-      console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: ${result.waitedSources.join(', ') || 'no sources'}`);
+      const sourceResults = Array.isArray(result.sourceResults) ? result.sourceResults : [];
+      if (sourceResults.length === 0) {
+        console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: no sources`);
+      }
+      for (const sourceResult of sourceResults) {
+        console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: source=${sourceResult.source} action=${sourceResult.action} result=${sourceResult.result}`);
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
