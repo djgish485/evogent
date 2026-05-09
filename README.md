@@ -88,10 +88,6 @@ Evo ships with skills for the places most people read:
 
 Each source is a markdown skill: a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evo's curator will pick it up on the next cycle. No code changes required.
 
-## Development Philosophy
-
-This app is powered by extremely flexible and strong coding agents, so use their full capabilities. Coding agent instructions are preferred over brittle deterministic code whenever possible. This keeps the system flexible and able to correct any errors and problems that arise. Regular audits are performed by the agents to *evolve* and improve the app over time.
-
 ## Secure by default
 
 Direct access to Evo's agents is disabled for remote users by default. To use the app remotely, put it behind an authenticated login layer (Cloudflare Access works great) and then set `MEDIA_AGENT_TRUST_NETWORK=1` to let those authenticated requests through. The cloud-VM install prompt above does this for you. See [Security](docs/security.md) for the full model.
