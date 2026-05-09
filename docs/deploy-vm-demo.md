@@ -117,8 +117,11 @@ In practice, create path-scoped Access applications. Cloudflare path matching an
 
 - Public Bypass application destinations should include `/`, feed reads such as `/api/feed*`, feed assets needed by the UI, and `/ws/feed` if live feed updates are public.
 - Owner Allow application destinations should include `/api/chat*`, `/api/agents*`, `/api/internal*`, `/api/orchestrator*`, write APIs, and private WebSocket paths such as `/ws/chat`, `/ws/orchestrator`, and `/ws/agent-progress`.
+- Verify Cloudflare Zero Trust > Settings > Authentication > Global session timeout is at least as long as the per-app session; a 24h global timeout can override the app value downward.
 
 Do not put a broad `<hostname>/*` owner-only destination in front of the public homepage unless you have verified it does not override the bypass app.
+
+Use `session_duration: "720h"` (30 days) for personal demo apps so the owner does not re-login frequently; CF Access supports up to month-long self-hosted sessions, so pick a shorter value if compliance requires it, and Cloudflare team-domain SSO can extend sessions further across all apps on `<team>.cloudflareaccess.com`.
 
 API shape for an Access application update:
 
@@ -127,7 +130,7 @@ API shape for an Access application update:
   "name": "evogent-demo-owner",
   "domain": "<demo-hostname>",
   "type": "self_hosted",
-  "session_duration": "24h",
+  "session_duration": "720h",
   "policies": [
     {
       "name": "Allow owner",
