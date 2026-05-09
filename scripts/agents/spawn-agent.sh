@@ -105,15 +105,20 @@ mkdir -p "$WORKTREE_BASE"
 cd "$REPO_DIR"
 ADDON_MODE_FILE="$REPO_DIR/.evogent-mode.md"
 [ -f "$ADDON_MODE_FILE" ] || ADDON_MODE_FILE="$REPO_DIR/.claude/dev-agent-addon.md"
-ADDON_MODE=$(awk -F: '/^[[:space:]]*mode[[:space:]]*:/ { value=$2; sub(/#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }' "$ADDON_MODE_FILE" 2>/dev/null || true)
+read_addon_value() {
+  awk -F: -v key="$1" '$0 ~ "^[[:space:]]*" key "[[:space:]]*:" { value=$2; sub(/#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); gsub(/^["\047]|["\047]$/, "", value); print value; exit }' "$ADDON_MODE_FILE" 2>/dev/null || true
+}
+ADDON_MODE=$(read_addon_value mode)
 [ -n "$ADDON_MODE" ] || ADDON_MODE="suggestion-remote"
+MERGE_TARGET="${MERGE_TARGET:-$(read_addon_value mergeTarget)}"
+[ -n "$MERGE_TARGET" ] || MERGE_TARGET="main"
 case "$ADDON_MODE" in
   suggestion-remote)
-    git fetch origin main
-    git worktree add "$WORKTREE_DIR" -b "$TASK_ID" origin/main
+    git fetch origin "$MERGE_TARGET"
+    git worktree add "$WORKTREE_DIR" -b "$TASK_ID" "origin/$MERGE_TARGET"
     ;;
   suggestion-local)
-    git worktree add "$WORKTREE_DIR" -b "$TASK_ID" main
+    git worktree add "$WORKTREE_DIR" -b "$TASK_ID" "$MERGE_TARGET"
     ;;
   direct)
     echo "ERROR: direct mode does not dispatch dev agents; edit files directly in the chat working directory"
@@ -167,6 +172,7 @@ jq --argjson task "$TASK_JSON" '. += [$task]' "$TASKS_FILE" > "${TASKS_FILE}.tmp
 ENV_EXPORTS=""
 [ -n "${CODEX_REASONING:-}" ] && ENV_EXPORTS="export CODEX_REASONING='${CODEX_REASONING}'; "
 [ -n "${CODEX_FAST_MODE:-}" ] && ENV_EXPORTS="${ENV_EXPORTS}export CODEX_FAST_MODE='${CODEX_FAST_MODE}'; "
+ENV_EXPORTS="${ENV_EXPORTS}export MERGE_TARGET='${MERGE_TARGET}'; "
 tmux new-session -d -s "$TMUX_SESSION" -c "$WORKTREE_DIR" \
   "${ENV_EXPORTS}bash $SCRIPTS_DIR/run-agent.sh '${TASK_ID}' '${AGENT_TYPE}'"
 
