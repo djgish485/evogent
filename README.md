@@ -8,7 +8,7 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 ## Live demo
 
-[evo.dangish.net](https://evo.dangish.net) is configured to curate an x.com account's For You & Following feeds, HN news, etc.
+[evo.dangish.net](https://evo.dangish.net) curates an x.com account's For You & Following feeds, HN news, etc. Coding agents are read only in this demo.
 
 ## Use your subscriptions
 
@@ -87,10 +87,6 @@ Evo ships with skills for the places most people read:
 - **Hacker News**
 
 Each source is a markdown skill: a short file that tells the agent how to fetch the source and what its content looks like. To add a new one (an RSS feed, a niche forum, a company dashboard, anything web-readable), describe it to a coding agent and let it write the skill. Drop it in `skills-library/` and Evo's curator will pick it up on the next cycle. No code changes required.
-
-## Development Philosophy
-
-This app is powered by extremely flexible and strong coding agents, so use their full capabilities. Coding agent instructions are preferred over brittle deterministic code whenever possible. This keeps the system flexible and able to correct any errors and problems that arise. Regular audits are performed by the agents to *evolve* and improve the app over time.
 
 ## Secure by default
 
