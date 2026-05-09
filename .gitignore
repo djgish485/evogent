@@ -31,6 +31,14 @@
 !.claude/skills/setup-wizard/**
 !.claude/skills/twitter-auth-repair/
 !.claude/skills/twitter-auth-repair/**
+!.claude/skills/hackernews-cache/
+!.claude/skills/hackernews-cache/**
+!.claude/skills/substack-cache/
+!.claude/skills/substack-cache/**
+!.claude/skills/tweet-cache/
+!.claude/skills/tweet-cache/**
+!.claude/skills/youtube-cache/
+!.claude/skills/youtube-cache/**
 !.claude/hooks/
 !.claude/hooks/**
 
