@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: merge-now.sh <task-id>
-# Called BY the agent (inside codex exec) to merge its branch to main,
+# Called BY the agent (inside codex exec) to merge its branch to the merge target,
 # run post-merge hooks, and restart the service — so the agent can then
 # verify its changes on the live app before marking done.
 #
@@ -21,19 +21,28 @@ REPO_DIR=$(jq -r --arg id "$TASK_ID" '.[] | select(.id == $id) | .repoDir // emp
 [ -z "$REPO_DIR" ] && { echo "ERROR: Could not find repoDir for task $TASK_ID"; exit 1; }
 ADDON_MODE_FILE="$REPO_DIR/.evogent-mode.md"
 [ -f "$ADDON_MODE_FILE" ] || ADDON_MODE_FILE="$REPO_DIR/.claude/dev-agent-addon.md"
-ADDON_MODE=$(awk -F: '/^[[:space:]]*mode[[:space:]]*:/ { value=$2; sub(/#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }' "$ADDON_MODE_FILE" 2>/dev/null || true)
+read_addon_value() {
+  awk -F: -v key="$1" '$0 ~ "^[[:space:]]*" key "[[:space:]]*:" { value=$2; sub(/#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); gsub(/^["\047]|["\047]$/, "", value); print value; exit }' "$ADDON_MODE_FILE" 2>/dev/null || true
+}
+ADDON_MODE=$(read_addon_value mode)
 [ -n "$ADDON_MODE" ] || ADDON_MODE="suggestion-remote"
 case "$ADDON_MODE" in suggestion-remote|suggestion-local|direct) ;; *) echo "ERROR: Invalid $ADDON_MODE_FILE mode: $ADDON_MODE"; exit 1 ;; esac
 [ "$ADDON_MODE" != "direct" ] || { echo "ERROR: direct mode does not use merge-now.sh"; exit 1; }
+MERGE_TARGET="${MERGE_TARGET:-$(read_addon_value mergeTarget)}"
+[ -n "$MERGE_TARGET" ] || MERGE_TARGET="main"
+MERGE_REMOTE_REF="origin/$MERGE_TARGET"
 
-echo "=== merge-now.sh: merging $TASK_ID to main ==="
+echo "=== merge-now.sh: merging $TASK_ID to $MERGE_TARGET ==="
 
 cd "$REPO_DIR"
 
 # Preserve runtime data files that git reset would wipe —
 # but skip files the branch modifies (branch version wins)
-MERGE_BASE_REF="origin/main"
-if [ "$ADDON_MODE" = "suggestion-remote" ]; then git fetch origin main; else MERGE_BASE_REF="main"; fi
+MERGE_BASE_REF="$MERGE_TARGET"
+if [ "$ADDON_MODE" = "suggestion-remote" ]; then
+  git fetch origin "$MERGE_TARGET" || { echo "ERROR: mergeTarget ${MERGE_TARGET} has no ${MERGE_REMOTE_REF} ref - create it on origin first or push manually"; exit 1; }
+  MERGE_BASE_REF="$MERGE_REMOTE_REF"
+fi
 BRANCH_FILES=$(git diff --name-only "$MERGE_BASE_REF"..."$TASK_ID" 2>/dev/null || true)
 declare -a _preserved_files=()
 for _f in data/config.md data/preferences-context.md data/curation-prompt.md data/agent-receipts.jsonl; do
@@ -44,8 +53,8 @@ for _f in data/config.md data/preferences-context.md data/curation-prompt.md dat
     echo "Skipping preserve of $_f (branch modifies it)"
   fi
 done
-git checkout main
-[ "$ADDON_MODE" = "suggestion-remote" ] && git reset --hard origin/main
+git checkout "$MERGE_TARGET"
+[ "$ADDON_MODE" = "suggestion-remote" ] && git reset --hard "$MERGE_REMOTE_REF"
 
 # Restore preserved runtime data
 for _f in "${_preserved_files[@]}"; do
@@ -63,43 +72,27 @@ if [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ]; then
   git worktree remove "$WORKTREE" --force 2>/dev/null || true
 fi
 
-# Rebase agent branch onto current main to prevent silent reverts.
-echo "=== Rebasing ${TASK_ID} onto main ==="
-if ! git rebase main "$TASK_ID"; then
+# Rebase agent branch onto current merge target to prevent silent reverts.
+echo "=== Rebasing ${TASK_ID} onto ${MERGE_TARGET} ==="
+if ! git rebase "$MERGE_TARGET" "$TASK_ID"; then
   echo "REBASE CONFLICT for ${TASK_ID} — aborting"
   git rebase --abort 2>/dev/null || true
-  git checkout main 2>/dev/null || true
+  git checkout "$MERGE_TARGET" 2>/dev/null || true
   exit 1
 fi
-git checkout main
+git checkout "$MERGE_TARGET"
 
-if [ "$ADDON_MODE" = "suggestion-remote" ] && ! bash "$SCRIPTS_DIR/check-push-size.sh" "$REPO_DIR" origin/main "$TASK_ID"; then
+if [ "$ADDON_MODE" = "suggestion-remote" ] && ! bash "$SCRIPTS_DIR/check-push-size.sh" "$REPO_DIR" "$MERGE_REMOTE_REF" "$TASK_ID"; then
   echo "=== merge-now.sh: ${TASK_ID} introduces a blob larger than the push limit ==="
   exit 1
 fi
 
 VALIDATION_RESULT="$(read_validation_result "$STATE_DIR" "$TASK_ID")"
-MERGE_BASE="$(git rev-parse HEAD)"
-MERGE_MESSAGE_FILE="$(mktemp)"
-trap 'rm -f "$MERGE_MESSAGE_FILE"' EXIT
-write_merge_commit_message_file "$MERGE_MESSAGE_FILE" "$TASK_ID" "$TASKS_FILE" "$LOG_DIR" "$REPO_ROOT" "$REPO_DIR" "$STATE_DIR" "$VALIDATION_RESULT"
-
-if git merge --no-ff "$TASK_ID" -F "$MERGE_MESSAGE_FILE"; then
-  NEW_HEAD="$(git rev-parse HEAD)"
-  if [ "$MERGE_BASE" != "$NEW_HEAD" ]; then
-    append_agent_receipt "$TASK_ID" "$TASKS_FILE" "$LOG_DIR" "$REPO_ROOT" "$REPO_DIR" "$STATE_DIR" "$VALIDATION_RESULT"
-  fi
-  [ "$ADDON_MODE" = "suggestion-remote" ] && git push origin main
-  if [ "$MERGE_BASE" != "$NEW_HEAD" ]; then
-    bash "$SCRIPTS_DIR/enqueue-post-merge-review.sh" "$NEW_HEAD" "$TASK_ID" || echo "WARNING: post-merge review enqueue failed"
-  fi
-  # Run repo-specific post-merge hook if it exists
-  if [ -x "${REPO_DIR}/.claude/hooks/post-merge.sh" ]; then
-    echo "=== Running post-merge hook ==="
-    bash "${REPO_DIR}/.claude/hooks/post-merge.sh" || echo "WARNING: post-merge hook failed"
-  fi
-  MERGED_TEXT="=== merge-now.sh: merged and deployed $TASK_ID ==="
-  [ "$ADDON_MODE" = "suggestion-local" ] && MERGED_TEXT="=== merge-now.sh: merged locally $TASK_ID ==="
+PUSH_AFTER_MERGE=0
+[ "$ADDON_MODE" = "suggestion-remote" ] && PUSH_AFTER_MERGE=1
+if REPO_DIR="$REPO_DIR" TASKS_FILE="$TASKS_FILE" LOG_DIR="$LOG_DIR" MERGE_BRANCH="$TASK_ID" MERGE_TARGET="$MERGE_TARGET" PUSH_AFTER_MERGE="$PUSH_AFTER_MERGE" RECEIPT_REQUIRED=1 bash "$SCRIPTS_DIR/finalize-merge.sh" "$TASK_ID" "$VALIDATION_RESULT"; then
+  MERGED_TEXT="=== merge-now.sh: merged and deployed $TASK_ID to $MERGE_TARGET ==="
+  [ "$ADDON_MODE" = "suggestion-local" ] && MERGED_TEXT="=== merge-now.sh: merged locally $TASK_ID to $MERGE_TARGET ==="
   echo "$MERGED_TEXT"
   # Mark that the agent handled the merge (so run-agent.sh skips it)
   touch "/tmp/.agent-merged-${TASK_ID}"

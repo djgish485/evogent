@@ -11,6 +11,12 @@ MAX_ATTEMPTS=3
 
 [ ! -f "$TASKS_FILE" ] && exit 0
 
+read_mode_value() {
+  local file="$1"
+  local key="$2"
+  awk -F: -v key="$key" '$0 ~ "^[[:space:]]*" key "[[:space:]]*:" { value=$2; sub(/#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); gsub(/^["\047]|["\047]$/, "", value); print value; exit }' "$file" 2>/dev/null || true
+}
+
 echo "=== Agent check at $(date -u) ==="
 
 jq -c '.[] | select(.status == "running")' "$TASKS_FILE" 2>/dev/null | while read -r task; do
@@ -33,43 +39,34 @@ jq -c '.[] | select(.status == "running")' "$TASKS_FILE" 2>/dev/null | while rea
         merge)
           REPO_DIR=$(echo "$task" | jq -r '.repoDir // "/root/the-algo"')
           LOG_DIR="$STATE_DIR/logs/agent/${TASK_ID}"
-          RECEIPT_HELPERS="$CANONICAL_SCRIPTS_DIR/receipt-helpers.sh"
-          REVIEW_ENQUEUE="$CANONICAL_SCRIPTS_DIR/enqueue-post-merge-review.sh"
+          FINALIZE_MERGE="$CANONICAL_SCRIPTS_DIR/finalize-merge.sh"
+          ADDON_MODE_FILE="$REPO_DIR/.evogent-mode.md"
+          [ -f "$ADDON_MODE_FILE" ] || ADDON_MODE_FILE="$REPO_DIR/.claude/dev-agent-addon.md"
+          TASK_MERGE_TARGET="${MERGE_TARGET:-$(read_mode_value "$ADDON_MODE_FILE" mergeTarget)}"
+          [ -n "$TASK_MERGE_TARGET" ] || TASK_MERGE_TARGET="main"
+          MERGE_REMOTE_REF="origin/$TASK_MERGE_TARGET"
           cd "$REPO_DIR"
-          git fetch origin main && git checkout main && git reset --hard origin/main
+          if ! git fetch origin "$TASK_MERGE_TARGET"; then
+            echo "ERROR: mergeTarget ${TASK_MERGE_TARGET} has no ${MERGE_REMOTE_REF} ref - create it on origin first or push manually"
+            jq --arg id "$TASK_ID" '(.[] | select(.id == $id)).status = "failed"' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+            "$SCRIPTS_DIR/notify.sh" "Task Failed" "Task ${TASK_ID} merge target ${TASK_MERGE_TARGET} was not found on origin."
+            continue
+          fi
+          git checkout "$TASK_MERGE_TARGET" && git reset --hard "$MERGE_REMOTE_REF"
 
-          if [ -f "$RECEIPT_HELPERS" ] && [ -x "$REVIEW_ENQUEUE" ]; then
-            # Use structured merge receipts when the repo ships the helper scripts.
-            source "$RECEIPT_HELPERS"
-            VALIDATION_RESULT="$(read_validation_result "$STATE_DIR" "$TASK_ID")"
-            MERGE_BASE="$(git rev-parse HEAD)"
-            MERGE_MESSAGE_FILE="$(mktemp)"
-            if write_merge_commit_message_file "$MERGE_MESSAGE_FILE" "$TASK_ID" "$TASKS_FILE" "$LOG_DIR" "$REPO_ROOT" "$REPO_DIR" "$STATE_DIR" "$VALIDATION_RESULT" \
-              && git merge --no-ff "$TASK_ID" -F "$MERGE_MESSAGE_FILE"; then
-              NEW_HEAD="$(git rev-parse HEAD)"
-              if [ "$MERGE_BASE" != "$NEW_HEAD" ]; then
-                append_agent_receipt "$TASK_ID" "$TASKS_FILE" "$LOG_DIR" "$REPO_ROOT" "$REPO_DIR" "$STATE_DIR" "$VALIDATION_RESULT"
-              fi
-              git push origin main
-              if [ "$MERGE_BASE" != "$NEW_HEAD" ]; then
-                bash "$REVIEW_ENQUEUE" "$NEW_HEAD" "$TASK_ID" || echo "WARNING: post-merge review enqueue failed"
-              fi
-              if [ -x "${REPO_DIR}/.claude/hooks/post-merge.sh" ]; then
-                echo "=== Running post-merge hook ==="
-                bash "${REPO_DIR}/.claude/hooks/post-merge.sh" || echo "WARNING: post-merge hook failed"
-              fi
+          if [ -x "$FINALIZE_MERGE" ]; then
+            if REPO_DIR="$REPO_DIR" TASKS_FILE="$TASKS_FILE" LOG_DIR="$LOG_DIR" MERGE_BRANCH="$TASK_ID" MERGE_TARGET="$TASK_MERGE_TARGET" RECEIPT_REQUIRED=1 bash "$FINALIZE_MERGE" "$TASK_ID"; then
               jq --arg id "$TASK_ID" '(.[] | select(.id == $id)).status = "done"' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
-              "$SCRIPTS_DIR/notify.sh" "Task Complete" "Task ${TASK_ID} merged and pushed."
+              "$SCRIPTS_DIR/notify.sh" "Task Complete" "Task ${TASK_ID} merged and pushed to ${TASK_MERGE_TARGET}."
             else
               jq --arg id "$TASK_ID" '(.[] | select(.id == $id)).status = "failed"' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
               "$SCRIPTS_DIR/notify.sh" "Task Failed" "Task ${TASK_ID} merge failed."
             fi
-            rm -f "$MERGE_MESSAGE_FILE"
           else
             if git merge --no-ff "$TASK_ID" -m "merge: ${TASK_ID}"; then
-              git push origin main
+              git push origin "$TASK_MERGE_TARGET"
               jq --arg id "$TASK_ID" '(.[] | select(.id == $id)).status = "done"' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
-              "$SCRIPTS_DIR/notify.sh" "Task Complete" "Task ${TASK_ID} merged and pushed."
+              "$SCRIPTS_DIR/notify.sh" "Task Complete" "Task ${TASK_ID} merged and pushed to ${TASK_MERGE_TARGET}."
             else
               jq --arg id "$TASK_ID" '(.[] | select(.id == $id)).status = "failed"' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
               "$SCRIPTS_DIR/notify.sh" "Task Failed" "Task ${TASK_ID} merge failed."
