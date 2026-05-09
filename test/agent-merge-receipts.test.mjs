@@ -62,6 +62,28 @@ function installFinalizeMergeScript(scriptsDir) {
   fs.copyFileSync(finalizeMergeSourcePath, path.join(scriptsDir, 'finalize-merge.sh'));
 }
 
+function installRunAgentScript(scriptsDir) {
+  fs.copyFileSync(runAgentSourcePath, path.join(scriptsDir, 'run-agent.sh'));
+  fs.chmodSync(path.join(scriptsDir, 'run-agent.sh'), 0o755);
+}
+
+function installAgentConfig(scriptsDir) {
+  fs.writeFileSync(
+    path.join(scriptsDir, 'config'),
+    [
+      'DEFAULT_AGENT=${DEFAULT_AGENT:-codex}',
+      'CLAUDE_MODEL=${CLAUDE_MODEL:-claude-test}',
+      'CODEX_MODEL=${CODEX_MODEL:-codex-test}',
+      'CODEX_REASONING=${CODEX_REASONING:-low}',
+      'CODEX_FAST_MODE=${CODEX_FAST_MODE:-0}',
+      'GEMINI_MODEL=${GEMINI_MODEL:-gemini-test}',
+      'AGENT_MAX_ATTEMPTS=${AGENT_MAX_ATTEMPTS:-3}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
 function installFakeCurl(binDir, logFile) {
   writeExecutable(
     path.join(binDir, 'curl'),
@@ -140,6 +162,16 @@ esac
   );
 }
 
+function installFakeCodex(binDir) {
+  writeExecutable(
+    path.join(binDir, 'codex'),
+    `#!/usr/bin/env bash
+set -euo pipefail
+touch .agent-done
+`,
+  );
+}
+
 test('finalize-merge.sh writes an env-backed receipt for self-orchestrating merges', () => {
   const taskId = 'task-self-orchestrating-receipt';
   const suggestionId = 'suggestion-self-receipt-1';
@@ -206,6 +238,103 @@ test('finalize-merge.sh writes an env-backed receipt for self-orchestrating merg
   assert.equal(receipt.validationResult, 'pass');
   assert.deepEqual(receipt.filesTouched, ['feature.txt']);
   assert.deepEqual(receipt.diffSummary, { files: 1, insertions: 1, deletions: 0 });
+});
+
+test('run-agent.sh auto-merge uses mergeTarget for rebase, push, and notification', () => {
+  const taskId = 'task-non-main-merge-target';
+  const mergeTarget = 'feat-test';
+  const repoDir = makeTempDir('agent-run-merge-target-repo-');
+  const originDir = makeTempDir('agent-run-merge-target-origin-');
+  const stateDir = path.join(makeTempDir('agent-run-merge-target-state-'), 'state');
+  const worktreeDir = path.join(makeTempDir('agent-run-merge-target-worktrees-'), taskId);
+  const scriptsDir = path.join(repoDir, 'scripts', 'agents');
+  const binDir = path.join(makeTempDir('agent-run-merge-target-bin-'), 'bin');
+  const logFile = path.join(repoDir, 'commands.log');
+
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(path.join(stateDir, 'logs', 'agent', taskId), { recursive: true });
+  installCommonHarnessScripts(scriptsDir, logFile);
+  installFinalizeMergeScript(scriptsDir);
+  installRunAgentScript(scriptsDir);
+  installAgentConfig(scriptsDir);
+  installFakeCodex(binDir);
+  writeExecutable(
+    path.join(scriptsDir, 'enqueue-post-merge-review.sh'),
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf 'enqueue-post-merge-review %s|%s\\n' "$1" "$2" >> "${logFile}"
+`,
+  );
+
+  execFileSync('git', ['init', '--bare', originDir], { stdio: 'ignore' });
+  execFileSync('git', ['init'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'agent@example.com'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.name', 'Agent Test'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['branch', '-M', 'main'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['remote', 'add', 'origin', originDir], { cwd: repoDir, stdio: 'ignore' });
+  fs.writeFileSync(path.join(repoDir, 'README.md'), 'base\n', 'utf8');
+  execFileSync('git', ['add', 'README.md', 'scripts/agents'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', 'initial'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['push', '-u', 'origin', 'main'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['checkout', '-b', mergeTarget], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['push', '-u', 'origin', mergeTarget], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['checkout', 'main'], { cwd: repoDir, stdio: 'ignore' });
+
+  fs.writeFileSync(
+    path.join(repoDir, '.evogent-mode.md'),
+    `mode: suggestion-remote\nmergeAfterGates: true\nmergeTarget: ${mergeTarget}\n`,
+    'utf8',
+  );
+
+  execFileSync('git', ['worktree', 'add', '-b', taskId, worktreeDir, `origin/${mergeTarget}`], { cwd: repoDir, stdio: 'ignore' });
+  fs.writeFileSync(path.join(worktreeDir, 'feature.txt'), 'non-main merge target\n', 'utf8');
+  execFileSync('git', ['add', 'feature.txt'], { cwd: worktreeDir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', 'fix: target feature branch'], { cwd: worktreeDir, stdio: 'ignore' });
+
+  fs.writeFileSync(
+    path.join(stateDir, 'active-tasks.json'),
+    `${JSON.stringify([{
+      id: taskId,
+      agent: 'codex',
+      description: 'verify non-main merge target',
+      worktree: worktreeDir,
+      branch: taskId,
+      tmux: `agent-${taskId}`,
+      repoDir,
+      pipeline: 'merge',
+      reasoning: 'low',
+      startedAt: '2026-05-09T00:00:00Z',
+      status: 'running',
+      attempts: 1,
+    }])}\n`,
+    'utf8',
+  );
+  fs.writeFileSync(path.join(stateDir, 'logs', 'agent', taskId, 'prompt-input.txt'), 'Test prompt\n', 'utf8');
+
+  const result = spawnSync('bash', [path.join(scriptsDir, 'run-agent.sh'), taskId, 'codex'], {
+    cwd: worktreeDir,
+    encoding: 'utf8',
+    timeout: 120_000,
+    env: {
+      ...process.env,
+      MEDIA_AGENT_STATE_DIR: stateDir,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const commandLog = fs.readFileSync(logFile, 'utf8');
+  assert.match(commandLog, new RegExp(`check-push-size ${repoDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\|origin/${mergeTarget}\\|${taskId}`));
+  assert.match(commandLog, new RegExp(`notify Task Complete\\|Task ${taskId} merged and pushed to ${mergeTarget}\\.`));
+  assert.equal(
+    execFileSync('git', ['--git-dir', originDir, 'show', `${mergeTarget}:feature.txt`], { encoding: 'utf8' }),
+    'non-main merge target\n',
+  );
+  assert.throws(() => {
+    execFileSync('git', ['--git-dir', originDir, 'show', 'main:feature.txt'], { stdio: 'pipe' });
+  });
 });
 
 test('enqueue-post-merge-review.sh skips silently when the origin session no longer exists', () => {
@@ -365,8 +494,8 @@ test('enqueue-post-merge-review.sh does not enqueue duplicate reviews for the sa
   assert.doesNotMatch(commandLog, /curl POST http:\/\/127\.0\.0\.1:3001\/api\/chat/);
 });
 
-test('run-agent prompt instructs the dev agent to include a Task-Id trailer and wires post-merge review enqueue', () => {
+test('run-agent prompt instructs the dev agent to include a Task-Id trailer and wires the receipt-aware finalizer', () => {
   const script = fs.readFileSync(runAgentSourcePath, 'utf8');
   assert.match(script, /git commit -m \$'type: description\\n\\nTask-Id: \$\{TASK_ID\}'/);
-  assert.match(script, /enqueue-post-merge-review\.sh/);
+  assert.match(script, /finalize-merge\.sh/);
 });
