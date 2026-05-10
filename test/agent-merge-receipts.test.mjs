@@ -319,6 +319,7 @@ printf 'enqueue-post-merge-review %s|%s\\n' "$1" "$2" >> "${logFile}"
     env: {
       ...process.env,
       MEDIA_AGENT_STATE_DIR: stateDir,
+      MERGE_TARGET: '',
       PATH: `${binDir}:${process.env.PATH ?? ''}`,
     },
   });
