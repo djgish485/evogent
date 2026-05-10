@@ -1,12 +1,9 @@
-import type { A2UINode, A2UIRenderTier } from '../../src/components/a2ui/types';
-
 export interface OpenClawSkillOutputBundle {
   skillName: string;
   bundleDir: string;
   runTimestamp: string;
-  outputMarkdown: string;
-  uiTree?: A2UINode;
-  mcpAppHtml?: string;
+  text: string;
+  mcpAppHtml: string;
 }
 
 export interface OpenClawChannelInput {
@@ -37,8 +34,6 @@ export interface EvogentSubmitItem {
   tags: string[];
   metadata: {
     layoutMode: 'agent-session';
-    renderMarkdown: true;
-    renderTier: A2UIRenderTier;
     openClaw: {
       skillName: string;
       bundleDir: string;
@@ -50,7 +45,6 @@ export interface EvogentSubmitItem {
       color: string;
       continuing: true;
     };
-    uiTree?: A2UINode;
-    mcpAppHtml?: string;
+    mcpAppHtml: string;
   };
 }

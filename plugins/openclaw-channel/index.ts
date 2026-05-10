@@ -6,7 +6,6 @@ import type {
   OpenClawChannelInput,
   OpenClawSkillOutputBundle,
 } from './schema';
-import type { A2UINode, A2UIRenderTier } from '../../src/components/a2ui/types';
 
 const skillRunsDir = process.env.OPENCLAW_SKILL_RUNS_DIR
   || path.join(os.homedir(), '.openclaw', 'data', 'skill-runs');
@@ -23,12 +22,6 @@ const skillColorLookup: Array<[RegExp, string]> = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isA2UINode(value: unknown): value is A2UINode {
-  return isRecord(value)
-    && typeof value.id === 'string'
-    && typeof value.type === 'string';
 }
 
 function slugify(value: string): string {
@@ -102,63 +95,56 @@ function normalizeTimestamp(value: unknown): string | null {
   return null;
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(filePath);
-    return stat.isFile();
-  } catch {
-    return false;
-  }
-}
+function stripHtmlForFeedText(html: string, skillName: string, runTimestamp: string): string {
+  const text = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 
-async function readOptionalFile(filePath: string): Promise<string | null> {
-  if (!await fileExists(filePath)) {
-    return null;
+  if (text.length >= 100) {
+    return text.slice(0, 2000);
   }
-  const content = await fs.readFile(filePath, 'utf8');
-  return content.trim() ? content : null;
-}
 
-async function readOptionalA2UI(filePath: string): Promise<A2UINode | null> {
-  const content = await readOptionalFile(filePath);
-  if (!content) {
-    return null;
-  }
-  const parsed = JSON.parse(content) as unknown;
-  if (!isA2UINode(parsed)) {
-    throw new Error(`${filePath} must contain an A2UI root node with string id and type.`);
-  }
-  return parsed;
+  return [
+    `OpenClaw MCP App output for ${readableSkillName(skillName)}.`,
+    `This Evogent feed item renders the sandboxed HTML bundle emitted at ${runTimestamp}.`,
+    'Open the card to inspect the same agent UI at a larger size.',
+  ].join(' ');
 }
 
 async function readBundle(input: OpenClawChannelInput | string): Promise<OpenClawSkillOutputBundle> {
   const skillName = resolveSkillName(input);
   const bundleDir = resolveBundleDir(input, skillName);
-  const markdownPath = path.join(bundleDir, 'output.md');
-  const markdownStat = await fs.stat(markdownPath);
-  if (!markdownStat.isFile()) {
-    throw new Error(`${markdownPath} is not a file.`);
+  const mcpAppPath = path.join(bundleDir, 'output.mcpapp.html');
+  const mcpAppStat = await fs.stat(mcpAppPath);
+  if (!mcpAppStat.isFile()) {
+    throw new Error(`${mcpAppPath} is not a file.`);
   }
 
-  const outputMarkdown = (await fs.readFile(markdownPath, 'utf8')).trim();
-  if (!outputMarkdown) {
-    throw new Error(`${markdownPath} is empty.`);
+  const mcpAppHtml = (await fs.readFile(mcpAppPath, 'utf8')).trim();
+  if (!mcpAppHtml) {
+    throw new Error(`${mcpAppPath} is empty.`);
   }
 
   const explicitTimestamp = isRecord(input)
     ? normalizeTimestamp(input.runTimestamp) ?? normalizeTimestamp(input.timestamp)
     : null;
-  const runTimestamp = explicitTimestamp ?? new Date(markdownStat.mtimeMs).toISOString();
-  const uiTree = await readOptionalA2UI(path.join(bundleDir, 'output.a2ui.json'));
-  const mcpAppHtml = await readOptionalFile(path.join(bundleDir, 'output.mcpapp.html'));
+  const runTimestamp = explicitTimestamp ?? new Date(mcpAppStat.mtimeMs).toISOString();
 
   return {
     skillName,
     bundleDir,
     runTimestamp,
-    outputMarkdown,
-    ...(uiTree ? { uiTree } : {}),
-    ...(mcpAppHtml ? { mcpAppHtml } : {}),
+    text: stripHtmlForFeedText(mcpAppHtml, skillName, runTimestamp),
+    mcpAppHtml,
   };
 }
 
@@ -173,33 +159,26 @@ function idPart(value: string): string {
     .slice(0, 80);
 }
 
-function buildItem(
-  bundle: OpenClawSkillOutputBundle,
-  tier: A2UIRenderTier,
-  index: number,
-): EvogentSubmitItem {
+function buildItem(bundle: OpenClawSkillOutputBundle): EvogentSubmitItem {
   const baseTitle = readableSkillName(bundle.skillName);
   const timestampId = idPart(bundle.runTimestamp);
   const baseId = `${bundle.skillName}-${timestampId}`;
   const threadId = `openclaw-${baseId}`;
-  const publishedAt = new Date(new Date(bundle.runTimestamp).getTime() + index).toISOString();
   const color = colorForSkill(bundle.skillName);
 
   return {
-    id: `${baseId}-${tier}`,
+    id: baseId,
     type: 'article',
     source: 'openclaw',
-    sourceId: `${baseId}-${tier}`,
+    sourceId: baseId,
     relationship: 'thread',
     title: baseTitle,
-    text: bundle.outputMarkdown,
+    text: bundle.text,
     authorDisplayName: 'OpenClaw',
-    publishedAt,
-    tags: ['openclaw', bundle.skillName, tier],
+    publishedAt: bundle.runTimestamp,
+    tags: ['openclaw', bundle.skillName, 'mcpapp'],
     metadata: {
       layoutMode: 'agent-session',
-      renderMarkdown: true,
-      renderTier: tier,
       openClaw: {
         skillName: bundle.skillName,
         bundleDir: bundle.bundleDir,
@@ -211,21 +190,9 @@ function buildItem(
         color,
         continuing: true,
       },
-      ...(tier === 'a2ui' && bundle.uiTree ? { uiTree: bundle.uiTree } : {}),
-      ...(tier === 'mcpapp' && bundle.mcpAppHtml ? { mcpAppHtml: bundle.mcpAppHtml } : {}),
+      mcpAppHtml: bundle.mcpAppHtml,
     },
   };
-}
-
-function buildItems(bundle: OpenClawSkillOutputBundle): EvogentSubmitItem[] {
-  const tiers: A2UIRenderTier[] = ['markdown'];
-  if (bundle.uiTree) {
-    tiers.push('a2ui');
-  }
-  if (bundle.mcpAppHtml) {
-    tiers.push('mcpapp');
-  }
-  return tiers.map((tier, index) => buildItem(bundle, tier, index));
 }
 
 export async function publish(input: OpenClawChannelInput | string): Promise<{
@@ -235,7 +202,7 @@ export async function publish(input: OpenClawChannelInput | string): Promise<{
   response: unknown;
 }> {
   const bundle = await readBundle(input);
-  const items = buildItems(bundle);
+  const items = [buildItem(bundle)];
   const response = await fetch(evogentSubmitUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

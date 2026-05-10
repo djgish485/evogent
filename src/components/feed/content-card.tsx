@@ -5,14 +5,13 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createPortal } from 'react-dom';
-import { A2UIRenderer } from '@/components/a2ui/A2UIRenderer';
-import { MCPAppFrame } from '@/components/a2ui/MCPAppFrame';
 import { DislikedItemTombstone } from '@/components/feed/disliked-item-tombstone';
 import {
   FeedMarkdown,
   FEED_MARKDOWN_BODY_CLASS_NAME,
   FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME,
 } from '@/components/feed/feed-markdown';
+import { MCPAppFrame, type MCPAppActionEvent } from '@/components/feed/openclaw-mcp-card';
 import { TextSelectionTooltip } from '@/components/feed/text-selection-tooltip';
 import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
 import {
@@ -44,7 +43,6 @@ import { getYouTubeFeedData, isYouTubeSource, type YouTubeFeedData } from '@/lib
 import { resolveHackerNewsDiscussionUrl } from '@/lib/hacker-news';
 import { buildSearchSnippet, splitSearchHighlightParts, textMatchesSearchQuery } from '@/lib/search-utils';
 import { getSessionTint } from '@/lib/session-tints';
-import type { A2UIActionEvent, A2UIRenderTier } from '@/components/a2ui/types';
 
 interface ContentCardProps {
   item: FeedItem;
@@ -69,6 +67,7 @@ interface ContentCardProps {
 const fullWidthDetailCardClass = 'group relative w-full px-4 py-2 sm:px-5';
 const detailReplyChildCardClass = 'group relative w-full px-4 py-3 sm:px-5';
 const defaultContentCardClass = 'group relative w-full rounded-2xl border border-zinc-700 bg-zinc-950/90 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow] hover:border-zinc-600 hover:bg-zinc-950 hover:shadow-[0_18px_44px_rgba(0,0,0,0.24)]';
+const bareMcpAppCardClass = 'group relative w-full';
 
 export function resolveContentCardOuterClass({
   detailLayout = 'card',
@@ -421,44 +420,18 @@ function isAgentSessionArticleLayout(item: Pick<FeedItem, 'metadata'>): boolean 
   return readMetadataString(item.metadata, 'layoutMode') === 'agent-session';
 }
 
-const renderTierLabels: Record<A2UIRenderTier, string> = {
-  markdown: 'Markdown',
-  a2ui: 'A2UI',
-  mcpapp: 'MCP App',
-};
-
-function normalizeRenderTier(value: unknown): A2UIRenderTier | null {
-  switch (typeof value === 'string' ? value.trim().toLowerCase() : '') {
-    case 'markdown':
-      return 'markdown';
-    case 'a2ui':
-      return 'a2ui';
-    case 'mcpapp':
-    case 'mcp-app':
-    case 'mcp_app':
-      return 'mcpapp';
-    default:
-      return null;
-  }
-}
-
-function resolveRenderTier(item: Pick<FeedItem, 'metadata'>): A2UIRenderTier | null {
-  const explicitTier = normalizeRenderTier(item.metadata?.renderTier);
-  if (explicitTier) {
-    return explicitTier;
-  }
-  if (item.metadata?.uiTree) {
-    return 'a2ui';
-  }
-  if (typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()) {
-    return 'mcpapp';
-  }
-  return null;
-}
-
 function resolveAgentSessionTint(item: Pick<FeedItem, 'id' | 'metadata'>) {
   const thread = item.metadata?.thread;
   return getSessionTint(thread?.threadId ?? item.id, thread?.color ?? null);
+}
+
+function resolveOpenClawMcpAppHtml(item: Pick<FeedItem, 'source' | 'metadata'>): string | null {
+  if (item.source !== 'openclaw') {
+    return null;
+  }
+
+  const html = item.metadata?.mcpAppHtml;
+  return typeof html === 'string' && html.trim() ? html : null;
 }
 
 function resolveAgentSessionChildCountLabel(item: Pick<FeedItem, 'title' | 'childrenCount' | 'metadata'>, visibleChildCount: number): string | null {
@@ -2961,7 +2934,7 @@ export function ArticleCard({
   onReasonSubmit: (reason: string) => void;
   onDismissReasonInput: () => void;
   onChat?: (item: FeedItem, selectedText?: string) => void;
-  onGeneratedUiAction?: (event: A2UIActionEvent) => void | Promise<void>;
+  onGeneratedUiAction?: (event: MCPAppActionEvent) => void | Promise<void>;
   searchQuery?: string | null;
   useSearchSnippet?: boolean;
 }) {
@@ -2997,12 +2970,9 @@ export function ArticleCard({
   const mcpAppHtml = typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()
     ? item.metadata.mcpAppHtml
     : null;
-  const generatedSurface = item.metadata?.uiTree ? (
-    <A2UIRenderer tree={item.metadata.uiTree} onAction={onGeneratedUiAction} />
-  ) : mcpAppHtml ? (
+  const generatedSurface = mcpAppHtml ? (
     <MCPAppFrame html={mcpAppHtml} onAction={onGeneratedUiAction} />
   ) : null;
-  const renderTier = resolveRenderTier(item);
   const isProminent = isProminentFeedItem(item);
   const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
@@ -3118,11 +3088,6 @@ export function ArticleCard({
           <h1 className={`min-w-0 flex-1 font-semibold text-zinc-100 ${detail ? 'text-2xl leading-tight sm:text-3xl' : isProminent ? 'text-[22px] leading-tight sm:text-[24px]' : 'text-[19px] leading-tight sm:text-[21px]'}`}>
             {item.title || 'Untitled update'}
           </h1>
-          {renderTier ? (
-            <span className="shrink-0 rounded-full border border-zinc-700/80 bg-zinc-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
-              {renderTierLabels[renderTier]}
-            </span>
-          ) : null}
         </div>
 
         {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
@@ -4101,12 +4066,15 @@ export function ContentCard({
 
   const isFullWidthDetail = detailLayout === 'full-width';
   const isCardInteractive = !detail || Boolean(onOpenDetail);
-  const cardClass = resolveContentCardOuterClass({
-    detailLayout,
-    relationship: item.relationship,
-    detailMainItemId,
-  });
-  const agentSessionTint = item.type === 'article' && isAgentSessionArticleLayout(item)
+  const openClawMcpAppHtml = resolveOpenClawMcpAppHtml(item);
+  const cardClass = openClawMcpAppHtml
+    ? bareMcpAppCardClass
+    : resolveContentCardOuterClass({
+        detailLayout,
+        relationship: item.relationship,
+        detailMainItemId,
+      });
+  const agentSessionTint = !openClawMcpAppHtml && item.type === 'article' && isAgentSessionArticleLayout(item)
     ? resolveAgentSessionTint(item)
     : null;
 
@@ -4135,7 +4103,7 @@ export function ContentCard({
 
     openFeedItemDetail(feedItem);
   }, [openFeedItemDetail]);
-  const handleGeneratedUiAction = useCallback((actionEvent: A2UIActionEvent) => {
+  const handleGeneratedUiAction = useCallback((actionEvent: MCPAppActionEvent) => {
     const normalizedActionId = actionEvent.actionId.trim().toLowerCase().replace(/[\s-]+/g, '_');
 
     if (
@@ -4371,11 +4339,15 @@ export function ContentCard({
         }
       }}
     >
-      <div className="pointer-events-none absolute right-3 top-3 z-10">
+      {!openClawMcpAppHtml && <div className="pointer-events-none absolute right-3 top-3 z-10">
         <CompactEnrichmentIndicator state={enrichmentIndicatorState} />
-      </div>
+      </div>}
 
-      {item.type === 'tweet' && (
+      {openClawMcpAppHtml && (
+        <MCPAppFrame html={openClawMcpAppHtml} onAction={handleGeneratedUiAction} />
+      )}
+
+      {!openClawMcpAppHtml && item.type === 'tweet' && (
         <div className="relative">
           {showParentTweetPreview && parentTweet && (
             <div className="relative z-10 pb-3 pl-2">
@@ -4419,7 +4391,7 @@ export function ContentCard({
         </div>
       )}
 
-      {item.type === 'article' && (
+      {!openClawMcpAppHtml && item.type === 'article' && (
         <ArticleCard
           item={item}
           agentName={agentName}

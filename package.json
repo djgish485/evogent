@@ -24,7 +24,6 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^9.0.3",
-    "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "sqlite-vec": "^0.1.7-alpha.2",
     "ws": "^8.19.0",
