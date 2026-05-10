@@ -13,13 +13,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Evogent (branch test)',
+  title: 'Evogent',
   description: 'Personal media curation feed powered by an always-on agent session.',
   applicationName: 'Evogent',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'Evogent (branch test)',
+    title: 'Evogent',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: {
