@@ -26,6 +26,7 @@ const BRAIN_PROVIDER_SWITCH_BLOCKING_PRIORITIES = new Set([
   'user_ping',
   'heartbeat',
   'code_fix_spawn',
+  'feed_action',
   'reflection',
 ]);
 type BrainProviderName = 'claude' | 'codex';

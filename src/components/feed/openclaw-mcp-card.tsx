@@ -28,6 +28,17 @@ const frameBridgeScript = `
   function postHeight() {
     post({ type: 'height', height: measureHeight() });
   }
+  function readPayload(target) {
+    var payload = { text: target.textContent || '' };
+    if (!target.attributes) return payload;
+    for (var index = 0; index < target.attributes.length; index += 1) {
+      var attr = target.attributes[index];
+      if (!attr || attr.name.indexOf('data-payload-') !== 0) continue;
+      var key = attr.name.slice('data-payload-'.length).replace(/-([a-z])/g, function (_, letter) { return letter.toUpperCase(); });
+      if (key) payload[key] = attr.value;
+    }
+    return payload;
+  }
   window.evogentAction = function (actionId, payload) {
     if (typeof actionId === 'string' && actionId.trim()) {
       post({ type: 'action', actionId: actionId, payload: payload && typeof payload === 'object' ? payload : {} });
@@ -39,7 +50,7 @@ const frameBridgeScript = `
     var actionId = target.getAttribute('data-evogent-action') || target.getAttribute('data-action-id');
     if (!actionId) return;
     event.preventDefault();
-    post({ type: 'action', actionId: actionId, payload: { text: target.textContent || '' } });
+    post({ type: 'action', actionId: actionId, payload: readPayload(target) });
   });
   window.addEventListener('load', postHeight);
   if (typeof ResizeObserver !== 'undefined') {
