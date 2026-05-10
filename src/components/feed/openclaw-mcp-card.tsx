@@ -145,11 +145,11 @@ export function MCPAppFrame({
   return (
     <div data-testid="mcp-app-frame" className="overflow-hidden rounded-lg border border-zinc-300 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/50">
       <div className="border-b border-zinc-200 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        sandboxed agent UI
+        OpenClaw
       </div>
       <iframe
         ref={iframeRef}
-        title="Sandboxed agent UI"
+        title="OpenClaw"
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
