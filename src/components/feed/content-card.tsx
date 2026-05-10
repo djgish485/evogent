@@ -2970,9 +2970,6 @@ export function ArticleCard({
   const mcpAppHtml = typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()
     ? item.metadata.mcpAppHtml
     : null;
-  const generatedSurface = mcpAppHtml ? (
-    <MCPAppFrame html={mcpAppHtml} onAction={onGeneratedUiAction} />
-  ) : null;
   const isProminent = isProminentFeedItem(item);
   const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
@@ -3092,10 +3089,10 @@ export function ArticleCard({
 
         {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
 
-        {agentChildren.length === 0 && (generatedSurface || displayText) && (
+        {agentChildren.length === 0 && (mcpAppHtml || displayText) && (
           <div className="relative select-text touch-auto">
-            {generatedSurface ? (
-              generatedSurface
+            {mcpAppHtml ? (
+              <MCPAppFrame html={mcpAppHtml} onAction={onGeneratedUiAction} />
             ) : shouldRenderMarkdownBody ? (
                 <FeedMarkdown
                   text={displayText ?? ''}
@@ -3107,7 +3104,7 @@ export function ArticleCard({
                 <HighlightedSearchText text={displayText ?? ''} searchQuery={bodySearchQuery} />
               </p>
             )}
-            {!generatedSurface && needsTruncation && (
+            {!mcpAppHtml && needsTruncation && (
               <div className="mt-1">
                 <button
                   type="button"
@@ -3316,12 +3313,14 @@ export function ArticleCard({
 
       {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
 
-      {displayText && (
+      {(mcpAppHtml || displayText) && (
         <div className="relative select-text touch-auto">
-          {shouldRenderMarkdownBody ? (
+          {mcpAppHtml ? (
+            <MCPAppFrame html={mcpAppHtml} onAction={onGeneratedUiAction} />
+          ) : shouldRenderMarkdownBody ? (
             <>
               <FeedMarkdown
-                text={displayText}
+                text={displayText ?? ''}
                 searchQuery={bodySearchQuery}
                 className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
               />
@@ -3343,7 +3342,7 @@ export function ArticleCard({
             </>
           ) : (
             <p className={`whitespace-pre-wrap break-words ${detail ? `text-zinc-200 ${isProminent ? 'text-[18px] leading-8 sm:text-[20px]' : 'text-[17px] leading-8 sm:text-[18px]'}` : `text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}`}>
-              <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
+              <HighlightedSearchText text={displayText ?? ''} searchQuery={bodySearchQuery} />
               {needsTruncation && !expanded && (
                 <>
                   {'... '}
