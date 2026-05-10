@@ -77,6 +77,9 @@ describe('NotificationCard', () => {
     assert.match(markup, /data-testid="mcp-app-frame"/);
     assert.match(markup, /x\.follow/);
     assert.match(markup, /Follow/);
+    assert.doesNotMatch(markup, /data-testid="notification-dismiss-button"/);
+    assert.doesNotMatch(markup, /<h3/);
+    assert.doesNotMatch(markup, />Info</);
     assert.doesNotMatch(markup, /Plain notification fallback/);
   });
 });
