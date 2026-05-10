@@ -2193,7 +2193,11 @@ export default function Home() {
 
     // Group active notifications
     const activeNotifications = shouldRenderNotificationEntries
-      ? items.filter((item) => item.type === 'notification' && shouldRenderItem(item))
+      ? items.filter((item) => (
+        item.type === 'notification'
+        && !readTrimmedMetadataString(item.metadata?.mcpAppHtml)
+        && shouldRenderItem(item)
+      ))
       : [];
 
     if (activeNotifications.length > 0) {

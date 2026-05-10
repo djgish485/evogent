@@ -43,17 +43,6 @@ function getSeverity(item: FeedItem): NotificationSeverity {
   return 'info';
 }
 
-function getSeverityLabel(severity: NotificationSeverity): string {
-  switch (severity) {
-    case 'warning':
-      return 'Warning';
-    case 'error':
-      return 'Error';
-    default:
-      return 'Info';
-  }
-}
-
 function getSeverityClasses(severity: NotificationSeverity): { tint: string; badge: string; icon: string } {
   switch (severity) {
     case 'warning':
@@ -124,15 +113,6 @@ export function NotificationCard({
   showTaskContext = false,
   searchQuery = null,
 }: NotificationCardProps) {
-  const severity = getSeverity(item);
-  const classes = getSeverityClasses(severity);
-  const title = item.title?.trim() || 'Notification';
-  const dismissable = item.metadata?.dismissable !== false;
-  const notificationTimestamp = getFeedItemCompactTimestampSource(item);
-  const notificationTimestampLabel = formatCompactTimestamp(notificationTimestamp);
-  const taskContext = showTaskContext ? item.notificationTaskContext ?? null : null;
-  const taskUpdatedAtLabel = formatCompactTimestamp(taskContext?.updatedAt ?? null);
-  const taskStateLabel = getTaskStateLabel(taskContext?.state ?? null);
   const mcpAppHtml = typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()
     ? item.metadata.mcpAppHtml
     : null;
@@ -159,6 +139,25 @@ export function NotificationCard({
     });
   };
 
+  if (mcpAppHtml) {
+    return (
+      <article data-testid="notification-card" data-item-type="notification" data-item-id={item.id} data-feed-item-id={item.id} data-feed-item-type={item.type} className="w-full">
+        <MCPAppFrame html={mcpAppHtml} onAction={handleGeneratedUiAction} />
+      </article>
+    );
+  }
+
+  const severity = getSeverity(item);
+  const classes = getSeverityClasses(severity);
+  const severityLabel = severity === 'warning' ? 'Warning' : severity === 'error' ? 'Error' : 'Info';
+  const title = item.title?.trim() || 'Notification';
+  const dismissable = item.metadata?.dismissable !== false;
+  const notificationTimestamp = getFeedItemCompactTimestampSource(item);
+  const notificationTimestampLabel = formatCompactTimestamp(notificationTimestamp);
+  const taskContext = showTaskContext ? item.notificationTaskContext ?? null : null;
+  const taskUpdatedAtLabel = formatCompactTimestamp(taskContext?.updatedAt ?? null);
+  const taskStateLabel = getTaskStateLabel(taskContext?.state ?? null);
+
   return (
     <article
       data-testid="notification-card"
@@ -178,13 +177,11 @@ export function NotificationCard({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${classes.badge}`}>
-                  {getSeverityLabel(severity)}
+                  {severityLabel}
                 </span>
-                {!mcpAppHtml && (
-                  <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
-                    <HighlightedSearchText text={title} searchQuery={searchQuery} />
-                  </h3>
-                )}
+                <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                  <HighlightedSearchText text={title} searchQuery={searchQuery} />
+                </h3>
                 {notificationTimestampLabel ? (
                   <time
                     dateTime={notificationTimestamp ?? undefined}
@@ -194,21 +191,14 @@ export function NotificationCard({
                   </time>
                 ) : null}
               </div>
-              {mcpAppHtml && (
-                <div className="mt-2">
-                  <MCPAppFrame html={mcpAppHtml} onAction={handleGeneratedUiAction} />
-                </div>
-              )}
-              {!mcpAppHtml && (
-                <div className="mt-1">
-                  <FeedMarkdown
-                    text={item.text}
-                    searchQuery={searchQuery}
-                    className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
-                  />
-                </div>
-              )}
-              {!mcpAppHtml && item.excerpt && (
+              <div className="mt-1">
+                <FeedMarkdown
+                  text={item.text}
+                  searchQuery={searchQuery}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
+              </div>
+              {item.excerpt && (
                 <div className="mt-1">
                   <FeedMarkdown
                     text={item.excerpt}
@@ -217,7 +207,7 @@ export function NotificationCard({
                   />
                 </div>
               )}
-              {!mcpAppHtml && taskContext && (taskContext.summary || taskContext.lines.length > 0) && (
+              {taskContext && (taskContext.summary || taskContext.lines.length > 0) && (
                 <div className="mt-2 rounded-xl border border-zinc-800/80 bg-black/25 px-3 py-2">
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
                     <span className="font-medium text-zinc-300">Task {taskContext.taskId}</span>
