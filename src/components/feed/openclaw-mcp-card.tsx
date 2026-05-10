@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { A2UIActionEvent } from './types';
+
+export interface MCPAppActionEvent {
+  actionId: string;
+  source: 'mcpapp';
+  payload?: Record<string, unknown>;
+}
 
 const mcpAppMessageTypes = new Set(['height', 'action']);
 
@@ -90,7 +95,7 @@ export function MCPAppFrame({
   onAction,
 }: {
   html: string;
-  onAction?: (event: A2UIActionEvent) => void | Promise<void>;
+  onAction?: (event: MCPAppActionEvent) => void | Promise<void>;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(180);

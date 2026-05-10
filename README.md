@@ -62,15 +62,14 @@ When done, report the URL where Evogent is running.
 
 ## Wire OpenClaw into Evogent
 
-If you're running [OpenClaw](https://open.claw.cloud/) alongside Evogent, you can route any OpenClaw skill output into your Evogent feed automatically. Skills can emit markdown, A2UI trees (declarative generative UI), and MCP App HTML bundles; Evogent renders all three. Paste this into a coding agent in your OpenClaw working directory:
+If you're running [OpenClaw](https://open.claw.cloud/) alongside Evogent, you can route OpenClaw skill output into your Evogent feed automatically. Each skill run emits `output.mcpapp.html`, and Evogent renders that sandboxed MCP App iframe as the card. Paste this into a coding agent in your OpenClaw working directory:
 
 ```text
 Wire my OpenClaw instance to push skill outputs into the Evogent feed running on this machine. Follow https://github.com/djgish485/evogent/blob/main/docs/openclaw-integration.md end-to-end.
 
 Phase 1: install the Evogent channel plugin into ~/.openclaw/channels/.
 Phase 2: opt every existing skill into the evogent channel.
-Phase 3 (optional, recommended for rich generative UI): teach each skill to emit output.a2ui.json alongside output.md using the A2UI catalog in the doc.
-Phase 4 (optional): teach each skill to emit output.mcpapp.html for sandboxed-iframe agent UIs.
+Phase 3: teach each skill to emit output.mcpapp.html for sandboxed-iframe agent UIs.
 
 Report which skills are wired and verify a test card lands in the Evogent feed when done.
 ```

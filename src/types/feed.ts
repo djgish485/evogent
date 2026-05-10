@@ -1,6 +1,5 @@
 import type { ChatMessage } from './chat';
 import type { ConversationSessionSummary } from './conversation';
-import type { A2UINode, A2UIRenderTier } from '@/components/a2ui/types';
 
 export type FeedItemType = 'tweet' | 'article' | 'analysis' | 'suggestion' | 'notification';
 export type FeedPendingCounts = Record<FeedItemType, number>;
@@ -217,9 +216,7 @@ export interface FeedMetadata {
   linkPreviews?: LinkPreview[];
   article?: Record<string, unknown>;
   layoutMode?: 'agent-session' | string;
-  uiTree?: A2UINode;
   mcpAppHtml?: string;
-  renderTier?: A2UIRenderTier;
   articleEnrichment?: {
     status?: 'completed' | 'skipped' | 'failed';
     completedAt?: string;
