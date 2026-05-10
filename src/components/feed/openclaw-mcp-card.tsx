@@ -50,6 +50,8 @@ const frameBridgeScript = `
     var actionId = target.getAttribute('data-evogent-action') || target.getAttribute('data-action-id');
     if (!actionId) return;
     event.preventDefault();
+    if ('disabled' in target) target.disabled = true;
+    target.style.opacity = '0.6'; target.style.cursor = 'not-allowed'; target.textContent = 'Working…'; document.querySelectorAll('[data-evogent-action]').forEach(function (button) { if (button === target) return; if ('disabled' in button) button.disabled = true; button.style.opacity = '0.6'; button.style.cursor = 'not-allowed'; });
     post({ type: 'action', actionId: actionId, payload: readPayload(target) });
   });
   window.addEventListener('load', postHeight);
@@ -155,12 +157,9 @@ export function MCPAppFrame({
 
   return (
     <div data-testid="mcp-app-frame" className="overflow-hidden rounded-lg border border-zinc-300 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/50">
-      <div className="border-b border-zinc-200 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        OpenClaw
-      </div>
       <iframe
         ref={iframeRef}
-        title="OpenClaw"
+        title="Card content"
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
