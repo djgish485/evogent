@@ -716,6 +716,37 @@ describe('ArticleCard', () => {
     assert.doesNotMatch(markup, /\*\*Sarah Kim\*\*/);
   });
 
+  test('renders mcpAppHtml as the body without requiring agent-session layout', () => {
+    const item = createAnalysisItem({
+      title: 'Freeform digest',
+      text: 'Plain analysis fallback',
+      metadata: {
+        mcpAppHtml: '<button data-evogent-action="x.follow">Follow</button>',
+      },
+    });
+
+    const markup = renderToStaticMarkup(createElement(ArticleCard, {
+      item,
+      agentName: 'Agent',
+      isLiked: false,
+      isDisliked: false,
+      votePending: false,
+      onThumbsUp: () => {},
+      onThumbsDown: () => {},
+      expanded: false,
+      onToggleExpand: () => {},
+      showReasonInput: null,
+      onReasonSubmit: () => {},
+      onDismissReasonInput: () => {},
+      detail: false,
+    }));
+
+    assert.match(markup, /data-testid="mcp-app-frame"/);
+    assert.match(markup, /x\.follow/);
+    assert.match(markup, /Follow/);
+    assert.doesNotMatch(markup, /Plain analysis fallback/);
+  });
+
   test('renders Hacker News discussion and original article actions separately', () => {
     const item = createArticleItem({
       source: 'hackernews',

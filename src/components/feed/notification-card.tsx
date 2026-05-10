@@ -1,6 +1,7 @@
 'use client';
 
 import { FeedMarkdown, FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME } from '@/components/feed/feed-markdown';
+import { MCPAppFrame, type MCPAppActionEvent } from '@/components/feed/openclaw-mcp-card';
 import { formatCompactTimestamp, getFeedItemCompactTimestampSource } from '@/lib/compact-timestamp';
 import { splitSearchHighlightParts } from '@/lib/search-utils';
 import type { FeedItem, NotificationSeverity, NotificationTaskContext } from '@/types/feed';
@@ -132,6 +133,31 @@ export function NotificationCard({
   const taskContext = showTaskContext ? item.notificationTaskContext ?? null : null;
   const taskUpdatedAtLabel = formatCompactTimestamp(taskContext?.updatedAt ?? null);
   const taskStateLabel = getTaskStateLabel(taskContext?.state ?? null);
+  const mcpAppHtml = typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()
+    ? item.metadata.mcpAppHtml
+    : null;
+  const handleGeneratedUiAction = (actionEvent: MCPAppActionEvent) => {
+    const normalizedActionId = actionEvent.actionId.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (
+      normalizedActionId === 'dismiss'
+      || normalizedActionId === 'dismiss_notification'
+      || normalizedActionId === 'resolve_notification'
+      || normalizedActionId === 'mark_read'
+    ) {
+      void onDismiss(item);
+      return;
+    }
+
+    void fetch('/api/internal/feed-actions/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: item.id,
+        actionId: normalizedActionId,
+        payload: actionEvent.payload ?? {},
+      }),
+    });
+  };
 
   return (
     <article
@@ -154,9 +180,11 @@ export function NotificationCard({
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${classes.badge}`}>
                   {getSeverityLabel(severity)}
                 </span>
-                <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
-                  <HighlightedSearchText text={title} searchQuery={searchQuery} />
-                </h3>
+                {!mcpAppHtml && (
+                  <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                    <HighlightedSearchText text={title} searchQuery={searchQuery} />
+                  </h3>
+                )}
                 {notificationTimestampLabel ? (
                   <time
                     dateTime={notificationTimestamp ?? undefined}
@@ -166,14 +194,21 @@ export function NotificationCard({
                   </time>
                 ) : null}
               </div>
-              <div className="mt-1">
-                <FeedMarkdown
-                  text={item.text}
-                  searchQuery={searchQuery}
-                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
-                />
-              </div>
-              {item.excerpt && (
+              {mcpAppHtml && (
+                <div className="mt-2">
+                  <MCPAppFrame html={mcpAppHtml} onAction={handleGeneratedUiAction} />
+                </div>
+              )}
+              {!mcpAppHtml && (
+                <div className="mt-1">
+                  <FeedMarkdown
+                    text={item.text}
+                    searchQuery={searchQuery}
+                    className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                  />
+                </div>
+              )}
+              {!mcpAppHtml && item.excerpt && (
                 <div className="mt-1">
                   <FeedMarkdown
                     text={item.excerpt}
@@ -182,7 +217,7 @@ export function NotificationCard({
                   />
                 </div>
               )}
-              {taskContext && (taskContext.summary || taskContext.lines.length > 0) ? (
+              {!mcpAppHtml && taskContext && (taskContext.summary || taskContext.lines.length > 0) && (
                 <div className="mt-2 rounded-xl border border-zinc-800/80 bg-black/25 px-3 py-2">
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
                     <span className="font-medium text-zinc-300">Task {taskContext.taskId}</span>
@@ -221,7 +256,7 @@ export function NotificationCard({
                     </div>
                   ) : null}
                 </div>
-              ) : null}
+              )}
               {feedback && (
                 <p className={`mt-2 text-xs ${feedback.toLowerCase().includes('failed') ? 'text-red-300' : 'text-zinc-400'}`}>
                   {feedback}
