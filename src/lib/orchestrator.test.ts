@@ -125,6 +125,7 @@ describe('orchestrator client wrappers', { skip: ORCHESTRATOR_INTEGRATION_SKIP_R
     await withOrchestratorLock(async () => {
       const priorities = [
         { value: 'user_chat' as const, expectedNumeric: 400 },
+        { value: 'feed_action' as const, expectedNumeric: 325 },
         { value: 'user_ping' as const, expectedNumeric: 300 },
         { value: 'post_enrichment' as const, expectedNumeric: 200 },
         { value: 'cache_refresh' as const, expectedNumeric: 150 },
