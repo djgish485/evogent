@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createPortal } from 'react-dom';
+import { A2UIRenderer } from '@/components/a2ui/A2UIRenderer';
+import { MCPAppFrame } from '@/components/a2ui/MCPAppFrame';
 import { DislikedItemTombstone } from '@/components/feed/disliked-item-tombstone';
 import {
   FeedMarkdown,
@@ -42,6 +44,7 @@ import { getYouTubeFeedData, isYouTubeSource, type YouTubeFeedData } from '@/lib
 import { resolveHackerNewsDiscussionUrl } from '@/lib/hacker-news';
 import { buildSearchSnippet, splitSearchHighlightParts, textMatchesSearchQuery } from '@/lib/search-utils';
 import { getSessionTint } from '@/lib/session-tints';
+import type { A2UIActionEvent, A2UIRenderTier } from '@/components/a2ui/types';
 
 interface ContentCardProps {
   item: FeedItem;
@@ -416,6 +419,41 @@ function readMetadataBoolean(metadata: FeedItem['metadata'], key: string): boole
 
 function isAgentSessionArticleLayout(item: Pick<FeedItem, 'metadata'>): boolean {
   return readMetadataString(item.metadata, 'layoutMode') === 'agent-session';
+}
+
+const renderTierLabels: Record<A2UIRenderTier, string> = {
+  markdown: 'Markdown',
+  a2ui: 'A2UI',
+  mcpapp: 'MCP App',
+};
+
+function normalizeRenderTier(value: unknown): A2UIRenderTier | null {
+  switch (typeof value === 'string' ? value.trim().toLowerCase() : '') {
+    case 'markdown':
+      return 'markdown';
+    case 'a2ui':
+      return 'a2ui';
+    case 'mcpapp':
+    case 'mcp-app':
+    case 'mcp_app':
+      return 'mcpapp';
+    default:
+      return null;
+  }
+}
+
+function resolveRenderTier(item: Pick<FeedItem, 'metadata'>): A2UIRenderTier | null {
+  const explicitTier = normalizeRenderTier(item.metadata?.renderTier);
+  if (explicitTier) {
+    return explicitTier;
+  }
+  if (item.metadata?.uiTree) {
+    return 'a2ui';
+  }
+  if (typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()) {
+    return 'mcpapp';
+  }
+  return null;
 }
 
 function resolveAgentSessionTint(item: Pick<FeedItem, 'id' | 'metadata'>) {
@@ -2904,6 +2942,7 @@ export function ArticleCard({
   onReasonSubmit,
   onDismissReasonInput,
   onChat,
+  onGeneratedUiAction,
   searchQuery,
   useSearchSnippet = true,
 }: {
@@ -2922,6 +2961,7 @@ export function ArticleCard({
   onReasonSubmit: (reason: string) => void;
   onDismissReasonInput: () => void;
   onChat?: (item: FeedItem, selectedText?: string) => void;
+  onGeneratedUiAction?: (event: A2UIActionEvent) => void | Promise<void>;
   searchQuery?: string | null;
   useSearchSnippet?: boolean;
 }) {
@@ -2954,6 +2994,15 @@ export function ArticleCard({
     : getTruncationState(body, expanded, MAIN_TEXT_TRUNCATION);
   const bodySearchQuery = usesSearchSnippet || !useSearchSnippet ? searchQuery : null;
   const shouldRenderMarkdownBody = (item.type === 'analysis' || readMetadataBoolean(item.metadata, 'renderMarkdown')) && !usesSearchSnippet;
+  const mcpAppHtml = typeof item.metadata?.mcpAppHtml === 'string' && item.metadata.mcpAppHtml.trim()
+    ? item.metadata.mcpAppHtml
+    : null;
+  const generatedSurface = item.metadata?.uiTree ? (
+    <A2UIRenderer tree={item.metadata.uiTree} onAction={onGeneratedUiAction} />
+  ) : mcpAppHtml ? (
+    <MCPAppFrame html={mcpAppHtml} onAction={onGeneratedUiAction} />
+  ) : null;
+  const renderTier = resolveRenderTier(item);
   const isProminent = isProminentFeedItem(item);
   const linkUrl = youtubeVideo?.canonicalUrl ?? resolvePrimaryLinkUrl(item) ?? item.url;
   const linkLabel = youtubeVideo?.liveStatus === 'live'
@@ -3069,24 +3118,31 @@ export function ArticleCard({
           <h1 className={`min-w-0 flex-1 font-semibold text-zinc-100 ${detail ? 'text-2xl leading-tight sm:text-3xl' : isProminent ? 'text-[22px] leading-tight sm:text-[24px]' : 'text-[19px] leading-tight sm:text-[21px]'}`}>
             {item.title || 'Untitled update'}
           </h1>
+          {renderTier ? (
+            <span className="shrink-0 rounded-full border border-zinc-700/80 bg-zinc-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
+              {renderTierLabels[renderTier]}
+            </span>
+          ) : null}
         </div>
 
         {media.length > 0 && <MediaDisplay media={media} tweetUrl={item.url || undefined} />}
 
-        {agentChildren.length === 0 && displayText && (
+        {agentChildren.length === 0 && (generatedSurface || displayText) && (
           <div className="relative select-text touch-auto">
-            {shouldRenderMarkdownBody ? (
-              <FeedMarkdown
-                text={displayText}
-                searchQuery={bodySearchQuery}
-                className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
-              />
+            {generatedSurface ? (
+              generatedSurface
+            ) : shouldRenderMarkdownBody ? (
+                <FeedMarkdown
+                  text={displayText ?? ''}
+                  searchQuery={bodySearchQuery}
+                  className={FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME}
+                />
             ) : (
               <p className={`whitespace-pre-wrap break-words text-zinc-300 ${isProminent ? 'text-[15px] leading-7' : 'text-[14px] leading-relaxed'}`}>
-                <HighlightedSearchText text={displayText} searchQuery={bodySearchQuery} />
+                <HighlightedSearchText text={displayText ?? ''} searchQuery={bodySearchQuery} />
               </p>
             )}
-            {needsTruncation && (
+            {!generatedSurface && needsTruncation && (
               <div className="mt-1">
                 <button
                   type="button"
@@ -4079,6 +4135,79 @@ export function ContentCard({
 
     openFeedItemDetail(feedItem);
   }, [openFeedItemDetail]);
+  const handleGeneratedUiAction = useCallback((actionEvent: A2UIActionEvent) => {
+    const normalizedActionId = actionEvent.actionId.trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+    if (
+      normalizedActionId === 'thumbsup'
+      || normalizedActionId === 'thumbsdown'
+      || normalizedActionId === 'undo_thumbsup'
+      || normalizedActionId === 'undo_thumbsdown'
+    ) {
+      void handleVote(normalizedActionId);
+      return;
+    }
+
+    if (normalizedActionId === 'open_detail' || normalizedActionId === 'view_all' || normalizedActionId === 'expand') {
+      openFeedItemDetail(item);
+      return;
+    }
+
+    if (normalizedActionId === 'chat' || normalizedActionId === 'ask_agent') {
+      onChat?.(item);
+      return;
+    }
+
+    if (item.type === 'suggestion') {
+      const suggestionAction = normalizedActionId === 'accept_suggestion' || normalizedActionId === 'accept'
+        ? 'accept_suggestion'
+        : normalizedActionId === 'dismiss_suggestion' || normalizedActionId === 'dismiss'
+          ? 'dismiss_suggestion'
+          : normalizedActionId === 'undo_suggestion'
+            ? 'undo_suggestion'
+            : null;
+
+      if (suggestionAction === 'accept_suggestion') {
+        void onSuggestionAccept?.(item);
+        return;
+      }
+
+      if (suggestionAction === 'dismiss_suggestion') {
+        void onSuggestionDismiss?.(item);
+        return;
+      }
+
+      if (suggestionAction === 'undo_suggestion') {
+        void fetch('/api/interactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feedItemId: item.id, action: suggestionAction }),
+        });
+        return;
+      }
+    }
+
+    if (
+      item.type === 'notification'
+      && (
+        normalizedActionId === 'dismiss'
+        || normalizedActionId === 'dismiss_notification'
+        || normalizedActionId === 'resolve_notification'
+        || normalizedActionId === 'mark_read'
+      )
+    ) {
+      void fetch('/api/internal/notifications/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedItemId: item.id }),
+      });
+      return;
+    }
+
+    if (normalizedActionId === 'dismiss' || normalizedActionId === 'hide') {
+      void handleVote('thumbsdown');
+    }
+  }, [handleVote, item, onChat, onSuggestionAccept, onSuggestionDismiss, openFeedItemDetail]);
   const handleQuoteTweetClick = useCallback(async (quote: QuoteTweet) => {
     const quoteIdentifier = quote.id?.trim() || quote.url?.trim() || null;
     const fallbackUrl = quote.url?.trim() || (quote.id?.trim() ? `https://x.com/i/web/status/${quote.id.trim()}` : null);
@@ -4307,6 +4436,7 @@ export function ContentCard({
           onReasonSubmit={handleReasonSubmit}
           onDismissReasonInput={() => setShowReasonInput(null)}
           onChat={onChat}
+          onGeneratedUiAction={handleGeneratedUiAction}
           searchQuery={searchQuery}
           useSearchSnippet={useSearchSnippet}
         />
@@ -4329,6 +4459,7 @@ export function ContentCard({
           onReasonSubmit={handleReasonSubmit}
           onDismissReasonInput={() => setShowReasonInput(null)}
           onChat={onChat}
+          onGeneratedUiAction={handleGeneratedUiAction}
           searchQuery={searchQuery}
           useSearchSnippet={useSearchSnippet}
         />
