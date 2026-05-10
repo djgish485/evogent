@@ -57,4 +57,26 @@ describe('NotificationCard', () => {
     assert.doesNotMatch(markup, /## Priority/);
     assert.doesNotMatch(markup, /\*\*Sarah Kim\*\*/);
   });
+
+  test('renders mcpAppHtml instead of the plain notification body when present', () => {
+    const markup = renderToStaticMarkup(
+      <NotificationCard
+        item={createNotificationItem({
+          text: 'Plain notification fallback',
+          metadata: {
+            severity: 'info',
+            dismissable: true,
+            mcpAppHtml: '<button data-evogent-action="x.follow">Follow</button>',
+          },
+        })}
+        pendingAction={null}
+        onDismiss={() => {}}
+      />,
+    );
+
+    assert.match(markup, /data-testid="mcp-app-frame"/);
+    assert.match(markup, /x\.follow/);
+    assert.match(markup, /Follow/);
+    assert.doesNotMatch(markup, /Plain notification fallback/);
+  });
 });
