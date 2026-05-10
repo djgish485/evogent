@@ -51,7 +51,7 @@ test('mergeCodexAvailability preserves missing-cli failures without browser diag
 });
 
 test('brain provider switch only blocks interactive or curation task priorities', () => {
-  for (const priority of ['user_chat', 'user_ping', 'heartbeat', 'code_fix_spawn', 'reflection']) {
+  for (const priority of ['user_chat', 'user_ping', 'heartbeat', 'code_fix_spawn', 'feed_action', 'reflection']) {
     assert.equal(
       __testOnly.isBrainProviderSwitchBlocked({ priority }),
       true,

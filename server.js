@@ -62,6 +62,7 @@ const WORKER_RESTART_SERVICE_UNIT = 'evogent-worker.service';
 const TASK_TIMEOUT_MS_BY_PRIORITY = Object.freeze({
   user_chat: EXECUTION_TASK_TIMEOUT_MS,
   code_fix_spawn: EXECUTION_TASK_TIMEOUT_MS,
+  feed_action: EXECUTION_TASK_TIMEOUT_MS,
   user_ping: EXECUTION_TASK_TIMEOUT_MS,
   post_enrichment: EXECUTION_TASK_TIMEOUT_MS,
   cache_refresh: EXECUTION_TASK_TIMEOUT_MS,
@@ -84,11 +85,12 @@ let cloudflareAccessJwks = null;
 let joseImportPromise = null;
 let lastCloudflareAccessJwtWarningAt = 0;
 
-/** @typedef {'user_chat' | 'user_ping' | 'code_fix_spawn' | 'post_enrichment' | 'cache_refresh' | 'heartbeat' | 'reflection'} OrchestratorPriority */
+/** @typedef {'user_chat' | 'user_ping' | 'code_fix_spawn' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'heartbeat' | 'reflection'} OrchestratorPriority */
 
 const PRIORITY_VALUES = Object.freeze({
   user_chat: 400,
   code_fix_spawn: 350,
+  feed_action: 325,
   user_ping: 300,
   post_enrichment: 200,
   cache_refresh: 150,
@@ -115,6 +117,9 @@ const PRIORITY_ALIASES = Object.freeze({
   code_fix: 'code_fix_spawn',
   codefix: 'code_fix_spawn',
   'code-fix': 'code_fix_spawn',
+  feed_action: 'feed_action',
+  feedaction: 'feed_action',
+  'feed-action': 'feed_action',
 });
 
 /**
@@ -2266,13 +2271,42 @@ function resolveResearchFeedItemId(transcriptLines, responseText) {
 }
 
 function buildTaskPrompt(task) {
-  const resolvedTaskMessage = buildRuntimeTaskPrompt(task, {
+  let resolvedTaskMessage = buildRuntimeTaskPrompt(task, {
     rootDir: process.cwd(),
     dataDir: process.env.DATA_DIR || path.join(process.cwd(), 'data'),
     internalBaseUrl,
     startedAt: task?.startedAt || task?.enqueuedAt || null,
     timeoutMs: resolveTaskTimeoutMs(task),
   });
+
+  if (task?.priority === 'feed_action') {
+    const metadata = task?.metadata && typeof task.metadata === 'object' ? task.metadata : null;
+    const feedAction = metadata?.feedAction && typeof metadata.feedAction === 'object' ? metadata.feedAction : null;
+    const rawSkillPath = typeof feedAction?.skillPath === 'string' ? feedAction.skillPath.trim() : '';
+    const skillRoot = path.join(process.cwd(), '.claude', 'skills');
+    const skillPath = rawSkillPath
+      ? path.resolve(process.cwd(), rawSkillPath)
+      : '';
+    const canReadSkill = Boolean(skillPath)
+      && skillPath.startsWith(`${skillRoot}${path.sep}`)
+      && path.basename(skillPath) === 'SKILL.md';
+    let skillText = '';
+
+    if (canReadSkill) {
+      try {
+        skillText = fs.readFileSync(skillPath, 'utf8').trim();
+      } catch {
+        skillText = '';
+      }
+    }
+
+    resolvedTaskMessage = [
+      'Run this user-initiated feed-card action. Do not interpret the action in product code.',
+      resolvedTaskMessage,
+      '## Routed Source Skill',
+      skillText || `Routed skill could not be loaded from ${rawSkillPath || '(missing skillPath)'}. Stop and report this as an action routing error.`,
+    ].join('\n\n');
+  }
 
   return [
     'You are an ephemeral Evogent task. Complete this task and exit.',

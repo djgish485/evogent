@@ -4174,7 +4174,18 @@ export function ContentCard({
 
     if (normalizedActionId === 'dismiss' || normalizedActionId === 'hide') {
       void handleVote('thumbsdown');
+      return;
     }
+
+    void fetch('/api/internal/feed-actions/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: item.id,
+        actionId: normalizedActionId,
+        payload: actionEvent.payload ?? {},
+      }),
+    });
   }, [handleVote, item, onChat, onSuggestionAccept, onSuggestionDismiss, openFeedItemDetail]);
   const handleQuoteTweetClick = useCallback(async (quote: QuoteTweet) => {
     const quoteIdentifier = quote.id?.trim() || quote.url?.trim() || null;

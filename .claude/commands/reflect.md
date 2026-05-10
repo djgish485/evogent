@@ -66,6 +66,30 @@ Hard guardrails:
 - Zero suggestions is often the correct outcome.
 - Reflection owns cross-cycle synthesis and durable recommendations.
 
+## Authoring freeform UI cards
+
+Any submitted feed item type may include `metadata.mcpAppHtml`. The renderer will show that HTML as the card body, so use it when a plain suggestion or notification would hide the useful next action.
+
+Card actions:
+- Use `data-evogent-action="<actionId>"` on clickable elements, or call `window.evogentAction(actionId, payload)` from card JavaScript.
+- For simple buttons, attach payload fields as `data-payload-<name>="value"` attributes. They become payload keys, for example `data-payload-handle="nickcammarata"` becomes `{ "handle": "nickcammarata" }`.
+- Built-in UI actions such as `dismiss_notification`, `open_detail`, `accept_suggestion`, and `dismiss_suggestion` still work.
+- Source actions use dotted namespaces owned by installed source skills: `x.follow`, `youtube.subscribe`, `substack.subscribe`. The namespace before the dot must be declared in that skill's SKILL.md frontmatter under `metadata.media-agent.action-namespaces`.
+- Product code only dispatches the action. The source skill's "Feed action handlers" section defines what the action means and how to perform it.
+
+Example follow-candidate card body:
+
+```html
+<section>
+  <h2>Consider following @nickcammarata</h2>
+  <p>Concrete reason from recent evidence.</p>
+  <button data-evogent-action="x.follow" data-payload-handle="nickcammarata">Follow @nickcammarata</button>
+  <button data-evogent-action="dismiss_notification">Dismiss</button>
+</section>
+```
+
+Autonomous reflection must not follow accounts or click source actions on its own. Only the user-initiated card-action path may dispatch a source action.
+
 ## 5. Recent-merge audit
 
 Audit recent dev-agent merges against the project's design and boundary rules. This is reflection-scale synthesis, not a substitute for `/review` or `/security-review`.

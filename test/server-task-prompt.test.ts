@@ -68,3 +68,48 @@ test('buildTaskPrompt passes resolved runtime values into buildRuntimeTaskPrompt
     'resolved runtime prompt',
   ].join('\n\n'));
 });
+
+test('buildTaskPrompt embeds routed feed-action skill instructions', () => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'data', 'server-task-prompt-'));
+  const skillPath = path.join(tempDir, '.claude', 'skills', 'tweet-cache', 'SKILL.md');
+  fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+  fs.writeFileSync(skillPath, '# Tweet Source\n\n## Feed Action Handlers\n\n### `x.follow`\nFollow using the shared browser.');
+
+  try {
+    const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.js'), 'utf8');
+    const sandbox = {
+      buildRuntimeTaskPrompt: () => 'Action ID: x.follow\nPayload JSON: {"handle":"nickcammarata"}',
+      internalBaseUrl: 'http://127.0.0.1:3115',
+      process: {
+        cwd: () => tempDir,
+        env: {},
+      },
+      resolveTaskTimeoutMs: () => 5 * 60 * 1000,
+      fs,
+      path,
+    } as Record<string, unknown>;
+
+    vm.runInNewContext(`${extractBuildTaskPrompt(serverSource)}; globalThis.buildTaskPrompt = buildTaskPrompt;`, sandbox);
+    const buildTaskPrompt = sandbox.buildTaskPrompt as ((task: Record<string, unknown>) => string) | undefined;
+    assert.ok(buildTaskPrompt);
+
+    const prompt = buildTaskPrompt({
+      id: 'feed-action-task',
+      priority: 'feed_action',
+      source: 'feed_action_dispatch',
+      enqueuedAt: '2026-05-10T12:34:56.000Z',
+      message: 'dispatch x.follow',
+      metadata: {
+        feedAction: { skillPath, actionId: 'x.follow', itemId: 'follow-card-1' },
+      },
+    });
+
+    assert.match(prompt, /Priority: feed_action/);
+    assert.match(prompt, /Run this user-initiated feed-card action/);
+    assert.match(prompt, /## Routed Source Skill/);
+    assert.match(prompt, /## Feed Action Handlers/);
+    assert.match(prompt, /Follow using the shared browser/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

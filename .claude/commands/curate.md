@@ -60,7 +60,7 @@ Before broadening the thread, read the anchor item itself. If the anchor URL is 
   - `text`: brief account description, the specific reply from the signal account that signaled interest (link to or quote the reply), and a one-line reason to follow
   - `metadata.notificationKind: "follow_candidate"`
   - `metadata.suggestedHandle`: the plain X handle
-- Never auto-follow, never click Follow, and never navigate to a profile just to follow it. This is a user-decision notification only.
+- Autonomous curation boundary: never auto-follow, never click Follow, and never navigate to a profile just to follow it. A user-initiated click from a rendered feed card is allowed only through the skill-routed feed action path below.
 - Also read the last 72 hours of chat messages with `metadata.threadFeedback` before selection.
 - Also read recent structured `thread_feedback` rows when present:
   `SELECT thread_id, cycle_id, vote, thread_title, reason, category, probe_reason, probe_uncertainty, source_item_ids, origin_session_id, created_at FROM thread_feedback ORDER BY datetime(created_at) DESC LIMIT 25`
@@ -73,6 +73,34 @@ Before broadening the thread, read the anchor item itself. If the anchor URL is 
 - Treat recent thread feedback as editorial steering for continuation decisions, not as a frozen taxonomy or hardcoded lane list.
 - In most cycles, consider at most one feedback-probe thread when a candidate is high quality, clears the normal thread rules, and is genuinely uncertain because of source fit, topic fit, thread shape, or borderline-probe behavior. Do not force a probe when the pool is weak or the candidate fails quality gates.
 - To create a probe, attach `metadata.feedbackProbe = { reason, uncertainty, category, sourceItemIds, options }` to the selected thread's items. Keep `options` short, usually `{ "moreLabel": "More like this", "lessLabel": "Less like this" }` or `{ "moreLabel": "Keep pushing", "lessLabel": "Stop pushing" }`.
+
+## Authoring freeform UI cards
+
+Any submitted feed item type may include `metadata.mcpAppHtml`. The renderer will show that HTML as the card body, so use it when a plain notification would force the user to leave Evogent to do the obvious next step.
+
+Card actions:
+- Use `data-evogent-action="<actionId>"` on clickable elements, or call `window.evogentAction(actionId, payload)` from card JavaScript.
+- For simple buttons, attach payload fields as `data-payload-<name>="value"` attributes. They become payload keys, for example `data-payload-handle="nickcammarata"` becomes `{ "handle": "nickcammarata" }`.
+- Built-in UI actions such as `dismiss_notification`, `open_detail`, `thumbsup`, and `thumbsdown` still work.
+- Source actions use dotted namespaces owned by installed source skills: `x.follow`, `youtube.subscribe`, `substack.subscribe`. The namespace before the dot must be declared in that skill's SKILL.md frontmatter under `metadata.media-agent.action-namespaces`.
+- Product code only dispatches the action. The source skill's "Feed action handlers" section defines what the action means and how to perform it.
+
+Follow-candidate example:
+
+```json
+{
+  "type": "notification",
+  "title": "Consider following @nickcammarata on the browse account",
+  "text": "A recent reply suggests this account is relevant.",
+  "metadata": {
+    "notificationKind": "follow_candidate",
+    "suggestedHandle": "nickcammarata",
+    "mcpAppHtml": "<section><h2>Consider following @nickcammarata</h2><p>Why this is worth attention, with the concrete signal.</p><button data-evogent-action=\"x.follow\" data-payload-handle=\"nickcammarata\">Follow @nickcammarata</button><button data-evogent-action=\"dismiss_notification\">Dismiss</button></section>"
+  }
+}
+```
+
+The curator authors the card and stops. Only the user's click may trigger `x.follow`; the routed action agent then follows `.claude/skills/tweet-cache/SKILL.md`.
 
 ## 3. Build one holistic candidate pool before selection
 
