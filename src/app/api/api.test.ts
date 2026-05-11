@@ -926,6 +926,8 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       assertObject(response.data, 'Expected config payload');
       assert.strictEqual(typeof response.data.content, 'string');
       assert.strictEqual(response.data.readOnly, false);
+      assertObject(response.data.timeZone, 'Expected config timezone payload');
+      assert.strictEqual(typeof response.data.timeZone.timeZone, 'string');
       assert.ok(response.data.content.includes('#'));
     });
 

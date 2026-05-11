@@ -18,6 +18,7 @@ import {
   readAutomaticCurationEnabled,
   readBackgroundSourceBrowsingEnabled,
   readCodeFixReasoningEffort,
+  readTimeZoneConfig,
   resolveCodeFixReasoningEffortForBrainProvider,
   resolveCodeFixReasoningEffortForProvider,
   updateBrainConfigContent,
@@ -151,9 +152,47 @@ test('updateBrainConfigContent switches provider sections without disturbing the
 test('DEFAULT_CONFIG_CONTENT documents the active medium curation cadence', () => {
   assert.match(DEFAULT_CONFIG_CONTENT, /## Automatic Curation\nOn\n/i);
   assert.match(DEFAULT_CONFIG_CONTENT, /## Background Source Browsing\nOn\n/i);
+  assert.match(DEFAULT_CONFIG_CONTENT, /## Time Zone\n<!-- IANA time zone/i);
   assert.match(DEFAULT_CONFIG_CONTENT, /## Curation Schedule\n[\s\S]*Minimum interval: 90 minutes/i);
   assert.match(DEFAULT_CONFIG_CONTENT, /Maximum interval: 4 hours/i);
   assert.match(DEFAULT_CONFIG_CONTENT, /Source caches refresh ahead of visible curation/i);
+});
+
+test('parseBrainConfig reads Time Zone from config.md', () => {
+  const parsed = parseBrainConfig([
+    '# Evogent Config',
+    '',
+    '## Time Zone',
+    'America/Denver',
+    '',
+  ].join('\n'));
+
+  assert.equal(parsed.timeZone, 'America/Denver');
+  assert.equal(parsed.timeZoneConfig.source, 'config');
+  assert.equal(parsed.timeZoneConfig.isConfiguredValid, true);
+});
+
+test('readTimeZoneConfig falls back when Time Zone is invalid', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-config-'));
+  try {
+    const configPath = path.join(tempDir, 'config.md');
+
+    fs.writeFileSync(configPath, [
+      '# Evogent Config',
+      '',
+      '## Time Zone',
+      'Mars/Olympus',
+      '',
+    ].join('\n'), 'utf8');
+
+    const parsed = readTimeZoneConfig(configPath);
+    assert.equal(parsed.isConfigured, true);
+    assert.equal(parsed.isConfiguredValid, false);
+    assert.match(parsed.warning, /Invalid IANA time zone/);
+    assert.ok(parsed.timeZone);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('parseBackgroundSourceBrowsingEnabled defaults to enabled for existing configs', () => {

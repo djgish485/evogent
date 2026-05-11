@@ -698,14 +698,20 @@ describe('sidebar automation controls', () => {
     const markup = renderToStaticMarkup(createElement(SidebarAutomationControls, {
       automaticCurationEnabled: true,
       backgroundSourceBrowsingEnabled: true,
+      timeZoneLabel: 'America/Denver',
+      timeZoneWarning: null,
+      openClawDailyTimer: null,
       configLoaded: true,
       isSavingAutomaticCuration: false,
       isSavingBackgroundSourceBrowsing: false,
+      isRepairingOpenClawDailyTimer: false,
       isStartingSourceHealth: false,
       automaticCurationError: null,
       backgroundSourceBrowsingError: null,
+      openClawDailyTimerError: null,
       onToggleAutomaticCuration: () => {},
       onToggleBackgroundSourceBrowsing: () => {},
+      onRepairOpenClawDailyTimer: () => {},
       onStartSourceHealth: () => {},
     }));
 
@@ -722,6 +728,8 @@ describe('sidebar automation controls', () => {
     assert.match(markup, /h-4 w-4/);
     assert.doesNotMatch(markup, /h-8 w-8/);
     assert.match(markup, /Source Health/);
+    assert.match(markup, /Time Zone/);
+    assert.match(markup, /America\/Denver/);
     assert.doesNotMatch(markup, /Adaptive heartbeat pauses when off\. Manual refresh still works\./);
     assert.doesNotMatch(markup, /Keeps new source items ready for curation\./);
     assert.doesNotMatch(markup, />On</);
@@ -733,14 +741,20 @@ describe('sidebar automation controls', () => {
     const markup = renderToStaticMarkup(createElement(SidebarAutomationControls, {
       automaticCurationEnabled: true,
       backgroundSourceBrowsingEnabled: false,
+      timeZoneLabel: 'America/Denver',
+      timeZoneWarning: null,
+      openClawDailyTimer: null,
       configLoaded: true,
       isSavingAutomaticCuration: false,
       isSavingBackgroundSourceBrowsing: false,
+      isRepairingOpenClawDailyTimer: false,
       isStartingSourceHealth: false,
       automaticCurationError: null,
       backgroundSourceBrowsingError: null,
+      openClawDailyTimerError: null,
       onToggleAutomaticCuration: () => {},
       onToggleBackgroundSourceBrowsing: () => {},
+      onRepairOpenClawDailyTimer: () => {},
       onStartSourceHealth: () => {},
     }));
 

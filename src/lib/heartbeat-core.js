@@ -1,3 +1,5 @@
+const { DEFAULT_TIME_ZONE, normalizeIanaTimeZone } = require('../../lib/time-zone.js');
+
 const MIN_INTERVAL_MINUTES = 60;
 const MAX_INTERVAL_MINUTES = 360;
 const PREDICTIVE_LEAD_MINUTES = 30;
@@ -12,6 +14,96 @@ const ACTIVITY_WEIGHTS = Object.freeze({
   foreground: 2,
   background: 1,
 });
+const zonedFormatters = new Map();
+
+function resolveTimeZone(value) {
+  return normalizeIanaTimeZone(value) || DEFAULT_TIME_ZONE;
+}
+
+function getZonedFormatter(timeZone) {
+  const resolvedTimeZone = resolveTimeZone(timeZone);
+  const cached = zonedFormatters.get(resolvedTimeZone);
+  if (cached) return cached;
+
+  const formatter = new Intl.DateTimeFormat('en-US-u-ca-gregory', {
+    timeZone: resolvedTimeZone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  zonedFormatters.set(resolvedTimeZone, formatter);
+  return formatter;
+}
+
+function getZonedParts(date, timeZone) {
+  const parts = {};
+  for (const part of getZonedFormatter(timeZone).formatToParts(date)) {
+    if (part.type !== 'literal') {
+      parts[part.type] = part.value;
+    }
+  }
+
+  const weekdays = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+    dayOfWeek: weekdays[parts.weekday] ?? 0,
+  };
+}
+
+function localPartsToUtcMs(parts) {
+  return Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour || 0,
+    parts.minute || 0,
+    parts.second || 0,
+  );
+}
+
+function zonedTimeToUtc(parts, timeZone) {
+  const desiredLocalMs = localPartsToUtcMs(parts);
+  let candidate = new Date(desiredLocalMs);
+  let candidateParts = getZonedParts(candidate, timeZone);
+  let actualLocalMs = localPartsToUtcMs(candidateParts);
+  candidate = new Date(candidate.getTime() + (desiredLocalMs - actualLocalMs));
+
+  candidateParts = getZonedParts(candidate, timeZone);
+  actualLocalMs = localPartsToUtcMs(candidateParts);
+  if (actualLocalMs !== desiredLocalMs) {
+    candidate = new Date(candidate.getTime() + (desiredLocalMs - actualLocalMs));
+  }
+
+  return candidate;
+}
+
+function addLocalDays(parts, days) {
+  const next = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days, 12, 0, 0));
+  return {
+    year: next.getUTCFullYear(),
+    month: next.getUTCMonth() + 1,
+    day: next.getUTCDate(),
+  };
+}
 
 function toDate(value) {
   if (value instanceof Date) {
@@ -100,30 +192,51 @@ function buildPeakWindows(dayHourCounts) {
     .slice(0, 10);
 }
 
-function nextOccurrenceForWindow(now, window) {
-  const base = new Date(now.getTime());
-  base.setUTCSeconds(0, 0);
-  base.setUTCMinutes(0);
-  base.setUTCHours(window.hour);
+function nextOccurrenceForWindow(now, window, timeZone) {
+  const nowParts = getZonedParts(now, timeZone);
+  let dayDiff = (window.dayOfWeek - nowParts.dayOfWeek + 7) % 7;
+  let localDate = addLocalDays(nowParts, dayDiff);
+  let candidate = zonedTimeToUtc({
+    ...localDate,
+    hour: window.hour,
+    minute: 0,
+    second: 0,
+  }, timeZone);
 
-  const dayDiff = (window.dayOfWeek - now.getUTCDay() + 7) % 7;
-  base.setUTCDate(base.getUTCDate() + dayDiff);
-
-  if (base.getTime() <= now.getTime()) {
-    base.setUTCDate(base.getUTCDate() + 7);
+  if (candidate.getTime() <= now.getTime()) {
+    dayDiff += 7;
+    localDate = addLocalDays(nowParts, dayDiff);
+    candidate = zonedTimeToUtc({
+      ...localDate,
+      hour: window.hour,
+      minute: 0,
+      second: 0,
+    }, timeZone);
   }
 
-  return base;
+  return candidate;
 }
 
-function nextOccurrenceForHour(now, hour) {
-  const candidate = new Date(now.getTime());
-  candidate.setUTCSeconds(0, 0);
-  candidate.setUTCMinutes(0);
-  candidate.setUTCHours(hour);
+function nextOccurrenceForHour(now, hour, timeZone) {
+  const nowParts = getZonedParts(now, timeZone);
+  let localDate = addLocalDays(nowParts, 0);
+  let candidate = zonedTimeToUtc({
+    ...localDate,
+    hour,
+    minute: 0,
+    second: 0,
+  }, timeZone);
+
   if (candidate.getTime() <= now.getTime()) {
-    candidate.setUTCDate(candidate.getUTCDate() + 1);
+    localDate = addLocalDays(nowParts, 1);
+    candidate = zonedTimeToUtc({
+      ...localDate,
+      hour,
+      minute: 0,
+      second: 0,
+    }, timeZone);
   }
+
   return candidate;
 }
 
@@ -168,10 +281,10 @@ function resolveInactivityBackoffInterval(maxIntervalMinutes, latestActivityAge)
   return maxIntervalMinutes * multiplier;
 }
 
-function resolveNextUsageWindow(now, analysis) {
+function resolveNextUsageWindow(now, analysis, timeZone) {
   const fromWindows = analysis.peakWindows
     .map((window) => {
-      const at = nextOccurrenceForWindow(now, window);
+      const at = nextOccurrenceForWindow(now, window, timeZone);
       return {
         dayOfWeek: window.dayOfWeek,
         hour: window.hour,
@@ -198,7 +311,7 @@ function resolveNextUsageWindow(now, analysis) {
       dayOfWeek: null,
       hour,
       score: analysis.hourlyCounts[hour] || 0,
-      at: nextOccurrenceForHour(now, hour),
+      at: nextOccurrenceForHour(now, hour, timeZone),
       source: 'hour_window',
     }))
     .sort((left, right) => left.at.getTime() - right.at.getTime())[0];
@@ -206,14 +319,16 @@ function resolveNextUsageWindow(now, analysis) {
   return fromHours || null;
 }
 
-function analyzePatterns(activityHistory) {
+function analyzePatterns(activityHistory, options = {}) {
+  const timeZone = resolveTimeZone(options?.timeZone);
   const normalized = normalizeActivities(activityHistory);
   const hourlyCounts = Array.from({ length: 24 }, () => 0);
   const dayOfWeekHourlyCounts = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
 
   for (const activity of normalized) {
-    const hour = activity.timestamp.getUTCHours();
-    const dayOfWeek = activity.timestamp.getUTCDay();
+    const zonedParts = getZonedParts(activity.timestamp, timeZone);
+    const hour = zonedParts.hour;
+    const dayOfWeek = zonedParts.dayOfWeek;
     const weight = ACTIVITY_WEIGHTS[activity.event] || 1;
     hourlyCounts[hour] += weight;
     dayOfWeekHourlyCounts[dayOfWeek][hour] += weight;
@@ -221,6 +336,7 @@ function analyzePatterns(activityHistory) {
 
   return {
     sampleSize: normalized.length,
+    timeZone,
     hourlyCounts,
     dayOfWeekHourlyCounts,
     peakHours: findPeakHours(hourlyCounts),
@@ -236,7 +352,8 @@ function shouldTrigger(input) {
 
 function getTriggerDecision(input) {
   const now = toDate(input?.now) || new Date();
-  const analysis = analyzePatterns(input?.activityHistory || []);
+  const timeZone = resolveTimeZone(input?.timeZone);
+  const analysis = analyzePatterns(input?.activityHistory || [], { timeZone });
   const minIntervalMinutes = Number.isFinite(input?.minIntervalMinutes)
     ? Math.max(1, Math.floor(input.minIntervalMinutes))
     : MIN_INTERVAL_MINUTES;
@@ -331,7 +448,7 @@ function getTriggerDecision(input) {
     };
   }
 
-  const nextWindow = resolveNextUsageWindow(now, analysis);
+  const nextWindow = resolveNextUsageWindow(now, analysis, timeZone);
   const predictedWindow = nextWindow
     ? {
       source: nextWindow.source,
@@ -339,6 +456,7 @@ function getTriggerDecision(input) {
       hour: nextWindow.hour,
       score: nextWindow.score,
       at: nextWindow.at.toISOString(),
+      timeZone,
       minutesUntilWindow: minutesBetween(nextWindow.at, now),
     }
     : null;

@@ -18,6 +18,16 @@ describe('heartbeat core behavior', () => {
     assert.strictEqual(analysis.dayOfWeekHourlyCounts.some((hours) => hours[18] > 0), true);
   });
 
+  test('analyzePatterns groups usage by configured local time zone', () => {
+    const analysis = analyzePatterns([
+      { event: 'app_open', timestamp: '2026-05-12T13:10:00.000Z' },
+      { event: 'foreground', timestamp: '2026-12-12T14:15:00.000Z' },
+    ], { timeZone: 'America/Denver' });
+
+    assert.strictEqual(analysis.timeZone, 'America/Denver');
+    assert.strictEqual(analysis.hourlyCounts[7], 4);
+  });
+
   test('shouldTrigger blocks before min interval even with recent activity', () => {
     const decision = getTriggerDecision({
       now: '2026-03-01T12:00:00.000Z',
@@ -81,6 +91,40 @@ describe('heartbeat core behavior', () => {
 
     assert.strictEqual(decision.trigger, true);
     assert.strictEqual(decision.reason, 'predicted_usage_window');
+  });
+
+  test('predicted usage windows use the configured time zone across DST', () => {
+    const summerDecision = getTriggerDecision({
+      now: '2026-05-12T12:35:00.000Z',
+      lastCurationAt: '2026-05-12T09:00:00.000Z',
+      timeZone: 'America/Denver',
+      activityHistory: [
+        { event: 'app_open', timestamp: '2026-05-05T13:05:00.000Z' },
+        { event: 'foreground', timestamp: '2026-04-28T13:10:00.000Z' },
+      ],
+    });
+
+    assert.strictEqual(summerDecision.trigger, true);
+    assert.strictEqual(summerDecision.reason, 'predicted_usage_window');
+    assert.strictEqual(summerDecision.predictedWindow?.hour, 7);
+    assert.strictEqual(summerDecision.predictedWindow?.timeZone, 'America/Denver');
+    assert.strictEqual(summerDecision.predictedWindow?.at, '2026-05-12T13:00:00.000Z');
+
+    const winterDecision = getTriggerDecision({
+      now: '2026-12-12T13:35:00.000Z',
+      lastCurationAt: '2026-12-12T10:00:00.000Z',
+      timeZone: 'America/Denver',
+      activityHistory: [
+        { event: 'app_open', timestamp: '2026-12-05T14:05:00.000Z' },
+        { event: 'foreground', timestamp: '2026-11-28T14:10:00.000Z' },
+      ],
+    });
+
+    assert.strictEqual(winterDecision.trigger, true);
+    assert.strictEqual(winterDecision.reason, 'predicted_usage_window');
+    assert.strictEqual(winterDecision.predictedWindow?.hour, 7);
+    assert.strictEqual(winterDecision.predictedWindow?.timeZone, 'America/Denver');
+    assert.strictEqual(winterDecision.predictedWindow?.at, '2026-12-12T14:00:00.000Z');
   });
 
   test('shouldTrigger enforces max interval', () => {

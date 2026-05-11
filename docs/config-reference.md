@@ -50,6 +50,17 @@ Every completed setup should leave an agent name in config.
 
 If the user skips naming, pick a sensible default such as Atlas, Nova, Echo, Sage, Scout, Pixel, Ember, or Orion.
 
+## Time Zone
+
+Controls user-facing local-time decisions, schedule labels, and OpenClaw daily timer sync. Use an IANA time zone name.
+
+```markdown
+## Time Zone
+America/Denver
+```
+
+If the section is absent or blank, Evogent uses the host time zone when available and falls back to UTC. Invalid values are ignored with a warning.
+
 ## Background Source Browsing
 
 Background Source Browsing is the global pause switch for scheduled browser-backed source refreshes.
