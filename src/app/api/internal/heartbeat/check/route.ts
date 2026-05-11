@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       triggered: result.triggered,
       triggerReason: result.triggerReason,
       decisionReason: result.decision.reason,
+      timeZone: result.decision.analysis.timeZone,
       requestId: result.requestId,
       queueDepth: result.queueDepth,
       checkedAt: new Date().toISOString(),

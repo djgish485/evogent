@@ -7,6 +7,7 @@ import {
   createPromptSafetyNonce,
   wrapUntrustedContent,
 } from '../../lib/prompt-safety.js';
+import { readTimeZoneConfig } from '../../lib/time-zone.js';
 
 const POST_CONTEXT_SEPARATOR = '\n\nContext — discussing this post:';
 
@@ -140,6 +141,7 @@ export function buildCuratorChatInstruction(input: {
     'Curator chat sessions may directly edit data/config.md, data/curation-prompt.md, and data/preference-insights.md. For /curate, including /curate with a URL or focus, run the shared curation flow from .claude/commands/curate.md and prefer browse_cache_items before live browsing.',
   );
   const slashCommand = getSlashCommandName(input.message);
+  const timeZoneConfig = readTimeZoneConfig(path.join(process.cwd(), 'data', 'config.md'));
   const latestInstructionDocument = slashCommand === 'curate-latest'
     ? readInstructionDocument(
         '.claude/commands/curate-latest.md',
@@ -150,6 +152,7 @@ export function buildCuratorChatInstruction(input: {
   return [
     ...buildSharedChatEnvelope(input),
     `SessionTitle: ${input.sessionTitle?.trim() || 'Curator'}`,
+    `ConfiguredTimeZone: ${timeZoneConfig.timeZone}`,
     'You are running inside a curator chat session.',
     'Follow the curator instruction document below directly for this turn.',
     'Curator chat sessions override the normal chat write-boundary: they MAY directly edit only data/config.md, data/curation-prompt.md, and data/preference-insights.md.',

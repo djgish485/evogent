@@ -1,7 +1,7 @@
 'use client';
 
 import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
-import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
+import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, type OpenClawDailyTimerSidebarStatus, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
 import { CuratorCurateButtons } from '@/components/chat/curator-curate-buttons';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
@@ -62,6 +62,7 @@ import { applySuggestionChatFallbackReason, getGroupedCodeFixSuggestionChatConte
 import { partitionSuggestionItemsByLifecycle, type SuggestionLifecycleLane } from '@/lib/suggestion-status-lanes';
 import { shouldSuppressFeedSystemNotice } from '@/lib/system-notices';
 import { formatAbsoluteTimestamp, formatChatTimestamp, formatRelativeTimestamp } from '@/lib/timestamps';
+import { normalizeTimeZoneConfigView, parseTimeZoneConfig, type TimeZoneConfigView } from '@/lib/time-zone-config';
 import { formatWorkingDirectoryLabel } from '@/lib/working-directory';
 import { type ChatAttachment, type ChatMessage, type ConfigSuggestionDecision } from '@/types/chat';
 import { type ConversationSessionSummary, type ConversationSessionType } from '@/types/conversation';
@@ -1238,10 +1239,14 @@ export default function Home() {
     selectedText: string | null;
   } | null>(null);
   const [configContent, setConfigContent] = useState<string | null>(null);
+  const [configTimeZone, setConfigTimeZone] = useState<TimeZoneConfigView>(() => parseTimeZoneConfig(null));
   const [isSavingAutomaticCuration, setIsSavingAutomaticCuration] = useState(false);
   const [automaticCurationError, setAutomaticCurationError] = useState<string | null>(null);
   const [isSavingBackgroundSourceBrowsing, setIsSavingBackgroundSourceBrowsing] = useState(false);
   const [backgroundSourceBrowsingError, setBackgroundSourceBrowsingError] = useState<string | null>(null);
+  const [openClawDailyTimer, setOpenClawDailyTimer] = useState<OpenClawDailyTimerSidebarStatus | null>(null);
+  const [openClawDailyTimerError, setOpenClawDailyTimerError] = useState<string | null>(null);
+  const [isRepairingOpenClawDailyTimer, setIsRepairingOpenClawDailyTimer] = useState(false);
   const [isSavingCodeFixReasoning, setIsSavingCodeFixReasoning] = useState(false);
   const [codeFixReasoningError, setCodeFixReasoningError] = useState<string | null>(null);
   const [brainProviderStatus, setBrainProviderStatus] = useState<BrainProviderStateResponse | null>(null);
@@ -1701,7 +1706,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; timeZone?: unknown };
       if (!response.ok) {
         throw new Error(
           isAuthFailure(response, null)
@@ -1711,6 +1716,7 @@ export default function Home() {
       }
 
       setConfigContent(nextContent);
+      setConfigTimeZone(normalizeTimeZoneConfigView(payload.timeZone, nextContent));
     } catch (error) {
       setAutomaticCurationError(
         isAuthFailure(response, error)
@@ -1743,7 +1749,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; timeZone?: unknown };
       if (!response.ok) {
         throw new Error(
           isAuthFailure(response, null)
@@ -1753,6 +1759,7 @@ export default function Home() {
       }
 
       setConfigContent(nextContent);
+      setConfigTimeZone(normalizeTimeZoneConfigView(payload.timeZone, nextContent));
     } catch (error) {
       setBackgroundSourceBrowsingError(
         isAuthFailure(response, error)
@@ -1785,7 +1792,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: nextContent }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; timeZone?: unknown };
       if (!response.ok) {
         throw new Error(
           isAuthFailure(response, null)
@@ -1795,6 +1802,7 @@ export default function Home() {
       }
 
       setConfigContent(nextContent);
+      setConfigTimeZone(normalizeTimeZoneConfigView(payload.timeZone, nextContent));
       return true;
     } catch (error) {
       setCodeFixReasoningError(
@@ -1809,6 +1817,41 @@ export default function Home() {
       setIsSavingCodeFixReasoning(false);
     }
   }, [codeFixReasoningEffort, configContent, isSavingCodeFixReasoning]);
+  const repairOpenClawDailyTimer = useCallback(async () => {
+    if (isRepairingOpenClawDailyTimer) {
+      return;
+    }
+
+    setIsRepairingOpenClawDailyTimer(true);
+    setOpenClawDailyTimerError(null);
+    let response: Response | null = null;
+
+    try {
+      response = await fetch('/api/openclaw/daily-timer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        timer?: OpenClawDailyTimerSidebarStatus;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to repair OpenClaw daily timer');
+      }
+
+      setOpenClawDailyTimer(payload.timer ?? null);
+    } catch (error) {
+      setOpenClawDailyTimerError(
+        isAuthFailure(response, error)
+          ? AUTH_REQUIRED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to repair OpenClaw daily timer',
+      );
+    } finally {
+      setIsRepairingOpenClawDailyTimer(false);
+    }
+  }, [isRepairingOpenClawDailyTimer]);
   const resolveSuggestionStatus = useCallback((item: FeedItem): SuggestionStatus => {
     if (item.type !== 'suggestion') return 'pending';
     const override = suggestionStatusOverrides[item.id];
@@ -4790,14 +4833,16 @@ export default function Home() {
       try {
         const response = await fetch('/api/config', { cache: 'no-store' });
         if (!response.ok) throw new Error(`Error ${response.status}`);
-        const payload = (await response.json()) as { content?: string };
+        const payload = (await response.json()) as { content?: string; timeZone?: unknown };
         if (cancelled) return;
         if (typeof payload.content === 'string') {
           setConfigContent(payload.content);
+          setConfigTimeZone(normalizeTimeZoneConfigView(payload.timeZone, payload.content));
         }
       } catch {
         if (!cancelled) {
           setConfigContent(null);
+          setConfigTimeZone(parseTimeZoneConfig(null));
         }
       }
     };
@@ -4808,6 +4853,37 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOpenClawDailyTimer = async () => {
+      try {
+        const response = await fetch('/api/openclaw/daily-timer', { cache: 'no-store' });
+        const payload = (await response.json().catch(() => ({}))) as {
+          timer?: OpenClawDailyTimerSidebarStatus;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!response.ok) {
+          throw new Error(payload.error || 'Failed to inspect OpenClaw daily timer');
+        }
+        setOpenClawDailyTimer(payload.timer ?? null);
+        setOpenClawDailyTimerError(null);
+      } catch (error) {
+        if (!cancelled) {
+          setOpenClawDailyTimer(null);
+          setOpenClawDailyTimerError(error instanceof Error ? error.message : 'Failed to inspect OpenClaw daily timer');
+        }
+      }
+    };
+
+    void loadOpenClawDailyTimer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configTimeZone.timeZone]);
 
   useEffect(() => {
     void postActivity('app_open', {
@@ -7439,17 +7515,25 @@ export default function Home() {
                     <SidebarAutomationControls
                       automaticCurationEnabled={automaticCurationEnabled}
                       backgroundSourceBrowsingEnabled={backgroundSourceBrowsingEnabled}
+                      timeZoneLabel={configTimeZone.timeZone}
+                      timeZoneWarning={configTimeZone.warning}
+                      openClawDailyTimer={openClawDailyTimer}
                       configLoaded={Boolean(configContent)}
                       isSavingAutomaticCuration={isSavingAutomaticCuration}
                       isSavingBackgroundSourceBrowsing={isSavingBackgroundSourceBrowsing}
+                      isRepairingOpenClawDailyTimer={isRepairingOpenClawDailyTimer}
                       isStartingSourceHealth={isStartingSourceHealth}
                       automaticCurationError={automaticCurationError}
                       backgroundSourceBrowsingError={backgroundSourceBrowsingError}
+                      openClawDailyTimerError={openClawDailyTimerError}
                       onToggleAutomaticCuration={() => {
                         void toggleAutomaticCuration();
                       }}
                       onToggleBackgroundSourceBrowsing={() => {
                         void toggleBackgroundSourceBrowsing();
+                      }}
+                      onRepairOpenClawDailyTimer={() => {
+                        void repairOpenClawDailyTimer();
                       }}
                       onStartSourceHealth={() => {
                         void submitSourceHealthFromSidebar();

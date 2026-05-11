@@ -110,6 +110,32 @@ Evogent renders the HTML in an iframe with `sandbox="allow-scripts"`, no
 same-origin permission, no top navigation permission, and
 `referrerPolicy="no-referrer"`.
 
+## Daily Brief Timer Time Zone
+
+Evogent reads the configured IANA time zone from `data/config.md`:
+
+```markdown
+## Time Zone
+America/Denver
+```
+
+The app exposes OpenClaw daily timer status at
+`GET /api/openclaw/daily-timer`. If `openclaw-skills-daily.timer` is installed
+and still uses a UTC-style schedule such as `OnCalendar=*-*-* 06:00:00`, Evogent
+marks it misaligned for the configured local morning. `POST
+/api/openclaw/daily-timer` writes a user systemd drop-in that clears the old
+calendar and replaces it with a DST-safe calendar expression such as:
+
+```ini
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* 07:00:00 America/Denver
+```
+
+The repair only runs when `systemd-analyze calendar` accepts time zones in
+calendar expressions. If the host does not support that, Evogent reports the
+problem instead of silently converting local morning to a fixed UTC hour.
+
 The parent listens only to messages from the iframe where
 `event.data.channel === "evogent:mcpapp"`.
 
