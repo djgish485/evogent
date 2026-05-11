@@ -52,6 +52,7 @@ const articleBodySourceSynopsisError = [
 const minTitlePrefixRemainderLength = 100;
 const articleUrlValidationTimeoutMs = 6_000;
 const maxBatchEnrichmentChunkSize = 4;
+const openClawMcpAppHtmlError = 'openclaw cards must include metadata.mcpAppHtml — markdown-only openclaw submissions are no longer accepted';
 const articleUrlValidationUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
   'AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -903,6 +904,7 @@ export async function POST(request: Request) {
   const duplicateSourceIds = new Set<string>();
   const acceptedIdentifiers = new Map<string, string>();
   let hasArticleBodyValidationError = false;
+  let hasOpenClawMcpAppHtmlValidationError = false;
   let duplicates = 0;
   const requestOriginSessionId = typeof payload.originSessionId === 'string' && payload.originSessionId.trim()
     ? payload.originSessionId.trim()
@@ -959,6 +961,21 @@ export async function POST(request: Request) {
     }
 
     const normalized = validatedArticleBody.normalized;
+    const openClawMcpAppHtml = normalized.metadata?.mcpAppHtml;
+    if (
+      normalized.source === 'openclaw'
+      && (typeof openClawMcpAppHtml !== 'string' || !openClawMcpAppHtml.trim())
+    ) {
+      errors.push({
+        scope: 'item',
+        index,
+        sourceId: normalized.sourceId ?? null,
+        error: openClawMcpAppHtmlError,
+      });
+      hasOpenClawMcpAppHtmlValidationError = true;
+      continue;
+    }
+
     if (Array.isArray(normalized.mediaUrls)) {
       const seenMediaUrls = new Set<string>();
       const mediaUrls: string[] = [];
@@ -1221,6 +1238,6 @@ export async function POST(request: Request) {
     acceptedIds,
     duplicateSourceIds: Array.from(duplicateSourceIds),
   }, {
-    status: hasArticleBodyValidationError ? 400 : 200,
+    status: hasArticleBodyValidationError || hasOpenClawMcpAppHtmlValidationError ? 400 : 200,
   });
 }
