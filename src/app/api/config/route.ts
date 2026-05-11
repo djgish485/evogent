@@ -10,6 +10,7 @@ import {
 import { getDataPath } from '@/lib/data-dir';
 import { enqueueOrchestratorMessage } from '@/lib/orchestrator';
 import { readBrainConfig } from '../../../../lib/brain-config.js';
+import { parseConfigTimeZone } from '../../../../lib/time-zone.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -634,11 +635,14 @@ export async function GET(request: Request) {
     content = repairResult.content;
   }
 
+  const timeZone = target.key === 'config' ? parseConfigTimeZone(content) : null;
+
   return NextResponse.json({
     content,
     target: target.key,
     path: target.relativePath,
     readOnly: target.readOnly ?? false,
+    ...(timeZone ? { timeZone } : {}),
     ...(!target.readOnly && (target.key === 'config' || target.key === 'curation-prompt')
       ? { integrity: editableIntegrity?.integrity ?? null }
       : {}),
@@ -711,6 +715,7 @@ export async function POST(request: Request) {
     queuedForBrain,
     target: target.key,
     path: target.relativePath,
+    ...(target.key === 'config' ? { timeZone: parseConfigTimeZone(content) } : {}),
     ...(writeResult.snapshot ? { snapshot: writeResult.snapshot } : {}),
     integrity: writeResult.integrity,
   });

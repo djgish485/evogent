@@ -5,6 +5,7 @@ import {
   DEFAULT_AUTOMATIC_CURATION_ENABLED,
   parseAutomaticCurationEnabled,
 } from '../../lib/brain-config.js';
+import { parseConfigTimeZone } from '../../lib/time-zone.js';
 
 export interface CurationScheduleConfig {
   minIntervalMinutes: number;
@@ -13,6 +14,7 @@ export interface CurationScheduleConfig {
 
 export interface HeartbeatConfig extends CurationScheduleConfig {
   automaticCurationEnabled: boolean;
+  timeZone: string;
 }
 
 function getUsageLevelScheduleDefaults(content: string): CurationScheduleConfig {
@@ -85,6 +87,7 @@ export function parseHeartbeatConfig(content: string): HeartbeatConfig {
   return {
     ...schedule,
     automaticCurationEnabled: parseAutomaticCurationEnabled(content),
+    timeZone: parseConfigTimeZone(content).timeZone,
   };
 }
 
@@ -98,6 +101,7 @@ export function readHeartbeatConfig(configPath = getDataPath('config.md')): Hear
       automaticCurationEnabled: DEFAULT_AUTOMATIC_CURATION_ENABLED,
       minIntervalMinutes: defaults.defaultMinInterval,
       maxIntervalMinutes: defaults.defaultMaxInterval,
+      timeZone: parseConfigTimeZone('').timeZone,
     };
   }
 }

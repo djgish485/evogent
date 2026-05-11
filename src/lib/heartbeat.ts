@@ -19,6 +19,7 @@ export interface PeakWindow {
 
 export interface PatternAnalysis {
   sampleSize: number;
+  timeZone: string;
   hourlyCounts: number[];
   dayOfWeekHourlyCounts: number[][];
   peakHours: number[];
@@ -32,6 +33,7 @@ export interface PredictedWindow {
   hour: number;
   score: number;
   at: string;
+  timeZone: string;
   minutesUntilWindow: number;
 }
 
@@ -62,6 +64,7 @@ export interface ShouldTriggerInput {
   minIntervalMinutes?: number;
   maxIntervalMinutes?: number;
   predictiveLeadMinutes?: number;
+  timeZone?: string;
   recentAutomatedCancellation?: {
     requestId?: string | null;
     cancelledAt: string;
@@ -71,8 +74,8 @@ export interface ShouldTriggerInput {
   automaticCancellationCooldownMinutes?: number;
 }
 
-export function analyzePatterns(activityHistory: ActivitySample[]): PatternAnalysis {
-  return heartbeatCore.analyzePatterns(activityHistory) as PatternAnalysis;
+export function analyzePatterns(activityHistory: ActivitySample[], options?: { timeZone?: string }): PatternAnalysis {
+  return heartbeatCore.analyzePatterns(activityHistory, options) as PatternAnalysis;
 }
 
 export function getTriggerDecision(input: ShouldTriggerInput): TriggerDecision {

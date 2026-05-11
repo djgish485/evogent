@@ -115,6 +115,7 @@ export async function evaluateAdaptiveHeartbeat(
     lastCurationAt: getLatestSuccessfulCurationTime(),
     minIntervalMinutes: heartbeatConfig.minIntervalMinutes,
     maxIntervalMinutes: heartbeatConfig.maxIntervalMinutes,
+    timeZone: heartbeatConfig.timeZone,
     recentAutomatedCancellation: getLatestAutomatedCurationCancellation(),
     automaticCancellationCooldownMinutes: heartbeatConfig.minIntervalMinutes,
   });
@@ -217,6 +218,7 @@ export async function evaluateAdaptiveHeartbeat(
         heartbeatTriggeredBy: input.triggeredBy,
         triggerReason: decision.reason,
         predictedWindow: decision.predictedWindow,
+        timeZone: heartbeatConfig.timeZone,
         minutesSinceLastCuration: decision.minutesSinceLastCuration,
         peakHours: decision.analysis.peakHours,
         automatedCuration: true,
