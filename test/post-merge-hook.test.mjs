@@ -168,3 +168,62 @@ test('post-merge hook writes pending restart when HEAD differs from the last con
   assert.equal(restartState.status, 'pending');
   assert.equal(restartState.commitFull, head);
 });
+
+test('post-merge hook syncs changed library files only for installed runtime skills', () => {
+  const { repoDir, env } = createRepo();
+  const baseHead = git(['rev-parse', 'HEAD'], repoDir);
+  const installedRuntimeDir = path.join(repoDir, '.claude', 'skills', 'tweet-cache');
+  const installedLibraryDir = path.join(repoDir, 'skills-library', 'tweet-cache');
+  const uninstalledLibraryDir = path.join(repoDir, 'skills-library', 'youtube-cache');
+
+  fs.mkdirSync(path.join(installedLibraryDir, 'scripts'), { recursive: true });
+  fs.mkdirSync(uninstalledLibraryDir, { recursive: true });
+  fs.mkdirSync(installedRuntimeDir, { recursive: true });
+  fs.writeFileSync(path.join(installedRuntimeDir, 'SKILL.md'), 'old runtime skill\n', 'utf8');
+  fs.writeFileSync(path.join(installedLibraryDir, 'SKILL.md'), 'new library skill\n', 'utf8');
+  fs.writeFileSync(path.join(installedLibraryDir, 'scripts', 'refresh.sh'), '#!/usr/bin/env bash\n', 'utf8');
+  fs.writeFileSync(path.join(uninstalledLibraryDir, 'SKILL.md'), 'uninstalled library skill\n', 'utf8');
+  git(['add', 'skills-library'], repoDir);
+  git(['commit', '-m', 'update library skills'], repoDir);
+  git(['update-ref', 'ORIG_HEAD', baseHead], repoDir);
+
+  const result = spawnSync('bash', [path.join(repoDir, '.claude', 'hooks', 'post-merge.sh')], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    env,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /synced installed skill tweet-cache from skills-library/);
+  assert.equal(fs.readFileSync(path.join(installedRuntimeDir, 'SKILL.md'), 'utf8'), 'new library skill\n');
+  assert.equal(fs.existsSync(path.join(installedRuntimeDir, 'scripts', 'refresh.sh')), true);
+  assert.equal(fs.existsSync(path.join(repoDir, '.claude', 'skills', 'youtube-cache')), false);
+});
+
+test('post-merge hook leaves runtime skills alone when skills-library was not changed', () => {
+  const { repoDir, env } = createRepo();
+  const runtimeDir = path.join(repoDir, '.claude', 'skills', 'tweet-cache');
+  const libraryDir = path.join(repoDir, 'skills-library', 'tweet-cache');
+
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  fs.mkdirSync(libraryDir, { recursive: true });
+  fs.writeFileSync(path.join(runtimeDir, 'SKILL.md'), 'runtime local skill\n', 'utf8');
+  fs.writeFileSync(path.join(libraryDir, 'SKILL.md'), 'library skill\n', 'utf8');
+  git(['add', 'skills-library'], repoDir);
+  git(['commit', '-m', 'add library skill'], repoDir);
+  const baseHead = git(['rev-parse', 'HEAD'], repoDir);
+  fs.appendFileSync(path.join(repoDir, 'README.md'), 'docs only\n', 'utf8');
+  git(['add', 'README.md'], repoDir);
+  git(['commit', '-m', 'docs only'], repoDir);
+  git(['update-ref', 'ORIG_HEAD', baseHead], repoDir);
+
+  const result = spawnSync('bash', [path.join(repoDir, '.claude', 'hooks', 'post-merge.sh')], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    env,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.doesNotMatch(result.stdout, /synced installed skill/);
+  assert.equal(fs.readFileSync(path.join(runtimeDir, 'SKILL.md'), 'utf8'), 'runtime local skill\n');
+});
