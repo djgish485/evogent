@@ -59,6 +59,30 @@ try {
 NODE
 }
 
+sync_installed_skills_from_library() {
+  local base_ref
+  base_ref=$(run_git_with_lock rev-parse --verify ORIG_HEAD 2>/dev/null || true)
+  [ -n "$base_ref" ] || return 0
+
+  local skill_name library_dir runtime_dir
+  while IFS= read -r skill_name; do
+    [ -n "$skill_name" ] || continue
+    library_dir="skills-library/$skill_name"
+    runtime_dir=".claude/skills/$skill_name"
+
+    if [ ! -d "$library_dir" ] || [ ! -d "$runtime_dir" ] || [ ! -f "$runtime_dir/SKILL.md" ]; then
+      continue
+    fi
+
+    cp -a "$library_dir/." "$runtime_dir/"
+    echo "--- post-merge: synced installed skill $skill_name from skills-library ---"
+  done < <(
+    run_git_with_lock diff --name-only "$base_ref" HEAD -- skills-library/ 2>/dev/null \
+      | sed -n 's#^skills-library/\([^/][^/]*\)/.*#\1#p' \
+      | sort -u
+  )
+}
+
 COMMIT=$(run_git_with_lock rev-parse --short HEAD 2>/dev/null || echo "unknown")
 COMMIT_FULL=$(run_git_with_lock rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -74,6 +98,8 @@ fi
 
 echo "--- post-merge: npm install ---"
 npm install --prefer-offline 2>&1
+
+sync_installed_skills_from_library
 
 # Do NOT build here — building overwrites .next/ chunks while the app
 # is serving them, causing ChunkLoadError for active users.
