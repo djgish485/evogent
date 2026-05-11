@@ -1,3 +1,6 @@
+import { access } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { getSkillsRegistry, listInstalledSkillsWithWarnings } from '@/lib/skills';
 
@@ -21,6 +24,15 @@ export async function GET() {
 
         return { value, label };
       });
+    const openClawHome = process.env.OPENCLAW_HOME || path.join(homedir(), '.openclaw');
+    const openClawChannelPath = path.join(openClawHome, 'channels', 'evogent');
+
+    try {
+      await access(openClawChannelPath);
+      feedSources.push({ value: 'openclaw', label: 'OpenClaw' });
+    } catch {
+      // Missing OpenClaw channel install is expected.
+    }
 
     return NextResponse.json({
       items: skills,
