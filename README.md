@@ -62,7 +62,9 @@ When done, report the URL where Evogent is running.
 
 ## Wire OpenClaw into Evogent
 
-If you're running [OpenClaw](https://open.claw.cloud/) alongside Evogent, you can route OpenClaw skill output into your Evogent feed automatically. Each skill run emits `output.mcpapp.html`, and Evogent renders that sandboxed MCP App iframe as the card. Paste this into a coding agent in your OpenClaw working directory:
+If you're running [OpenClaw](https://open.claw.cloud/) alongside Evogent, you can route OpenClaw skill output into your Evogent feed automatically. Each skill run emits `output.mcpapp.html`, and Evogent renders that sandboxed MCP App iframe as the card.
+
+Evogent also supports v1 bidirectional chat for local OpenClaw: OpenClaw sessions appear in the compose dropdown, OpenClaw cards get a **Chat with OpenClaw** button, and replies mirror back to the same OpenClaw session history. Paste this into a coding agent in your OpenClaw working directory:
 
 ```text
 Wire my OpenClaw instance to push skill outputs into the Evogent feed running on this machine. Follow https://github.com/djgish485/evogent/blob/main/docs/openclaw-integration.md end-to-end.
