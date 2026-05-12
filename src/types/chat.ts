@@ -30,3 +30,25 @@ export interface ChatMessage {
   metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
+
+export interface OpenClawSession {
+  key: string;
+  sessionId: string;
+  label: string;
+  preview: string;
+  updatedAt: string;
+  messageCount: number | null;
+  status: string | null;
+  agentId: string | null;
+}
+
+export interface OpenClawMessageEvent {
+  type: 'openclaw_session_message' | 'openclaw_session_streaming' | 'openclaw_session_done';
+  sessionKey: string;
+  sessionId: string;
+  message?: ChatMessage;
+  text?: string;
+  state?: string;
+  error?: string | null;
+  ts: string;
+}
