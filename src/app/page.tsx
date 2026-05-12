@@ -64,7 +64,7 @@ import { shouldSuppressFeedSystemNotice } from '@/lib/system-notices';
 import { formatAbsoluteTimestamp, formatChatTimestamp, formatRelativeTimestamp } from '@/lib/timestamps';
 import { normalizeTimeZoneConfigView, parseTimeZoneConfig, type TimeZoneConfigView } from '@/lib/time-zone-config';
 import { formatWorkingDirectoryLabel } from '@/lib/working-directory';
-import { type ChatAttachment, type ChatMessage, type ConfigSuggestionDecision } from '@/types/chat';
+import { type ChatAttachment, type ChatMessage, type ConfigSuggestionDecision, type OpenClawSession } from '@/types/chat';
 import { type ConversationSessionSummary, type ConversationSessionType } from '@/types/conversation';
 import { type ChatSessionSearchMatch, type FeedbackProbeMetadata, type FeedItem, type FeedListResponse, type FeedPendingCounts, type FeedSuggestionGroup, type SuggestionStatus } from '@/types/feed';
 import { type ChangeEvent, Fragment, type DragEvent as ReactDragEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -133,9 +133,32 @@ async function cancelOrchestratorTaskFromClient(taskId?: string | null): Promise
   }
 }
 
-function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/ws/agent-progress') {
+function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/ws/openclaw' | '/ws/agent-progress') {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}${pathname}`;
+}
+
+const OPENCLAW_SESSION_PREFIX = 'openclaw:';
+const OPENCLAW_UNREACHABLE_MESSAGE = 'OpenClaw unreachable -- check ~/.openclaw/openclaw.json';
+
+function toOpenClawSessionId(sessionKey: string): string {
+  return `${OPENCLAW_SESSION_PREFIX}${sessionKey}`;
+}
+
+function fromOpenClawSessionId(sessionId: string | null | undefined): string | null {
+  if (!sessionId?.startsWith(OPENCLAW_SESSION_PREFIX)) return null;
+  return sessionId.slice(OPENCLAW_SESSION_PREFIX.length);
+}
+
+function buildOpenClawCardQuote(item: FeedItem): string {
+  const title = item.title?.trim() || 'OpenClaw card';
+  const excerpt = (item.excerpt || item.text || '').replace(/\s+/g, ' ').trim();
+  const briefExcerpt = excerpt.length > 420 ? `${excerpt.slice(0, 417).trimEnd()}...` : excerpt;
+  return [
+    `> ${title}`,
+    ...(briefExcerpt ? [`> ${briefExcerpt}`] : []),
+    '',
+  ].join('\n');
 }
 
 function AgentUnavailableBanner({
@@ -1222,6 +1245,12 @@ export default function Home() {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [conversationSessions, setConversationSessions] = useState<ConversationSessionSummary[]>([]);
+  const [openClawSessions, setOpenClawSessions] = useState<OpenClawSession[]>([]);
+  const [openClawSessionsStatus, setOpenClawSessionsStatus] = useState<'idle' | 'loading' | 'loaded' | 'unreachable'>('idle');
+  const [openClawSessionsError, setOpenClawSessionsError] = useState<string | null>(null);
+  const [openClawDefaultSessionKey, setOpenClawDefaultSessionKey] = useState('');
+  const [openClawDefaultPrompt, setOpenClawDefaultPrompt] = useState<{ item: FeedItem; prefill: string } | null>(null);
+  const [isSavingOpenClawDefault, setIsSavingOpenClawDefault] = useState(false);
   const [searchChatSessionMatches, setSearchChatSessionMatches] = useState<ChatSessionSearchMatch[]>([]);
   const [conversationSessionsHasMore, setConversationSessionsHasMore] = useState(false);
   const [isLoadingConversationSessions, setIsLoadingConversationSessions] = useState(false);
@@ -1325,6 +1354,8 @@ export default function Home() {
   const pendingItemsRef = useRef<FeedItem[]>([]);
   const chatMessagesRef = useRef<ChatMessage[]>([]);
   const conversationSessionsRef = useRef<ConversationSessionSummary[]>([]);
+  const openClawSessionsRef = useRef<OpenClawSession[]>([]);
+  const openClawDefaultSessionKeyRef = useRef('');
   const conversationSessionNextOffsetRef = useRef(0);
   const hydratedConversationSessionIdsRef = useRef<Set<string>>(new Set());
   const selectedSessionIdRef = useRef<string | null>(null);
@@ -2031,13 +2062,61 @@ export default function Home() {
     );
   }, [chatMessages, conversationSessions, items, orchestratorStatus, pendingItems, searchChatSessionMatches, searchQuery]);
 
+  const openClawConversationCards = useMemo<ConversationCardViewModel[]>(() => (
+    openClawSessions.map((session) => {
+      const sessionMessages = chatMessages
+        .filter((message) => message.sessionId === session.sessionId)
+        .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+      const previewMessages = [...sessionMessages.filter((message) => message.type === 'chat').slice(-3)].reverse();
+      const lastMessage = sessionMessages.at(-1) ?? null;
+      const lastTimestamp = lastMessage?.timestamp ?? session.updatedAt;
+      const summarySource = lastMessage
+        ? buildConversationPreviewText(lastMessage, searchQuery)
+        : session.preview || 'OpenClaw session ready';
+
+      return {
+        sessionId: session.sessionId,
+        sessionType: null,
+        provider: null,
+        messages: sessionMessages,
+        previewMessages,
+        feedItems: [],
+        title: session.label,
+        color: 'teal',
+        workingDirectory: '',
+        summary: summarySource,
+        lastActor: lastMessage?.role ?? 'agent',
+        lastMessage: lastMessage
+          ? {
+            role: lastMessage.role,
+            metadata: lastMessage.metadata,
+            status: lastMessage.status ?? null,
+            timestamp: lastMessage.timestamp,
+          }
+          : null,
+        lastTimestamp,
+        messageCount: Math.max(session.messageCount ?? 0, sessionMessages.length),
+        queuePosition: null,
+        pendingCount: 0,
+        queuedTaskCount: 0,
+        status: 'idle',
+        activeTaskId: null,
+        chatTaskId: null,
+        contextKind: 'global',
+        contextRefId: null,
+        searchMatchMessageId: null,
+        searchMatchTimestamp: null,
+      };
+    })
+  ), [chatMessages, openClawSessions, searchQuery]);
+
   const conversationCardMap = useMemo(() => {
     const map: Record<string, ConversationCardViewModel> = {};
-    for (const conversation of conversationCards) {
+    for (const conversation of [...conversationCards, ...openClawConversationCards]) {
       map[conversation.sessionId] = conversation;
     }
     return map;
-  }, [conversationCards]);
+  }, [conversationCards, openClawConversationCards]);
 
   const topDetailEntry = detailStack[detailStack.length - 1] ?? null;
   const isChatDetailOpen = topDetailEntry?.kind === 'chat';
@@ -2046,6 +2125,10 @@ export default function Home() {
   const targetConversation = targetConversationId ? conversationCardMap[targetConversationId] ?? null : null;
   const targetSessionId = targetConversation?.sessionId ?? selectedSessionId;
   const targetSessionSummary = conversationSessions.find((session) => session.sessionId === targetSessionId) ?? null;
+  const targetOpenClawSessionKey = fromOpenClawSessionId(targetSessionId);
+  const targetOpenClawSession = targetOpenClawSessionKey
+    ? openClawSessions.find((session) => session.key === targetOpenClawSessionKey) ?? null
+    : null;
   const suggestionCreatorSessionTitles = useMemo<SuggestionCreatorSessionTitles>(() => {
     const titles: SuggestionCreatorSessionTitles = {};
     for (const session of conversationSessions) {
@@ -2387,6 +2470,14 @@ export default function Home() {
   }, [conversationSessions]);
 
   useEffect(() => {
+    openClawSessionsRef.current = openClawSessions;
+  }, [openClawSessions]);
+
+  useEffect(() => {
+    openClawDefaultSessionKeyRef.current = openClawDefaultSessionKey;
+  }, [openClawDefaultSessionKey]);
+
+  useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId;
   }, [selectedSessionId]);
 
@@ -2397,6 +2488,8 @@ export default function Home() {
   useEffect(() => {
     if (!selectedSessionId) return;
     if (conversationSessions.some((session) => session.sessionId === selectedSessionId)) return;
+    const openClawSessionKey = fromOpenClawSessionId(selectedSessionId);
+    if (openClawSessionKey) return;
     if (!hasLoadedSelectedSessionId || isSendingChat) return;
     if (skipSelectedSessionAutoCorrectionRef.current) {
       skipSelectedSessionAutoCorrectionRef.current = false;
@@ -3037,6 +3130,38 @@ export default function Home() {
     }
   }, [hasLoadedSelectedSessionId, refreshConversationSessionSummary, updateSelectedChatSession]);
 
+  const loadOpenClawSessions = useCallback(async () => {
+    setOpenClawSessionsStatus((current) => (current === 'idle' ? 'loading' : current));
+    try {
+      const response = await fetch('/api/openclaw/sessions', { cache: 'no-store' });
+      const data = (await response.json().catch(() => ({}))) as {
+        reachable?: boolean;
+        sessions?: OpenClawSession[];
+        error?: string | null;
+        settings?: {
+          defaultSessionKey?: string;
+        };
+      };
+      if (!response.ok || data.reachable === false) {
+        throw new Error(data.error || OPENCLAW_UNREACHABLE_MESSAGE);
+      }
+
+      setOpenClawSessions(Array.isArray(data.sessions) ? data.sessions : []);
+      setOpenClawDefaultSessionKey(typeof data.settings?.defaultSessionKey === 'string' ? data.settings.defaultSessionKey : '');
+      setOpenClawSessionsStatus('loaded');
+      setOpenClawSessionsError(null);
+      return Array.isArray(data.sessions) ? data.sessions : [];
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : OPENCLAW_UNREACHABLE_MESSAGE;
+      setOpenClawSessions([]);
+      setOpenClawSessionsStatus('unreachable');
+      setOpenClawSessionsError(message);
+      return [];
+    }
+  }, []);
+
   const loadRecentChatMessages = useCallback(async () => {
     try {
       const response = await fetch('/api/chat/messages?limit=250', { cache: 'no-store' });
@@ -3106,6 +3231,27 @@ export default function Home() {
     }
 
     hydratedConversationSessionIdsRef.current.add(normalizedSessionId);
+
+    const openClawSessionKey = fromOpenClawSessionId(normalizedSessionId);
+    if (openClawSessionKey) {
+      try {
+        const response = await fetch(`/api/openclaw/chat/${encodeURIComponent(openClawSessionKey)}`, { cache: 'no-store' });
+        const data = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          messages?: ChatMessage[];
+          error?: string;
+        };
+        if (!response.ok || data.ok === false) {
+          throw new Error(data.error || OPENCLAW_UNREACHABLE_MESSAGE);
+        }
+        setChatMessages((current) => mergeChatMessages(current, Array.isArray(data.messages) ? data.messages : []));
+      } catch (error) {
+        hydratedConversationSessionIdsRef.current.delete(normalizedSessionId);
+        setChatStatus(error instanceof Error && error.message ? error.message : 'Failed to load OpenClaw session messages');
+      }
+      return;
+    }
+
     const targetLimit = Math.max(
       CHAT_HISTORY_PAGE_SIZE,
       Math.min(expectedMessageCount ?? CHAT_HISTORY_PAGE_SIZE, 5_000),
@@ -3145,6 +3291,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedSessionId) return;
+    const openClawSessionKey = fromOpenClawSessionId(selectedSessionId);
+    if (openClawSessionKey) {
+      void loadSessionMessages(selectedSessionId, null);
+      return;
+    }
     const selectedSession = conversationSessions.find((session) => session.sessionId === selectedSessionId) ?? null;
     if (!selectedSession) return;
     if (selectedSession.messageCount === 0) return;
@@ -4525,15 +4676,102 @@ export default function Home() {
     return linkedConversation;
   }, [conversationCards, updateSelectedChatSession]);
 
+  const applyOpenClawCardChatPrefill = useCallback((sessionKey: string, prefill: string) => {
+    const sessionId = toOpenClawSessionId(sessionKey);
+    setChatPostContext(null);
+    setChatSelectedText(null);
+    setChatContext(null);
+    setChatAttachments([]);
+    setChatInput(prefill);
+    updateSelectedChatSession(sessionId);
+    openConversationDetail(sessionId, null, { replaceTop: true });
+    setConversationScrollToBottomId(sessionId);
+    window.requestAnimationFrame(() => {
+      focusChatInput(true);
+    });
+  }, [focusChatInput, openConversationDetail, updateSelectedChatSession]);
+
+  const handleOpenClawCardChat = useCallback(async (item: FeedItem) => {
+    const prefill = `${buildOpenClawCardQuote(item)}\n`;
+    const sessions = await loadOpenClawSessions();
+    const defaultSessionKey = openClawDefaultSessionKeyRef.current;
+
+    if (openClawSessionsStatus === 'unreachable' && sessions.length === 0) {
+      setChatStatus(openClawSessionsError || OPENCLAW_UNREACHABLE_MESSAGE);
+      return;
+    }
+
+    if (sessions.length === 0) {
+      setChatStatus(openClawSessionsError || 'No OpenClaw sessions found. Create one in OpenClaw first.');
+      return;
+    }
+
+    if (defaultSessionKey && sessions.some((session) => session.key === defaultSessionKey)) {
+      applyOpenClawCardChatPrefill(defaultSessionKey, prefill);
+      return;
+    }
+
+    setOpenClawDefaultPrompt({ item, prefill });
+  }, [
+    applyOpenClawCardChatPrefill,
+    loadOpenClawSessions,
+    openClawSessionsError,
+    openClawSessionsStatus,
+  ]);
+
   const handleChatAboutPost = useCallback((item: FeedItem, selectedText?: string) => {
+    if (item.source === 'openclaw') {
+      void handleOpenClawCardChat(item);
+      return;
+    }
     prepareChatAboutPost(item, selectedText);
     focusChatInput(true);
-  }, [focusChatInput, prepareChatAboutPost]);
+  }, [focusChatInput, handleOpenClawCardChat, prepareChatAboutPost]);
 
   const handleChatAboutPostInDetail = useCallback((item: FeedItem, selectedText?: string) => {
+    if (item.source === 'openclaw') {
+      void handleOpenClawCardChat(item);
+      return;
+    }
     prepareChatAboutPost(item, selectedText);
     focusChatInput(true);
-  }, [focusChatInput, prepareChatAboutPost]);
+  }, [focusChatInput, handleOpenClawCardChat, prepareChatAboutPost]);
+
+  const chooseOpenClawDefaultSession = useCallback(async (sessionKey: string) => {
+    const normalizedSessionKey = sessionKey.trim();
+    if (!normalizedSessionKey || !openClawDefaultPrompt || isSavingOpenClawDefault) return;
+
+    setIsSavingOpenClawDefault(true);
+    setChatStatus(null);
+    try {
+      const response = await fetch('/api/openclaw/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultSessionKey: normalizedSessionKey }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        settings?: {
+          defaultSessionKey?: string;
+        };
+      };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to save OpenClaw default session');
+      }
+      setOpenClawDefaultSessionKey(data.settings?.defaultSessionKey || normalizedSessionKey);
+      applyOpenClawCardChatPrefill(normalizedSessionKey, openClawDefaultPrompt.prefill);
+      setOpenClawDefaultPrompt(null);
+    } catch (error) {
+      setChatStatus(error instanceof Error && error.message ? error.message : 'Failed to save OpenClaw default session');
+    } finally {
+      setIsSavingOpenClawDefault(false);
+    }
+  }, [
+    applyOpenClawCardChatPrefill,
+    isSavingOpenClawDefault,
+    openClawDefaultPrompt,
+  ]);
 
   const handleChatAboutSuggestion = useCallback((item: FeedItem) => {
     const destination = resolveSuggestionChatDestination({
@@ -4667,7 +4905,8 @@ export default function Home() {
   useEffect(() => {
     void loadConversationSessions({ reset: true, ensureSessionId: selectedSessionIdRef.current });
     void loadRecentChatMessages();
-  }, [loadConversationSessions, loadRecentChatMessages]);
+    void loadOpenClawSessions();
+  }, [loadConversationSessions, loadOpenClawSessions, loadRecentChatMessages]);
 
   const feedWsHandlersRef = useRef<{
     applyIncomingFeedItems: typeof applyIncomingFeedItems;
@@ -5214,6 +5453,113 @@ export default function Home() {
   }, [clearSessionCompactionState, showCompactFeedback]);
 
   useEffect(() => {
+    const dispose = createReconnectingWs(createWsUrl('/ws/openclaw'), (event) => {
+      try {
+        const payload = JSON.parse(event.data) as {
+          type?: string;
+          connected?: boolean;
+          error?: string | null;
+          sessionId?: string | null;
+          sessionKey?: string | null;
+          message?: ChatMessage;
+          text?: string;
+          state?: string;
+          activity?: string;
+          tool?: string;
+        };
+
+        if (payload.type === 'openclaw_status') {
+          if (payload.connected) {
+            setOpenClawSessionsError(null);
+            setOpenClawSessionsStatus((current) => current === 'idle' || current === 'unreachable' ? 'loading' : current);
+            void loadOpenClawSessions();
+          } else if (typeof payload.error === 'string' && payload.error.trim()) {
+            setOpenClawSessionsError(payload.error.trim());
+            setOpenClawSessionsStatus('unreachable');
+          }
+          return;
+        }
+
+        if (payload.type === 'openclaw_sessions_changed') {
+          void loadOpenClawSessions();
+          return;
+        }
+
+        if (payload.type === 'openclaw_session_tool') {
+          const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim() ? payload.sessionId.trim() : null;
+          const activity = typeof payload.activity === 'string' && payload.activity.trim() ? payload.activity.trim() : '';
+          const tool = typeof payload.tool === 'string' && payload.tool.trim() ? payload.tool.trim() : 'OpenClaw';
+          if (sessionId && activity) {
+            markChatActivity();
+            rememberLiveActivity(sessionId, {
+              label: 'OpenClaw tool activity',
+              detail: activity,
+              badge: tool,
+              status: 'running',
+            });
+          }
+          return;
+        }
+
+        if (payload.type === 'openclaw_session_streaming') {
+          const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim() ? payload.sessionId.trim() : null;
+          const text = typeof payload.text === 'string' ? payload.text : '';
+          if (sessionId && text) {
+            markChatActivity();
+            rememberLiveActivity(sessionId, {
+              label: 'OpenClaw streaming reply',
+              detail: getStreamingPreviewLine(text),
+              badge: 'OpenClaw',
+              status: 'running',
+            });
+            setStreamingChat({ text, inReplyTo: null, sessionId });
+            setChatProgress(null);
+          }
+          return;
+        }
+
+        if (payload.type === 'openclaw_session_done') {
+          const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim() ? payload.sessionId.trim() : null;
+          if (sessionId) {
+            setStreamingChat((current) => (current?.sessionId === sessionId ? null : current));
+            clearRetainedLiveActivity(sessionId);
+          }
+          setBrainTyping(false);
+          if (typeof payload.error === 'string' && payload.error.trim()) {
+            setChatStatus(payload.error.trim());
+          }
+          void loadOpenClawSessions();
+          return;
+        }
+
+        if (payload.type === 'openclaw_session_message' && payload.message) {
+          const incoming = payload.message;
+          clearDeliveredAgentChatState([incoming]);
+          setChatMessages((current) => mergeChatMessages(current, [incoming]));
+          if (incoming.sessionId) {
+            clearRetainedLiveActivity(incoming.sessionId);
+          }
+          void loadOpenClawSessions();
+        }
+      } catch {
+        // ignore malformed OpenClaw bridge messages
+      }
+    }, {
+      onReconnect: () => {
+        void loadOpenClawSessions();
+      },
+    });
+
+    return dispose;
+  }, [
+    clearDeliveredAgentChatState,
+    clearRetainedLiveActivity,
+    loadOpenClawSessions,
+    markChatActivity,
+    rememberLiveActivity,
+  ]);
+
+  useEffect(() => {
     const dispose = createReconnectingWs(createWsUrl('/ws/orchestrator'), (event) => {
       try {
         const payload = JSON.parse(event.data) as {
@@ -5653,6 +5999,53 @@ export default function Home() {
 
     let response: Response | null = null;
     try {
+      const openClawSessionKey = fromOpenClawSessionId(targetSessionId);
+      if (openClawSessionKey) {
+        if (chatAttachments.length > 0) {
+          throw new Error('OpenClaw chat mirror does not support attachments yet.');
+        }
+
+        response = await fetch(`/api/openclaw/chat/${encodeURIComponent(openClawSessionKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: contextualizedMessage,
+          }),
+        });
+
+        const data = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          sessionId?: string | null;
+        };
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || OPENCLAW_UNREACHABLE_MESSAGE);
+        }
+
+        const openClawSessionId = data.sessionId || toOpenClawSessionId(openClawSessionKey);
+        updateSelectedChatSession(openClawSessionId);
+        setConversationHighlightId(openClawSessionId);
+        setConversationScrollToBottomId(openClawSessionId);
+        rememberLiveActivity(openClawSessionId, {
+          label: 'OpenClaw is thinking',
+          detail: 'Waiting for the mirrored session reply.',
+          badge: 'OpenClaw',
+          status: 'running',
+        });
+        openConversationDetail(openClawSessionId, null, {
+          replaceTop: true,
+        });
+
+        void loadOpenClawSessions();
+        setChatInput('');
+        setChatContext(null);
+        setChatAttachments([]);
+        setChatPostContext(null);
+        setChatSelectedText(null);
+        return;
+      }
+
       response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5828,6 +6221,7 @@ export default function Home() {
     hasOpenDetailView,
     isSendingChat,
     isUploadingChatAttachments,
+    loadOpenClawSessions,
     markChatActivity,
     openConversationDetail,
     rememberLiveActivity,
@@ -6586,8 +6980,10 @@ export default function Home() {
     ? baseComposerReservedHeight
     : CHAT_COMPOSER_GAP_PX;
   const currentSession = conversationSessions.find((s) => s.sessionId === targetSessionId) ?? null;
-  const sessionLabel = currentSession?.title || (conversationSessions.length > 0 ? DEFAULT_GENERAL_AGENT_SESSION_TITLE : 'New session');
-  const sessionMessageCount = currentSession?.messageCount ?? 0;
+  const sessionLabel = targetOpenClawSession?.label
+    || currentSession?.title
+    || (conversationSessions.length > 0 ? DEFAULT_GENERAL_AGENT_SESSION_TITLE : 'New session');
+  const sessionMessageCount = targetOpenClawSession?.messageCount ?? currentSession?.messageCount ?? 0;
   const restartStatus = restartState?.status ?? null;
   const restartHeadline = restartStatus === 'pending'
     ? 'Update available'
@@ -7099,6 +7495,56 @@ export default function Home() {
                   </button>
                 );
               })}
+              <div className="border-t border-zinc-700/60 px-4 pt-3 pb-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">OpenClaw</span>
+              </div>
+              {openClawSessionsStatus === 'loading' && openClawSessions.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-zinc-500">Loading OpenClaw sessions...</div>
+              ) : openClawSessionsStatus === 'unreachable' ? (
+                <div className="mx-3 mb-2 rounded-xl border border-red-800/70 bg-red-950/30 px-3 py-2 text-sm text-red-100">
+                  {openClawSessionsError || OPENCLAW_UNREACHABLE_MESSAGE}
+                </div>
+              ) : openClawSessions.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-zinc-500">No OpenClaw sessions found.</div>
+              ) : (
+                openClawSessions.map((session) => {
+                  const isActive = session.sessionId === targetSessionId;
+                  return (
+                    <button
+                      key={session.key}
+                      type="button"
+                      onClick={() => selectSessionFromPicker(session.sessionId)}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                        isActive
+                          ? 'bg-teal-500/10 text-teal-100'
+                          : 'text-zinc-300 hover:bg-zinc-800/60'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{session.label}</span>
+                          <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-teal-100">
+                            OpenClaw
+                          </span>
+                          {session.key === openClawDefaultSessionKey ? (
+                            <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                              Default
+                            </span>
+                          ) : null}
+                          {isActive && (
+                            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-teal-300">
+                              <path d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143z" fill="currentColor" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-zinc-500">
+                          {session.preview || (session.messageCount != null ? `${session.messageCount} message${session.messageCount === 1 ? '' : 's'}` : 'OpenClaw session')}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
               <button
                 type="button"
                 onMouseDown={(event) => {
@@ -8210,18 +8656,33 @@ export default function Home() {
         const detailSession = conversationSessions.find(
           (s) => s.sessionId === (conversation?.sessionId ?? entry.conversationId)
         ) ?? targetSessionSummary ?? null;
-        const detailSessionTitle = detailSession?.title ?? DEFAULT_GENERAL_AGENT_SESSION_TITLE;
-        const detailSessionTitleNode = renderChatSessionHeaderTitle(
-          detailSession,
-          detailSessionTitle,
-        );
+        const detailOpenClawSessionKey = fromOpenClawSessionId(conversation?.sessionId ?? entry.conversationId);
+        const detailOpenClawSession = detailOpenClawSessionKey
+          ? openClawSessions.find((session) => session.key === detailOpenClawSessionKey) ?? null
+          : null;
+        const detailSessionTitle = detailOpenClawSession?.label ?? detailSession?.title ?? DEFAULT_GENERAL_AGENT_SESSION_TITLE;
+        const detailSessionTitleNode = detailOpenClawSession
+          ? (
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <span className="truncate">{detailSessionTitle}</span>
+              <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-teal-100">
+                OpenClaw
+              </span>
+            </span>
+          )
+          : renderChatSessionHeaderTitle(
+            detailSession,
+            detailSessionTitle,
+          );
         const detailSessionWorkingDirectory = formatWorkingDirectoryLabel(
           detailSession?.workingDirectory ?? conversation?.workingDirectory ?? null,
         ) ?? undefined;
-        const detailSessionSubtitle = renderChatSessionHeaderSubtitle(
-          detailSession,
-          detailSessionWorkingDirectory,
-        );
+        const detailSessionSubtitle = detailOpenClawSession
+          ? <span>{detailOpenClawSession.preview || 'Mirrored OpenClaw session'}</span>
+          : renderChatSessionHeaderSubtitle(
+            detailSession,
+            detailSessionWorkingDirectory,
+          );
 
         return (
           <PostDetailView
@@ -8277,6 +8738,49 @@ export default function Home() {
           />
         );
       })}
+
+      {openClawDefaultPrompt && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-labelledby="openclaw-default-session-title">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-950 p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="openclaw-default-session-title" className="text-base font-semibold text-zinc-50">Choose OpenClaw session</h2>
+                <p className="mt-1 text-sm text-zinc-400">This will be the default target for OpenClaw card chats.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenClawDefaultPrompt(null)}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                aria-label="Close OpenClaw session prompt"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {openClawSessions.length === 0 ? (
+                <div className="rounded-xl border border-red-900/70 bg-red-950/30 px-3 py-2 text-sm text-red-100">
+                  {openClawSessionsError || OPENCLAW_UNREACHABLE_MESSAGE}
+                </div>
+              ) : (
+                openClawSessions.map((session) => (
+                  <button
+                    key={session.key}
+                    type="button"
+                    disabled={isSavingOpenClawDefault}
+                    onClick={() => { void chooseOpenClawDefaultSession(session.key); }}
+                    className="flex w-full items-start rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-left transition hover:border-teal-500/50 hover:bg-teal-500/10 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-zinc-100">{session.label}</div>
+                      <div className="mt-0.5 truncate text-xs text-zinc-500">{session.preview || session.key}</div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <CodeFixReasoningSwitcherModal
         open={isCodeFixReasoningModalOpen}

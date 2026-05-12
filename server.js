@@ -14,6 +14,8 @@ const { getRuntimeDeploymentSnapshot } = require('./lib/runtime-deployment');
 const { extractChatProgressFromEvent } = require('./src/lib/chat-progress.js');
 const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/lib/chat-session-rehydrate.js');
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
+const { getOpenClawGatewayClient } = require('./src/lib/openclaw/gateway-client.js');
+const { normalizeOpenClawGatewayEvent } = require('./src/lib/openclaw/sessions.js');
 const { regeneratePreferenceContext } = require('./src/lib/preferences-context-runtime.js');
 const { failStaleQueuedChatMessages } = require('./lib/chat-message-cleanup.js');
 const { recoverClaudeSessionPoison } = require('./lib/chat-session-repair');
@@ -2405,6 +2407,8 @@ const orchestratorClients = new Set();
 const chatClients = new Set();
 const chatSSESubscribers = new Map(); // messageId → Set of HTTP response objects
 /** @type {Set<import('ws').WebSocket>} */
+const openClawClients = new Set();
+/** @type {Set<import('ws').WebSocket>} */
 const agentProgressClients = new Set();
 const compactingChatSessions = new Map();
 const pendingCompactRequests = new Set();
@@ -2569,6 +2573,29 @@ function sendToClients(clients, payload) {
       client.send(payload);
     }
   }
+}
+
+let openClawBridgeStarted = false;
+
+function ensureOpenClawBridge() {
+  if (openClawBridgeStarted) return;
+  openClawBridgeStarted = true;
+
+  const client = getOpenClawGatewayClient();
+  client.on('status', (status) => {
+    sendToClients(openClawClients, JSON.stringify({
+      type: 'openclaw_status',
+      connected: Boolean(status.connected),
+      error: status.error || null,
+      ts: new Date().toISOString(),
+    }));
+  });
+
+  client.on('event', (eventFrame) => {
+    const payload = normalizeOpenClawGatewayEvent(eventFrame);
+    if (!payload) return;
+    sendToClients(openClawClients, JSON.stringify(payload));
+  });
 }
 
 function broadcastFeedUpdate(items) {
@@ -4229,10 +4256,11 @@ app.prepare().then(() => {
       res.setHeader('Content-Type', 'application/json');
       res.statusCode = 200;
       res.end(JSON.stringify({
-        clients: feedClients.size + orchestratorClients.size + chatClients.size + agentProgressClients.size,
+        clients: feedClients.size + orchestratorClients.size + chatClients.size + openClawClients.size + agentProgressClients.size,
         feedClients: feedClients.size,
         orchestratorClients: orchestratorClients.size,
         chatClients: chatClients.size,
+        openClawClients: openClawClients.size,
         agentProgressClients: agentProgressClients.size,
       }));
       return;
@@ -4245,6 +4273,7 @@ app.prepare().then(() => {
   const feedWss = new WebSocketServer({ noServer: true });
   const orchestratorWss = new WebSocketServer({ noServer: true });
   const chatWss = new WebSocketServer({ noServer: true });
+  const openClawWss = new WebSocketServer({ noServer: true });
   const agentProgressWss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', async (request, socket, head) => {
@@ -4296,6 +4325,13 @@ app.prepare().then(() => {
     if (pathname === '/ws/chat') {
       chatWss.handleUpgrade(request, socket, head, (ws) => {
         chatWss.emit('connection', ws, request);
+      });
+      return;
+    }
+
+    if (pathname === '/ws/openclaw') {
+      openClawWss.handleUpgrade(request, socket, head, (ws) => {
+        openClawWss.emit('connection', ws, request);
       });
       return;
     }
@@ -4356,6 +4392,38 @@ app.prepare().then(() => {
 
     ws.on('error', () => {
       chatClients.delete(ws);
+    });
+  });
+
+  openClawWss.on('connection', (ws) => {
+    ensureOpenClawBridge();
+    openClawClients.add(ws);
+
+    const client = getOpenClawGatewayClient();
+    ws.send(JSON.stringify({
+      type: 'openclaw_status',
+      connected: client.status().connected,
+      error: client.status().error,
+      ts: new Date().toISOString(),
+    }));
+
+    client.ensureConnected()
+      .then(() => client.subscribeSessions())
+      .catch((error) => {
+        ws.send(JSON.stringify({
+          type: 'openclaw_status',
+          connected: false,
+          error: error instanceof Error && error.message ? error.message : 'OpenClaw unreachable -- check ~/.openclaw/openclaw.json',
+          ts: new Date().toISOString(),
+        }));
+      });
+
+    ws.on('close', () => {
+      openClawClients.delete(ws);
+    });
+
+    ws.on('error', () => {
+      openClawClients.delete(ws);
     });
   });
 
@@ -4664,6 +4732,7 @@ app.prepare().then(() => {
     console.log(`> WebSocket feed updates at ws://${hostname}:${port}/ws/feed`);
     console.log(`> WebSocket orchestrator updates at ws://${hostname}:${port}/ws/orchestrator`);
     console.log(`> WebSocket chat updates at ws://${hostname}:${port}/ws/chat`);
+    console.log(`> WebSocket OpenClaw mirror at ws://${hostname}:${port}/ws/openclaw`);
     console.log(`> WebSocket agent progress at ws://${hostname}:${port}/ws/agent-progress`);
     if (hostname !== '127.0.0.1' && hostname !== 'localhost' && !trustNetwork) {
       console.log(`> Evogent listening on ${hostname}:${port}. Chat / write / agent-spawn APIs default to loopback-only; front the app with cloudflared+Cloudflare Access (recommended) or set MEDIA_AGENT_TRUST_NETWORK=1 only after putting an auth proxy in place. See docs/security.md.`);
