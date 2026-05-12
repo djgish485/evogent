@@ -10,6 +10,69 @@ OpenClaw skills publish one Evogent card per run. The card is the skill's
 skill also writes `output.md` or `output.a2ui.json`, the Evogent channel ignores
 those files.
 
+## Inbound chat: replying to OpenClaw from Evogent
+
+Evogent also mirrors local OpenClaw chat sessions. The compose session dropdown
+has an **OpenClaw** section populated from the OpenClaw gateway, and sending to
+one of those rows calls `chat.send` on the real OpenClaw session. Replies stream
+back into Evogent while the same turns are appended to
+`~/.openclaw/agents/<agent>/sessions/`, so the OpenClaw dashboard shows the same
+history. Evogent does not create a parallel SQLite chat copy for these turns.
+
+### Settings
+
+Evogent reads these optional settings from `data/config.md`:
+
+```markdown
+## OpenClaw
+openclaw.gatewayUrl:
+openclaw.token:
+openclaw.defaultSessionKey:
+```
+
+- `openclaw.gatewayUrl` overrides gateway auto-discovery. Leave it blank for
+  local installs. v1 only supports loopback WebSocket URLs such as
+  `ws://127.0.0.1:18789`; remote OpenClaw is a planned follow-up.
+- `openclaw.token` overrides the shared gateway token. Leave it blank so Evogent
+  reads `gateway.auth.token` from `~/.openclaw/openclaw.json`. Never print this
+  value in logs or UI; show only whether it is configured.
+- `openclaw.defaultSessionKey` is the session key used by the card-level
+  **Chat with OpenClaw** button. If blank, Evogent prompts the first time a user
+  clicks that button and saves the selected key here.
+
+### Auto-discovery
+
+On the server, Evogent reads `~/.openclaw/openclaw.json`, finds
+`gateway.auth.token`, and connects to the local gateway at
+`ws://127.0.0.1:18789` unless `openclaw.gatewayUrl` is set. No user action is
+needed when OpenClaw and Evogent run on the same machine with the default
+gateway. The connection uses the trusted backend shortcut:
+`client.id="gateway-client"`, `client.mode="backend"`, role `operator`, scopes
+`operator.read` and `operator.write`, and the shared token. Device pairing is
+not implemented for Evogent v1.
+
+### User behavior
+
+Every OpenClaw feed card rendered from `source = "openclaw"` and
+`metadata.mcpAppHtml` includes a **Chat with OpenClaw** button below the iframe.
+Clicking it opens the compose UI, pre-fills a markdown quote containing the card
+title and a short body excerpt, selects the saved default OpenClaw session, and
+focuses the input. If no default session is saved, Evogent displays the live
+OpenClaw session list and asks the user to choose one before continuing.
+
+The compose dropdown has a separate **OpenClaw** section. It is fetched from
+`sessions.list`, includes a label plus brief last-message preview, and refreshes
+when the gateway emits `sessions.changed`. Selecting a row changes the composer
+target to that OpenClaw session; sending a message routes through the gateway
+with `chat.send`.
+
+If the gateway cannot be reached, the OpenClaw section shows
+`OpenClaw unreachable -- check ~/.openclaw/openclaw.json`. The same diagnostic
+appears when a card chat button is clicked. Check that OpenClaw is running, the
+gateway port is still `18789` or matches `openclaw.gatewayUrl`, and the shared
+token in `data/config.md` or `~/.openclaw/openclaw.json` is correct. Native
+Evogent chat sessions continue to work while OpenClaw is unreachable.
+
 ## Prerequisites
 
 You need OpenClaw running, Evogent running, and both reachable from the same
@@ -109,6 +172,45 @@ HTML
 Evogent renders the HTML in an iframe with `sandbox="allow-scripts"`, no
 same-origin permission, no top navigation permission, and
 `referrerPolicy="no-referrer"`.
+
+## Phase 4: Verify Two-way Chat Works
+
+Open Evogent and click the session selector in the compose bar. The dropdown
+should include an **OpenClaw** section with rows that match:
+
+```bash
+find "$OPENCLAW_HOME/agents" -path "*/sessions/sessions.json" -print
+```
+
+Pick an OpenClaw session, type a short message, and send it. Evogent should show
+the user turn and then stream the OpenClaw reply into the same chat thread.
+Verify the mirror by checking the OpenClaw transcript file for that session:
+
+```bash
+SESSION_KEY="<key-from-compose-dropdown>"
+node <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const home = process.env.OPENCLAW_HOME || `${process.env.HOME}/.openclaw`;
+const key = process.env.SESSION_KEY;
+const agentsDir = path.join(home, 'agents');
+for (const agent of fs.readdirSync(agentsDir)) {
+  const indexPath = path.join(agentsDir, agent, 'sessions', 'sessions.json');
+  if (!fs.existsSync(indexPath)) continue;
+  const sessions = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+  const row = sessions[key];
+  if (row?.sessionFile) {
+    console.log(row.sessionFile);
+    process.exit(0);
+  }
+}
+process.exit(1);
+NODE
+```
+
+Open the printed file and confirm the new user turn and reply are present. Then
+open the OpenClaw dashboard for the same session and confirm the same turns are
+visible there.
 
 ## Daily Brief Timer Time Zone
 

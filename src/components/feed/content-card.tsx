@@ -4354,7 +4354,23 @@ export function ContentCard({
       </div>}
 
       {openClawMcpAppHtml && (
-        <MCPAppFrame html={openClawMcpAppHtml} onAction={handleGeneratedUiAction} />
+        <div className="space-y-2">
+          <MCPAppFrame html={openClawMcpAppHtml} onAction={handleGeneratedUiAction} />
+          <div className="flex justify-end px-1">
+            <button
+              type="button"
+              data-testid="openclaw-card-chat-button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onChat?.(item);
+              }}
+              className="inline-flex h-8 items-center rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 text-xs font-medium text-teal-100 transition hover:border-teal-400/60 hover:bg-teal-500/20"
+            >
+              Chat with OpenClaw
+            </button>
+          </div>
+        </div>
       )}
 
       {!openClawMcpAppHtml && item.type === 'tweet' && (
