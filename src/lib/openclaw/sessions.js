@@ -268,11 +268,30 @@ function normalizeOpenClawGatewayEvent(eventFrame) {
   const event = eventFrame?.event;
   const payload = eventFrame?.payload || {};
   if (event === 'sessions.changed') {
-    return {
+    const sessionKey = typeof payload.sessionKey === 'string' && payload.sessionKey.trim() ? payload.sessionKey.trim() : null;
+    const session = payload.session && typeof payload.session === 'object' ? payload.session : payload;
+    const status = typeof session.status === 'string' ? session.status.trim().toLowerCase() : '';
+    const hasActiveRun = session.hasActiveRun ?? payload.hasActiveRun;
+    const endedAt = session.endedAt ?? payload.endedAt;
+    const changed = {
       type: 'openclaw_sessions_changed',
-      sessionKey: typeof payload.sessionKey === 'string' ? payload.sessionKey : null,
+      sessionKey,
       ts: new Date().toISOString(),
     };
+    if (sessionKey && (status === 'failed' || (hasActiveRun === false && endedAt != null && status !== 'done' && status !== 'completed'))) {
+      const error = [payload.errorMessage, payload.error, session.errorMessage, session.error]
+        .find((value) => typeof value === 'string' && value.trim())?.trim() || 'OpenClaw run failed';
+      return [changed, {
+        type: 'openclaw_session_done',
+        sessionKey,
+        sessionId: toOpenClawSessionId(sessionKey),
+        runId: typeof payload.runId === 'string' && payload.runId.trim() ? payload.runId.trim() : null,
+        state: 'error',
+        error,
+        ts: changed.ts,
+      }];
+    }
+    return changed;
   }
 
   if (event === 'chat') {

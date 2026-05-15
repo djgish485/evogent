@@ -2594,7 +2594,9 @@ function ensureOpenClawBridge() {
   client.on('event', (eventFrame) => {
     const payload = normalizeOpenClawGatewayEvent(eventFrame);
     if (!payload) return;
-    sendToClients(openClawClients, JSON.stringify(payload));
+    for (const item of (Array.isArray(payload) ? payload : [payload])) {
+      sendToClients(openClawClients, JSON.stringify(item));
+    }
   });
 }
 
