@@ -76,12 +76,13 @@ class OpenClawGatewayClient extends EventEmitter {
       return this.connectPromise;
     }
 
-    this.connectPromise = new Promise((resolve, reject) => {
+    const promise = new Promise((resolve, reject) => {
       this.connectResolve = resolve;
       this.connectReject = reject;
     });
+    this.connectPromise = promise;
     this.openSocket();
-    return this.connectPromise;
+    return promise;
   }
 
   openSocket() {
