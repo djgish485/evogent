@@ -6,7 +6,7 @@ const {
   resolveOpenClawConnectionConfig,
 } = require('./config.js');
 
-const PROTOCOL_VERSION = 3;
+const PROTOCOL_VERSION = 4;
 const REQUEST_TIMEOUT_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 15_000;
 const INITIAL_RECONNECT_MS = 1_000;
