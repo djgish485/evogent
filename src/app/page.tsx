@@ -2393,7 +2393,7 @@ export default function Home() {
         });
       }
     } else if (shouldShowAgentEntries) {
-      for (const conversation of conversationCards) {
+      for (const conversation of [...conversationCards, ...openClawConversationCards]) {
         if (!shouldIncludeConversationTimelineEntry({
           selectedFilter,
           oldestLoadedPrimaryFeedItemTimestamp,
@@ -2413,6 +2413,7 @@ export default function Home() {
   }, [
     conversationCardMap,
     conversationCards,
+    openClawConversationCards,
     getRenderableSuggestionGroupItems,
     hasActiveSearch,
     isSourceFilter,
@@ -5461,11 +5462,13 @@ export default function Home() {
           error?: string | null;
           sessionId?: string | null;
           sessionKey?: string | null;
+          runId?: string | null;
           message?: ChatMessage;
           text?: string;
           state?: string;
           activity?: string;
           tool?: string;
+          ts?: string;
         };
 
         if (payload.type === 'openclaw_status') {
@@ -5505,6 +5508,8 @@ export default function Home() {
           const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim() ? payload.sessionId.trim() : null;
           const text = typeof payload.text === 'string' ? payload.text : '';
           if (sessionId && text) {
+            const nextStreamingChat = { text, inReplyTo: null, sessionId };
+            streamingChatRef.current = nextStreamingChat;
             markChatActivity();
             rememberLiveActivity(sessionId, {
               label: 'OpenClaw streaming reply',
@@ -5512,7 +5517,7 @@ export default function Home() {
               badge: 'OpenClaw',
               status: 'running',
             });
-            setStreamingChat({ text, inReplyTo: null, sessionId });
+            setStreamingChat(nextStreamingChat);
             setChatProgress(null);
           }
           return;
@@ -5521,6 +5526,36 @@ export default function Home() {
         if (payload.type === 'openclaw_session_done') {
           const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim() ? payload.sessionId.trim() : null;
           if (sessionId) {
+            const streamedReply = streamingChatRef.current?.sessionId === sessionId ? streamingChatRef.current : null;
+            const finalText = streamedReply?.text.trim() ?? '';
+            const terminalState = typeof payload.state === 'string' ? payload.state.trim().toLowerCase() : '';
+            if (finalText && (terminalState === 'final' || terminalState === 'done')) {
+              const timestamp = typeof payload.ts === 'string' && payload.ts.trim() ? payload.ts.trim() : new Date().toISOString();
+              const runId = typeof payload.runId === 'string' && payload.runId.trim() ? payload.runId.trim() : `${sessionId}-${timestamp}`;
+              const openclawSessionKey = typeof payload.sessionKey === 'string' && payload.sessionKey.trim()
+                ? payload.sessionKey.trim()
+                : fromOpenClawSessionId(sessionId);
+              setChatMessages((current) => mergeChatMessages(current, [{
+                type: 'chat',
+                id: `openclaw-final-${runId}`,
+                role: 'agent',
+                inReplyTo: streamedReply?.inReplyTo ?? null,
+                sessionId,
+                text: finalText,
+                timestamp,
+                context: null,
+                status: 'delivered',
+                metadata: {
+                  source: 'openclaw',
+                  ...(openclawSessionKey ? { openclawSessionKey } : {}),
+                  ...(typeof payload.runId === 'string' && payload.runId.trim() ? { runId: payload.runId.trim() } : {}),
+                },
+                createdAt: timestamp,
+              }]));
+            }
+            if (streamedReply) {
+              streamingChatRef.current = null;
+            }
             setStreamingChat((current) => (current?.sessionId === sessionId ? null : current));
             clearRetainedLiveActivity(sessionId);
           }
