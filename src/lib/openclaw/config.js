@@ -55,7 +55,7 @@ function extractMarkdownSection(content, heading) {
 
 function readSettingLine(section, key) {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escapedKey}\\s*[:=]\\s*([^\\n]*)`, 'i');
+  const pattern = new RegExp(`(?:^|\\n)[ \\t]*(?:[-*][ \\t]*)?${escapedKey}[ \\t]*[:=][ \\t]*([^\\n]*)`, 'i');
   const match = section.match(pattern);
   return normalizeOptionalString(match?.[1] || '');
 }
