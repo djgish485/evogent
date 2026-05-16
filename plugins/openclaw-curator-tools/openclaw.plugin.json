@@ -1,0 +1,30 @@
+{
+  "id": "evogent-curator-tools",
+  "name": "Evogent Curator Tools",
+  "description": "Shadow-mode tools for an OpenClaw curator agent to inspect Evogent cache, preferences, feed submission, and recent interactions.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "Optional Evogent internal HTTP base URL. Defaults to MEDIA_AGENT_INTERNAL_BASE_URL or http://127.0.0.1:3001."
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "Evogent internal base URL",
+      "placeholder": "http://127.0.0.1:3001"
+    }
+  },
+  "contracts": {
+    "tools": [
+      "evogent.browse_cache.query",
+      "evogent.preferences.match",
+      "evogent.feed.submit",
+      "evogent.interactions.recent"
+    ]
+  }
+}
