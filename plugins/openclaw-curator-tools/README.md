@@ -13,10 +13,10 @@ From the Evogent repo:
 bash scripts/install-openclaw-curator-tools.sh
 ```
 
-The installer symlinks this folder to:
+The installer registers this folder with OpenClaw:
 
-```text
-~/.openclaw/plugin-tools/curator-tools
+```bash
+openclaw plugins install plugins/openclaw-curator-tools
 ```
 
 Restart OpenClaw after installing so the manifest and runtime entrypoint are
@@ -88,5 +88,5 @@ The plugin calls Evogent over HTTP. Base URL resolution:
 3. `INTERNAL_BASE_URL`
 4. `http://127.0.0.1:3001`
 
-For cutover in a later phase, change the submit path in `index.ts` from
+For cutover in a later phase, change the submit path in `index.js` from
 `/api/internal/curate/shadow` to `/api/internal/curate/submit`.
