@@ -1,51 +1,11 @@
-type JsonObject = Record<string, unknown>;
-
-export interface BrowseCacheQueryInput {
-  source?: string | null;
-  since?: string | number | Date | null;
-  limit?: number | string | null;
-  includeExpired?: boolean;
-  unseenFirst?: boolean;
-}
-
-export interface PreferenceMatchInput {
-  text: string;
-  limit?: number | string | null;
-}
-
-export interface FeedSubmitInput {
-  items: unknown[];
-  candidates?: unknown[];
-  cycleSummary?: unknown;
-  originSessionId?: string | null;
-  origin_session_id?: string | null;
-  originConversationId?: string | null;
-  origin_conversation_id?: string | null;
-}
-
-export interface InteractionsRecentInput {
-  limit?: number | string | null;
-}
-
-type ToolDefinition = {
-  name: string;
-  description: string;
-  parameters: JsonObject;
-  execute: (idOrParams: unknown, maybeParams?: unknown) => Promise<unknown>;
-};
-
-type PluginApi = {
-  registerTool: (tool: ToolDefinition) => void;
-};
-
 const defaultBaseUrl = 'http://127.0.0.1:3001';
 const shadowSubmitPath = '/api/internal/curate/shadow';
 
-function isRecord(value: unknown): value is JsonObject {
+function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function getBaseUrl(): string {
+function getBaseUrl() {
   return (
     process.env.EVOGENT_INTERNAL_BASE_URL
     || process.env.MEDIA_AGENT_INTERNAL_BASE_URL
@@ -54,7 +14,7 @@ function getBaseUrl(): string {
   ).replace(/\/$/, '');
 }
 
-function normalizeLimit(value: unknown, fallback: number, max: number): number {
+function normalizeLimit(value, fallback, max) {
   const parsed = typeof value === 'number'
     ? value
     : typeof value === 'string'
@@ -68,7 +28,7 @@ function normalizeLimit(value: unknown, fallback: number, max: number): number {
   return Math.min(max, Math.max(1, Math.floor(parsed)));
 }
 
-function timestampMs(value: unknown): number | null {
+function timestampMs(value) {
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return value.getTime();
   }
@@ -82,10 +42,10 @@ function timestampMs(value: unknown): number | null {
   return null;
 }
 
-async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
+async function requestJson(path, init = {}) {
   const response = await fetch(`${getBaseUrl()}${path}`, init);
   const bodyText = await response.text();
-  const body = bodyText ? JSON.parse(bodyText) as unknown : {};
+  const body = bodyText ? JSON.parse(bodyText) : {};
 
   if (!response.ok) {
     throw new Error(`Evogent request failed (${response.status}): ${bodyText || response.statusText}`);
@@ -94,11 +54,11 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<unknow
   return body;
 }
 
-function toolParams(idOrParams: unknown, maybeParams?: unknown): unknown {
+function toolParams(idOrParams, maybeParams) {
   return maybeParams === undefined ? idOrParams : maybeParams;
 }
 
-function textResult(value: unknown) {
+function textResult(value) {
   return {
     content: [
       {
@@ -109,14 +69,14 @@ function textResult(value: unknown) {
   };
 }
 
-function requireRecordParams(value: unknown, toolName: string): JsonObject {
+function requireRecordParams(value, toolName) {
   if (!isRecord(value)) {
     throw new Error(`${toolName} parameters must be a JSON object.`);
   }
   return value;
 }
 
-export async function queryBrowseCache(input: BrowseCacheQueryInput = {}) {
+export async function queryBrowseCache(input = {}) {
   const params = new URLSearchParams();
   const source = typeof input.source === 'string' ? input.source.trim() : '';
   const freshAfterMs = timestampMs(input.since);
@@ -137,7 +97,7 @@ export async function queryBrowseCache(input: BrowseCacheQueryInput = {}) {
   return requestJson(`/api/internal/browse-cache/items?${params.toString()}`);
 }
 
-export async function matchPreferences(input: PreferenceMatchInput) {
+export async function matchPreferences(input) {
   if (typeof input.text !== 'string' || !input.text.trim()) {
     throw new Error('evogent.preferences.match requires a non-empty text string.');
   }
@@ -159,7 +119,7 @@ export async function matchPreferences(input: PreferenceMatchInput) {
   };
 }
 
-export async function submitShadowFeed(input: FeedSubmitInput | unknown[]) {
+export async function submitShadowFeed(input) {
   const body = Array.isArray(input)
     ? { items: input }
     : requireRecordParams(input, 'evogent.feed.submit');
@@ -175,13 +135,13 @@ export async function submitShadowFeed(input: FeedSubmitInput | unknown[]) {
   });
 }
 
-export async function recentInteractions(input: InteractionsRecentInput = {}) {
+export async function recentInteractions(input = {}) {
   const params = new URLSearchParams();
   params.set('limit', String(normalizeLimit(input.limit, 50, 200)));
   return requestJson(`/api/internal/interactions/recent?${params.toString()}`);
 }
 
-const browseCacheQueryTool: ToolDefinition = {
+const browseCacheQueryTool = {
   name: 'evogent.browse_cache.query',
   description: 'Return candidate items from Evogent browse_cache_items, optionally filtered by source and freshness.',
   parameters: {
@@ -202,15 +162,15 @@ const browseCacheQueryTool: ToolDefinition = {
     const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.browse_cache.query');
     return textResult(await queryBrowseCache({
       source: typeof params.source === 'string' ? params.source : null,
-      since: params.since as string | number | Date | null | undefined,
-      limit: params.limit as number | string | null | undefined,
+      since: params.since,
+      limit: params.limit,
       includeExpired: params.includeExpired === true,
       unseenFirst: params.unseenFirst === false ? false : true,
     }));
   },
 };
 
-const preferencesMatchTool: ToolDefinition = {
+const preferencesMatchTool = {
   name: 'evogent.preferences.match',
   description: 'Score text against Evogent preference memory using the existing preference vector matcher.',
   parameters: {
@@ -226,12 +186,12 @@ const preferencesMatchTool: ToolDefinition = {
     const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.preferences.match');
     return textResult(await matchPreferences({
       text: typeof params.text === 'string' ? params.text : '',
-      limit: params.limit as number | string | null | undefined,
+      limit: params.limit,
     }));
   },
 };
 
-const feedSubmitTool: ToolDefinition = {
+const feedSubmitTool = {
   name: 'evogent.feed.submit',
   description: 'Submit curated feed items in shadow mode. This writes JSONL under data/shadow-curator-log and never inserts into the live feed.',
   parameters: {
@@ -254,11 +214,11 @@ const feedSubmitTool: ToolDefinition = {
   },
   async execute(idOrParams, maybeParams) {
     const params = toolParams(idOrParams, maybeParams);
-    return textResult(await submitShadowFeed(params as FeedSubmitInput | unknown[]));
+    return textResult(await submitShadowFeed(params));
   },
 };
 
-const interactionsRecentTool: ToolDefinition = {
+const interactionsRecentTool = {
   name: 'evogent.interactions.recent',
   description: 'Return recent Evogent interaction signals joined to the corresponding feed item title and source fields.',
   parameters: {
@@ -271,7 +231,7 @@ const interactionsRecentTool: ToolDefinition = {
   async execute(idOrParams, maybeParams) {
     const params = toolParams(idOrParams, maybeParams);
     const input = isRecord(params)
-      ? { limit: params.limit as number | string | null | undefined }
+      ? { limit: params.limit }
       : {};
     return textResult(await recentInteractions(input));
   },
@@ -288,7 +248,7 @@ export const evogentCuratorTools = {
   id: 'evogent-curator-tools',
   name: 'Evogent Curator Tools',
   description: 'Shadow-mode Evogent tools for the OpenClaw curator agent.',
-  register(api: PluginApi) {
+  register(api) {
     for (const tool of tools) {
       api.registerTool(tool);
     }
