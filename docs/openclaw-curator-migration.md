@@ -64,10 +64,10 @@ Run the tool plugin installer from the Evogent repo:
 bash scripts/install-openclaw-curator-tools.sh
 ```
 
-This symlinks:
+This registers the plugin with OpenClaw:
 
-```text
-plugins/openclaw-curator-tools -> ~/.openclaw/plugin-tools/curator-tools
+```bash
+openclaw plugins install plugins/openclaw-curator-tools
 ```
 
 Then seed the OpenClaw curator agent:
@@ -187,7 +187,7 @@ should not start until all checks pass:
 
 If Phase 1A validates, Phase 1B is intentionally small:
 
-1. Change the plugin submit path in `plugins/openclaw-curator-tools/index.ts`
+1. Change the plugin submit path in `plugins/openclaw-curator-tools/index.js`
    from `/api/internal/curate/shadow` to `/api/internal/curate/submit`.
 2. Restart OpenClaw so the plugin reloads.
 3. Disable the existing live curator heartbeat trigger.
