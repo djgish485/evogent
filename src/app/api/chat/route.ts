@@ -49,6 +49,14 @@ function normalizeOriginView(value: unknown): ChatOriginView {
   return value === 'post_detail' ? 'post_detail' : 'feed';
 }
 
+function isRetiredCurateCommand(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return normalized === '/curate'
+    || normalized.startsWith('/curate ')
+    || normalized === '/curate-latest'
+    || normalized.startsWith('/curate-latest ');
+}
+
 async function resolveTargetSessionId(
   selectedSessionId: string | null,
   provider: 'claude' | 'codex',
@@ -105,6 +113,16 @@ export async function POST(request: Request) {
 
   if (!message) {
     return NextResponse.json({ error: 'message must be a non-empty string' }, { status: 400 });
+  }
+
+  if (isRetiredCurateCommand(message)) {
+    return NextResponse.json({
+      ok: false,
+      enqueued: false,
+      queueDepth: 0,
+      requestId: null,
+      message: 'Evogent-native curation has been retired; the OpenClaw curator submits directly to the live feed.',
+    }, { status: 410 });
   }
 
   await fs.promises.mkdir(getChatAttachmentsDir(), { recursive: true });

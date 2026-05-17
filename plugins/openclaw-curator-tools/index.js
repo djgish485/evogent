@@ -1,5 +1,5 @@
 const defaultBaseUrl = 'http://127.0.0.1:3001';
-const shadowSubmitPath = '/api/internal/curate/shadow';
+const liveSubmitPath = '/api/internal/curate/submit';
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -119,7 +119,7 @@ export async function matchPreferences(input) {
   };
 }
 
-export async function submitShadowFeed(input) {
+export async function submitFeed(input) {
   const body = Array.isArray(input)
     ? { items: input }
     : requireRecordParams(input, 'evogent.feed.submit');
@@ -128,7 +128,7 @@ export async function submitShadowFeed(input) {
     throw new Error('evogent.feed.submit requires an items array.');
   }
 
-  return requestJson(shadowSubmitPath, {
+  return requestJson(liveSubmitPath, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -193,7 +193,7 @@ const preferencesMatchTool = {
 
 const feedSubmitTool = {
   name: 'evogent.feed.submit',
-  description: 'Submit curated feed items in shadow mode. This writes JSONL under data/shadow-curator-log and never inserts into the live feed.',
+  description: 'Submit curated feed items to Evogent live feed storage through /api/internal/curate/submit.',
   parameters: {
     type: 'object',
     additionalProperties: true,
@@ -214,7 +214,7 @@ const feedSubmitTool = {
   },
   async execute(idOrParams, maybeParams) {
     const params = toolParams(idOrParams, maybeParams);
-    return textResult(await submitShadowFeed(params));
+    return textResult(await submitFeed(params));
   },
 };
 
@@ -247,7 +247,7 @@ export const tools = [
 export const evogentCuratorTools = {
   id: 'evogent-curator-tools',
   name: 'Evogent Curator Tools',
-  description: 'Shadow-mode Evogent tools for the OpenClaw curator agent.',
+  description: 'Evogent tools for the OpenClaw curator agent.',
   register(api) {
     for (const tool of tools) {
       api.registerTool(tool);

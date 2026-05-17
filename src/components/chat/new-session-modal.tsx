@@ -275,7 +275,7 @@ export function NewSessionModal({
             <option value="normal">Normal chat</option>
             <option value="curator">Curator session</option>
           </select>
-          <p className="mt-2 text-xs text-zinc-500">Curator sessions can run `/curate` inline and directly edit the curator config files.</p>
+          <p className="mt-2 text-xs text-zinc-500">Curator sessions can discuss feed policy and directly edit the curator config files.</p>
         </label>
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between gap-3">

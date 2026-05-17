@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { resolveUserFacingCommandDocument } from '@/lib/commands';
 import { readPromptAddon, renderPromptAddonBody } from '../../lib/prompt-addons';
@@ -10,14 +9,6 @@ import {
 import { readTimeZoneConfig } from '../../lib/time-zone.js';
 
 const POST_CONTEXT_SEPARATOR = '\n\nContext — discussing this post:';
-
-function readInstructionDocument(relativePath: string, fallback: string): string {
-  try {
-    return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8').trim() || fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 function getSlashCommandName(message: string): string | null {
   const match = message.trim().match(/^\/([A-Za-z0-9_-]+)/);
@@ -136,18 +127,7 @@ export function buildCuratorChatInstruction(input: {
   sessionTitle: string | null;
   attachmentPaths?: string[];
 }): string {
-  const curatorInstructionDocument = readInstructionDocument(
-    '.claude/commands/curate-chat.md',
-    'Curator chat sessions may directly edit data/config.md, data/curation-prompt.md, and data/preference-insights.md. For /curate, including /curate with a URL or focus, run the shared curation flow from .claude/commands/curate.md and prefer browse_cache_items before live browsing.',
-  );
-  const slashCommand = getSlashCommandName(input.message);
   const timeZoneConfig = readTimeZoneConfig(path.join(process.cwd(), 'data', 'config.md'));
-  const latestInstructionDocument = slashCommand === 'curate-latest'
-    ? readInstructionDocument(
-        '.claude/commands/curate-latest.md',
-        'Run .claude/commands/curate-latest.md directly. This is a direct-browse latest-content pass, not the cache-first /curate flow.',
-      )
-    : null;
 
   return [
     ...buildSharedChatEnvelope(input),
@@ -158,17 +138,8 @@ export function buildCuratorChatInstruction(input: {
     'Curator chat sessions override the normal chat write-boundary: they MAY directly edit only data/config.md, data/curation-prompt.md, and data/preference-insights.md.',
     'For data/config.md, apply explicit concrete personal settings directly, such as Agent Name = Bob. Ask first when ambiguous, broad, or destructive. Never print or edit secrets.',
     'No other direct file writes are allowed from curator chat.',
-    'When the user message is /curate or starts with /curate, execute the shared curation flow from .claude/commands/curate.md instead of inventing a parallel curation routine.',
-    'When the user message is /curate-latest, execute .claude/commands/curate-latest.md directly; keep it direct-browse/latest-content and do not route it through the cache-first /curate behavior.',
     'When the user asks for fresh source material, you may enqueue a low-priority cache refresh with POST /api/internal/orchestrator/enqueue using priority "cache_refresh" and a message like "/cache-refresh twitter".',
-    'When curation accepts items, auto-submit them through POST /api/internal/curate/submit and include originSessionId "' + input.sessionId + '" on the request body or each item.',
-    'If you use browse-cache items during curation, follow the required mark-seen step from .claude/commands/curate.md before submit.',
     'Respond by POSTing exactly one JSON body to $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit. Do not write chat-output.jsonl directly.',
     'Submit {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"' + input.messageId + '","text":"...","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"' + input.sessionId + '"}.',
-    '',
-    '## Curator Instruction Document',
-    curatorInstructionDocument,
-    latestInstructionDocument ? '## Curate Latest Instruction Document' : null,
-    latestInstructionDocument,
   ].filter(Boolean).join('\n');
 }

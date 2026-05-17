@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { evaluateAdaptiveHeartbeat } from '@/lib/heartbeat-service';
-import { hasPendingCurationCycle, insertUserActivity, isActivityEvent } from '@/lib/db/activity';
+import { insertUserActivity, isActivityEvent } from '@/lib/db/activity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const INLINE_HEARTBEAT_DEBOUNCE_MS = 30_000;
-let lastInlineHeartbeatEvaluationAt = 0;
-let inlineHeartbeatEvaluationInFlight = false;
 
 export async function POST(request: Request) {
   let payload: unknown;
@@ -32,54 +27,16 @@ export async function POST(request: Request) {
 
   const timestamp = new Date().toISOString();
   const activityId = insertUserActivity(event, metadata, timestamp);
-  const nowMs = Date.now();
-  const recentlyEvaluated = nowMs - lastInlineHeartbeatEvaluationAt < INLINE_HEARTBEAT_DEBOUNCE_MS;
 
-  if ((inlineHeartbeatEvaluationInFlight || recentlyEvaluated) && !hasPendingCurationCycle()) {
-    return NextResponse.json({
-      ok: true,
-      logged: true,
-      activityId,
-      heartbeat: {
-        triggered: false,
-        triggerReason: 'inline_heartbeat_debounced',
-        decisionReason: 'inline_heartbeat_debounced',
-        requestId: null,
-      },
-    });
-  }
-
-  try {
-    inlineHeartbeatEvaluationInFlight = true;
-    lastInlineHeartbeatEvaluationAt = nowMs;
-    const heartbeat = await evaluateAdaptiveHeartbeat({
-      triggeredBy: `activity:${event}`,
-      latestActivity: { event, timestamp },
-    });
-
-    return NextResponse.json({
-      ok: true,
-      logged: true,
-      activityId,
-      heartbeat: {
-        triggered: heartbeat.triggered,
-        triggerReason: heartbeat.triggerReason,
-        decisionReason: heartbeat.decision.reason,
-        requestId: heartbeat.requestId,
-      },
-    });
-  } catch {
-    return NextResponse.json({
-      ok: true,
-      logged: true,
-      activityId,
-      heartbeat: {
-        triggered: false,
-        triggerReason: 'heartbeat_evaluation_failed',
-      },
-    }, { status: 202 });
-  } finally {
-    inlineHeartbeatEvaluationInFlight = false;
-    lastInlineHeartbeatEvaluationAt = Date.now();
-  }
+  return NextResponse.json({
+    ok: true,
+    logged: true,
+    activityId,
+    heartbeat: {
+      triggered: false,
+      triggerReason: 'openclaw_curator_managed',
+      decisionReason: 'openclaw_curator_managed',
+      requestId: null,
+    },
+  });
 }

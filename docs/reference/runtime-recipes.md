@@ -24,7 +24,7 @@ Researching [topic] — the analysis will appear in your feed when ready.
 
 ## Browser-Backed Source Validation
 
-Use this when you need to prove that a browser-backed direct-browse cycle really ran from an isolated worktree instance and persisted results into SQLite.
+Use this when you need to prove that a browser-backed source refresh really ran from an isolated worktree instance and persisted browse cache rows into SQLite.
 
 For source setup, do not count ad hoc CDP extraction as success. The validation must trigger the packaged `/cache-refresh <source>` path through the isolated app and then verify rows in the isolated app's SQLite database.
 
@@ -39,50 +39,50 @@ DATA_DIR=/tmp/evogent-validation/fix-add-browser-backed-source-validation-rec-17
 npm start
 ```
 
-2. Trigger a real curation cycle against the isolated worktree app, not production.
+2. Trigger a packaged source cache refresh against the isolated worktree app, not production.
 
 ```bash
 curl -s -X POST http://127.0.0.1:3239/api/internal/orchestrator/enqueue \
   -H 'Content-Type: application/json' \
   -d '{
-    "message": "/curate browser-backed validation",
-    "priority": "heartbeat",
+    "message": "/cache-refresh x.com",
+    "priority": "user_ping",
     "source": "worktree-browser-validation"
   }'
 ```
 
-3. Wait for the isolated cycle to finish, then verify persisted feed rows in SQLite. The validation is not complete until the isolated data dir shows newly inserted feed rows from the cycle.
+3. Wait for the isolated refresh to finish, then verify persisted browse cache rows in SQLite. The validation is not complete until the isolated data dir shows newly inserted source rows.
 
 ```bash
 sqlite3 /tmp/evogent-validation/fix-add-browser-backed-source-validation-rec-1775667907864/media-agent.db "
   SELECT
-    id,
     source,
     source_id,
+    fetched_at_ms,
     author_username,
     title,
-    published_at,
-    created_at
-  FROM feed
-  ORDER BY created_at_ms DESC, created_at DESC
-  LIMIT 1;
+    datetime(fetched_at_ms / 1000, 'unixepoch') AS fetched_at_utc
+  FROM browse_cache_items
+  WHERE source = '$SOURCE'
+  ORDER BY fetched_at_ms DESC
+  LIMIT 5;
 "
 ```
 
-4. Verify that the isolated cycle persisted multiple recent rows from browser-backed sources.
+4. Verify that the isolated refresh persisted multiple recent rows from browser-backed sources.
 
 ```bash
 sqlite3 /tmp/evogent-validation/fix-add-browser-backed-source-validation-rec-1775667907864/media-agent.db "
   SELECT
     source,
     source_id,
+    fetched_at_ms,
     author_username,
-    published_at,
-    created_at
-  FROM feed
-  WHERE source IN ('twitter', 'youtube', 'substack')
-  ORDER BY created_at_ms DESC, created_at DESC
-  LIMIT 10;
+    datetime(fetched_at_ms / 1000, 'unixepoch') AS fetched_at_utc
+  FROM browse_cache_items
+  WHERE source = '$SOURCE'
+  ORDER BY fetched_at_ms DESC
+  LIMIT 5;
 "
 ```
 

@@ -11,11 +11,8 @@ const { Worker } = require('bullmq');
 const { extractChatProgressFromEvent } = require('./src/lib/chat-progress.js');
 const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/lib/chat-session-rehydrate.js');
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
-const { regeneratePreferenceContext } = require('./src/lib/preferences-context-runtime.js');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
-const { readAutomaticCurationEnabled } = require('./lib/brain-config');
-const { hasCurationCapability, readConfigUsageLevel } = require('./lib/cache-refresh-config');
-const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
+const { readConfigUsageLevel } = require('./lib/cache-refresh-config');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
@@ -24,7 +21,6 @@ const {
   BACKGROUND_QUEUE_NAME,
   closeBackgroundQueue,
   createQueueConnection,
-  drainStaleBackgroundJobs,
   enqueueBackgroundJob,
   hasPendingBackgroundJob,
 } = require('./lib/queue');
@@ -32,7 +28,7 @@ const {
 const port = Number.parseInt(process.env.PORT || '3001', 10);
 const internalBaseUrl = process.env.ORCHESTRATOR_INTERNAL_URL || `http://127.0.0.1:${port}`;
 const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
-const HEARTBEAT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const REFLECTION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const REFLECTION_MESSAGE = 'Reflection: review recent feedback and consider config suggestions';
 const REFLECTION_INTERVAL_MS_BY_FREQUENCY = Object.freeze({
   daily: 24 * 60 * 60 * 1000,
@@ -46,7 +42,6 @@ const TASK_TIMEOUT_MS_BY_PRIORITY = Object.freeze({
   user_ping: EXECUTION_TASK_TIMEOUT_MS,
   post_enrichment: EXECUTION_TASK_TIMEOUT_MS,
   cache_refresh: EXECUTION_TASK_TIMEOUT_MS,
-  heartbeat: EXECUTION_TASK_TIMEOUT_MS,
   reflection: EXECUTION_TASK_TIMEOUT_MS,
 });
 const PRIORITY_VALUES = Object.freeze({
@@ -55,7 +50,6 @@ const PRIORITY_VALUES = Object.freeze({
   user_ping: 300,
   post_enrichment: 200,
   cache_refresh: 150,
-  heartbeat: 100,
   reflection: 50,
 });
 const PRIORITY_ALIASES = Object.freeze({
@@ -72,7 +66,6 @@ const PRIORITY_ALIASES = Object.freeze({
   cache: 'cache_refresh',
   'cache-refresh': 'cache_refresh',
   cacherefresh: 'cache_refresh',
-  hb: 'heartbeat',
   reflect: 'reflection',
   code_fix: 'code_fix_spawn',
   codefix: 'code_fix_spawn',
@@ -85,7 +78,6 @@ const DEFAULT_CLAUDE_CURATION_ALLOWED_TOOLS = process.env.CLAUDE_CURATION_ALLOWE
 const DEFAULT_CLAUDE_PERMISSION_MODE = process.env.CLAUDE_PERMISSION_MODE || 'dontAsk';
 const MAX_TRANSCRIPT_LINES = 240;
 const TASK_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const STALE_ACTIVE_CURATION_JOB_LOCK_WAIT_MS = 35 * 1000;
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
 const dataPath = (...segments) => path.join(dataDir, ...segments);
 const chatOutputPath = dataPath('chat-output.jsonl');
@@ -97,7 +89,6 @@ const taskLogsDir = dataPath('task-logs');
 const defaultDbPath = dataPath('media-agent.db');
 
 let chatStatusDb = null;
-let heartbeatCheckInFlight = false;
 let reflectionCheckInFlight = false;
 const timerHandles = [];
 const workerConnection = createQueueConnection({ forWorker: true });
@@ -195,10 +186,6 @@ function readCurationStatus() {
   } catch {
     return normalizeCurationStatus(null);
   }
-}
-
-function isAutomaticCurationEnabled() {
-  return readAutomaticCurationEnabled(dataPath('config.md'));
 }
 
 function writeCurationStatus(status) {
@@ -387,14 +374,14 @@ function assignTaskLogFile(task) {
 }
 
 function normalizePriority(priority) {
-  if (typeof priority !== 'string') return 'heartbeat';
+  if (typeof priority !== 'string') return 'user_ping';
 
   const trimmed = priority.trim();
-  if (!trimmed) return 'heartbeat';
+  if (!trimmed) return 'user_ping';
 
   const lowered = trimmed.toLowerCase();
   const mapped = PRIORITY_ALIASES[lowered] || lowered;
-  return Object.hasOwn(PRIORITY_VALUES, mapped) ? mapped : 'heartbeat';
+  return Object.hasOwn(PRIORITY_VALUES, mapped) ? mapped : 'user_ping';
 }
 
 function sanitizeMessage(message) {
@@ -832,59 +819,11 @@ async function postOrchestratorStatus(status, trigger, event = null) {
   }
 }
 
-async function regeneratePreferenceContextBeforeCuration(task) {
-  console.log(`[cache-refresh] pre-curation refresh starting for task ${task.id}`);
-  try {
-    const result = await enqueueCacheRefreshForCuration(task, {
-      rootDir: process.cwd(),
-      configPath: dataPath('config.md'),
-    });
-
-    if (result.skipped) {
-      console.log(`[cache-refresh] pre-curation refresh skipped for task ${task.id}: ${result.reason}`);
-    } else if (result.timedOut) {
-      console.warn(`[cache-refresh] pre-curation refresh timed out for task ${task.id}: ${result.pendingSources.join(', ')}`);
-    } else {
-      console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: ${result.waitedSources.join(', ') || 'no sources'}`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[cache-refresh] pre-curation refresh failed for task ${task.id}: ${message}`);
-  }
-
-  console.log(`[preferences] pre-curation context refresh starting for task ${task.id}`);
-
-  try {
-    await regeneratePreferenceContext();
-    console.log(`[preferences] pre-curation context refresh completed for task ${task.id}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[preferences] pre-curation context refresh failed for task ${task.id}: ${message}`);
-  }
-}
-
-function isCurationInstruction(message) {
-  if (typeof message !== 'string') return false;
-  const normalized = message.trim().toLowerCase();
-  return normalized === '/curate'
-    || normalized.startsWith('/curate ')
-    || normalized === '/curate-latest'
-    || normalized.startsWith('/curate-latest ')
-    || normalized.startsWith('heartbeat:')
-    || normalized.includes('curation cycle');
-}
-
-function isCurationTask(task) {
-  return Boolean(task)
-    && (task.priority === 'heartbeat'
-      || (task.priority === 'user_ping' && isCurationInstruction(task.message)));
+function isCurationTask() {
+  return false;
 }
 
 function resolveBackgroundTaskKind(task) {
-  if (isCurationTask(task)) {
-    return 'curation';
-  }
-
   if (task?.priority === 'reflection') {
     return 'reflection';
   }
@@ -894,14 +833,11 @@ function resolveBackgroundTaskKind(task) {
 
 function resolveTaskTimeoutMs(task) {
   if (Number.isInteger(task?.timeoutMs) && task.timeoutMs > 0) {
-    return Math.min(task.timeoutMs, TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat);
+    return Math.min(task.timeoutMs, EXECUTION_TASK_TIMEOUT_MS);
   }
 
   const priorityTimeout = TASK_TIMEOUT_MS_BY_PRIORITY[task?.priority];
   if (typeof priorityTimeout === 'number' && priorityTimeout > 0) {
-    if (task.priority === 'user_ping' && isCurationInstruction(task.message)) {
-      return TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat;
-    }
     return priorityTimeout;
   }
 
@@ -912,8 +848,7 @@ function isUnitTestTask(task) {
   const source = typeof task?.source === 'string' ? task.source : '';
   const message = typeof task?.message === 'string' ? task.message : '';
   return source.startsWith('unit-test')
-    || message.startsWith('[unit]')
-    || (source.includes('unit-test') && source.startsWith('adaptive_heartbeat'));
+    || message.startsWith('[unit]');
 }
 
 function readUsageLevel() {
@@ -1419,7 +1354,6 @@ const BrainOrchestrator = createBrainOrchestrator({
   getTaskSessionId,
   isBackgroundRoutedCommand,
   isChatResearchSource,
-  isCurationInstruction,
   isCurationTask,
   isFreshAssistantStreamingSignal,
   isPidRunning,
@@ -1436,7 +1370,6 @@ const BrainOrchestrator = createBrainOrchestrator({
   readCurationStatus,
   readReflectionStatus,
   readStoredChatProviderSessionId,
-  regeneratePreferenceContextBeforeCuration,
   resolveBackgroundTaskKind,
   resolveResearchFeedItemId,
   resolveTaskTimeoutMs,
@@ -1522,52 +1455,10 @@ async function maybeApplyPendingWorkerRestart(trigger = 'status') {
   }
 }
 
-async function markHeartbeatTaskCompleted(requestId) {
-  if (typeof requestId !== 'string' || !requestId.trim()) return;
-
-  try {
-    await postInternal('/api/internal/heartbeat/complete', { requestId });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[adaptive-heartbeat] completion update failed for ${requestId}: ${message}`);
-  }
-}
-
 backgroundOrchestrator.onStatus((status, trigger, event) => {
   void postOrchestratorStatus(status, trigger, event);
   void maybeApplyPendingWorkerRestart(`orchestrator:${trigger}`);
-
-  if (trigger !== 'task_finished') return;
-
-  const finishedTask = Array.isArray(status.history) && status.history.length > 0
-    ? status.history[0]
-    : null;
-
-  if (!finishedTask || finishedTask.priority !== 'heartbeat') {
-    return;
-  }
-
-  if (finishedTask.state !== 'completed' && finishedTask.state !== 'failed') {
-    return;
-  }
-
-  void markHeartbeatTaskCompleted(finishedTask.id);
 });
-
-async function enqueueHeartbeatCheck(triggeredBy = 'timer') {
-  if (!isAutomaticCurationEnabled()) return;
-  if (heartbeatCheckInFlight) return;
-  heartbeatCheckInFlight = true;
-
-  try {
-    await enqueueBackgroundJob(BACKGROUND_JOB_NAMES.HEARTBEAT, { triggeredBy }, { skipIfPending: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[adaptive-heartbeat] queueing failed: ${message}`);
-  } finally {
-    heartbeatCheckInFlight = false;
-  }
-}
 
 async function runReflectionSchedulerCheck(triggeredBy = 'timer') {
   if (reflectionCheckInFlight) return;
@@ -1643,36 +1534,12 @@ async function runReflectionSchedulerCheck(triggeredBy = 'timer') {
   }
 }
 
-async function runCurationTimerTick(triggeredBy = 'timer') {
-  if (!hasCurationCapability(process.cwd())) {
-    if (triggeredBy === 'startup') {
-      console.log('> Curation timers idle: no curator session, no source skills');
-    }
-    return;
-  }
-
-  if (isAutomaticCurationEnabled()) {
-    await enqueueHeartbeatCheck(triggeredBy);
-  } else if (triggeredBy === 'startup') {
-    console.log('> Automatic curation disabled in data/config.md; adaptive heartbeat checks paused');
-  }
-
+async function runReflectionTimerTick(triggeredBy = 'timer') {
   await runReflectionSchedulerCheck(triggeredBy);
 }
 
 function createBackgroundWorker() {
   const worker = new Worker(BACKGROUND_QUEUE_NAME, async (job) => {
-    if (job.name === BACKGROUND_JOB_NAMES.HEARTBEAT) {
-      if (!isAutomaticCurationEnabled()) {
-        console.log('[worker] skipped heartbeat job: automatic_curation_disabled');
-        return { skipped: true, reason: 'automatic_curation_disabled' };
-      }
-      const triggeredBy = typeof job.data?.triggeredBy === 'string' && job.data.triggeredBy.trim()
-        ? job.data.triggeredBy.trim()
-        : 'timer';
-      return postInternal('/api/internal/heartbeat/check', { triggeredBy });
-    }
-
     if (
       job.name === BACKGROUND_JOB_NAMES.USER_CHAT
       || job.name === BACKGROUND_JOB_NAMES.POST_ENRICHMENT
@@ -1693,7 +1560,7 @@ function createBackgroundWorker() {
       };
     }
 
-    if (job.name === BACKGROUND_JOB_NAMES.CURATION || job.name === BACKGROUND_JOB_NAMES.REFLECTION) {
+    if (job.name === BACKGROUND_JOB_NAMES.REFLECTION) {
       return backgroundOrchestrator.runBackgroundTask(job.data);
     }
 
@@ -1750,14 +1617,6 @@ function resetStaleCurationStatusOnStartup() {
 }
 
 async function runStartupStateCleanup() {
-  const drainedJobs = await drainStaleBackgroundJobs({
-    names: [BACKGROUND_JOB_NAMES.CURATION],
-    maxLockWaitMs: STALE_ACTIVE_CURATION_JOB_LOCK_WAIT_MS,
-  });
-  if (drainedJobs.removed > 0) {
-    console.log(`[worker] removed ${drainedJobs.removed} stale curation BullMQ jobs before startup`);
-  }
-
   if (resetStaleCurationStatusOnStartup()) {
     console.log('[worker] reset stale curation-status.json before startup');
   }
@@ -1794,15 +1653,14 @@ async function start() {
     return;
   }
 
-  await runCurationTimerTick('startup');
+  await runReflectionTimerTick('startup');
 
-  const heartbeatTimer = setInterval(() => {
-    void runCurationTimerTick('timer');
-  }, HEARTBEAT_CHECK_INTERVAL_MS);
-  if (typeof heartbeatTimer.unref === 'function') heartbeatTimer.unref();
-  timerHandles.push(heartbeatTimer);
+  const reflectionTimer = setInterval(() => {
+    void runReflectionTimerTick('timer');
+  }, REFLECTION_CHECK_INTERVAL_MS);
+  if (typeof reflectionTimer.unref === 'function') reflectionTimer.unref();
+  timerHandles.push(reflectionTimer);
 
-  console.log('> Adaptive heartbeat timer enabled in worker (5 minute checks, respects data/config.md)');
   console.log('> Reflection timer enabled in worker (quiet-hour scheduling)');
 }
 

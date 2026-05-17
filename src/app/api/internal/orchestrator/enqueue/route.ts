@@ -40,8 +40,8 @@ export async function POST(request: Request) {
   if (isHiddenCurateRequest(payload)) {
     return NextResponse.json({
       ok: false,
-      error: 'Route curation through Curator Agent chat with POST /api/chat so the run is visible.',
-    }, { status: 400 });
+      error: 'Evogent-native curation has been retired; the OpenClaw curator submits directly to the live feed.',
+    }, { status: 410 });
   }
 
   const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {

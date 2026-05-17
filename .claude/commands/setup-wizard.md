@@ -75,7 +75,7 @@ Choose Low, Medium, or High."
 - If a browser-backed source needs login, explain that credentials go only into the shared Chrome/noVNC browser, never into chat.
 - If no skills are installed besides setup-wizard, show available skills briefly and recommend `full-text` plus one source cache skill.
 - Do not ask a separate manual interests question. Keep custom steering inside the combined optional etc question, and frame it as optional cold-start steering when there is no usable source, preference, archive, feedback, cache, or curation evidence.
-- If the user accepts the offer to run the first curation or otherwise asks to run curation from setup chat, send a visible `/curate` turn to the existing Curator Agent session through `POST $API_BASE/api/chat`. Resolve the session from `GET $API_BASE/api/chat/sessions?limit=100` by `sessionType: "curator"` or title `Curator Agent`. Do not use `POST /api/internal/orchestrator/enqueue` for this user-visible curation request. After sending it, reply in setup chat that it was sent to Curator Agent and that the user can watch the run there.
+- If the user accepts the offer to run the first curation or otherwise asks to run curation from setup chat, explain that OpenClaw owns scheduled curation and that accepted items are submitted through `evogent.feed.submit`. Do not enqueue an Evogent-native curation task.
 
 ## Response Shape
 
