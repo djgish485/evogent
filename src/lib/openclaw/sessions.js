@@ -160,6 +160,7 @@ function normalizeOpenClawSession(session) {
     key,
     sessionId: toOpenClawSessionId(key),
     label: normalizeSessionLabel(session),
+    sessionType: /^agent:curator:/.test(key) ? 'curator' : null,
     preview,
     updatedAt,
     messageCount: typeof session.messageCount === 'number' && Number.isFinite(session.messageCount)
