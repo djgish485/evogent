@@ -1992,19 +1992,11 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       }
     });
 
-    test('GET /api/config?target=curate returns read-only curate command content', async () => {
+    test('GET /api/config?target=curate rejects retired curate command content', async () => {
       const response = await requestJson('/api/config?target=curate');
-      assert.strictEqual(response.status, 200);
-      assertObject(response.data, 'Expected curate command payload');
-      assert.strictEqual(typeof response.data.content, 'string');
-      assert.strictEqual(response.data.target, 'curate-command');
-      assert.strictEqual(response.data.path, '.claude/commands/curate.md');
-      assert.strictEqual(response.data.readOnly, true);
-      assert.ok(response.data.content.includes('Run one full curation cycle in this invocation.'));
-      assert.ok(response.data.content.includes('if the same source has failed across 2 or more consecutive cycles and the feed has zero items of that source\'s content type'));
-      assert.ok(response.data.content.includes('the submit API deterministically queues the focused post-curation tweet enrichment task'));
-      assert.ok(response.data.content.includes('Do not do tweet-page avatar, parent, or reply work inline in curation.'));
-      assert.ok(response.data.content.includes('metadata.suggestionType: "code_fix"'));
+      assert.strictEqual(response.status, 400);
+      assertObject(response.data, 'Expected invalid target payload');
+      assert.match(String(response.data.error), /Invalid target/);
     });
 
     test('GET /api/config?target=reflect-command returns read-only reflect command content', async () => {

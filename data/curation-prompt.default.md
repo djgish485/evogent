@@ -62,7 +62,7 @@ The `text` field MUST NOT be a paraphrase of the title. If you are tempted to wr
 
 ## Front-page signal sources
 
-For every full /curate, directly browse the WSJ home page, the New York Times home page, and WSJ Opinion/editorials before final thread selection. I do not need subscription-only article bodies; headlines, decks, page placement, and editorial-page framing are useful signals. Treat bigger or more prominent home-page headlines as evidence that the event matters to me.
+For every full curation run, directly browse the WSJ home page, the New York Times home page, and WSJ Opinion/editorials before final thread selection. I do not need subscription-only article bodies; headlines, decks, page placement, and editorial-page framing are useful signals. Treat bigger or more prominent home-page headlines as evidence that the event matters to me.
 
 When WSJ or NYT has a visually dominant current-event lead, treat it as a rare override signal, not a routine requirement. Ask: is this a live public event, policy shock, market shock, war/diplomacy turn, or major elite-institution story? If yes, prefer a fresh top-level thread/update unless there is a clear quality reason to drop it. If no, record the headline in `frontPageSignalAudit` and continue normally. Use direct story wording and `metadata.thread.prominence.level = "lead"` only for accepted lead-level threads.
 
@@ -111,7 +111,7 @@ Outside test before submit: count words on every bridge and rationale. Any singl
 
 Decode specialty vocabulary, don't parrot it.
 
-The five default categories (Mainstream / Contrarian / Unknown voices / Underpriced / Long-tail adjacent) are defined in `.claude/commands/curate.md` Section 4. Use them verbatim when today's pool maps cleanly onto them. Deviate when a better organization emerges - a new live story running through everything, an unusually tight technical arc, a debate with a distinct shape - and record the chosen organization in the scratchpad so it stays legible. Do not force items into a poor-fitting category just to keep the count at exactly five.
+The five default categories are Mainstream, Contrarian, Unknown voices, Underpriced, and Long-tail adjacent. Use them verbatim when today's pool maps cleanly onto them. Deviate when a better organization emerges - a new live story running through everything, an unusually tight technical arc, a debate with a distinct shape - and record the chosen organization in the scratchpad so it stays legible. Do not force items into a poor-fitting category just to keep the count at exactly five.
 
 ## Thread Analysis and Titles
 

@@ -3,7 +3,6 @@
 import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
 import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, type OpenClawDailyTimerSidebarStatus, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
-import { CuratorCurateButtons } from '@/components/chat/curator-curate-buttons';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
 import { ConfigPanel } from '@/components/config-panel';
 import { AnalysisSeriesCard } from '@/components/feed/analysis-series-card';
@@ -23,8 +22,8 @@ import { SetupBanner } from '@/components/setup-banner';
 import { type AgentTranscriptData, type AgentTranscriptState, type AgentTranscriptTarget, type BrainTranscriptEvent, type CurationTaskState, getAgentEventMetadata, resolveTaskTranscriptTarget, type TaskTranscriptFallbackState } from '@/lib/agent-transcript';
 import { buildAnalysisRenderableEntries } from '@/lib/analysis-presentation';
 import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
-import { parseAutomaticCurationEnabled, parseBackgroundSourceBrowsingEnabled, updateAutomaticCurationConfigContent, updateBackgroundSourceBrowsingConfigContent } from '@/lib/automatic-curation-config';
-import { type BrainProviderAvailabilityState, type BrainProviderName, type BrainProviderStateResponse, canOpenChatSessionCompactPopover, type ClaudeReasoningEffort, type CodexReasoningEffort, type CurateCommand, formatCompactTokenCount, getChatSessionCompactButtonState, getChatSessionContextHeaderMetrics, getChatSessionHeaderProviderLabel, getChatSessionManualCompactionUnavailableReason, getProviderChipLabel, getProviderDisplayName, resolveBrainState } from '@/lib/brain-provider';
+import { parseBackgroundSourceBrowsingEnabled, updateBackgroundSourceBrowsingConfigContent } from '@/lib/automatic-curation-config';
+import { type BrainProviderAvailabilityState, type BrainProviderName, type BrainProviderStateResponse, canOpenChatSessionCompactPopover, type ClaudeReasoningEffort, type CodexReasoningEffort, formatCompactTokenCount, getChatSessionCompactButtonState, getChatSessionContextHeaderMetrics, getChatSessionHeaderProviderLabel, getChatSessionManualCompactionUnavailableReason, getProviderChipLabel, getProviderDisplayName, resolveBrainState } from '@/lib/brain-provider';
 import { CHAT_ATTACHMENT_ACCEPT } from '@/lib/chat-attachment-metadata';
 import { getChatComposerTransferFiles, isChatComposerFileTransfer, uploadChatAttachmentFiles } from '@/lib/chat-composer-attachments';
 import { buildSlashCommandComposerText, CHAT_COMPOSER_FORM_TEXT_ENTRY_ATTRIBUTES, CHAT_COMPOSER_TEXTBOX_TEXT_ENTRY_ATTRIBUTES, normalizeChatComposerText, normalizeFeedSearchQuery, shouldSubmitChatComposerKeyDown } from '@/lib/chat-composer-helpers';
@@ -54,7 +53,7 @@ import { CLAUDE_REASONING_OPTIONS, CODEX_REASONING_OPTIONS, deriveCodexReasoning
 import { createReconnectingWs } from '@/lib/reconnecting-ws';
 import { type RestartLifecycleState, type RestartLifecycleStatus } from '@/lib/restart-lifecycle';
 import { textMatchesSearchQuery } from '@/lib/search-utils';
-import { CURATOR_CURATE_HEADER_FULL_LABEL_MIN_ROW_WIDTH, getSessionTint, SESSION_TINT_PALETTE } from '@/lib/session-tints';
+import { getSessionTint, SESSION_TINT_PALETTE } from '@/lib/session-tints';
 import { resolveSetupWizardSessionId, resolveSourceHealthSessionId, SETUP_WIZARD_COMMAND, SETUP_WIZARD_ORIGIN_VIEW, SOURCE_HEALTH_ORIGIN_VIEW, SOURCE_HEALTH_TRIGGER_SOURCE, SOURCE_STATUS_COMMAND } from '@/lib/setup-chat-routing';
 import { type ActivityEvent, type SetupReadinessResponse, type SkillsApiResponse } from '@/lib/setup-types';
 import { type SuggestionCreatorSessionTitles } from '@/lib/suggestion-creator-label';
@@ -207,10 +206,7 @@ function ConversationCard({
   streamingChat,
   retainedLiveActivity,
   chatProgress,
-  isCurateDisabled,
-  isSendingChat,
   searchQuery,
-  submitCurateToSession,
   onOpen,
 }: {
   conversation: ConversationCardViewModel;
@@ -220,14 +216,7 @@ function ConversationCard({
   streamingChat: StreamingChatState | null;
   retainedLiveActivity: LiveActivitySnapshot | null;
   chatProgress: ChatProgressState | null;
-  isCurateDisabled: boolean;
-  isSendingChat: boolean;
   searchQuery: string | null;
-  submitCurateToSession: (
-    sessionId: string,
-    command: CurateCommand,
-    options?: { openDetailOnSuccess?: boolean },
-  ) => Promise<boolean>;
   onOpen: () => void;
 }) {
   const liveStreamingPreview = streamingChat && doesLiveStateBelongToConversation(conversation, streamingChat)
@@ -316,24 +305,9 @@ function ConversationCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">{conversation.title}</p>
-            {conversation.sessionType === 'curator' ? (
-              <CuratorCurateButtons
-                disabled={isCurateDisabled || isSendingChat}
-                tint={sessionTint}
-                className="flex shrink-0 items-center gap-1.5 sm:gap-2"
-                onContainerClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onSubmit={(command) => {
-                  void submitCurateToSession(conversation.sessionId, command, { openDetailOnSuccess: false });
-                }}
-              />
-            ) : (
-              <span className="rounded-full border border-zinc-700 bg-black/30 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-300">
-                {conversationStatusLabel(conversation.status)}
-              </span>
-            )}
+            <span className="rounded-full border border-zinc-700 bg-black/30 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-300">
+              {conversationStatusLabel(conversation.status)}
+            </span>
           </div>
           <div className="mt-2 space-y-1.5">
             {displayedLiveActivity ? (
@@ -1269,8 +1243,6 @@ export default function Home() {
   } | null>(null);
   const [configContent, setConfigContent] = useState<string | null>(null);
   const [configTimeZone, setConfigTimeZone] = useState<TimeZoneConfigView>(() => parseTimeZoneConfig(null));
-  const [isSavingAutomaticCuration, setIsSavingAutomaticCuration] = useState(false);
-  const [automaticCurationError, setAutomaticCurationError] = useState<string | null>(null);
   const [isSavingBackgroundSourceBrowsing, setIsSavingBackgroundSourceBrowsing] = useState(false);
   const [backgroundSourceBrowsingError, setBackgroundSourceBrowsingError] = useState<string | null>(null);
   const [openClawDailyTimer, setOpenClawDailyTimer] = useState<OpenClawDailyTimerSidebarStatus | null>(null);
@@ -1636,10 +1608,6 @@ export default function Home() {
       codexReasoningEffort,
     } as const;
   }, [configContent]);
-  const automaticCurationEnabled = useMemo(
-    () => parseAutomaticCurationEnabled(configContent),
-    [configContent],
-  );
   const backgroundSourceBrowsingEnabled = useMemo(
     () => parseBackgroundSourceBrowsingEnabled(configContent),
     [configContent],
@@ -1717,49 +1685,6 @@ export default function Home() {
     }
     setSelectedFilter('all');
   }, [feedFilters, selectedFilter]);
-  const toggleAutomaticCuration = useCallback(async () => {
-    if (!configContent || isSavingAutomaticCuration) {
-      return;
-    }
-
-    const nextContent = updateAutomaticCurationConfigContent(
-      configContent,
-      !automaticCurationEnabled,
-    );
-
-    setIsSavingAutomaticCuration(true);
-    setAutomaticCurationError(null);
-    let response: Response | null = null;
-
-    try {
-      response = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: nextContent }),
-      });
-      const payload = await response.json().catch(() => ({})) as { error?: string; timeZone?: unknown };
-      if (!response.ok) {
-        throw new Error(
-          isAuthFailure(response, null)
-            ? AUTH_REQUIRED_MESSAGE
-            : payload.error || 'Failed to update automatic curation',
-        );
-      }
-
-      setConfigContent(nextContent);
-      setConfigTimeZone(normalizeTimeZoneConfigView(payload.timeZone, nextContent));
-    } catch (error) {
-      setAutomaticCurationError(
-        isAuthFailure(response, error)
-          ? AUTH_REQUIRED_MESSAGE
-          : error instanceof Error
-            ? error.message
-            : 'Failed to update automatic curation',
-      );
-    } finally {
-      setIsSavingAutomaticCuration(false);
-    }
-  }, [automaticCurationEnabled, configContent, isSavingAutomaticCuration]);
   const toggleBackgroundSourceBrowsing = useCallback(async () => {
     if (!configContent || isSavingBackgroundSourceBrowsing) {
       return;
@@ -2032,22 +1957,8 @@ export default function Home() {
   }, [feedBannerCompletedTask]);
 
   const feedBannerCurationTask: CurationTaskState | null = useMemo(() => {
-    const task = activeNonChatTask ?? feedBannerCompletedTask;
-    if (!task) return null;
-    const isCuration = task.priority === 'heartbeat'
-      || (task.priority === 'user_ping' && /\/curate|heartbeat:|curation cycle/i.test(task.messagePreview || ''));
-    if (!isCuration) return null;
-    const isActive = activeNonChatTask?.id === task.id;
-    return {
-      taskId: task.id,
-      status: isActive ? 'running' : (task.state === 'failed' ? 'failed' : 'completed'),
-      startedAt: task.startedAt || task.enqueuedAt,
-      updatedAt: task.completedAt || task.startedAt || task.enqueuedAt,
-      itemsAdded: null,
-      error: task.error || null,
-      transcriptTarget: resolveTaskTranscriptTarget(task.id, orchestratorStatus),
-    };
-  }, [activeNonChatTask, feedBannerCompletedTask, orchestratorStatus]);
+    return null;
+  }, []);
 
   const conversationCards = useMemo(() => {
     return buildSessionCards(
@@ -2145,7 +2056,6 @@ export default function Home() {
   const hasOpenDetailView = detailStack.length > 0;
   const pendingItemCount = hasActiveSearch ? 0 : pendingItems.length;
   const isCurationPipelineActive = hasActiveCurationTask(orchestratorStatus);
-  const isCurateDisabled = isLoading || isCurationPipelineActive;
 
   const shouldShowAgentEntries = !hasActiveSearch && (selectedFilter === 'all' || selectedFilter === 'agent');
   const searchConversationIds = useMemo(() => (
@@ -4417,65 +4327,6 @@ export default function Home() {
     pendingCodexReasoningEffort,
     updateSelectedChatSession,
   ]);
-
-  const submitCurateToSession = useCallback(async (
-    sessionId: string,
-    command: CurateCommand = '/curate',
-    options?: { openDetailOnSuccess?: boolean; originView?: string; selectOnSuccess?: boolean },
-  ): Promise<boolean> => {
-    const openDetailOnSuccess = options?.openDetailOnSuccess ?? true;
-    const selectOnSuccess = options?.selectOnSuccess ?? true;
-    let response: Response | null = null;
-    try {
-      setChatStatus(null);
-      response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: command,
-          sessionId,
-          context: null,
-          inReplyTo: null,
-          contextKind: 'global',
-          contextRefId: null,
-          originView: options?.originView ?? (hasOpenDetailView ? 'post_detail' : 'feed'),
-        }),
-      });
-      if (isAuthFailure(response, null)) {
-        throw new Error(resolveChatFetchErrorMessage(response, null, 'Unable to start curation in this session'));
-      }
-      const data = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        userMessage?: ChatMessage;
-        sessionId?: string | null;
-      };
-      if (data.userMessage) {
-        setChatMessages((current) => mergeChatMessages(current, [data.userMessage as ChatMessage]));
-      }
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || 'Unable to start curation in this session');
-      }
-      if (data.sessionId) {
-        hydratedConversationSessionIdsRef.current.delete(data.sessionId);
-        void refreshConversationSessionSummary(data.sessionId);
-        if (selectOnSuccess) {
-          updateSelectedChatSession(data.sessionId);
-          setConversationHighlightId(data.sessionId);
-          setConversationScrollToBottomId(data.sessionId);
-          if (openDetailOnSuccess) {
-            openConversationDetail(data.sessionId, null, { replaceTop: true });
-          }
-        }
-      }
-      return true;
-    } catch (error) {
-      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to start curator session curation'));
-      return false;
-    } finally {
-      setSessionPickerOpen(false);
-    }
-  }, [hasOpenDetailView, openConversationDetail, refreshConversationSessionSummary, updateSelectedChatSession]);
 
   const submitGeneralChatCommand = useCallback(async ({
     command,
@@ -7241,20 +7092,6 @@ export default function Home() {
     const isProviderWithReasoningSettings = isClaudeSession || isCodexSession;
     const isMenuPopoverOpen = chatSessionReasoningPopover?.sessionId === sessionId
       && chatSessionReasoningPopover.anchor === 'menu';
-    const sessionTint = getSessionTint(sessionId, session.color);
-
-    const curatorActions = session.sessionType === 'curator' ? (
-      <CuratorCurateButtons
-        disabled={isCurateDisabled || isSendingChat}
-        tint={sessionTint}
-        showIcon={false}
-        fullLabelMinRowWidth={CURATOR_CURATE_HEADER_FULL_LABEL_MIN_ROW_WIDTH}
-        className="flex shrink-0 items-center gap-1 sm:gap-2"
-        onSubmit={(command) => {
-          void submitCurateToSession(sessionId, command);
-        }}
-      />
-    ) : null;
     return (
       <>
         <div ref={chatSessionMenuRef} className="relative shrink-0">
@@ -7324,7 +7161,6 @@ export default function Home() {
             </div>
           )}
         </div>
-        {curatorActions}
       </>
     );
   };
@@ -7994,22 +7830,16 @@ export default function Home() {
                   />
                   {hasCuratorSession ? (
                     <SidebarAutomationControls
-                      automaticCurationEnabled={automaticCurationEnabled}
                       backgroundSourceBrowsingEnabled={backgroundSourceBrowsingEnabled}
                       timeZoneLabel={configTimeZone.timeZone}
                       timeZoneWarning={configTimeZone.warning}
                       openClawDailyTimer={openClawDailyTimer}
                       configLoaded={Boolean(configContent)}
-                      isSavingAutomaticCuration={isSavingAutomaticCuration}
                       isSavingBackgroundSourceBrowsing={isSavingBackgroundSourceBrowsing}
                       isRepairingOpenClawDailyTimer={isRepairingOpenClawDailyTimer}
                       isStartingSourceHealth={isStartingSourceHealth}
-                      automaticCurationError={automaticCurationError}
                       backgroundSourceBrowsingError={backgroundSourceBrowsingError}
                       openClawDailyTimerError={openClawDailyTimerError}
-                      onToggleAutomaticCuration={() => {
-                        void toggleAutomaticCuration();
-                      }}
                       onToggleBackgroundSourceBrowsing={() => {
                         void toggleBackgroundSourceBrowsing();
                       }}
@@ -8292,7 +8122,7 @@ export default function Home() {
                   <p className="text-sm text-zinc-300">{isSetupReady ? 'Ready for curation' : 'Welcome'}</p>
                   <p className="mt-1 text-xs text-zinc-500">
                     {isSetupReady
-                      ? 'Start a Curator Agent run, or check Source Health if the first pass finds no items.'
+                      ? 'OpenClaw will submit selected items from its curator run. Check Source Health if the feed stays empty.'
                       : 'Your curated feed will appear here.'}
                   </p>
                 </>
@@ -8314,10 +8144,7 @@ export default function Home() {
                   streamingChat={visibleStreamingChat}
                   retainedLiveActivity={retainedLiveActivityBySession[conversation.sessionId] ?? null}
                   chatProgress={effectiveChatProgress}
-                  isCurateDisabled={isCurateDisabled}
-                  isSendingChat={isSendingChat}
                   searchQuery={searchQuery}
-                  submitCurateToSession={submitCurateToSession}
                   onOpen={() => {
                     updateSelectedChatSession(conversation.sessionId);
                     if (searchQuery && conversation.searchMatchMessageId) {

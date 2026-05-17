@@ -118,7 +118,7 @@ For each triggered source, run these probes in order and stop when a probe gives
    - `signed-out`, `login`, `interstitial`: Suggested fix: run `/setup-source <source>` to re-authenticate the shared Chrome profile.
    - `429`, `rate limit`, `Pro cap`: Suggested fix: wait for the provider window to reset and check `/api/usage/summary`.
    - `network`, `DNS`, `tls`: Suggested fix: check VM connectivity with `curl -fsS https://x.com`.
-   - `hook claimed but worker missing`: Suggested fix: drain stuck BullMQ cache_refresh job for <source> and re-enqueue; investigate `lib/cache-refresh-on-demand.js` wait-loop observability.
+   - `hook claimed but worker missing`: Suggested fix: drain stuck BullMQ cache_refresh job for <source> and re-enqueue; investigate the cache-refresh worker logs.
 
 When a clear operational cause is identified, end that source bullet with one `Suggested fix:` line naming the next action. When the cause looks like a code bug, such as heartbeat scheduling missing an installed source or runtime rejecting a correct source skill, end the diagnosis with: `This looks like a code bug in <subsystem>. Want me to file a code_fix?`
 

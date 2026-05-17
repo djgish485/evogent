@@ -747,20 +747,16 @@ export function ChatCurationStatusBanner({
 }
 
 export type SidebarAutomationControlsProps = {
-  automaticCurationEnabled: boolean;
   backgroundSourceBrowsingEnabled: boolean;
   timeZoneLabel: string;
   timeZoneWarning: string | null;
   openClawDailyTimer: OpenClawDailyTimerSidebarStatus | null;
   configLoaded: boolean;
-  isSavingAutomaticCuration: boolean;
   isSavingBackgroundSourceBrowsing: boolean;
   isRepairingOpenClawDailyTimer: boolean;
   isStartingSourceHealth: boolean;
-  automaticCurationError: string | null;
   backgroundSourceBrowsingError: string | null;
   openClawDailyTimerError: string | null;
-  onToggleAutomaticCuration: () => void;
   onToggleBackgroundSourceBrowsing: () => void;
   onRepairOpenClawDailyTimer: () => void;
   onStartSourceHealth: () => void;
@@ -777,20 +773,16 @@ export type OpenClawDailyTimerSidebarStatus = {
 };
 
 export function SidebarAutomationControls({
-  automaticCurationEnabled,
   backgroundSourceBrowsingEnabled,
   timeZoneLabel,
   timeZoneWarning,
   openClawDailyTimer,
   configLoaded,
-  isSavingAutomaticCuration,
   isSavingBackgroundSourceBrowsing,
   isRepairingOpenClawDailyTimer,
   isStartingSourceHealth,
-  automaticCurationError,
   backgroundSourceBrowsingError,
   openClawDailyTimerError,
-  onToggleAutomaticCuration,
   onToggleBackgroundSourceBrowsing,
   onRepairOpenClawDailyTimer,
   onStartSourceHealth,
@@ -798,46 +790,7 @@ export function SidebarAutomationControls({
   const shouldShowOpenClawTimer = Boolean(openClawDailyTimer?.installed && openClawDailyTimer.state !== 'aligned');
   return (
     <section className="rounded-xl border border-zinc-800/90 bg-zinc-950/70 px-3 py-3">
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 text-sm text-zinc-100">
-          Automatic curation
-          <CompactInfoPopover title="Automatic curation" buttonLabel="View automatic curation details" triggerVariant="minimal">
-            <p>Adaptive heartbeat pauses when off. Manual refresh still works.</p>
-          </CompactInfoPopover>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={automaticCurationEnabled}
-          aria-label="Toggle automatic curation"
-          data-testid="automatic-curation-toggle"
-          disabled={!configLoaded || isSavingAutomaticCuration}
-          onClick={onToggleAutomaticCuration}
-          className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${
-            automaticCurationEnabled
-              ? 'border-emerald-500/70 bg-emerald-500/20'
-              : 'border-zinc-700 bg-zinc-800'
-          } disabled:cursor-not-allowed disabled:opacity-60`}
-        >
-          <span
-            aria-hidden="true"
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              automaticCurationEnabled ? 'translate-x-6' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </div>
-      {isSavingAutomaticCuration || !configLoaded ? (
-        <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
-          {isSavingAutomaticCuration ? <span className={automaticCurationEnabled ? 'text-emerald-300' : 'text-zinc-400'}>Saving...</span> : null}
-          {!configLoaded ? <span className="text-zinc-500">Loading config...</span> : null}
-        </div>
-      ) : null}
-      {automaticCurationError ? (
-        <p className="mt-2 text-[11px] text-red-300">{automaticCurationError}</p>
-      ) : null}
-
-      <div className="mt-3 border-t border-zinc-800/80 pt-3">
+      <div>
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 text-sm text-zinc-100">
             Background Browsing

@@ -47,7 +47,7 @@ Security gain:
 
 ### Step 2: Eliminate Nested Spawning in Command Instructions
 
-Ensure command files (`/curate`, `/reflect`) execute work inline instead of launching child `claude -p` processes.
+Ensure command files such as `/reflect` execute work inline instead of launching child `claude -p` processes.
 
 Security gain:
 - Removes recursion and uncontrolled process trees

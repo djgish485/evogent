@@ -120,12 +120,6 @@ claude -p '<audit prompt>' --allowedTools 'Read,Glob,Grep,Bash(read-only command
 
 Use the full prompt template above. Keep the sub-agent read-only.
 
-### Called by curation at end-of-cycle
-
-`/.claude/commands/curate.md` can use this skill as a post-cycle check when repeated failures, quality drift, or broken subsystem contracts are observed.
-
-When curation invokes this skill, actionable findings should be submitted as `type='suggestion'` feed items with `metadata.suggestionType='code_fix'`, linked to the summary notification via `parentId`.
-
 ### Called by reflection
 
 Reflection can invoke this skill when it detects quality drift, repeated failures, or recurring evidence that the upstream pipeline is wasting work or dropping needed data.

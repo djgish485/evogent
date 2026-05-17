@@ -58,7 +58,7 @@ This layer sets cadence, editorial style, topic emphasis, avoidance rules, and o
 
 The curation worker is driven by a stack of context, not a single prompt:
 
-- static instructions in `.claude/commands/curate.md`
+- OpenClaw curator instructions synced from Evogent memory files
 - dynamic learned summary in `data/preferences-context.md`
 - synthesized long-term patterns in `data/preference-insights.md`
 - editorial policy in `data/curation-prompt.md`

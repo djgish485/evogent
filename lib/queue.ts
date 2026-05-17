@@ -1,8 +1,6 @@
 export const BACKGROUND_QUEUE_NAME = 'evogent-background' as const;
 
 export const BACKGROUND_JOB_NAMES = {
-  HEARTBEAT: 'heartbeat',
-  CURATION: 'curation',
   REFLECTION: 'reflection',
   USER_CHAT: 'user_chat',
   POST_ENRICHMENT: 'post_enrichment',
@@ -13,18 +11,6 @@ export type BackgroundJobName = typeof BACKGROUND_JOB_NAMES[keyof typeof BACKGRO
 
 interface BackgroundJobBase {
   requestId?: string;
-}
-
-export interface HeartbeatJobData extends BackgroundJobBase {
-  triggeredBy: string;
-}
-
-export interface CurationJobData extends BackgroundJobBase {
-  message: string;
-  priority: 'heartbeat' | 'user_ping';
-  source: string;
-  metadata?: Record<string, unknown> | null;
-  timeoutMs?: number;
 }
 
 export interface ReflectionJobData extends BackgroundJobBase {
@@ -64,8 +50,6 @@ export interface ConfigApplyJobData extends BackgroundJobBase {
 }
 
 export interface BackgroundJobDataMap {
-  heartbeat: HeartbeatJobData;
-  curation: CurationJobData;
   reflection: ReflectionJobData;
   user_chat: UserChatJobData;
   post_enrichment: PostEnrichmentJobData;

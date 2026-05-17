@@ -8,7 +8,7 @@ agent_dir="$openclaw_home/agents/$agent_id"
 config_file="${OPENCLAW_CONFIG_PATH:-$openclaw_home/openclaw.json}"
 model_ref="${OPENCLAW_CURATOR_MODEL:-openai/gpt-5.5}"
 runtime_id="${OPENCLAW_CURATOR_RUNTIME_ID:-codex}"
-cron_name="${OPENCLAW_CURATOR_CRON_NAME:-Evogent shadow curator}"
+cron_name="${OPENCLAW_CURATOR_CRON_NAME:-Evogent curator}"
 cron_schedule="${OPENCLAW_CURATOR_CRON:-*/30 * * * *}"
 
 copy_if_missing() {
@@ -116,7 +116,7 @@ NODE
 
 cron_message=$(
   cat <<'EOF'
-Run one Evogent shadow curation cycle. Use evogent.browse_cache.query to inspect candidates, evogent.preferences.match to score them against memory, evogent.interactions.recent for recent feedback, and evogent.feed.submit to write selected items to the shadow log only. Do not call the live curate submit endpoint.
+Run one Evogent curation cycle. Use evogent.browse_cache.query to inspect candidates, evogent.preferences.match to score them against memory, evogent.interactions.recent for recent feedback, and evogent.feed.submit to submit selected items to the live feed.
 EOF
 )
 
@@ -151,7 +151,7 @@ const jobs = Array.isArray(parsed)
       : [];
 const exists = jobs.some((job) => {
   if (!job || typeof job !== 'object') return false;
-  return job.name === cronName || job.id === 'evogent-shadow-curator' || job.jobId === 'evogent-shadow-curator';
+  return job.name === cronName || job.id === 'evogent-curator' || job.jobId === 'evogent-curator';
 });
 process.exit(exists ? 0 : 1);
 NODE
@@ -180,12 +180,9 @@ fi
 
 cat <<EOF
 
-Installed OpenClaw curator agent in shadow mode:
+Installed OpenClaw curator agent:
   $agent_dir
 
 Manual run:
   openclaw agent run --agent curator
-
-Shadow output:
-  $repo_dir/data/shadow-curator-log/$(date +%Y-%m-%d).jsonl
 EOF
