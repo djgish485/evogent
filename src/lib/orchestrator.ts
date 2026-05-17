@@ -1,4 +1,4 @@
-export type OrchestratorPriority = 'user_chat' | 'user_ping' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'heartbeat' | 'reflection';
+export type OrchestratorPriority = 'user_chat' | 'user_ping' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'reflection';
 
 export interface EnqueueOrchestratorRequest {
   message: string;

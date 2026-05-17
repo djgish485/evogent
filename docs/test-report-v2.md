@@ -8,7 +8,7 @@
 
 ## Summary
 
-Unit and API/WebSocket integration tests cover the orchestrator, chat, enrichment, heartbeat, post-detail, skills, and mobile-UX subsystems. Playwright E2E tests were removed (2026-03-19) — dev agents use Browser tool for interactive visual verification instead.
+Unit and API/WebSocket integration tests cover the orchestrator, chat, enrichment, post-detail, skills, and mobile-UX subsystems. Playwright E2E tests were removed (2026-03-19) — dev agents use Browser tool for interactive visual verification instead.
 
 ## Test Files
 
@@ -18,7 +18,6 @@ Unit and API/WebSocket integration tests cover the orchestrator, chat, enrichmen
 | `src/lib/orchestrator.test.ts` | 6 | Enqueue, priorities, status, queue ordering |
 | `src/lib/sub-agent.test.ts` | 5 | Spawn, log files, handle shape, defaults |
 | `src/lib/agent-manager.test.ts` | 4 | Singleton, empty state, constants |
-| `src/lib/heartbeat-service.test.ts` | 3 | Evaluate, skip-if-pending, complete |
 | `src/lib/db/schema.test.ts` | 7 | All 5 tables, columns, constraints, indexes |
 | `src/lib/heartbeat.test.ts` | +5 expanded | No-trigger, peaks, empty history, weights |
 | `src/lib/skills.test.ts` | +6 expanded | List, registry, install, parse, config |
@@ -40,7 +39,7 @@ Unit and API/WebSocket integration tests cover the orchestrator, chat, enrichmen
 | 1 | Brain Orchestrator | x | x | x |
 | 2 | Sub-Agent Architecture | x | x | x |
 | 3 | Inline Chat | x | x | x |
-| 4 | Adaptive Heartbeat | x | x | - |
+| 4 | Activity Signals | x | x | - |
 | 5 | Post Detail + Enrichment | x | x | - |
 | 6 | Skills System | x | x | - |
 | 7 | Mobile UX | - | - | - |

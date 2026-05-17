@@ -11,7 +11,6 @@ import {
 } from './orchestrator';
 
 const LOCK_DIR = getDataPath('.orchestrator-test-lock');
-const CHAT_OUTPUT_PATH = getDataPath('chat-output.jsonl');
 const REFLECTION_STATUS_PATH = getDataPath('reflection-status.json');
 const ORCHESTRATOR_INTEGRATION_SKIP_REASON = process.env.RUN_ORCHESTRATOR_INTEGRATION_TESTS === '1'
   ? undefined
@@ -72,37 +71,6 @@ async function waitForStatus(
 function requestId(label: string): string {
   const rand = Math.random().toString(36).slice(2, 10);
   return `test-orch-${label}-${Date.now()}-${rand}`;
-}
-
-async function readChatOutputEvents(): Promise<Array<Record<string, unknown>>> {
-  const content = await fs.promises.readFile(CHAT_OUTPUT_PATH, 'utf8')
-    .catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? '' : Promise.reject(error)));
-
-  return content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-async function waitForChatEvent(
-  predicate: (event: Record<string, unknown>) => boolean,
-  options: { timeoutMs?: number; intervalMs?: number } = {},
-): Promise<Record<string, unknown>> {
-  const timeoutMs = options.timeoutMs ?? 10_000;
-  const intervalMs = options.intervalMs ?? 100;
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    const events = await readChatOutputEvents();
-    const match = events.find((event) => predicate(event));
-    if (match) {
-      return match;
-    }
-    await delay(intervalMs);
-  }
-
-  throw new Error('Timed out waiting for chat event');
 }
 
 describe('orchestrator client wrappers', { skip: ORCHESTRATOR_INTEGRATION_SKIP_REASON }, () => {
@@ -240,66 +208,6 @@ describe('orchestrator client wrappers', { skip: ORCHESTRATOR_INTEGRATION_SKIP_R
 
       assert.strictEqual(status.currentTask?.id, lowId);
       assert.ok(historyIds.includes(highId));
-    });
-  });
-
-  test('background curation does not block chat and emits lifecycle events', async () => {
-    await withOrchestratorLock(async () => {
-      await waitForStatus((status) => (
-        status.queueDepth === 0
-        && !status.isProcessing
-        && !status.activeCurationAgent
-        && !status.activeReflectionAgent
-      ), { timeoutMs: 120_000, intervalMs: 200 });
-
-      const curationId = requestId('background-curation');
-      const chatId = requestId('background-chat');
-
-      const curation = await enqueueOrchestratorMessage({
-        message: '/curate [unit] background curation should not block chat',
-        priority: 'heartbeat',
-        requestId: curationId,
-        source: 'unit-test-background-curation',
-      });
-
-      assert.strictEqual(curation.ok, true);
-
-      await waitForStatus((status) => (
-        status.activeCurationAgent === curationId
-        && status.history.some((task) => task.id === curationId && task.state === 'processing')
-      ), { timeoutMs: 60_000, intervalMs: 150 });
-
-      const chat = await enqueueOrchestratorMessage({
-        message: '[unit] chat should run while curation is active',
-        priority: 'user_chat',
-        requestId: chatId,
-        source: 'unit-test-background-chat',
-      });
-
-      assert.strictEqual(chat.ok, true);
-
-      const concurrentStatus = await waitForStatus((status) => (
-        status.history.some((task) => task.id === curationId && (task.state === 'processing' || task.state === 'completed'))
-        && status.history.some((task) => task.id === chatId && task.state === 'completed')
-      ), { timeoutMs: 60_000, intervalMs: 150 });
-
-      assert.ok(concurrentStatus.history.some((task) => task.id === chatId && task.state === 'completed'));
-
-      const finalStatus = await waitForStatus((status) => (
-        !status.activeCurationAgent
-        && status.history.some((task) => task.id === curationId && task.state === 'completed')
-      ), { timeoutMs: 60_000, intervalMs: 150 });
-
-      const curationHistory = finalStatus.history.find((task) => task.id === curationId);
-      assert.ok(curationHistory);
-      assert.strictEqual(typeof curationHistory?.logFile, 'string');
-      assert.ok((curationHistory?.logFile ?? '').endsWith(`${curationId}.jsonl`));
-
-      const startEvent = await waitForChatEvent((event) => event.id === `event-curation-started-${curationId}`);
-      assert.ok(startEvent);
-      assert.strictEqual((startEvent?.metadata as Record<string, unknown> | undefined)?.taskId, curationId);
-      assert.strictEqual((startEvent?.metadata as Record<string, unknown> | undefined)?.event, 'curation_started');
-      assert.strictEqual((startEvent?.metadata as Record<string, unknown> | undefined)?.hasTranscript, true);
     });
   });
 

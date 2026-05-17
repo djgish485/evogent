@@ -24,7 +24,6 @@ const CONFIG_TARGET = CONFIG_DOCUMENT_TARGETS.config;
 const BRAIN_PROVIDER_SWITCH_BLOCKING_PRIORITIES = new Set([
   'user_chat',
   'user_ping',
-  'heartbeat',
   'code_fix_spawn',
   'feed_action',
   'reflection',

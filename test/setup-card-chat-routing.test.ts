@@ -132,14 +132,15 @@ test('setup banner click path submits /setup-wizard and dismisses the banner', a
   assert.match(pageSource, /\/api\/setup-readiness/);
   assert.match(pageSource, /isSetupReady={isSetupReady}/);
   assert.match(pageSource, /Ready for curation/);
-  assert.match(pageSource, /Start a Curator Agent run, or check Source Health/);
+  assert.match(pageSource, /OpenClaw will submit selected items from its curator run/);
 });
 
-test('internal orchestrator proxy rejects hidden curate handoff', async () => {
+test('internal orchestrator proxy rejects retired curate handoff', async () => {
   const routeSource = await fs.readFile(path.join(process.cwd(), 'src/app/api/internal/orchestrator/enqueue/route.ts'), 'utf8');
 
   assert.match(routeSource, /isHiddenCurateRequest/);
-  assert.match(routeSource, /Route curation through Curator Agent chat with POST \/api\/chat/);
+  assert.match(routeSource, /Evogent-native curation has been retired/);
+  assert.match(routeSource, /status:\s*410/);
   assert.match(routeSource, /normalized === '\/curate'/);
 });
 
