@@ -10,7 +10,6 @@ interface ConfigPanelProps {
 type ConfigTabKey =
   | 'config'
   | 'curation-prompt'
-  | 'curate-command'
   | 'reflect-command'
   | 'enrichment-instructions'
   | 'chat-instructions'
@@ -57,14 +56,6 @@ const TABS: ConfigTabDefinition[] = [
     heading: 'Edit Curation Prompt',
     placeholder: 'Describe curation priorities, topics, and sources to prefer...',
     endpoint: '/api/config?target=curation-prompt',
-  },
-  {
-    key: 'curate-command',
-    label: 'Curate',
-    heading: 'Curate Command',
-    placeholder: '',
-    endpoint: '/api/config?target=curate-command',
-    readOnly: true,
   },
   {
     key: 'reflect-command',

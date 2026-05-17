@@ -91,6 +91,6 @@ rm -rf "$EXTRACT_DIR" "$ARCHIVE_PATH"
 ## After Import
 
 - preferences-context.md auto-regenerates with the new signals
-- The next /curate cycle will use these preferences to guide content selection
+- The next OpenClaw curator run will use these preferences to guide content selection
 - You can check the stats: GET /api/preferences
 - Typical import size: 17,000-20,000 preferences from an active Twitter account

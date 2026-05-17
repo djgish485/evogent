@@ -20,7 +20,7 @@ If you were pointed at this repo and asked to install the app, there is no runti
 
 ### Spawned by Evogent runtime
 
-If the prompt includes `Task ID`, `Priority`, `Source`, and `Timestamp` headers plus a `Chat:`, `/curate`, or `Reflection:` task prompt, the runtime instructions below apply as written.
+If the prompt includes `Task ID`, `Priority`, `Source`, and `Timestamp` headers plus a `Chat:`, `User ping:`, or `Reflection:` task prompt, the runtime instructions below apply as written.
 
 ### Developing the codebase
 
@@ -70,7 +70,7 @@ Try to explain things simply. If you cannot explain something simply, you do not
 Example: if the user asks whether a chain of curation/chat fixes is accurate, answer first in product terms, then optionally name the mechanism.
 
 - Too internal: `The heartbeat curator-chat fallback replies hit fallback chat ingestion, which normalized agent-only rows and created orphan sessions.`
-- Better: `Yes. Background curation was fixed to send a real /curate message into the curator chat. An old file-import backup was still creating fake chat sessions/cards. The new fix removes that backup as a chat delivery path.`
+- Better: `Yes. The old background curation path was removed. OpenClaw now owns feed curation and submits accepted items through the live feed API.`
 
 ## Diagnostic Methodology: Hand-Compute
 
@@ -99,9 +99,8 @@ The practical test is simple: is this something the user wants to consume as con
 
 The task prompt will usually be one of these:
 
-- `/curate` or heartbeat text: run one curation cycle
-- `Chat: ...`: submit one delivered reply through `POST $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit`
 - `User ping: ...`: carry out the user request directly
+- `Chat: ...`: submit one delivered reply through `POST $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit`
 - `Reflection: ...`: review recent behavior and emit reflection outputs when justified
 - `Config updated. Re-read ...`: re-read the referenced file(s) and exit unless output is requested
 
@@ -125,6 +124,8 @@ Primary context files:
 - `data/preference-insights.md`
 - `data/cache-hints.json`
 - `.claude/skills/*/SKILL.md`
+
+OpenClaw owns scheduled feed curation. Evogent runtime tasks must not spawn curation runs or enqueue `/curate`; curated items enter Evogent through `POST /api/internal/curate/submit`.
 
 Reference material lives here:
 

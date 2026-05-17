@@ -372,13 +372,6 @@ XHigh
     assert.strictEqual(
       getChatMessageAuthorLabel({
         role: 'user',
-        metadata: { automatedCuration: true },
-      }, 'Claude'),
-      'Auto',
-    );
-    assert.strictEqual(
-      getChatMessageAuthorLabel({
-        role: 'user',
         metadata: null,
       }, 'Claude'),
       'You',
@@ -694,34 +687,30 @@ describe('chat composer text entry', () => {
 });
 
 describe('sidebar automation controls', () => {
-  test('renders automatic curation and background browsing switches', () => {
+  test('renders background browsing switch without retired automatic curation controls', () => {
     const markup = renderToStaticMarkup(createElement(SidebarAutomationControls, {
-      automaticCurationEnabled: true,
       backgroundSourceBrowsingEnabled: true,
       timeZoneLabel: 'America/Denver',
       timeZoneWarning: null,
       openClawDailyTimer: null,
       configLoaded: true,
-      isSavingAutomaticCuration: false,
       isSavingBackgroundSourceBrowsing: false,
       isRepairingOpenClawDailyTimer: false,
       isStartingSourceHealth: false,
-      automaticCurationError: null,
       backgroundSourceBrowsingError: null,
       openClawDailyTimerError: null,
-      onToggleAutomaticCuration: () => {},
       onToggleBackgroundSourceBrowsing: () => {},
       onRepairOpenClawDailyTimer: () => {},
       onStartSourceHealth: () => {},
     }));
 
-    assert.match(markup, /Automatic curation/);
     assert.match(markup, /Background Browsing/);
-    assert.match(markup, /data-testid="automatic-curation-toggle"/);
+    assert.doesNotMatch(markup, /Automatic curation/);
+    assert.doesNotMatch(markup, /data-testid="automatic-curation-toggle"/);
     assert.match(markup, /data-testid="background-source-browsing-toggle"/);
     assert.match(markup, /data-testid="source-health-button"/);
     assert.match(markup, /aria-label="Toggle background browsing"/);
-    assert.match(markup, /aria-label="View automatic curation details"/);
+    assert.doesNotMatch(markup, /aria-label="View automatic curation details"/);
     assert.match(markup, /aria-label="View background browsing details"/);
     assert.match(markup, /class="contents"/);
     assert.match(markup, /p-1\.5/);
@@ -739,20 +728,16 @@ describe('sidebar automation controls', () => {
 
   test('renders the background browsing switch without an off label when disabled', () => {
     const markup = renderToStaticMarkup(createElement(SidebarAutomationControls, {
-      automaticCurationEnabled: true,
       backgroundSourceBrowsingEnabled: false,
       timeZoneLabel: 'America/Denver',
       timeZoneWarning: null,
       openClawDailyTimer: null,
       configLoaded: true,
-      isSavingAutomaticCuration: false,
       isSavingBackgroundSourceBrowsing: false,
       isRepairingOpenClawDailyTimer: false,
       isStartingSourceHealth: false,
-      automaticCurationError: null,
       backgroundSourceBrowsingError: null,
       openClawDailyTimerError: null,
-      onToggleAutomaticCuration: () => {},
       onToggleBackgroundSourceBrowsing: () => {},
       onRepairOpenClawDailyTimer: () => {},
       onStartSourceHealth: () => {},

@@ -22,7 +22,6 @@ const { recoverClaudeSessionPoison } = require('./lib/chat-session-repair');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { resolveBrainProviderByName } = require('./lib/brain-provider');
 const { dispatchCodeFixSuggestionsInBackground } = require('./lib/code-fix-dispatch');
-const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
@@ -68,7 +67,6 @@ const TASK_TIMEOUT_MS_BY_PRIORITY = Object.freeze({
   user_ping: EXECUTION_TASK_TIMEOUT_MS,
   post_enrichment: EXECUTION_TASK_TIMEOUT_MS,
   cache_refresh: EXECUTION_TASK_TIMEOUT_MS,
-  heartbeat: EXECUTION_TASK_TIMEOUT_MS,
   reflection: EXECUTION_TASK_TIMEOUT_MS,
 });
 const CLAUDE_SYSTEM_PROMPT_PATH = path.join(process.cwd(), 'CLAUDE.md');
@@ -87,7 +85,7 @@ let cloudflareAccessJwks = null;
 let joseImportPromise = null;
 let lastCloudflareAccessJwtWarningAt = 0;
 
-/** @typedef {'user_chat' | 'user_ping' | 'code_fix_spawn' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'heartbeat' | 'reflection'} OrchestratorPriority */
+/** @typedef {'user_chat' | 'user_ping' | 'code_fix_spawn' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'reflection'} OrchestratorPriority */
 
 const PRIORITY_VALUES = Object.freeze({
   user_chat: 400,
@@ -96,7 +94,6 @@ const PRIORITY_VALUES = Object.freeze({
   user_ping: 300,
   post_enrichment: 200,
   cache_refresh: 150,
-  heartbeat: 100,
   reflection: 50,
 });
 
@@ -114,7 +111,6 @@ const PRIORITY_ALIASES = Object.freeze({
   cache: 'cache_refresh',
   'cache-refresh': 'cache_refresh',
   cacherefresh: 'cache_refresh',
-  hb: 'heartbeat',
   reflect: 'reflection',
   code_fix: 'code_fix_spawn',
   codefix: 'code_fix_spawn',
@@ -1012,10 +1008,10 @@ function isPublicReadPath(method, pathname) {
 }
 
 function normalizePriority(priority) {
-  if (typeof priority !== 'string') return 'heartbeat';
+  if (typeof priority !== 'string') return 'user_ping';
 
   const trimmed = priority.trim();
-  if (!trimmed) return 'heartbeat';
+  if (!trimmed) return 'user_ping';
 
   const lowered = trimmed.toLowerCase();
   const mapped = PRIORITY_ALIASES[lowered] || lowered;
@@ -1024,7 +1020,7 @@ function normalizePriority(priority) {
     return /** @type {OrchestratorPriority} */ (mapped);
   }
 
-  return 'heartbeat';
+  return 'user_ping';
 }
 
 function sanitizeMessage(message) {
@@ -1060,159 +1056,6 @@ function getChatStatusDb() {
   }
 
   return chatStatusDb;
-}
-
-function isCuratorCurationLifecycleEvent(event) {
-  return event
-    && typeof event === 'object'
-    && event.curationCommand === '/curate'
-    && typeof event.curationLogRequestId === 'string'
-    && event.curationLogRequestId.trim();
-}
-
-function insertCurationLogForTaskStart(event) {
-  if (!isCuratorCurationLifecycleEvent(event)) {
-    return false;
-  }
-
-  try {
-    const db = getChatStatusDb();
-    const feedCountBefore = Number(
-      (db.prepare('SELECT COUNT(*) AS count FROM feed').get() || {}).count || 0,
-    );
-    db.prepare(`
-      INSERT OR IGNORE INTO curation_log (request_id, triggered_by, started_at, feed_count_before)
-      VALUES (?, ?, ?, ?)
-    `).run(
-      event.curationLogRequestId.trim(),
-      typeof event.curationTriggeredBy === 'string' && event.curationTriggeredBy.trim()
-        ? event.curationTriggeredBy.trim()
-        : 'curator_chat',
-      new Date().toISOString(),
-      feedCountBefore,
-    );
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[curation-log] Failed to insert curation start for ${event.curationLogRequestId}: ${message}`);
-    return false;
-  }
-}
-
-function getCurationTaskChatStatus(db, event) {
-  const chatMessageId = typeof event?.chatMessageId === 'string' && event.chatMessageId.trim()
-    ? event.chatMessageId.trim()
-    : null;
-  if (!chatMessageId) {
-    return null;
-  }
-
-  try {
-    const row = db.prepare(`
-      SELECT status
-      FROM chat_messages
-      WHERE id = ?
-      LIMIT 1
-    `).get(chatMessageId) || null;
-    return typeof row?.status === 'string' && row.status.trim()
-      ? row.status.trim().toLowerCase()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function classifyCurationLogCompletion({ event, chatStatus, itemsAdded }) {
-  if (itemsAdded > 0) {
-    return {
-      status: 'success',
-      reason: null,
-    };
-  }
-
-  if (chatStatus === 'cancelled') {
-    return {
-      status: 'cancelled',
-      reason: 'chat message was cancelled before curation output',
-    };
-  }
-
-  if (chatStatus === 'failed') {
-    return {
-      status: 'failed',
-      reason: 'chat message failed before curation output',
-    };
-  }
-
-  const taskState = typeof event?.state === 'string' ? event.state.trim().toLowerCase() : '';
-  const taskError = typeof event?.error === 'string' && event.error.trim()
-    ? event.error.trim()
-    : null;
-
-  if (taskState === 'failed') {
-    return {
-      status: 'failed',
-      reason: taskError || 'task failed before curation output',
-    };
-  }
-
-  if (taskError && /abort|cancel/i.test(taskError)) {
-    return {
-      status: 'aborted',
-      reason: taskError,
-    };
-  }
-
-  return {
-    status: 'empty',
-    reason: 'task completed without feed output',
-  };
-}
-
-function completeCurationLogForTask(event) {
-  if (!isCuratorCurationLifecycleEvent(event)) {
-    return false;
-  }
-
-  try {
-    const db = getChatStatusDb();
-    const row = db.prepare(`
-      SELECT completed_at, feed_count_before
-      FROM curation_log
-      WHERE request_id = ?
-      LIMIT 1
-    `).get(event.curationLogRequestId.trim()) || null;
-
-    if (!row || row.completed_at) {
-      return false;
-    }
-
-    const feedCount = Number((db.prepare('SELECT COUNT(*) AS count FROM feed').get() || {}).count || 0);
-    const baseline = Number.isFinite(row.feed_count_before) ? Number(row.feed_count_before) : 0;
-    const itemsAdded = Math.max(0, feedCount - baseline);
-    const completion = classifyCurationLogCompletion({
-      event,
-      chatStatus: getCurationTaskChatStatus(db, event),
-      itemsAdded,
-    });
-
-    db.prepare(`
-      UPDATE curation_log
-      SET completed_at = ?, items_added = ?, completion_status = ?, completion_reason = ?
-      WHERE request_id = ?
-    `).run(
-      new Date().toISOString(),
-      itemsAdded,
-      completion.status,
-      completion.reason,
-      event.curationLogRequestId.trim(),
-    );
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[curation-log] Failed to complete curation ${event.curationLogRequestId}: ${message}`);
-    return false;
-  }
 }
 
 function upsertCodeFixTaskRow(db, {
@@ -1752,43 +1595,27 @@ function isCurationInstruction(message) {
   return normalized === '/curate'
     || normalized.startsWith('/curate ')
     || normalized === '/curate-latest'
-    || normalized.startsWith('/curate-latest ')
-    || normalized.startsWith('heartbeat:')
-    || normalized.includes('curation cycle');
+    || normalized.startsWith('/curate-latest ');
 }
 
 function resolveTaskTimeoutMs(task) {
   if (Number.isInteger(task?.timeoutMs) && task.timeoutMs > 0) {
-    return Math.min(task.timeoutMs, TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat);
-  }
-
-  if (task?.source === 'chat_research' || task?.source === 'chat_background_routing') {
-    return TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat;
+    return Math.min(task.timeoutMs, EXECUTION_TASK_TIMEOUT_MS);
   }
 
   const priorityTimeout = TASK_TIMEOUT_MS_BY_PRIORITY[task.priority];
   if (typeof priorityTimeout === 'number' && Number.isFinite(priorityTimeout) && priorityTimeout > 0) {
-    if (task.priority === 'user_ping' && isCurationInstruction(task.message)) {
-      return TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat;
-    }
     return priorityTimeout;
   }
 
   return 5 * 60 * 1000;
 }
 
-function isCurationTask(task) {
-  if (!task || typeof task !== 'object') return false;
-  if (getTaskChatMessageId(task) && getTaskSessionId(task)) return false;
-  return task.priority === 'heartbeat'
-    || (task.priority === 'user_ping' && isCurationInstruction(task.message));
+function isCurationTask() {
+  return false;
 }
 
 function resolveBackgroundTaskKind(task) {
-  if (isCurationTask(task)) {
-    return BACKGROUND_JOB_NAMES.CURATION;
-  }
-
   if (task?.priority === 'reflection') {
     return BACKGROUND_JOB_NAMES.REFLECTION;
   }
@@ -1835,16 +1662,6 @@ async function enqueueRedisBackgroundTask({
 
   if (!backgroundTaskKind) {
     return null;
-  }
-
-  if (backgroundTaskKind === BACKGROUND_JOB_NAMES.CURATION) {
-    if (readCurationStatus().active || await hasPendingBackgroundJob(BACKGROUND_JOB_NAMES.CURATION)) {
-      return {
-        ok: false,
-        error: 'Curation already in progress or queued',
-        queueDepth: 0,
-      };
-    }
   }
 
   if (backgroundTaskKind === BACKGROUND_JOB_NAMES.REFLECTION) {
@@ -2001,8 +1818,7 @@ function isUnitTestTask(task) {
   const message = typeof task?.message === 'string' ? task.message : '';
 
   return source.startsWith('unit-test')
-    || message.startsWith('[unit]')
-    || (source.includes('unit-test') && source.startsWith('adaptive_heartbeat'));
+    || message.startsWith('[unit]');
 }
 
 function stringifyUnknown(value) {
@@ -2363,7 +2179,6 @@ const BrainOrchestrator = createBrainOrchestrator({
   getTaskSessionId,
   isBackgroundRoutedCommand,
   isChatResearchSource,
-  isCurationInstruction,
   isCurationTask,
   isFreshAssistantStreamingSignal,
   isPidRunning,
@@ -2380,7 +2195,6 @@ const BrainOrchestrator = createBrainOrchestrator({
   readCurationStatus,
   readReflectionStatus,
   readStoredChatProviderSessionId,
-  regeneratePreferenceContextBeforeCuration,
   recoverClaudeSessionPoison,
   resolveBackgroundTaskKind,
   resolveResearchFeedItemId,
@@ -3212,145 +3026,14 @@ async function postInternal(pathname, payload, { signal } = {}) {
   });
 }
 
-async function regeneratePreferenceContextBeforeCuration(task) {
-  console.log(`[cache-refresh] pre-curation refresh starting for task ${task.id}`);
-  try {
-    const result = await enqueueCacheRefreshForCuration(task, {
-      rootDir: process.cwd(),
-      configPath: dataPath('config.md'),
-    });
-
-    if (result.skipped) {
-      console.log(`[cache-refresh] pre-curation refresh skipped for task ${task.id}: ${result.reason}`);
-    } else if (result.timedOut) {
-      console.warn(`[cache-refresh] pre-curation refresh timed out for task ${task.id}: ${result.pendingSources.join(', ')}`);
-    } else {
-      const sourceResults = Array.isArray(result.sourceResults) ? result.sourceResults : [];
-      if (sourceResults.length === 0) {
-        console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: no sources`);
-      }
-      for (const sourceResult of sourceResults) {
-        console.log(`[cache-refresh] pre-curation refresh completed for task ${task.id}: source=${sourceResult.source} action=${sourceResult.action} result=${sourceResult.result}`);
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[cache-refresh] pre-curation refresh failed for task ${task.id}: ${message}`);
-  }
-
-  console.log(`[preferences] pre-curation context refresh starting for task ${task.id}`);
-
-  try {
-    await regeneratePreferenceContext();
-    console.log(`[preferences] pre-curation context refresh completed for task ${task.id}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[preferences] pre-curation context refresh failed for task ${task.id}: ${message}`);
-  }
-}
-
 function getCurrentCurationProgressSnapshot() {
   return normalizeCurationStatus(readCurationStatus());
-}
-
-function recordCurationPhaseUpdate(body) {
-  const taskId = typeof body?.taskId === 'string' ? body.taskId.trim() : '';
-  const phase = typeof body?.phase === 'string' ? body.phase.trim() : '';
-  const detail = typeof body?.detail === 'string' && body.detail.trim()
-    ? body.detail.trim()
-    : null;
-
-  if (!taskId) {
-    return { ok: false, statusCode: 400, error: 'taskId is required' };
-  }
-
-  if (!phase) {
-    return { ok: false, statusCode: 400, error: 'phase is required' };
-  }
-
-  const currentStatus = getCurrentCurationProgressSnapshot();
-  if (!currentStatus.active || currentStatus.requestId !== taskId) {
-    return { ok: false, statusCode: 404, error: 'No active curation task matches taskId' };
-  }
-
-  if (
-    currentStatus.phase === 'enriching'
-    && currentStatus.phaseTaskId
-    && currentStatus.phaseTaskId !== taskId
-  ) {
-    return {
-      ok: true,
-      statusCode: 200,
-      taskId,
-      phase: currentStatus.phase,
-      detail: currentStatus.phaseDetail,
-      deadlineAt: currentStatus.deadlineAt,
-      persistDeadlineAt: currentStatus.persistDeadlineAt,
-      remainingMs: null,
-      persistRemainingMs: null,
-    };
-  }
-
-  const nowIso = new Date().toISOString();
-  const nextStatus = {
-    requestId: taskId,
-    phaseTaskId: taskId,
-    phase,
-    phaseDetail: detail,
-    phaseUpdatedAt: nowIso,
-  };
-
-  if (!currentStatus.selectionLockedAt && (phase === 'selection_locked' || body?.selectionLocked === true)) {
-    nextStatus.selectionLockedAt = nowIso;
-  }
-
-  if (!currentStatus.submittedAt && (phase === 'submitted' || body?.submitted === true)) {
-    nextStatus.submittedAt = nowIso;
-    nextStatus.failedBeforeSubmit = false;
-    nextStatus.lastFailureAt = null;
-    nextStatus.lastFailurePhase = null;
-    nextStatus.lastFailureDetail = null;
-  }
-
-  writeCurationStatus(nextStatus);
-
-  appendTaskLogEntry(currentStatus.logFile, {
-    type: 'curation_phase',
-    taskId,
-    phase,
-    detail,
-    timestamp: nowIso,
-    beforeSubmit: !(currentStatus.submittedAt || nextStatus.submittedAt),
-  });
-
-  const updatedStatus = getCurrentCurationProgressSnapshot();
-  const deadlineAtMs = Date.parse(updatedStatus.deadlineAt || '');
-  const persistDeadlineAtMs = Date.parse(updatedStatus.persistDeadlineAt || '');
-
-  return {
-    ok: true,
-    statusCode: 200,
-    taskId,
-    phase,
-    detail,
-    deadlineAt: updatedStatus.deadlineAt,
-    persistDeadlineAt: updatedStatus.persistDeadlineAt,
-    remainingMs: Number.isFinite(deadlineAtMs) ? Math.max(0, deadlineAtMs - Date.now()) : null,
-    persistRemainingMs: Number.isFinite(persistDeadlineAtMs) ? Math.max(0, persistDeadlineAtMs - Date.now()) : null,
-  };
 }
 
 orchestrator.onStatus((status, trigger, event) => {
   broadcastOrchestratorStatus(getCombinedOrchestratorStatus(), trigger, event);
 
-  if (trigger === 'task_started') {
-    insertCurationLogForTaskStart(event);
-    return;
-  }
-
   if (trigger !== 'task_finished') return;
-
-  completeCurationLogForTask(event);
 
   const finishedTask = getFinishedTaskFromStatus(status, event);
 
@@ -3792,29 +3475,6 @@ app.prepare().then(() => {
       return;
     }
 
-    if (req.method === 'POST' && parsedUrl.pathname === '/api/internal/curation/progress') {
-      res.setHeader('Content-Type', 'application/json');
-
-      try {
-        const body = await readJsonBody(req);
-        const result = recordCurationPhaseUpdate(body);
-        if (result.ok) {
-          broadcastOrchestratorStatus(getCombinedOrchestratorStatus(), 'curation_phase', {
-            event: 'curation_phase',
-            taskId: result.taskId,
-            phase: result.phase,
-            detail: result.detail ?? null,
-          });
-        }
-        res.statusCode = result.statusCode;
-        res.end(JSON.stringify(result));
-      } catch {
-        res.statusCode = 400;
-        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON payload' }));
-      }
-      return;
-    }
-
     if (req.method === 'POST' && parsedUrl.pathname === '/api/internal/code-fix-orchestrator/enqueue') {
       res.setHeader('Content-Type', 'application/json');
 
@@ -4150,7 +3810,19 @@ app.prepare().then(() => {
             res.end(JSON.stringify({ ok: false, error: 'timeoutMs must be a positive integer' }));
             return;
           }
-          timeoutMs = Math.min(body.timeoutMs, TASK_TIMEOUT_MS_BY_PRIORITY.heartbeat);
+          timeoutMs = Math.min(body.timeoutMs, EXECUTION_TASK_TIMEOUT_MS);
+        }
+
+        if (
+          (typeof body.priority === 'string' && body.priority.trim().toLowerCase() === 'heartbeat')
+          || isCurationInstruction(message)
+        ) {
+          res.statusCode = 410;
+          res.end(JSON.stringify({
+            ok: false,
+            error: 'Evogent-native curation has been retired; the OpenClaw curator submits directly to the live feed.',
+          }));
+          return;
         }
 
         if (!backgroundJobsDisabled) {

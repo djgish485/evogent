@@ -143,7 +143,7 @@ Recurring-pattern rules:
 
 Maintain `data/preference-insights.md` directly.
 
-If user feedback patterns reveal a systematic content gap, you may also overwrite `data/cache-hints.json` using the schema from `.claude/commands/curate.md` as lightweight browse steering for the next direct-browse cycle.
+If user feedback patterns reveal a systematic content gap, you may also overwrite `data/cache-hints.json` as lightweight browse steering for the next direct-browse cycle.
 
 Keep the existing sections:
 

@@ -38,7 +38,7 @@ If you later switch this deployment to Bird-backed fetching, uninstall this skil
 - The shared Chrome browse profile is the only auth source of truth for this skill. Do not require `AUTH_TOKEN` or `CT0` when this browser skill is the selected provider.
 - On deployments that provide `/root/.config/x-auth-cookies.json`, tweet-cache may dispatch the bounded `twitter-auth-repair` skill as a Twitter-specific fallback when the shared session loses auth. It is not the normal setup path and not a pattern to copy onto Google properties.
 
-See `.claude/commands/curate.md` for the cache-first curation workflow.
+See the OpenClaw curator memory for the cache-first curation workflow.
 
 ## Cacher Mode
 

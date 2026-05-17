@@ -43,10 +43,10 @@ test('buildTaskPrompt passes resolved runtime values into buildRuntimeTaskPrompt
 
   const prompt = buildTaskPrompt({
     id: 'task-123',
-    priority: 'heartbeat',
-    source: 'adaptive_heartbeat',
+    priority: 'user_ping',
+    source: 'unit-test',
     enqueuedAt: '2026-03-16T12:34:56.000Z',
-    message: '/curate',
+    message: '[unit] prompt smoke',
     metadata: {
       ignored: true,
     },
@@ -62,8 +62,8 @@ test('buildTaskPrompt passes resolved runtime values into buildRuntimeTaskPrompt
   assert.strictEqual(prompt, [
     'You are an ephemeral Evogent task. Complete this task and exit.',
     'Task ID: task-123',
-    'Priority: heartbeat',
-    'Source: adaptive_heartbeat',
+    'Priority: user_ping',
+    'Source: unit-test',
     'Timestamp (UTC): 2026-03-16T12:34:56.000Z',
     'resolved runtime prompt',
   ].join('\n\n'));

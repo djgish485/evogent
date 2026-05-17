@@ -18,7 +18,6 @@ export const dynamic = 'force-dynamic';
 type ConfigTargetKey =
   | 'config'
   | 'curation-prompt'
-  | 'curate-command'
   | 'reflect-command'
   | 'enrichment-instructions'
   | 'chat-instructions'
@@ -60,15 +59,6 @@ const runtimeInstructionsTarget: ConfigTarget = {
   relativePath: 'CLAUDE.md',
   historyDir: '',
   defaultContent: '',
-  readOnly: true,
-};
-
-const curateCommandTarget: ConfigTarget = {
-  key: 'curate-command',
-  filePath: path.join(process.cwd(), '.claude', 'commands', 'curate.md'),
-  relativePath: '.claude/commands/curate.md',
-  historyDir: '',
-  defaultContent: '# Curate command not found',
   readOnly: true,
 };
 
@@ -138,7 +128,6 @@ const skillsTarget: ConfigTarget = {
 const TARGETS_BY_KEY: Record<ConfigTargetKey, ConfigTarget> = {
   config: configTarget,
   'curation-prompt': curationPromptTarget,
-  'curate-command': curateCommandTarget,
   'reflect-command': reflectCommandTarget,
   'enrichment-instructions': enrichmentInstructionsTarget,
   'chat-instructions': chatInstructionsTarget,
@@ -149,7 +138,7 @@ const TARGETS_BY_KEY: Record<ConfigTargetKey, ConfigTarget> = {
   skills: skillsTarget,
 };
 
-const INVALID_TARGET_ERROR = 'Invalid target. Use config, curation-prompt, curate-command, reflect-command, enrichment-instructions, chat-instructions, runtime-instructions, preference-insights, preferences, cache-hints, or skills.';
+const INVALID_TARGET_ERROR = 'Invalid target. Use config, curation-prompt, reflect-command, enrichment-instructions, chat-instructions, runtime-instructions, preference-insights, preferences, cache-hints, or skills.';
 const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
 const ENRICHMENT_INSTRUCTIONS_HEADER = `# Enrichment Instructions
 
@@ -226,15 +215,6 @@ function normalizeTargetParam(value: string | null): ConfigTargetKey | null {
     || normalized === 'data/curation-prompt.md'
   ) {
     return 'curation-prompt';
-  }
-
-  if (
-    normalized === 'curate-command'
-    || normalized === 'curate_command'
-    || normalized === 'curate'
-    || normalized === '.claude/commands/curate.md'
-  ) {
-    return 'curate-command';
   }
 
   if (

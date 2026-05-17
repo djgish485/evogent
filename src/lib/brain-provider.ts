@@ -11,8 +11,6 @@ export type ClaudeReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
-export type CurateCommand = '/curate' | '/curate-latest';
-
 export function resolveBrainState(
   activity: { sessionExists: boolean; working: boolean },
   orchestrator: OrchestratorStatusResponse | null,

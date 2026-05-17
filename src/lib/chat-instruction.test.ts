@@ -229,26 +229,6 @@ test('buildChatInstruction allows explicit personal config edits without code_fi
   assert.match(instruction, /Never print or edit secrets/i);
 });
 
-test('buildChatInstruction routes normal chat curation requests through Curator Agent chat', () => {
-  const instruction = buildChatInstruction({
-    message: 'just run a curation',
-    context: null,
-    inReplyTo: null,
-    messageId: 'msg-curation-route',
-    sessionId: '88888888-8888-4888-8888-888888888888',
-  });
-
-  assert.match(instruction, /normal\/setup chat asks you to run, start, or kick off curation/i);
-  assert.match(instruction, /GET \$MEDIA_AGENT_INTERNAL_BASE_URL\/api\/chat\/sessions\?limit=100/);
-  assert.match(instruction, /sessionType "curator" or title "Curator Agent"/);
-  assert.match(instruction, /POST \{"message":"\/curate","sessionId":"<curator-session-id>"/);
-  assert.match(instruction, /to \$MEDIA_AGENT_INTERNAL_BASE_URL\/api\/chat/);
-  assert.match(instruction, /visible in Curator Agent chat/i);
-  assert.match(instruction, /sent to Curator Agent and that the user can watch the run there/i);
-  assert.match(instruction, /do not POST \/curate to \/api\/internal\/orchestrator\/enqueue/i);
-  assert.match(instruction, /do not fall back to the internal orchestrator enqueue endpoint/i);
-});
-
 test('buildChatInstruction injects a generic user-facing slash command document', async () => {
   const cwd = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-chat-command-'));
   try {
@@ -315,7 +295,7 @@ test('buildChatInstruction injects source-status command fixtures with arbitrary
 
 test('buildCuratorChatInstruction allows only curator-file direct writes and cache refresh routing', () => {
   const instruction = buildCuratorChatInstruction({
-    message: '/curate',
+    message: 'review my feed preferences',
     context: null,
     inReplyTo: null,
     messageId: 'msg-789',
@@ -328,71 +308,7 @@ test('buildCuratorChatInstruction allows only curator-file direct writes and cac
   assert.match(instruction, /apply explicit concrete personal settings directly, such as Agent Name = Bob/i);
   assert.doesNotMatch(instruction, /suggestionType":"code_fix"/i);
   assert.match(instruction, /priority "cache_refresh"/i);
-  assert.match(instruction, /shared curation flow from \.claude\/commands\/curate\.md/i);
-  assert.match(instruction, /starts with \/curate/i);
-  assert.match(instruction, /targeted-thread mode control the scope/i);
-  assert.match(instruction, /required mark-seen step/i);
+  assert.doesNotMatch(instruction, /shared curation flow from \.claude\/commands\/curate\.md/i);
+  assert.doesNotMatch(instruction, /starts with \/curate/i);
   assert.match(instruction, /SessionTitle: Iran-only curator/);
-  assert.match(instruction, /## Technique Catalog/);
-  assert.match(instruction, /Read `data\/user-techniques\.md` at the start of every turn\./);
-});
-
-test('buildCuratorChatInstruction maps curate-latest to the direct-browse instruction document', () => {
-  const instruction = buildCuratorChatInstruction({
-    message: '/curate-latest policy',
-    context: null,
-    inReplyTo: null,
-    messageId: 'msg-latest',
-    sessionId: '44444444-4444-4444-8444-444444444444',
-    sessionTitle: 'Latest curator',
-  });
-
-  assert.match(instruction, /When the user message is \/curate-latest, execute \.claude\/commands\/curate-latest\.md directly/i);
-  assert.match(instruction, /## Curate Latest Instruction Document/);
-  assert.match(instruction, /Run one lightweight latest-content curation pass/i);
-  assert.match(instruction, /This command MUST be direct browse, not cache-first/i);
-  assert.match(instruction, /do not route it through the cache-first \/curate behavior/i);
-});
-
-test('curator chat command document keeps curate-latest out of cache-first curate behavior', () => {
-  const instruction = fs.readFileSync(path.join(process.cwd(), '.claude/commands/curate-chat.md'), 'utf8');
-
-  assert.match(instruction, /When the message is `\/curate-latest`, execute `\.claude\/commands\/curate-latest\.md` directly/i);
-  assert.match(instruction, /direct-browse latest-content pass/i);
-  assert.match(instruction, /do not route it through the cache-first `\/curate` behavior/i);
-});
-
-test('setup wizard routes accepted curation offers through Curator Agent chat', () => {
-  const instruction = fs.readFileSync(path.join(process.cwd(), '.claude/commands/setup-wizard.md'), 'utf8');
-
-  assert.match(instruction, /asks to run curation from setup chat/i);
-  assert.match(instruction, /visible `\/curate` turn to the existing Curator Agent session/i);
-  assert.match(instruction, /POST \$API_BASE\/api\/chat/);
-  assert.match(instruction, /GET \$API_BASE\/api\/chat\/sessions\?limit=100/);
-  assert.match(instruction, /Do not use `POST \/api\/internal\/orchestrator\/enqueue`/);
-  assert.match(instruction, /watch the run there/i);
-});
-
-test('curate command treats chat-backed runs as curator-chat cycles regardless of trigger', () => {
-  const instruction = fs.readFileSync(path.join(process.cwd(), '.claude/commands/curate.md'), 'utf8');
-
-  assert.match(instruction, /when the prompt includes both `ChatMessageId:` and `SessionId:`/i);
-  assert.match(instruction, /regardless of trigger source/i);
-  assert.match(instruction, /must POST exactly one brief agent reply/i);
-  assert.match(instruction, /request-level `originSessionId = SessionId`/i);
-  assert.match(instruction, /metadata\.originKind = "curator_chat"/i);
-});
-
-test('curate command classifies narrow source-item requests as targeted threads', () => {
-  const instruction = fs.readFileSync(path.join(process.cwd(), '.claude/commands/curate.md'), 'utf8');
-
-  assert.match(instruction, /## 0\. Classify request scope/);
-  assert.match(instruction, /Full-cycle mode/i);
-  assert.match(instruction, /Targeted-thread mode/i);
-  assert.match(instruction, /specific URL, article, tweet, video, paper/i);
-  assert.match(instruction, /one focused thread around the named source item/i);
-  assert.match(instruction, /roughly 3-10 items/i);
-  assert.match(instruction, /Do not run the default five-category organization/i);
-  assert.match(instruction, /normal submit path, dedup checks, provenance fields, and mark-seen step/i);
-  assert.match(instruction, /instead of shipping an unrelated full cycle/i);
 });

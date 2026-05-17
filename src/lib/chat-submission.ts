@@ -7,7 +7,6 @@ import { ensureChatSession } from '@/lib/db/chat-sessions';
 import { enqueueOrchestratorMessage } from '@/lib/orchestrator';
 import { checkProviderAvailability } from '@/lib/setup-readiness';
 import type { ChatAttachment, ChatMessage } from '@/types/chat';
-import type { ChatSessionRecord } from '@/lib/db/chat-sessions';
 
 export type ChatContextKind = 'global' | 'post';
 export type ChatOriginView = 'feed' | 'post_detail' | 'feed/setup_card' | 'feed/source_health_button';
@@ -24,7 +23,7 @@ export interface SubmitChatMessageInput {
   metadata?: Record<string, unknown> | null;
   attachments?: ChatAttachment[];
   source?: string;
-  priority?: 'user_chat' | 'heartbeat';
+  priority?: 'user_chat';
   requestId?: string;
 }
 
@@ -36,14 +35,6 @@ export interface SubmitChatMessageResult {
   message: string;
   userMessage: ChatMessage;
   sessionId: string;
-}
-
-function getCuratorCurationCommand(session: ChatSessionRecord, message: string): '/curate' | '/curate-latest' | null {
-  if (session.sessionType !== 'curator') return null;
-  const normalized = message.trim().toLowerCase();
-  if (normalized === '/curate' || normalized.startsWith('/curate ')) return '/curate';
-  if (normalized === '/curate-latest' || normalized.startsWith('/curate-latest ')) return '/curate-latest';
-  return null;
 }
 
 function getPersistedUserChatMessageRow(messageId: string): {
@@ -64,33 +55,6 @@ function getPersistedUserChatMessageRow(messageId: string): {
   } | undefined;
 
   return row ?? null;
-}
-
-function buildCurationLogMetadata(
-  input: SubmitChatMessageInput,
-  session: ChatSessionRecord,
-  queueRequestId: string,
-): Record<string, unknown> | null {
-  const curationCommand = getCuratorCurationCommand(session, input.message);
-  if (!curationCommand) {
-    return null;
-  }
-
-  const metadata = input.metadata ?? {};
-  const triggerSource = typeof metadata.triggerSource === 'string' && metadata.triggerSource.trim()
-    ? metadata.triggerSource.trim()
-    : input.priority === 'heartbeat'
-      ? (typeof input.source === 'string' && input.source.trim() ? input.source.trim() : 'adaptive_heartbeat')
-      : 'curator_chat';
-  const triggerReason = typeof metadata.triggerReason === 'string' && metadata.triggerReason.trim()
-    ? metadata.triggerReason.trim()
-    : null;
-
-  return {
-    curationCommand,
-    curationLogRequestId: queueRequestId,
-    curationTriggeredBy: triggerReason ? `${triggerSource}:${triggerReason}` : triggerSource,
-  };
 }
 
 export async function resolveExistingAttachments(payload: unknown): Promise<ChatAttachment[]> {
@@ -123,7 +87,6 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
   );
   const forceFreshChatSession = sessionMessageCount === 0;
   const queueRequestId = input.requestId?.trim() || `chat-queue-${userMessageId}`;
-  const curationLogMetadata = buildCurationLogMetadata(input, session, queueRequestId);
   const providerAvailability = await checkProviderAvailability(session.provider);
   if (!providerAvailability.available) {
     throw new Error(`Install ${providerAvailability.providerDisplayName} before queueing agent work: ${providerAvailability.error ?? 'provider unavailable'}`);
@@ -140,7 +103,6 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
     status: 'pending',
     metadata: {
       ...(input.metadata ?? {}),
-      ...(curationLogMetadata ?? {}),
       endpoint: '/api/chat',
       sessionId: session.id,
       contextKind: input.contextKind ?? 'global',
@@ -210,7 +172,6 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         attachments: attachmentPaths,
         sessionType: session.sessionType,
         requiresBrowserTools: session.sessionType === 'curator',
-        ...(curationLogMetadata ?? {}),
       },
       requestId: queueRequestId,
     });

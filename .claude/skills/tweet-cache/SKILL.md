@@ -59,7 +59,7 @@ For errors, patch `metadata.mcpAppHtml` to a concise error state that preserves 
 
 ## Curation Task
 
-- Read the full curation plan from `.claude/commands/curate.md` plus the full `browserPrompt` from `data/tweet-cache-policy.json`.
+- Read the full OpenClaw curator memory plus the full `browserPrompt` from `data/tweet-cache-policy.json`.
 - Browse every required X surface in order: `home`, `following`, gap-detected priority thinkers, then planned searches.
 - Stay inside the shared authenticated Chrome session. Do not spawn a second agent, do not shell out to Bird CLI, and do not use repo-specific browser scripts.
 - At the start of each source step, verify the active tab and current URL match the intended X surface. If they do not, reuse the current tab by navigating it back to the target URL. Do not close other shared-browser tabs.

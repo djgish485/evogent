@@ -115,9 +115,7 @@ export function getChatMessageAuthorLabel(
 
   const baseLabel = isPostMergeReviewCallbackMessage(message)
     ? 'Code fix callback'
-    : message.metadata?.automatedCuration === true
-      ? 'Auto'
-      : 'You';
+    : 'You';
   const isCancelled = options.isCancelled ?? message.status === 'cancelled';
   return isCancelled ? `${baseLabel} • Cancelled` : baseLabel;
 }

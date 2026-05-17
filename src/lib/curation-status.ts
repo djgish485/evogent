@@ -4,33 +4,8 @@ export const STALE_CURATION_COMPLETION_MS = 30_000;
 
 export type ActiveCurationPipelinePhase = 'caching' | 'curating' | 'enriching';
 
-function isCurationInstructionPreview(value: string | null | undefined): boolean {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '/curate'
-    || normalized.startsWith('/curate ')
-    || normalized === '/curate-latest'
-    || normalized.startsWith('/curate-latest ')
-    || normalized.startsWith('heartbeat:')
-    || normalized.includes('curation cycle');
-}
-
 function normalizePhase(value: string | null | undefined): string | null {
   return typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : null;
-}
-
-function isLegacyCurationTask(orchestratorStatus: OrchestratorStatusResponse | null | undefined): boolean {
-  if (!orchestratorStatus) return false;
-
-  if (typeof orchestratorStatus.activeCurationAgent === 'string' && orchestratorStatus.activeCurationAgent.trim()) {
-    return true;
-  }
-
-  const currentTask = orchestratorStatus.currentTask;
-  if (!currentTask) return false;
-
-  return currentTask.priority === 'heartbeat'
-    || (currentTask.priority === 'user_ping' && isCurationInstructionPreview(currentTask.messagePreview));
 }
 
 export function getCurationStatusSnapshot(
@@ -57,10 +32,6 @@ export function getActiveCurationPipelinePhase(
     return 'curating';
   }
 
-  if (isLegacyCurationTask(orchestratorStatus)) {
-    return 'curating';
-  }
-
   return null;
 }
 
@@ -74,15 +45,6 @@ export function getActiveCurationTaskId(
 
   if (typeof curationStatus?.requestId === 'string' && curationStatus.requestId.trim()) {
     return curationStatus.requestId.trim();
-  }
-
-  if (typeof orchestratorStatus?.activeCurationAgent === 'string' && orchestratorStatus.activeCurationAgent.trim()) {
-    return orchestratorStatus.activeCurationAgent.trim();
-  }
-
-  const currentTask = orchestratorStatus?.currentTask;
-  if (currentTask && isCurationInstructionPreview(currentTask.messagePreview)) {
-    return currentTask.id;
   }
 
   return null;
