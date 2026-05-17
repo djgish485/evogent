@@ -137,7 +137,7 @@ cleanup() {
 trap cleanup EXIT
 
 if openclaw cron list --json > "$cron_list_file" 2>/dev/null; then
-  if CRON_LIST_FILE="$cron_list_file" CRON_NAME="$cron_name" node <<'NODE'
+  if existing_cron_id=$(CRON_LIST_FILE="$cron_list_file" CRON_NAME="$cron_name" node <<'NODE'
 const fs = require('node:fs');
 const file = process.env.CRON_LIST_FILE;
 const cronName = process.env.CRON_NAME;
@@ -149,14 +149,18 @@ const jobs = Array.isArray(parsed)
     : parsed.jobs && typeof parsed.jobs === 'object'
       ? Object.values(parsed.jobs)
       : [];
-const exists = jobs.some((job) => {
+const job = jobs.find((job) => {
   if (!job || typeof job !== 'object') return false;
   return job.name === cronName || job.id === 'evogent-curator' || job.jobId === 'evogent-curator';
 });
-process.exit(exists ? 0 : 1);
+if (!job) process.exit(1);
+const id = [job.id, job.jobId].find((value) => typeof value === 'string' && value.trim())?.trim();
+if (!id) process.exit(1);
+console.log(id);
 NODE
-  then
-    echo "OpenClaw cron entry already exists; leaving it unchanged:"
+  ); then
+    openclaw cron edit "$existing_cron_id" --no-deliver >/dev/null
+    echo "OpenClaw cron entry already exists; ensured silent delivery:"
     echo "  $cron_name"
   else
     openclaw cron add \
@@ -164,6 +168,7 @@ NODE
       --cron "$cron_schedule" \
       --session isolated \
       --agent "$agent_id" \
+      --no-deliver \
       --message "$cron_message"
     echo "Created OpenClaw cron entry:"
     echo "  $cron_name ($cron_schedule)"
@@ -175,6 +180,7 @@ else
     --cron "$cron_schedule" \
     --session isolated \
     --agent "$agent_id" \
+    --no-deliver \
     --message "$cron_message"
 fi
 
