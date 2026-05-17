@@ -139,6 +139,7 @@ function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/
 
 const OPENCLAW_SESSION_PREFIX = 'openclaw:';
 const OPENCLAW_UNREACHABLE_MESSAGE = 'OpenClaw unreachable -- check ~/.openclaw/openclaw.json';
+const OPENCLAW_CURATE_NOW_MESSAGE = 'Run one Evogent live curation cycle now. Use evogent.browse_cache.query for candidates, evogent.preferences.match to score, evogent.interactions.recent for recent feedback, and evogent.feed.submit to ship selected items to the live feed.';
 
 function toOpenClawSessionId(sessionKey: string): string {
   return `${OPENCLAW_SESSION_PREFIX}${sessionKey}`;
@@ -207,7 +208,9 @@ function ConversationCard({
   retainedLiveActivity,
   chatProgress,
   searchQuery,
+  isCurateNowPending,
   onOpen,
+  onCurateNow,
 }: {
   conversation: ConversationCardViewModel;
   agentName: string;
@@ -217,7 +220,9 @@ function ConversationCard({
   retainedLiveActivity: LiveActivitySnapshot | null;
   chatProgress: ChatProgressState | null;
   searchQuery: string | null;
+  isCurateNowPending: boolean;
   onOpen: () => void;
+  onCurateNow: (conversation: ConversationCardViewModel) => void;
 }) {
   const liveStreamingPreview = streamingChat && doesLiveStateBelongToConversation(conversation, streamingChat)
     ? getStreamingPreviewLine(streamingChat.text)
@@ -274,6 +279,8 @@ function ConversationCard({
     : displayedLiveActivity?.status === 'stalled'
       ? 'text-amber-300'
       : 'text-emerald-300';
+  const shouldShowCurateNowAction = conversation.sessionType === 'curator'
+    && fromOpenClawSessionId(conversation.sessionId) !== null;
 
   return (
     <div
@@ -395,6 +402,19 @@ function ConversationCard({
           </div>
         </div>
       </button>
+      {shouldShowCurateNowAction ? (
+        <div className="flex justify-end border-t border-zinc-800/80 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => onCurateNow(conversation)}
+            disabled={isCurateNowPending}
+            className="inline-flex h-8 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-xs font-medium text-amber-100 transition hover:border-amber-400/50 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500"
+            aria-label="Run OpenClaw curator now"
+          >
+            {isCurateNowPending ? 'Triggering...' : 'Curate Now'}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1295,6 +1315,7 @@ export default function Home() {
   const [newSessionModalError, setNewSessionModalError] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
+  const [curateNowPendingSessionIds, setCurateNowPendingSessionIds] = useState<Record<string, boolean>>({});
   const [isStartingSetupWizard, setIsStartingSetupWizard] = useState(false);
   const [isStartingSourceHealth, setIsStartingSourceHealth] = useState(false);
   const [isSetupReady, setIsSetupReady] = useState(false);
@@ -1987,7 +2008,7 @@ export default function Home() {
 
       return {
         sessionId: session.sessionId,
-        sessionType: null,
+        sessionType: session.sessionType ?? null,
         provider: null,
         messages: sessionMessages,
         previewMessages,
@@ -3072,6 +3093,58 @@ export default function Home() {
       return [];
     }
   }, []);
+
+  const triggerOpenClawCurateNow = useCallback(async (conversation: ConversationCardViewModel) => {
+    const openClawSessionKey = fromOpenClawSessionId(conversation.sessionId);
+    if (!openClawSessionKey || conversation.sessionType !== 'curator') {
+      return;
+    }
+
+    setCurateNowPendingSessionIds((current) => ({
+      ...current,
+      [conversation.sessionId]: true,
+    }));
+    setChatStatus(null);
+
+    let response: Response | null = null;
+    try {
+      response = await fetch(`/api/openclaw/chat/${encodeURIComponent(openClawSessionKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: OPENCLAW_CURATE_NOW_MESSAGE,
+        }),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        sessionId?: string | null;
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || OPENCLAW_UNREACHABLE_MESSAGE);
+      }
+
+      setConversationHighlightId(data.sessionId || conversation.sessionId);
+      setChatStatus('Curation triggered');
+      window.setTimeout(() => {
+        setChatStatus((current) => (current === 'Curation triggered' ? null : current));
+      }, 4_000);
+      void loadOpenClawSessions();
+    } catch (error) {
+      setChatStatus(resolveChatFetchErrorMessage(response, error, 'Failed to trigger curation'));
+    } finally {
+      setCurateNowPendingSessionIds((current) => {
+        if (!current[conversation.sessionId]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[conversation.sessionId];
+        return next;
+      });
+    }
+  }, [loadOpenClawSessions]);
 
   const loadRecentChatMessages = useCallback(async () => {
     try {
@@ -8145,6 +8218,7 @@ export default function Home() {
                   retainedLiveActivity={retainedLiveActivityBySession[conversation.sessionId] ?? null}
                   chatProgress={effectiveChatProgress}
                   searchQuery={searchQuery}
+                  isCurateNowPending={Boolean(curateNowPendingSessionIds[conversation.sessionId])}
                   onOpen={() => {
                     updateSelectedChatSession(conversation.sessionId);
                     if (searchQuery && conversation.searchMatchMessageId) {
@@ -8162,6 +8236,7 @@ export default function Home() {
                       conversation.contextKind === 'post' ? conversation.contextRefId : null,
                     );
                   }}
+                  onCurateNow={triggerOpenClawCurateNow}
                 />
               );
             }
