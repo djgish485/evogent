@@ -1,3 +1,5 @@
+import { type ConversationSessionType } from './conversation';
+
 export type ChatMessageRole = 'user' | 'agent';
 export type ChatMessageType = 'chat' | 'agent_event';
 
@@ -35,6 +37,7 @@ export interface OpenClawSession {
   key: string;
   sessionId: string;
   label: string;
+  sessionType: ConversationSessionType;
   preview: string;
   updatedAt: string;
   messageCount: number | null;
