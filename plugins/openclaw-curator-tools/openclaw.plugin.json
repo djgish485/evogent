@@ -21,13 +21,13 @@
   },
   "contracts": {
     "tools": [
-      "evogent.browse_cache.query",
-      "evogent.preferences.match",
-      "evogent.feed.submit",
-      "evogent.interactions.recent",
-      "evogent.skill_runs.list",
-      "evogent.skill_runs.read",
-      "evogent.chat_history.search"
+      "evogent_browse_cache_query",
+      "evogent_preferences_match",
+      "evogent_feed_submit",
+      "evogent_interactions_recent",
+      "evogent_skill_runs_list",
+      "evogent_skill_runs_read",
+      "evogent_chat_history_search"
     ]
   }
 }

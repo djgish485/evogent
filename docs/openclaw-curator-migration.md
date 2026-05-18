@@ -13,7 +13,7 @@ but it no longer schedules or runs its own curator process.
   - `data/preference-insights.md`
 - The `openclaw-curator-tools` plugin exposes browse-cache, preference-match,
   recent-interaction, and live feed-submit tools.
-- `evogent.feed.submit` posts to `POST /api/internal/curate/submit`.
+- `evogent_feed_submit` posts to `POST /api/internal/curate/submit`.
 
 If OpenClaw is not running, Evogent's feed can become stale. That is expected:
 the fix is to repair OpenClaw, not to fall back to an Evogent-native curator.

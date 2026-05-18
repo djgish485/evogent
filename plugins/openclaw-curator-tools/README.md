@@ -4,7 +4,7 @@ This plugin is the bridge from the OpenClaw curator agent to Evogent's live
 feed. The curator can inspect browse-cache candidates, read recent OpenClaw
 skill outputs, search Evogent chat history, score text against Evogent
 preferences, read recent engagement, and submit selected items with
-`evogent.feed.submit`.
+`evogent_feed_submit`.
 
 ## Install
 
@@ -30,38 +30,38 @@ discovered.
 
 ## Tools
 
-### `evogent.browse_cache.query`
+### `evogent_browse_cache_query`
 
 Returns candidates from `browse_cache_items`.
 
-### `evogent.preferences.match`
+### `evogent_preferences_match`
 
 Scores text against Evogent's preference vector matcher.
 
-### `evogent.feed.submit`
+### `evogent_feed_submit`
 
 Posts the same request body shape accepted by `/api/internal/curate/submit` and
 writes accepted items into Evogent's live feed.
 
-### `evogent.interactions.recent`
+### `evogent_interactions_recent`
 
 Returns recent engagement signals joined to feed item titles and source ids.
 
-### `evogent.skill_runs.list`
+### `evogent_skill_runs_list`
 
 Lists recent output files under `~/.openclaw/data/skill-runs/<skill>/`.
 Accepts `since` (ISO timestamp or epoch milliseconds, default 24 hours ago) and
 `skills` (optional skill-name filter). Returns each matching output file with
 its skill name, path, mtime, byte size, and a 200-character preview.
 
-### `evogent.skill_runs.read`
+### `evogent_skill_runs_read`
 
 Reads one skill-run output file by path. The path must resolve inside
 `~/.openclaw/data/skill-runs/`; paths outside that directory are rejected.
 Returns the file content, mtime, and content type (`html`, `markdown`, or
 `json`).
 
-### `evogent.chat_history.search`
+### `evogent_chat_history_search`
 
 Searches Evogent chat history through
 `GET /api/internal/chat-history/search`. Accepts `query`, `sessionId`, `since`

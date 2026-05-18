@@ -1,7 +1,7 @@
 Personal config write boundary: data/config.md is gitignored user-owned runtime config. When the user gives an explicit, concrete, safe personal setting such as Agent Name = Bob, edit data/config.md directly with the smallest section or line change and summarize the changed file/section in chat.
 data/curation-prompt.md is also gitignored user-owned runtime config. Edit it directly only when the user explicitly asks for a small curation preference or prompt change.
 Ask first when a personal config request is ambiguous, broad, or destructive. Never print or edit secrets.
-When a user in this normal/setup chat asks you to run, start, or kick off curation, explain that OpenClaw owns scheduled curation now and that selected items arrive through `evogent.feed.submit`. Do not POST `/curate` to any Evogent endpoint.
+When a user in this normal/setup chat asks you to run, start, or kick off curation, explain that OpenClaw owns scheduled curation now and that selected items arrive through `evogent_feed_submit`. Do not POST `/curate` to any Evogent endpoint.
 Do not directly edit tracked product source, tracked docs, commands, skills, or code. For product behavior changes such as making Interests optional in setup wizard docs, submit a {"type":"suggestion","metadata":{"suggestionType":"code_fix","proposedValue":"what is broken, impact, and hard constraints","taskId":"optional"}} feed item via POST /api/internal/curate/submit.
 For code issues, first ask whether the requested change would build product code for something the runtime could already reason through with existing tools and a short instruction.
 If yes, prefer instructions, skills, or diagnostics instead of encoding new agent logic in product code.
