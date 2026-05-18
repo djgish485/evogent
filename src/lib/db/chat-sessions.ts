@@ -88,6 +88,7 @@ export type BrainProviderName = 'claude' | 'codex';
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type ClaudeReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 const POST_CONTEXT_SEPARATOR = '\n\nContext — discussing this post:';
+const OPENCLAW_SESSION_PREFIX = 'openclaw:';
 
 function isUuid(value: string | null | undefined): value is string {
   return typeof value === 'string'
@@ -335,6 +336,19 @@ export function getChatSession(sessionId: string): ChatSessionRecord | null {
   return row ? rowToChatSession(row) : null;
 }
 
+export function getChatSessionMessageCount(sessionId: string): number {
+  const trimmedSessionId = sessionId.trim();
+  if (!trimmedSessionId) return 0;
+
+  const row = getDb().prepare(`
+    SELECT COUNT(*) AS count
+    FROM chat_messages
+    WHERE session_id = ?
+  `).get(trimmedSessionId) as { count?: number } | undefined;
+
+  return Number(row?.count) || 0;
+}
+
 export function createChatSession(input?: {
   id?: string;
   provider?: BrainProviderName | string | null;
@@ -417,6 +431,7 @@ export function ensureChatSession(sessionId: string): ChatSessionRecord {
 
 export function updateChatSession(input: {
   sessionId: string;
+  provider?: BrainProviderName | string | null;
   title?: string | null;
   color?: string | null;
   sessionType?: ConversationSessionType | string | null;
@@ -424,6 +439,7 @@ export function updateChatSession(input: {
   claudeReasoningEffort?: ClaudeReasoningEffort | string | null;
   codexReasoningEffort?: CodexReasoningEffort | string | null;
   codexFastMode?: boolean | null;
+  updateProvider?: boolean;
   updateTitle?: boolean;
   updateColor?: boolean;
   updateSessionType?: boolean;
@@ -436,10 +452,12 @@ export function updateChatSession(input: {
   if (!trimmedSessionId) return null;
   if (!getChatSession(trimmedSessionId)) return null;
 
+  const provider = normalizeBrainProvider(input.provider ?? getDefaultBrainProvider());
   const title = sanitizeSessionTitle(input.title);
   const color = sanitizeSessionColor(input.color);
   const sessionType = sanitizeSessionType(input.sessionType);
   const workingDirectory = sanitizeWorkingDirectory(input.workingDirectory);
+  const shouldUpdateProvider = input.updateProvider ?? false;
   const shouldUpdateTitle = input.updateTitle ?? false;
   const shouldUpdateColor = input.updateColor ?? false;
   const shouldUpdateSessionType = input.updateSessionType ?? false;
@@ -449,10 +467,13 @@ export function updateChatSession(input: {
   const shouldUpdateCodexFastMode = input.updateCodexFastMode ?? false;
 
   const updateSession = getDb().transaction(() => {
-    if (shouldUpdateTitle || shouldUpdateColor || shouldUpdateSessionType || shouldUpdateWorkingDirectory) {
+    if (shouldUpdateProvider || shouldUpdateTitle || shouldUpdateColor || shouldUpdateSessionType || shouldUpdateWorkingDirectory) {
       getDb().prepare(`
         UPDATE chat_sessions
         SET
+          provider = CASE WHEN ? THEN ? ELSE provider END,
+          provider_session_id = CASE WHEN ? THEN ? ELSE provider_session_id END,
+          claude_session_id = CASE WHEN ? THEN ? ELSE claude_session_id END,
           title = CASE WHEN ? THEN ? ELSE title END,
           color = CASE WHEN ? THEN ? ELSE color END,
           session_type = CASE WHEN ? THEN ? ELSE session_type END,
@@ -460,6 +481,12 @@ export function updateChatSession(input: {
           updated_at = datetime('now')
         WHERE id = ?
       `).run(
+        shouldUpdateProvider ? 1 : 0,
+        provider,
+        shouldUpdateProvider ? 1 : 0,
+        trimmedSessionId,
+        shouldUpdateProvider ? 1 : 0,
+        provider === 'claude' ? trimmedSessionId : '',
         shouldUpdateTitle ? 1 : 0,
         title,
         shouldUpdateColor ? 1 : 0,
@@ -525,7 +552,7 @@ export function updateChatSession(input: {
       `).run(trimmedSessionId, input.codexFastMode === true ? 1 : 0, trimmedSessionId);
     }
 
-    if ((shouldUpdateClaudeReasoningEffort || shouldUpdateCodexReasoningEffort || shouldUpdateCodexFastMode) && !shouldUpdateTitle && !shouldUpdateColor && !shouldUpdateWorkingDirectory) {
+    if ((shouldUpdateClaudeReasoningEffort || shouldUpdateCodexReasoningEffort || shouldUpdateCodexFastMode) && !shouldUpdateProvider && !shouldUpdateTitle && !shouldUpdateColor && !shouldUpdateWorkingDirectory) {
       touchChatSession(trimmedSessionId);
     }
 
@@ -918,15 +945,18 @@ function getConversationSessionAggregatePage(offset: number, limit: number): Con
       creation_order_index
     FROM session_stats
     WHERE NOT (
-      user_message_count = 0
-      AND title GLOB 'Session *'
-      AND feed_item_count = 0
-      AND message_count > 0
+      session_id LIKE ?
+    )
+      AND NOT (
+        user_message_count = 0
+        AND title GLOB 'Session *'
+        AND feed_item_count = 0
+        AND message_count > 0
     )
     ORDER BY datetime(COALESCE(last_message_timestamp, updated_at, created_at)) DESC, datetime(created_at) ASC, session_id ASC
     LIMIT ?
     OFFSET ?
-  `).all(limit, offset) as ConversationSessionAggregateRow[];
+  `).all(`${OPENCLAW_SESSION_PREFIX}%`, limit, offset) as ConversationSessionAggregateRow[];
 }
 
 function getConversationSessionAggregateById(sessionId: string): ConversationSessionAggregateRow | null {
@@ -958,7 +988,10 @@ function getConversationSessionAggregateById(sessionId: string): ConversationSes
       creation_order_index
     FROM session_stats
     WHERE session_id = ?
-  `).get(trimmedSessionId) as ConversationSessionAggregateRow | undefined;
+      AND NOT (
+        session_id LIKE ?
+      )
+  `).get(trimmedSessionId, `${OPENCLAW_SESSION_PREFIX}%`) as ConversationSessionAggregateRow | undefined;
 
   if (!row || isLegacyAgentOnlyOrphan(row)) {
     return null;
@@ -1108,7 +1141,10 @@ export function getConversationSessionSummariesByIds(sessionIds: string[]): Conv
       creation_order_index
     FROM session_stats
     WHERE session_id IN (${placeholders})
-  `).all(...uniqueSessionIds) as ConversationSessionAggregateRow[];
+      AND NOT (
+        session_id LIKE ?
+      )
+  `).all(...uniqueSessionIds, `${OPENCLAW_SESSION_PREFIX}%`) as ConversationSessionAggregateRow[];
 
   const rowsBySessionId = new Map<string, ConversationSessionAggregateRow>();
   for (const row of rows) {
@@ -1139,12 +1175,15 @@ export function getConversationSessionPage(input?: { limit?: number; offset?: nu
     SELECT COUNT(*) AS count
     FROM session_stats
     WHERE NOT (
-      user_message_count = 0
-      AND title GLOB 'Session *'
-      AND feed_item_count = 0
-      AND message_count > 0
+      session_id LIKE ?
     )
-  `).get() as { count?: number } | undefined;
+      AND NOT (
+        user_message_count = 0
+        AND title GLOB 'Session *'
+        AND feed_item_count = 0
+        AND message_count > 0
+    )
+  `).get(`${OPENCLAW_SESSION_PREFIX}%`) as { count?: number } | undefined;
   const totalCount = Number(totalRow?.count) || 0;
   const rows = getConversationSessionAggregatePage(safeOffset, safeLimit);
   const previewRowsBySessionId = getConversationSessionPreviewRowsBySessionIds(rows.map((row) => row.session_id));
