@@ -44,6 +44,7 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 const internalBaseUrl = process.env.ORCHESTRATOR_INTERNAL_URL || `http://127.0.0.1:${port}`;
 const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
+const ADAPTIVE_HEARTBEAT_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const trustNetwork = process.env.MEDIA_AGENT_TRUST_NETWORK === '1' || process.env.MEDIA_AGENT_TRUST_NETWORK === 'true';
 const cloudflareAccessTeamDomain = normalizeCloudflareAccessTeamDomain(process.env.MEDIA_AGENT_CF_ACCESS_TEAM_DOMAIN);
 const cloudflareAccessIssuer = cloudflareAccessTeamDomain ? `https://${cloudflareAccessTeamDomain}` : '';
@@ -3105,6 +3106,39 @@ async function initializeWatchersOnStartup() {
   }
 }
 
+let adaptiveHeartbeatCheckInFlight = false;
+
+async function runAdaptiveHeartbeatCheck(triggeredBy = 'timer') {
+  if (adaptiveHeartbeatCheckInFlight) return;
+  adaptiveHeartbeatCheckInFlight = true;
+
+  try {
+    const result = await postInternal('/api/internal/heartbeat/check', { triggeredBy });
+    if (result?.triggered) {
+      console.log(`[adaptive-heartbeat] triggered OpenClaw curator run: ${result.triggerReason || 'triggered'}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[adaptive-heartbeat] check failed: ${message}`);
+  } finally {
+    adaptiveHeartbeatCheckInFlight = false;
+  }
+}
+
+function startAdaptiveHeartbeatTimer() {
+  const startupTimer = setTimeout(() => {
+    void runAdaptiveHeartbeatCheck('startup');
+  }, 30_000);
+  if (typeof startupTimer.unref === 'function') startupTimer.unref();
+
+  const timer = setInterval(() => {
+    void runAdaptiveHeartbeatCheck('timer');
+  }, ADAPTIVE_HEARTBEAT_CHECK_INTERVAL_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+
+  console.log('> Adaptive OpenClaw heartbeat scheduled (15min interval)');
+}
+
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     const parsedUrl = parseUrl(req.url || '/');
@@ -4425,7 +4459,8 @@ app.prepare().then(() => {
       return;
     }
 
-    console.log('> Background timers moved to worker.js');
+    console.log('> Background queue/reflection timers moved to worker.js');
+    startAdaptiveHeartbeatTimer();
     void regeneratePreferenceContextOnStartup();
     startCodeFixSilentDeathWatchdog();
     startWorktreeJanitor();

@@ -9,7 +9,7 @@ config_file="${OPENCLAW_CONFIG_PATH:-$openclaw_home/openclaw.json}"
 model_ref="${OPENCLAW_CURATOR_MODEL:-openai/gpt-5.5}"
 runtime_id="${OPENCLAW_CURATOR_RUNTIME_ID:-codex}"
 cron_name="${OPENCLAW_CURATOR_CRON_NAME:-Evogent curator}"
-cron_schedule="${OPENCLAW_CURATOR_CRON:-*/30 * * * *}"
+cron_schedule="${OPENCLAW_CURATOR_CRON:-0 0 31 2 *}"
 
 copy_if_missing() {
   local source_file="$1"
@@ -32,45 +32,6 @@ copy_if_missing() {
   echo "  $source_file -> $target_file"
 }
 
-detect_gmail_calendar_adapter() {
-  export GMAIL_TOOL_KIND='none'
-  export GMAIL_TOOL_LIST=''
-  export GMAIL_TOOL_SEARCH=''
-  export GMAIL_TOOL_READ=''
-  export CAL_TOOL_LIST=''
-  export CAL_TOOL_CALENDARS=''
-  export GMAIL_TOOL_READONLY_NOTE=''
-
-  if command -v gog >/dev/null 2>&1; then
-    if timeout 8 gog gmail list -n 1 >/dev/null 2>&1; then
-      export GMAIL_TOOL_KIND='gog'
-      export GMAIL_TOOL_LIST='gog gmail list -n 50'
-      export GMAIL_TOOL_SEARCH='gog gmail list -n 50 "<gmail query, e.g. subject:invoice OR renewal OR receipt>"'
-      export GMAIL_TOOL_READ='gog gmail thread show <threadId>'
-      export CAL_TOOL_LIST='gog calendar events --max 20'
-      export CAL_TOOL_CALENDARS='gog calendar calendars'
-      export GMAIL_TOOL_READONLY_NOTE='Read-only. Curator MUST NOT call `gog gmail send/draft/trash/modify`, any label/batch mutation, or any calendar mutation. `/root/.config/gogcli/config.json` already has `no_send_accounts` set for this account; AGENTS.md still must forbid the mutating calls explicitly.'
-      return
-    fi
-  fi
-
-  local ezg_root="$HOME/.openclaw/workspace/skills/ez-google"
-  local ezg_scripts="$ezg_root/scripts"
-  if [[ -f "$ezg_scripts/gmail.py" ]] \
-    && [[ -f "$ezg_scripts/gcal.py" ]] \
-    && [[ -f "$ezg_scripts/auth.py" ]] \
-    && (cd "$ezg_root" && timeout 8 uv run scripts/auth.py status 2>/dev/null | grep -q AUTHENTICATED); then
-    export GMAIL_TOOL_KIND='ez-google'
-    export GMAIL_TOOL_LIST="cd $ezg_root && uv run scripts/gmail.py list -n 50"
-    export GMAIL_TOOL_SEARCH="cd $ezg_root && uv run scripts/gmail.py search '<gmail query>'"
-    export GMAIL_TOOL_READ="cd $ezg_root && uv run scripts/gmail.py get <MESSAGE_ID>"
-    export CAL_TOOL_LIST="cd $ezg_root && uv run scripts/gcal.py list today"
-    export CAL_TOOL_CALENDARS="cd $ezg_root && uv run scripts/gcal.py calendars"
-    export GMAIL_TOOL_READONLY_NOTE='Read-only. Curator MUST NOT call `gmail.py send/draft/bulk-trash/bulk-label`, any Gmail modify/trash/label mutation, or any calendar create/delete/mutation.'
-    return
-  fi
-}
-
 write_curator_agents_file() {
   local source_file="$1"
   local target_file="$2"
@@ -82,13 +43,6 @@ write_curator_agents_file() {
 
   AGENTS_SOURCE_FILE="$source_file" \
   AGENTS_TARGET_FILE="$target_file" \
-  GMAIL_TOOL_KIND="${GMAIL_TOOL_KIND:-none}" \
-  GMAIL_TOOL_LIST="${GMAIL_TOOL_LIST:-}" \
-  GMAIL_TOOL_SEARCH="${GMAIL_TOOL_SEARCH:-}" \
-  GMAIL_TOOL_READ="${GMAIL_TOOL_READ:-}" \
-  CAL_TOOL_LIST="${CAL_TOOL_LIST:-}" \
-  CAL_TOOL_CALENDARS="${CAL_TOOL_CALENDARS:-}" \
-  GMAIL_TOOL_READONLY_NOTE="${GMAIL_TOOL_READONLY_NOTE:-}" \
   node <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
@@ -97,56 +51,31 @@ const sourceFile = process.env.AGENTS_SOURCE_FILE;
 const targetFile = process.env.AGENTS_TARGET_FILE;
 const sectionHeading = '## Beyond installed skills — exploration';
 
-const gmailToolKind = process.env.GMAIL_TOOL_KIND || 'none';
-const gmailCalendarCommands = {
-  list: process.env.GMAIL_TOOL_LIST || '',
-  search: process.env.GMAIL_TOOL_SEARCH || '',
-  read: process.env.GMAIL_TOOL_READ || '',
-  calendarEvents: process.env.CAL_TOOL_LIST || '',
-  calendars: process.env.CAL_TOOL_CALENDARS || '',
-  readOnlyNote: process.env.GMAIL_TOOL_READONLY_NOTE || '',
-};
-
-function buildGmailCalendarBlock() {
-  if (gmailToolKind === 'gog' || gmailToolKind === 'ez-google') {
-    return [
-      `   - **Gmail/Calendar (${gmailToolKind})**: use these every cycle as first-class cross-source observation inputs, not as an occasional bonus. If any Gmail/Calendar command exits non-zero, submit one \`notification\` feed item saying "Gmail/Calendar via ${gmailToolKind} failed; user may need to re-auth" and continue the rest of the cycle without Gmail/Calendar.`,
-      `     - List Gmail: \`${gmailCalendarCommands.list}\``,
-      `     - Search Gmail: \`${gmailCalendarCommands.search}\``,
-      `     - Read Gmail thread/message: \`${gmailCalendarCommands.read}\``,
-      `     - List calendar events: \`${gmailCalendarCommands.calendarEvents}\``,
-      `     - List calendars: \`${gmailCalendarCommands.calendars}\``,
-      '     - Required checks every cycle: renewal alarms from Gmail subjects like `invoice`, `renewal`, or `receipt` plus calendar windows; calendar prep briefs for events in the next 48h with attendees\' public activity; surprising bridges that combine a Gmail thread with tweet/HN/chat context.',
-      `     - ${gmailCalendarCommands.readOnlyNote}`,
-    ];
-  }
-
-  return [
-    '   - **Gmail/Calendar setup**: Gmail/Calendar is not connected yet. Submit one `notification` feed item per cycle saying "Gmail/Calendar not connected yet. In a chat with me say \\"set up Gmail and Calendar\\" and I will walk you through OAuth via gog." Do not call any Gmail or Calendar tools this cycle; that includes send, draft, modify, trash, label, and calendar-mutation actions.',
-  ];
-}
-
 const explorationSection = [
   sectionHeading,
   '',
-  'At the start of each cycle, after pulling content candidates from the browse cache:',
+  '- MANDATORY first step every cycle (before any submission decisions): run bash `curl -s "$MEDIA_AGENT_INTERNAL_BASE_URL/api/feed?limit=200&sort=created" | jq -r \'.items[] | "\\(.createdAt[:16]) | \\(.source) | \\(.title)"\'` and `sqlite3 /root/media-agent/data/media-agent.db "SELECT source_id, url FROM feed WHERE created_at_ms > (strftime(\'%s\',\'now\',\'-72 hours\')*1000) AND (source_id IS NOT NULL OR url IS NOT NULL) LIMIT 200"`. Hold the resulting titles + source_ids + urls in mind. Do not resubmit any card whose underlying real-world fact already appears in either list, regardless of title wording.',
   '',
-  '1. Make open-ended cross-source observation the primary new capability. Use `evogent_chat_history_search` and your normal tools to notice connections the browse cache alone cannot see:',
-  ...buildGmailCalendarBlock(),
-  '   - **Promised follow-ups**: scan `evogent_chat_history_search` for phrases like "I\'ll send", "will do", "let me get back" older than 3 days. Draft the reply.',
-  '   - **Surprising bridges**: spot when items from different sources (tweet + HN comment + your chat) connect. Bridge them in one card.',
-  '   - **Open question tracking**: search chat history for unresolved questions. When the news answers them, surface a status-change card.',
-  '   - **Activity awareness**: notice YOUR patterns (e.g., quiet on Twitter for 3 days). Surface what you\'d usually engage with.',
+  'At the start of each cycle, after the MANDATORY feed-history reads above:',
   '',
-  '2. Skills are an OCCASIONAL bonus, not the main event. OpenClaw skills (daily-brief, competitor-watch, email-triage, gh-issues, research-clipping, etc.) produce output files. Read `evogent_skill_runs_list` to see what is available, but only call `evogent_skill_runs_read` and re-ship a skill output if it is genuinely new (mtime in the last 24h) AND high-signal (the content surprises). Do NOT ship the same skill output across multiple cycles. Most cycles should include no skill cards.',
+  '1. You have access to all of the user\'s data surfaces through your normal tools:',
+  '   - Gmail and Calendar via `gog` (`gog gmail`, `gog calendar`) on /usr/local/bin/gog with live OAuth',
+  '   - Twitter / Hacker News / Substack / YouTube caches via `evogent_browse_cache_query`',
+  '   - Preferences DB with vector similarity via `evogent_preferences_match`',
+  '   - Your chat history with the user via `evogent_chat_history_search`',
+  '   - The full feed (200 most recent items) via the curl you just ran',
+  '   - User interactions (likes, dismisses, dwell) via `evogent_interactions_recent`',
+  '   - Any web page via `web_fetch` / `web_search`',
   '',
-  '3. If you ship a skill-output card, its `sourceId` MUST be `evogent-skill:<skill-name>:<output-file-mtime-unix>`. Convert the output file mtime to whole Unix seconds. Do not use ISO timestamps, run timestamps, dates, titles, or generated ids for this sourceId.',
+  '2. Your job is to read across these and draw interesting, specific connections nobody else would notice — surface what is genuinely surprising, timely, or actionable BECAUSE only this app sees all of these together. Include concrete details from real data (real Gmail subjects with sender domains, real handles, real dates, real receipt amounts) so the user can verify and act. Vague abstractions are noise.',
   '',
-  '4. For skill-output cards, include `metadata.source: "openclaw"` so the rich OpenClaw card renderer is used. Also include `metadata.openClaw.bundleDir` as the directory containing the output file, plus `metadata.openClaw.skill` and `metadata.openClaw.outputPath` when known. These metadata fields help the feed dedupe repeated submissions if a sourceId is wrong.',
+  '3. If a cycle produces nothing genuinely interesting, ship ONE short transparency card titled something like "Today\'s read across your sources: nothing crossed the bar" with one sentence per surface explaining what you looked at and why nothing was worth surfacing. Silent zero-bridge cycles are the failure mode, not low volume.',
   '',
-  '5. For cross-source observation cards, use `metadata.source: "chat-curator"` and `metadata.kind: "observation"` so we can distinguish them from standard content cards.',
+  '4. Use `metadata.kind: "observation"` ONLY for cards that bridge at least two distinct sources where one is the user\'s private data (Gmail, Calendar, chat history, or interactions). Pure news analysis without a private-data bridge is `metadata.kind: "analysis"`. Use `metadata.bridges` as an array of source-kind strings (e.g. `["gmail","twitter"]`), not as a tagline string.',
   '',
-  '6. Surface this category sparsely (typically 0-2 cards per cycle). The standard content stream is still the baseline; cross-source observations are the personal signal that makes the feed useful.',
+  '5. Read-only on private data. Do not call `gog gmail send/draft/trash/modify`, any Gmail label/batch mutation, or any calendar create/delete/mutation.',
+  '',
+  '6. Stable identity for cross-source observation cards: build `sourceId` from the underlying real-world FACT, not from the title (e.g. `evogent-obs:calendar:<eventId>`, `evogent-obs:gmail-renewal:<vendor>:<date>`). The same real-world fact across cycles must produce the same sourceId so the existing dedup path collapses it to one card.',
 ].join('\n');
 
 if (!sourceFile || !targetFile) {
@@ -172,8 +101,6 @@ NODE
 
 mkdir -p "$agent_dir/sessions"
 
-detect_gmail_calendar_adapter
-echo "Gmail/Calendar adapter detected: $GMAIL_TOOL_KIND"
 write_curator_agents_file "$repo_dir/data/curation-prompt.md" "$agent_dir/AGENTS.md"
 copy_if_missing "$repo_dir/data/preferences-context.md" "$agent_dir/MEMORY.md" "MEMORY.md"
 copy_if_missing "$repo_dir/data/preference-insights.md" "$agent_dir/USER.md" "USER.md"
@@ -318,9 +245,9 @@ if (!id) process.exit(1);
 console.log(id);
 NODE
   ); then
-    openclaw cron edit "$existing_cron_id" --no-deliver >/dev/null
-    echo "OpenClaw cron entry already exists; ensured silent delivery:"
-    echo "  $cron_name"
+    openclaw cron edit "$existing_cron_id" --cron "$cron_schedule" --no-deliver >/dev/null
+    echo "OpenClaw cron entry already exists; disabled scheduler cadence and ensured silent delivery:"
+    echo "  $cron_name ($cron_schedule)"
   else
     openclaw cron add \
       --name "$cron_name" \

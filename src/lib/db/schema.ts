@@ -745,6 +745,15 @@ WHERE type = 'tweet'
   AND json_extract(metadata, '$.likeCount') IS NOT NULL;
 `;
 
+const backfillOpenClawChatCuratorSourceSql = `
+UPDATE feed
+SET source = 'openclaw'
+WHERE source IS NULL
+  AND metadata IS NOT NULL
+  AND json_valid(metadata)
+  AND json_extract(metadata, '$.source') = 'chat-curator';
+`;
+
 const clampFutureChatTimestampsSql = `
 UPDATE chat_messages
 SET timestamp = datetime('now')
@@ -1552,6 +1561,7 @@ export function ensureFeedSchema(db: Database.Database): void {
   db.exec(createFeedTimestampInsertTriggerSql);
   db.exec(createFeedTimestampUpdateTriggerSql);
   db.exec(backfillTweetMetricsFromMetadataSql);
+  db.exec(backfillOpenClawChatCuratorSourceSql);
   db.exec(createInteractionsTableSql);
   for (const stmt of createInteractionIndexesSql) {
     db.exec(stmt);
