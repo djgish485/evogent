@@ -48,6 +48,7 @@ import { buildSuggestionApplyRequest, getFeedSuggestionDefaultTitle, getSuggesti
 import { getThreadFeedbackProbe, getThreadSourceItemIds } from '@/lib/feedback-probe';
 import { buildInlineCodeFixChatMessage, getInlineCodeFixSuggestion, type InlineCodeFixChatSuggestion } from '@/lib/inline-code-fix-messages';
 import { type OrchestratorStatusResponse, type OrchestratorTaskStatus } from '@/lib/orchestrator';
+import { isOpenClawHeartbeatMessage } from '@/lib/openclaw/heartbeat';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
 import { ACTIVE_CHAT_STATUS_SYNC_INTERVAL_MS, APP_HEADER_HEIGHT_FALLBACK_PX, CHAT_ACTIVITY_STALE_TIMEOUT_MS, CHAT_COMPOSER_GAP_PX, CHAT_COMPOSER_MIN_RESERVED_HEIGHT_PX, CHAT_HISTORY_PAGE_SIZE, CHAT_HISTORY_TOP_LOAD_THRESHOLD_PX, CHAT_INPUT_MAX_HEIGHT_PX, CHAT_SESSION_COMPACTION_STALE_TIMEOUT_MS, COMPACT_FEEDBACK_TIMEOUT_MS, CONVERSATION_SESSION_PAGE_SIZE, CURATION_FEED_POLL_INTERVAL_MS, CURATION_STATUS_POLL_INTERVAL_MS, DEFAULT_FEED_SORT_ORDER, FEED_BANNER_COMPLETED_TASK_TIMEOUT_MS, MAX_RESET_FEED_BATCHES, MIN_PRIMARY_FEED_ITEMS, PAGE_SIZE, POST_CONTEXT_SEPARATOR, RESTART_APPLY_POLL_INTERVAL_MS, RESTART_APPLY_WAIT_TIMEOUT_MS, RESTART_STATUS_POLL_INTERVAL_MS, SELECTED_CHAT_SESSION_AUTOCORRECT_GRACE_MS, SELECTED_CHAT_SESSION_STORAGE_KEY, STATUS_SYNC_INTERVAL_MS, SUGGESTION_PAGE_SIZE } from '@/lib/page-constants';
 import { CLAUDE_REASONING_OPTIONS, CODEX_REASONING_OPTIONS, deriveCodexReasoningEffortFromConfig, formatClaudeReasoningEffortLabel, formatCodexReasoningEffortLabel } from '@/lib/reasoning-effort';
@@ -1998,6 +1999,7 @@ export default function Home() {
     openClawSessions.map((session) => {
       const sessionMessages = chatMessages
         .filter((message) => message.sessionId === session.sessionId)
+        .filter((message) => !isOpenClawHeartbeatMessage(message))
         .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
       const previewMessages = [...sessionMessages.filter((message) => message.type === 'chat').slice(-3)].reverse();
       const lastMessage = sessionMessages.at(-1) ?? null;
@@ -2035,7 +2037,7 @@ export default function Home() {
           }
           : null,
         lastTimestamp,
-        messageCount: Math.max(session.messageCount ?? 0, sessionMessages.length),
+        messageCount: Math.max(session.messageCount ?? sessionMessages.length, sessionMessages.length),
         queuePosition: null,
         pendingCount: 0,
         queuedTaskCount: 0,
@@ -2052,7 +2054,14 @@ export default function Home() {
 
   const conversationCardMap = useMemo(() => {
     const map: Record<string, ConversationCardViewModel> = {};
-    for (const conversation of [...conversationCards, ...openClawConversationCards]) {
+    const hasOpenClawCuratorCard = openClawConversationCards.some((conversation) => conversation.sessionType === 'curator');
+    const nativeConversationCards = hasOpenClawCuratorCard
+      ? conversationCards.filter((conversation) => !(
+        conversation.sessionType === 'curator'
+        && !conversation.sessionId.startsWith(OPENCLAW_SESSION_PREFIX)
+      ))
+      : conversationCards;
+    for (const conversation of [...nativeConversationCards, ...openClawConversationCards]) {
       map[conversation.sessionId] = conversation;
     }
     return map;
