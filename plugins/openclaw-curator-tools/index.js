@@ -47,7 +47,7 @@ function normalizeSkillNames(value) {
       continue;
     }
     if (name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
-      throw new Error(`Invalid skill name for evogent.skill_runs.list: ${name}`);
+      throw new Error(`Invalid skill name for evogent_skill_runs_list: ${name}`);
     }
     if (!seen.has(name)) {
       seen.add(name);
@@ -193,7 +193,7 @@ async function collectSkillOutputFiles(directory, depth = 0) {
 async function resolveSkillRunReadPath(inputPath) {
   const rawPath = typeof inputPath === 'string' ? inputPath.trim() : '';
   if (!rawPath) {
-    throw new Error('evogent.skill_runs.read requires a non-empty path.');
+    throw new Error('evogent_skill_runs_read requires a non-empty path.');
   }
 
   const root = getSkillRunsRoot();
@@ -207,7 +207,7 @@ async function resolveSkillRunReadPath(inputPath) {
   }
 
   if (!isPathInside(rootReal, candidateReal)) {
-    throw new Error('evogent.skill_runs.read path must be inside ~/.openclaw/data/skill-runs/.');
+    throw new Error('evogent_skill_runs_read path must be inside ~/.openclaw/data/skill-runs/.');
   }
 
   return candidateReal;
@@ -258,7 +258,7 @@ export async function queryBrowseCache(input = {}) {
 
 export async function matchPreferences(input) {
   if (typeof input.text !== 'string' || !input.text.trim()) {
-    throw new Error('evogent.preferences.match requires a non-empty text string.');
+    throw new Error('evogent_preferences_match requires a non-empty text string.');
   }
 
   const limit = normalizeLimit(input.limit, 5, 25);
@@ -281,10 +281,10 @@ export async function matchPreferences(input) {
 export async function submitFeed(input) {
   const body = Array.isArray(input)
     ? { items: input }
-    : requireRecordParams(input, 'evogent.feed.submit');
+    : requireRecordParams(input, 'evogent_feed_submit');
 
   if (!Array.isArray(body.items)) {
-    throw new Error('evogent.feed.submit requires an items array.');
+    throw new Error('evogent_feed_submit requires an items array.');
   }
 
   return requestJson(liveSubmitPath, {
@@ -302,7 +302,7 @@ export async function recentInteractions(input = {}) {
 
 export async function listSkillRuns(input = {}) {
   const params = isRecord(input) ? input : {};
-  const sinceMs = parseSinceMs(params.since, defaultSinceMs(24), 'evogent.skill_runs.list');
+  const sinceMs = parseSinceMs(params.since, defaultSinceMs(24), 'evogent_skill_runs_list');
   const root = getSkillRunsRoot();
   const rootReal = await realpathIfExists(root);
   const skillNames = await getSkillRunSkillNames(root, normalizeSkillNames(params.skills));
@@ -343,11 +343,11 @@ export async function listSkillRuns(input = {}) {
 }
 
 export async function readSkillRun(input) {
-  const params = requireRecordParams(input, 'evogent.skill_runs.read');
+  const params = requireRecordParams(input, 'evogent_skill_runs_read');
   const filePath = await resolveSkillRunReadPath(params.path);
   const stat = await fs.stat(filePath);
   if (!stat.isFile()) {
-    throw new Error('evogent.skill_runs.read path must be a file.');
+    throw new Error('evogent_skill_runs_read path must be a file.');
   }
 
   return {
@@ -359,10 +359,10 @@ export async function readSkillRun(input) {
 }
 
 export async function searchChatHistory(input) {
-  const params = requireRecordParams(input, 'evogent.chat_history.search');
+  const params = requireRecordParams(input, 'evogent_chat_history_search');
   const query = typeof params.query === 'string' ? params.query.trim() : '';
   if (!query) {
-    throw new Error('evogent.chat_history.search requires a non-empty query string.');
+    throw new Error('evogent_chat_history_search requires a non-empty query string.');
   }
 
   const searchParams = new URLSearchParams();
@@ -379,7 +379,7 @@ export async function searchChatHistory(input) {
 }
 
 const browseCacheQueryTool = {
-  name: 'evogent.browse_cache.query',
+  name: 'evogent_browse_cache_query',
   description: 'Return candidate items from Evogent browse_cache_items, optionally filtered by source and freshness.',
   parameters: {
     type: 'object',
@@ -396,7 +396,7 @@ const browseCacheQueryTool = {
     },
   },
   async execute(idOrParams, maybeParams) {
-    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.browse_cache.query');
+    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent_browse_cache_query');
     return textResult(await queryBrowseCache({
       source: typeof params.source === 'string' ? params.source : null,
       since: params.since,
@@ -408,7 +408,7 @@ const browseCacheQueryTool = {
 };
 
 const preferencesMatchTool = {
-  name: 'evogent.preferences.match',
+  name: 'evogent_preferences_match',
   description: 'Score text against Evogent preference memory using the existing preference vector matcher.',
   parameters: {
     type: 'object',
@@ -420,7 +420,7 @@ const preferencesMatchTool = {
     },
   },
   async execute(idOrParams, maybeParams) {
-    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.preferences.match');
+    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent_preferences_match');
     return textResult(await matchPreferences({
       text: typeof params.text === 'string' ? params.text : '',
       limit: params.limit,
@@ -429,7 +429,7 @@ const preferencesMatchTool = {
 };
 
 const feedSubmitTool = {
-  name: 'evogent.feed.submit',
+  name: 'evogent_feed_submit',
   description: 'Submit curated feed items to Evogent live feed storage through /api/internal/curate/submit.',
   parameters: {
     type: 'object',
@@ -456,7 +456,7 @@ const feedSubmitTool = {
 };
 
 const interactionsRecentTool = {
-  name: 'evogent.interactions.recent',
+  name: 'evogent_interactions_recent',
   description: 'Return recent Evogent interaction signals joined to the corresponding feed item title and source fields.',
   parameters: {
     type: 'object',
@@ -475,7 +475,7 @@ const interactionsRecentTool = {
 };
 
 const skillRunsListTool = {
-  name: 'evogent.skill_runs.list',
+  name: 'evogent_skill_runs_list',
   description: 'List recent OpenClaw skill output files from ~/.openclaw/data/skill-runs/ for curator consideration.',
   parameters: {
     type: 'object',
@@ -500,7 +500,7 @@ const skillRunsListTool = {
 };
 
 const skillRunsReadTool = {
-  name: 'evogent.skill_runs.read',
+  name: 'evogent_skill_runs_read',
   description: 'Read one OpenClaw skill output file from ~/.openclaw/data/skill-runs/. Rejects paths outside that directory.',
   parameters: {
     type: 'object',
@@ -511,13 +511,13 @@ const skillRunsReadTool = {
     },
   },
   async execute(idOrParams, maybeParams) {
-    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.skill_runs.read');
+    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent_skill_runs_read');
     return textResult(await readSkillRun(params));
   },
 };
 
 const chatHistorySearchTool = {
-  name: 'evogent.chat_history.search',
+  name: 'evogent_chat_history_search',
   description: 'Search Evogent chat history for recent user commitments, open questions, and active discussion topics.',
   parameters: {
     type: 'object',
@@ -534,7 +534,7 @@ const chatHistorySearchTool = {
     },
   },
   async execute(idOrParams, maybeParams) {
-    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent.chat_history.search');
+    const params = requireRecordParams(toolParams(idOrParams, maybeParams), 'evogent_chat_history_search');
     return textResult(await searchChatHistory(params));
   },
 };
