@@ -71,6 +71,34 @@ function getMessageRole(message) {
   return role === 'user' ? 'user' : 'agent';
 }
 
+function firstTrimmedString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function getRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function getMessageIdempotencyKey(message, fallback = null) {
+  const metadata = getRecord(message?.metadata);
+  return firstTrimmedString(
+    fallback,
+    message?.idempotencyKey,
+    message?.idempotency_key,
+    message?.clientRequestId,
+    message?.client_request_id,
+    metadata?.idempotencyKey,
+    metadata?.idempotency_key,
+    metadata?.clientRequestId,
+    metadata?.client_request_id,
+  );
+}
+
 function stableMessageId(sessionKey, message, index = 0) {
   const explicitId = typeof message?.id === 'string' && message.id.trim()
     ? message.id.trim()
@@ -93,6 +121,7 @@ function normalizeOpenClawMessage(sessionKey, message, options = {}) {
   const role = getMessageRole(message);
   const timestamp = normalizeTimestamp(message?.timestamp ?? message?.ts ?? message?.createdAt ?? message?.created_at);
   const id = options.id || stableMessageId(sessionKey, message, options.index ?? 0);
+  const idempotencyKey = getMessageIdempotencyKey(message, options.idempotencyKey);
   return {
     type: 'chat',
     id,
@@ -106,6 +135,7 @@ function normalizeOpenClawMessage(sessionKey, message, options = {}) {
     metadata: {
       source: 'openclaw',
       openclawSessionKey: sessionKey,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(typeof message?.runId === 'string' ? { runId: message.runId } : {}),
     },
     createdAt: timestamp,
@@ -130,17 +160,71 @@ function normalizeOpenClawMessages(sessionKey, messages) {
   return normalized;
 }
 
+const GENERATED_OPENCLAW_LABEL_PREFIX = /^\s*\[(?:(?:mon|tue|wed|thu|fri|sat|sun)\s+)?\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?\s+(?:utc|gmt|z)\]\s*/i;
+
+function stripGeneratedSessionLabelPrefix(value) {
+  return typeof value === 'string'
+    ? value.replace(GENERATED_OPENCLAW_LABEL_PREFIX, '').replace(/\s+/g, ' ').trim()
+    : '';
+}
+
+function titleFromUserText(value) {
+  const text = typeof value === 'string' ? value : '';
+  const raw = text
+    .split(/\n\nContext\s/i)[0]
+    ?.replace(/^Chat:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim() || '';
+  return truncateText(raw, 96);
+}
+
+function getFirstUserMessageTextFromMessages(messages) {
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (getMessageRole(message) !== 'user') continue;
+    const text = getMessageText(message).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function getFirstUserMessageTextFromSession(session) {
+  return firstTrimmedString(
+    session?.firstUserMessageText,
+    getMessageText(session?.firstUserMessage),
+    getMessageText(session?.lastUserMessage),
+    getFirstUserMessageTextFromMessages(session?.messages),
+    getFirstUserMessageTextFromMessages(session?.history),
+    getFirstUserMessageTextFromMessages(session?.recentMessages),
+  );
+}
+
+function isGenericSessionLabel(value, key) {
+  const label = typeof value === 'string' ? value.trim() : '';
+  if (!label) return true;
+  if (/^openclaw session$/i.test(label)) return true;
+  if (key && label === key) return true;
+  if (/^agent:[a-z0-9:_-]+$/i.test(label)) return true;
+  return false;
+}
+
 function normalizeSessionLabel(session) {
-  return truncateText(
-    session?.label
-    || session?.displayName
-    || session?.derivedTitle
-    || session?.subject
-    || session?.title
-    || session?.key
-    || 'OpenClaw session',
-    96,
-  ) || 'OpenClaw session';
+  const key = typeof session?.key === 'string' ? session.key.trim() : '';
+  const isCurator = session?.sessionType === 'curator' || /^agent:curator:/.test(key);
+  const firstUserTitle = titleFromUserText(getFirstUserMessageTextFromSession(session));
+  const candidates = [
+    session?.label,
+    session?.displayName,
+    session?.derivedTitle,
+    session?.subject,
+    session?.title,
+  ].map(stripGeneratedSessionLabelPrefix);
+  const label = candidates.find((candidate) => !isGenericSessionLabel(candidate, key)) || '';
+
+  if (isCurator) {
+    return firstUserTitle ? truncateText(`Curator: ${firstUserTitle}`, 96) : 'Curator';
+  }
+
+  return truncateText(label || firstUserTitle || 'OpenClaw session', 96) || 'OpenClaw session';
 }
 
 function normalizeLastMessagePreview(value) {
@@ -156,25 +240,53 @@ function normalizeOpenClawSession(session) {
   if (!key) return null;
   const updatedAt = normalizeTimestamp(session.updatedAt ?? session.lastInteractionAt ?? session.startedAt);
   const preview = normalizeLastMessagePreview(session.lastMessagePreview);
+  const sessionType = /^agent:curator:/.test(key) ? 'curator' : null;
+  const firstUserMessageText = getFirstUserMessageTextFromSession(session);
+  const rawUserMessageCount = Number(session.userMessageCount ?? session.userAuthoredMessageCount ?? session.userMessages);
   return {
     key,
     sessionId: toOpenClawSessionId(key),
-    label: normalizeSessionLabel(session),
-    sessionType: /^agent:curator:/.test(key) ? 'curator' : null,
+    label: normalizeSessionLabel({ ...session, firstUserMessageText, sessionType }),
+    sessionType,
     preview,
     updatedAt,
     messageCount: typeof session.messageCount === 'number' && Number.isFinite(session.messageCount)
       ? Math.max(0, session.messageCount)
       : null,
+    hasUserActivity: Boolean(firstUserMessageText) || (Number.isFinite(rawUserMessageCount) && rawUserMessageCount > 0),
+    firstUserMessageText,
     status: typeof session.status === 'string' && session.status.trim() ? session.status.trim() : null,
     agentId: typeof session.agentId === 'string' && session.agentId.trim() ? session.agentId.trim() : null,
     raw: session,
   };
 }
 
+async function fetchOpenClawSessionUserActivity(client, sessionKey) {
+  try {
+    const payload = await client.request('chat.history', {
+      sessionKey,
+      limit: 25,
+      maxChars: 5_000,
+    });
+    const firstUserMessageText = getFirstUserMessageTextFromMessages(payload?.messages);
+    return {
+      hasUserActivity: Boolean(firstUserMessageText),
+      firstUserMessageText,
+    };
+  } catch {
+    return {
+      hasUserActivity: false,
+      firstUserMessageText: '',
+    };
+  }
+}
+
 async function listOpenClawSessions(options = {}) {
   const client = getOpenClawGatewayClient();
   try {
+    const includeSessionKey = typeof options.includeSessionKey === 'string' && options.includeSessionKey.trim()
+      ? options.includeSessionKey.trim()
+      : null;
     const payload = await client.request('sessions.list', {
       limit: options.limit ?? 100,
       includeDerivedTitles: true,
@@ -185,11 +297,45 @@ async function listOpenClawSessions(options = {}) {
     const sessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
       .map(normalizeOpenClawSession)
       .filter(Boolean);
+    const inspectedSessions = await Promise.all(sessions.map(async (session) => {
+      if (session.hasUserActivity || (session.messageCount !== 0 && session.messageCount !== null)) {
+        return session;
+      }
+
+      const activity = await fetchOpenClawSessionUserActivity(client, session.key);
+      if (!activity.hasUserActivity && !activity.firstUserMessageText) {
+        return session;
+      }
+
+      return {
+        ...session,
+        hasUserActivity: activity.hasUserActivity,
+        firstUserMessageText: activity.firstUserMessageText,
+        label: normalizeSessionLabel({
+          ...session.raw,
+          key: session.key,
+          sessionType: session.sessionType,
+          firstUserMessageText: activity.firstUserMessageText,
+        }),
+      };
+    }));
+    const filteredSessions = inspectedSessions
+      .filter((session) => (
+        session.key === includeSessionKey
+        || session.hasUserActivity
+        || (session.messageCount ?? 0) > 0
+      ))
+      .sort((left, right) => {
+        if (left.hasUserActivity !== right.hasUserActivity) {
+          return left.hasUserActivity ? -1 : 1;
+        }
+        return right.updatedAt.localeCompare(left.updatedAt);
+      });
 
     return {
       ok: true,
       reachable: true,
-      sessions,
+      sessions: filteredSessions,
       error: null,
       settings: getOpenClawSettingsView(),
     };
@@ -345,6 +491,7 @@ function normalizeOpenClawGatewayEvent(eventFrame) {
       id: typeof payload.messageId === 'string' && payload.messageId.trim()
         ? `openclaw-${createHash('sha1').update(`${sessionKey}:${payload.messageId}`).digest('hex').slice(0, 24)}`
         : undefined,
+      idempotencyKey: getMessageIdempotencyKey(payload.message, payload.idempotencyKey ?? payload.idempotency_key),
     });
     if (!sessionKey || !message) return null;
     return {
