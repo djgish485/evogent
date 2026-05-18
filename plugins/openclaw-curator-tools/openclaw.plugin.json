@@ -1,8 +1,8 @@
 {
   "id": "evogent-curator-tools",
   "name": "Evogent Curator Tools",
-  "description": "Shadow-mode tools for an OpenClaw curator agent to inspect Evogent cache, preferences, feed submission, and recent interactions.",
-  "version": "0.1.0",
+  "description": "Shadow-mode tools for an OpenClaw curator agent to inspect Evogent cache, preferences, skill outputs, chat history, feed submission, and recent interactions.",
+  "version": "0.2.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -24,7 +24,10 @@
       "evogent.browse_cache.query",
       "evogent.preferences.match",
       "evogent.feed.submit",
-      "evogent.interactions.recent"
+      "evogent.interactions.recent",
+      "evogent.skill_runs.list",
+      "evogent.skill_runs.read",
+      "evogent.chat_history.search"
     ]
   }
 }
