@@ -3,6 +3,7 @@
 import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
 import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, type OpenClawDailyTimerSidebarStatus, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
+import { CuratorCurateButtons, type CurateCommand } from '@/components/chat/curator-curate-buttons';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
 import { ConfigPanel } from '@/components/config-panel';
 import { AnalysisSeriesCard } from '@/components/feed/analysis-series-card';
@@ -139,7 +140,6 @@ function createWsUrl(pathname: '/ws/feed' | '/ws/chat' | '/ws/orchestrator' | '/
 
 const OPENCLAW_SESSION_PREFIX = 'openclaw:';
 const OPENCLAW_UNREACHABLE_MESSAGE = 'OpenClaw unreachable -- check ~/.openclaw/openclaw.json';
-const OPENCLAW_CURATE_NOW_MESSAGE = 'Run one Evogent live curation cycle now. Use evogent.browse_cache.query for candidates, evogent.preferences.match to score, evogent.interactions.recent for recent feedback, and evogent.feed.submit to ship selected items to the live feed.';
 
 function toOpenClawSessionId(sessionKey: string): string {
   return `${OPENCLAW_SESSION_PREFIX}${sessionKey}`;
@@ -222,7 +222,7 @@ function ConversationCard({
   searchQuery: string | null;
   isCurateNowPending: boolean;
   onOpen: () => void;
-  onCurateNow: (conversation: ConversationCardViewModel) => void;
+  onCurateNow: (conversation: ConversationCardViewModel, command: CurateCommand) => void;
 }) {
   const liveStreamingPreview = streamingChat && doesLiveStateBelongToConversation(conversation, streamingChat)
     ? getStreamingPreviewLine(streamingChat.text)
@@ -281,6 +281,9 @@ function ConversationCard({
       : 'text-emerald-300';
   const shouldShowCurateNowAction = conversation.sessionType === 'curator'
     && fromOpenClawSessionId(conversation.sessionId) !== null;
+  const handleCurate = useCallback((command: CurateCommand) => {
+    onCurateNow(conversation, command);
+  }, [conversation, onCurateNow]);
 
   return (
     <div
@@ -403,16 +406,13 @@ function ConversationCard({
         </div>
       </button>
       {shouldShowCurateNowAction ? (
-        <div className="flex justify-end border-t border-zinc-800/80 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => onCurateNow(conversation)}
+        <div data-curator-actions-row className="flex justify-end border-t border-zinc-800/80 px-4 py-3">
+          <CuratorCurateButtons
             disabled={isCurateNowPending}
-            className="inline-flex h-8 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-xs font-medium text-amber-100 transition hover:border-amber-400/50 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500"
-            aria-label="Run OpenClaw curator now"
-          >
-            {isCurateNowPending ? 'Triggering...' : 'Curate Now'}
-          </button>
+            tint={sessionTint}
+            className="flex shrink-0 items-center gap-1.5 sm:gap-2"
+            onSubmit={handleCurate}
+          />
         </div>
       ) : null}
     </div>
@@ -3094,11 +3094,14 @@ export default function Home() {
     }
   }, []);
 
-  const triggerOpenClawCurateNow = useCallback(async (conversation: ConversationCardViewModel) => {
+  const triggerOpenClawCurateNow = useCallback(async (conversation: ConversationCardViewModel, command: CurateCommand) => {
     const openClawSessionKey = fromOpenClawSessionId(conversation.sessionId);
     if (!openClawSessionKey || conversation.sessionType !== 'curator') {
       return;
     }
+    const message = command === '/curate-latest'
+      ? 'Run one Evogent curation cycle focused on the LATEST content only. Pull only the freshest items from evogent.browse_cache.query (last 2 hours), rank them tightly, ship a smaller-than-usual batch. Use evogent.feed.submit to submit to the live feed.'
+      : 'Run one Evogent live curation cycle now. Use evogent.browse_cache.query for candidates, evogent.preferences.match to score, evogent.interactions.recent for recent feedback, evogent.skill_runs.list/read for installed skill outputs, evogent.chat_history.search for follow-ups and open questions. Use evogent.feed.submit to ship selected items to the live feed.';
 
     setCurateNowPendingSessionIds((current) => ({
       ...current,
@@ -3112,7 +3115,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: OPENCLAW_CURATE_NOW_MESSAGE,
+          message,
         }),
       });
 
