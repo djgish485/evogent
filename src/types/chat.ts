@@ -41,6 +41,8 @@ export interface OpenClawSession {
   preview: string;
   updatedAt: string;
   messageCount: number | null;
+  hasUserActivity?: boolean;
+  firstUserMessageText?: string;
   status: string | null;
   agentId: string | null;
 }

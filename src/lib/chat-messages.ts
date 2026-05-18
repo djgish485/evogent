@@ -23,24 +23,102 @@ export function getChatMessageAttachments(message: ChatMessage): ChatAttachment[
   return parseChatAttachments(metadata.attachments);
 }
 
+function readStringMetadata(message: ChatMessage, key: string): string {
+  const value = message.metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getChatMessageIdempotencyKey(message: ChatMessage): string {
+  const idempotencyKey = readStringMetadata(message, 'idempotencyKey');
+  if (!idempotencyKey) {
+    return '';
+  }
+
+  const source = readStringMetadata(message, 'source');
+  const sessionKey = readStringMetadata(message, 'openclawSessionKey');
+  const sessionId = typeof message.sessionId === 'string' && message.sessionId.trim() ? message.sessionId.trim() : '';
+  return [
+    'idempotency',
+    source,
+    sessionKey || sessionId,
+    message.role,
+    idempotencyKey,
+  ].join(':');
+}
+
+function isOpenClawOptimisticUserMessage(message: ChatMessage): boolean {
+  return message.role === 'user'
+    && readStringMetadata(message, 'source') === 'openclaw'
+    && message.id.startsWith('openclaw-user-');
+}
+
+function chooseMergedChatMessage(current: ChatMessage, incoming: ChatMessage): ChatMessage {
+  if (current.id === incoming.id) {
+    return incoming;
+  }
+
+  const currentIsOptimistic = isOpenClawOptimisticUserMessage(current);
+  const incomingIsOptimistic = isOpenClawOptimisticUserMessage(incoming);
+  if (currentIsOptimistic !== incomingIsOptimistic) {
+    return currentIsOptimistic ? incoming : current;
+  }
+
+  if (current.status !== 'delivered' && incoming.status === 'delivered') {
+    return incoming;
+  }
+
+  return incoming;
+}
+
 export function mergeChatMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
-  const map = new Map<string, ChatMessage>();
+  const records = new Map<string, ChatMessage>();
+  const idToRecordKey = new Map<string, string>();
+  const idempotencyToRecordKey = new Map<string, string>();
+
+  const setRecord = (recordKey: string, item: ChatMessage, aliases: ChatMessage[]) => {
+    records.set(recordKey, item);
+    for (const alias of aliases) {
+      idToRecordKey.set(alias.id, recordKey);
+      const idempotencyKey = getChatMessageIdempotencyKey(alias);
+      if (idempotencyKey) {
+        idempotencyToRecordKey.set(idempotencyKey, recordKey);
+      }
+    }
+    idToRecordKey.set(item.id, recordKey);
+    const itemIdempotencyKey = getChatMessageIdempotencyKey(item);
+    if (itemIdempotencyKey) {
+      idempotencyToRecordKey.set(itemIdempotencyKey, recordKey);
+    }
+  };
+
+  const mergeItem = (item: ChatMessage) => {
+    if (!shouldDisplayAgentEventInChat(item)) {
+      return;
+    }
+
+    const idempotencyKey = getChatMessageIdempotencyKey(item);
+    const existingRecordKey = idToRecordKey.get(item.id)
+      ?? (idempotencyKey ? idempotencyToRecordKey.get(idempotencyKey) : undefined);
+    const existing = existingRecordKey ? records.get(existingRecordKey) : undefined;
+    if (!existing || !existingRecordKey) {
+      setRecord(item.id, item, [item]);
+      return;
+    }
+
+    const next = chooseMergedChatMessage(existing, item);
+    records.delete(existingRecordKey);
+    setRecord(next.id, next, [existing, item]);
+  };
 
   for (const item of current) {
-    if (!shouldDisplayAgentEventInChat(item)) {
-      continue;
-    }
-    map.set(item.id, item);
+    mergeItem(item);
   }
 
   for (const item of incoming) {
-    if (!shouldDisplayAgentEventInChat(item)) {
-      continue;
-    }
-    map.set(item.id, item);
+    mergeItem(item);
   }
 
-  return Array.from(map.values()).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  return Array.from(records.values()).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
 }
 
 export function updateChatMessageStatus(
