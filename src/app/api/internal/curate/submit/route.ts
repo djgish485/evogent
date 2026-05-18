@@ -53,6 +53,7 @@ const minTitlePrefixRemainderLength = 100;
 const articleUrlValidationTimeoutMs = 6_000;
 const maxBatchEnrichmentChunkSize = 4;
 const openClawMcpAppHtmlError = 'openclaw cards must include metadata.mcpAppHtml — markdown-only openclaw submissions are no longer accepted';
+const evogentSkillSourceIdPrefix = 'evogent-skill:';
 const articleUrlValidationUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
   'AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -877,6 +878,71 @@ function normalizeFeedItemProvenance(
   return { ok: true, normalized: item };
 }
 
+function readOpenClawBundleDir(metadata: FeedInsertInput['metadata'] | undefined): string | null {
+  if (!isRecord(metadata) || !isRecord(metadata.openClaw)) {
+    return null;
+  }
+
+  const bundleDir = typeof metadata.openClaw.bundleDir === 'string'
+    ? metadata.openClaw.bundleDir.trim()
+    : '';
+  if (!bundleDir) {
+    return null;
+  }
+
+  return bundleDir.replace(/\/+$/, '') || bundleDir;
+}
+
+function readEvogentSkillSourceId(sourceId: string | null): string | null {
+  const trimmed = typeof sourceId === 'string' ? sourceId.trim() : '';
+  return trimmed.startsWith(evogentSkillSourceIdPrefix) ? trimmed : null;
+}
+
+function getExistingOpenClawSkillDuplicateKey(
+  item: FeedInsertInput,
+  canonicalSourceId: string | null,
+): string | null {
+  const skillSourceId = readEvogentSkillSourceId(canonicalSourceId);
+  const bundleDir = readOpenClawBundleDir(item.metadata);
+  if (!skillSourceId && !bundleDir) {
+    return null;
+  }
+
+  const clauses: string[] = [];
+  const params: Record<string, string> = {};
+  if (skillSourceId) {
+    clauses.push('source_id = @skillSourceId');
+    params.skillSourceId = skillSourceId;
+  }
+  if (bundleDir) {
+    clauses.push("rtrim(json_extract(metadata, '$.openClaw.bundleDir'), '/') = @bundleDir");
+    params.bundleDir = bundleDir;
+  }
+
+  const row = getDb().prepare(`
+    SELECT
+      source_id AS sourceId,
+      rtrim(json_extract(metadata, '$.openClaw.bundleDir'), '/') AS bundleDir
+    FROM feed
+    WHERE ${clauses.join(' OR ')}
+    ORDER BY created_at_ms DESC, created_at DESC, id DESC
+    LIMIT 1
+  `).get(params) as { sourceId: string | null; bundleDir: string | null } | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  if (skillSourceId && row.sourceId === skillSourceId) {
+    return skillSourceId;
+  }
+  if (bundleDir && row.bundleDir === bundleDir) {
+    return `openclaw-bundle:${bundleDir}`;
+  }
+
+  return skillSourceId ?? `openclaw-bundle:${bundleDir}`;
+}
+
 export async function POST(request: Request) {
   let payload: unknown;
   try {
@@ -1034,6 +1100,13 @@ export async function POST(request: Request) {
       }
     }
 
+    const openClawSkillDuplicateKey = getExistingOpenClawSkillDuplicateKey(normalizedWithProvenance, canonicalSourceId);
+    if (openClawSkillDuplicateKey) {
+      duplicates += 1;
+      duplicateSourceIds.add(openClawSkillDuplicateKey);
+      continue;
+    }
+
     pendingItems.push({
       index,
       normalized: normalizedWithProvenance,
@@ -1074,6 +1147,13 @@ export async function POST(request: Request) {
         continue;
       }
       normalizedWithProvenance.parentId = resolvedParentId;
+    }
+
+    const openClawSkillDuplicateKey = getExistingOpenClawSkillDuplicateKey(normalizedWithProvenance, canonicalSourceId);
+    if (openClawSkillDuplicateKey) {
+      duplicates += 1;
+      duplicateSourceIds.add(openClawSkillDuplicateKey);
+      continue;
     }
 
     const normalizedWithThreadColor = assignThreadColor(normalizedWithProvenance);
