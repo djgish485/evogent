@@ -507,6 +507,13 @@ function parseFeedInsertInput(input: unknown, index: number): { ok: true; normal
     };
   }
 
+  if (
+    normalized.source == null
+    && normalized.metadata?.source === 'chat-curator'
+  ) {
+    normalized.source = 'openclaw';
+  }
+
   return { ok: true, normalized };
 }
 
@@ -1027,9 +1034,13 @@ export async function POST(request: Request) {
     }
 
     const normalized = validatedArticleBody.normalized;
+    const openClawMetadataSource = typeof normalized.metadata?.source === 'string'
+      ? normalized.metadata.source.trim().toLowerCase()
+      : '';
     const openClawMcpAppHtml = normalized.metadata?.mcpAppHtml;
     if (
       normalized.source === 'openclaw'
+      && openClawMetadataSource !== 'chat-curator'
       && (typeof openClawMcpAppHtml !== 'string' || !openClawMcpAppHtml.trim())
     ) {
       errors.push({
