@@ -32,9 +32,67 @@ copy_if_missing() {
   echo "  $source_file -> $target_file"
 }
 
+write_curator_agents_file() {
+  local source_file="$1"
+  local target_file="$2"
+
+  if [[ ! -f "$source_file" ]]; then
+    echo "Required Evogent source file missing: $source_file" >&2
+    exit 1
+  fi
+
+  AGENTS_SOURCE_FILE="$source_file" \
+  AGENTS_TARGET_FILE="$target_file" \
+  node <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+
+const sourceFile = process.env.AGENTS_SOURCE_FILE;
+const targetFile = process.env.AGENTS_TARGET_FILE;
+const sectionHeading = '## Beyond installed skills — exploration';
+const explorationSection = [
+  sectionHeading,
+  '',
+  'At the start of each cycle, after pulling content candidates from the browse cache:',
+  '',
+  '1. Call `evogent.skill_runs.list` to see what OpenClaw skills have produced recently (daily-brief, competitor-watch, email-triage, gh-issues, research-clipping, etc.). For any that look promising, call `evogent.skill_runs.read` to inspect the content. Rank these candidates alongside the cache candidates — don\'t auto-include them, decide what\'s worth surfacing.',
+  '',
+  '2. Occasionally (not every cycle), use `evogent.chat_history.search` to look for:',
+  '   - **Promised follow-ups**: terms like "I\'ll send", "will do", "let me get back". If the user committed to doing something more than 3 days ago and hasn\'t, surface a card.',
+  '   - **Open questions the user raised**: things like "will Hermes ship #11712?" or "is X going to happen?" — and check if anything in today\'s cache or news answers it.',
+  '   - **Topics under active discussion**: search for recent themes from chat (e.g., "OpenClaw", "Codex", whatever the user has been engaging with), then look in the cache for related items the user would want.',
+  '',
+  '3. Beyond skills and chat, use your existing tools (web_search, web_fetch, bash) for ad-hoc enrichment when an item is interesting but underspecified. Cross-source observations are valuable: a tweet + an HN comment + an email receipt that together tell a story no single source tells.',
+  '',
+  '4. Surface SPARSE high-signal items in this category (typically 1-3 per cycle). The standard content stream is the main thing; these are the bonus signal that makes the feed feel personal rather than generic.',
+  '',
+  '5. Tag any skill-output card you ship with `metadata.source: "openclaw"` so it renders as the rich OpenClaw card type. Tag any cross-source observation card with `metadata.source: "chat-curator"` and `metadata.kind: "observation"` so we can distinguish it.',
+].join('\n');
+
+if (!sourceFile || !targetFile) {
+  throw new Error('Missing AGENTS source or target path.');
+}
+
+function stripExistingExplorationSection(content) {
+  const headingIndex = content.indexOf(sectionHeading);
+  if (headingIndex === -1) {
+    return content.trimEnd();
+  }
+  return content.slice(0, headingIndex).trimEnd();
+}
+
+const baseContent = stripExistingExplorationSection(fs.readFileSync(sourceFile, 'utf8'));
+fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+fs.writeFileSync(targetFile, `${baseContent}\n\n${explorationSection}\n`, 'utf8');
+NODE
+
+  echo "Wrote AGENTS.md with Evogent exploration addendum:"
+  echo "  $source_file -> $target_file"
+}
+
 mkdir -p "$agent_dir/sessions"
 
-copy_if_missing "$repo_dir/data/curation-prompt.md" "$agent_dir/AGENTS.md" "AGENTS.md"
+write_curator_agents_file "$repo_dir/data/curation-prompt.md" "$agent_dir/AGENTS.md"
 copy_if_missing "$repo_dir/data/preferences-context.md" "$agent_dir/MEMORY.md" "MEMORY.md"
 copy_if_missing "$repo_dir/data/preference-insights.md" "$agent_dir/USER.md" "USER.md"
 
