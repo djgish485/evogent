@@ -3,6 +3,7 @@ import {
   getOpenClawHistory,
   sendOpenClawMessage,
 } from '@/lib/openclaw/sessions';
+import { isOpenClawHeartbeatMessage } from '@/lib/openclaw/heartbeat';
 import { getChatMessagesPage, persistChatMessage } from '@/lib/db/chat';
 import { mergeChatMessages } from '@/lib/chat-messages';
 import { normalizeGatewayErrorMessage } from '@/lib/openclaw/gateway-client';
@@ -79,10 +80,13 @@ export async function GET(
       persistedMessages,
     );
 
+    const messages = mergeChatMessages(persistedMessages, historyMessages)
+      .filter((message) => !isOpenClawHeartbeatMessage(message));
+
     return NextResponse.json({
       ok: true,
       ...history,
-      messages: mergeChatMessages(persistedMessages, historyMessages),
+      messages,
     });
   } catch (error) {
     return NextResponse.json({
