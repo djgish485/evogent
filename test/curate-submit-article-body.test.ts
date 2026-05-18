@@ -26,6 +26,7 @@ type SubmitResponse = {
     error?: string;
   }>;
   acceptedIds?: string[];
+  duplicateSourceIds?: string[];
 };
 
 const articleBodySourceSynopsisError = [
@@ -166,6 +167,52 @@ describe('curate submit article body validation', { concurrency: false }, () => 
     assert.equal(result.status, 400);
     assert.equal(result.body.accepted, 0);
     assert.equal(result.body.errors?.[0]?.error, articleBodySourceSynopsisError);
+  });
+
+  test('deduplicates OpenClaw skill submissions by bundle dir when sourceId changes', async () => {
+    const bundleDir = path.join(tempDir, 'skill-runs', 'competitor-watch');
+    const outputPath = path.join(bundleDir, 'output.md');
+    const firstSourceId = `competitor-watch-${randomUUID()}`;
+    const secondSourceId = `evogent-skill:competitor-watch:${Math.floor(Date.now() / 1000)}`;
+    const metadata = {
+      mcpAppHtml: '<article>Competitor watch output</article>',
+      openClaw: {
+        bundleDir,
+        skill: 'competitor-watch',
+        outputPath,
+      },
+    };
+
+    const firstResult = await submitItems([{
+      id: `ma-openclaw-skill-first-${randomUUID()}`,
+      type: 'notification',
+      source: 'openclaw',
+      sourceId: firstSourceId,
+      title: 'Competitor watch',
+      text: 'First rendering of the same OpenClaw skill output.',
+      publishedAt: '2026-03-08T10:00:00.000Z',
+      metadata,
+    }]);
+
+    assert.equal(firstResult.status, 200);
+    assert.equal(firstResult.body.accepted, 1);
+    assert.equal(firstResult.body.duplicates, 0);
+
+    const secondResult = await submitItems([{
+      id: `ma-openclaw-skill-second-${randomUUID()}`,
+      type: 'notification',
+      source: 'openclaw',
+      sourceId: secondSourceId,
+      title: 'Competitor watch again',
+      text: 'Second rendering should dedupe even though the sourceId changed.',
+      publishedAt: '2026-03-08T10:05:00.000Z',
+      metadata,
+    }]);
+
+    assert.equal(secondResult.status, 200);
+    assert.equal(secondResult.body.accepted, 0);
+    assert.equal(secondResult.body.duplicates, 1);
+    assert.deepEqual(secondResult.body.duplicateSourceIds, [`openclaw-bundle:${bundleDir}`]);
   });
 
   test('rejects article submissions when excerpt is just the title', async () => {
