@@ -7,7 +7,9 @@ import { isOpenClawHeartbeatMessage } from '@/lib/openclaw/heartbeat';
 import { getChatMessagesPage, persistChatMessage } from '@/lib/db/chat';
 import { mergeChatMessages } from '@/lib/chat-messages';
 import { normalizeGatewayErrorMessage } from '@/lib/openclaw/gateway-client';
+import { getDataPath } from '@/lib/data-dir';
 import { type ChatMessage } from '@/types/chat';
+import { enqueueCacheRefreshForCuration } from '../../../../../../lib/cache-refresh-on-demand.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +24,40 @@ function decodeSessionKey(value: string): string {
 
 function sanitizeMessage(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function isFullCurationRequest(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized || normalized.includes('latest-content-focused')) return false;
+  return normalized === '/curate'
+    || /^run (?:a full|one evogent) curation cycle\b/.test(normalized);
+}
+
+function sanitizeIdempotencyKey(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 128) : null;
+}
+
+async function refreshCachesBeforeOpenClawCuration(message: string, requestId: string | null): Promise<void> {
+  if (!isFullCurationRequest(message)) {
+    return;
+  }
+
+  try {
+    await enqueueCacheRefreshForCuration({
+      id: requestId || `openclaw-curation-${Date.now()}`,
+      priority: 'heartbeat',
+      message,
+      metadata: {
+        automatedCuration: true,
+        curationCommand: '/curate',
+      },
+    }, {
+      rootDir: process.cwd(),
+      configPath: getDataPath('config.md'),
+    });
+  } catch (error) {
+    console.warn('[openclaw] pre-curation cache refresh failed:', error instanceof Error ? error.message : String(error));
+  }
 }
 
 function readIdempotencyKey(message: ChatMessage): string {
@@ -119,9 +155,13 @@ export async function POST(
   if (!message) {
     return NextResponse.json({ ok: false, error: 'message must be a non-empty string' }, { status: 400 });
   }
+  const idempotencyKey = sanitizeIdempotencyKey((payload as { idempotencyKey?: unknown }).idempotencyKey);
 
   try {
-    const result = await sendOpenClawMessage(key, message);
+    await refreshCachesBeforeOpenClawCuration(message, idempotencyKey);
+    const result = await sendOpenClawMessage(key, message, {
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    });
     const userMessage = result.userMessage as ChatMessage;
     const persisted = persistChatMessage({
       id: userMessage.id,

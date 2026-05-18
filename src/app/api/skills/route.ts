@@ -25,13 +25,13 @@ export async function GET() {
         return { value, label };
       });
     const openClawHome = process.env.OPENCLAW_HOME || path.join(homedir(), '.openclaw');
-    const openClawChannelPath = path.join(openClawHome, 'channels', 'evogent');
+    const openClawCuratorAgentPath = path.join(openClawHome, 'agents', 'curator');
 
     try {
-      await access(openClawChannelPath);
+      await access(openClawCuratorAgentPath);
       feedSources.push({ value: 'openclaw', label: 'OpenClaw' });
     } catch {
-      // Missing OpenClaw channel install is expected.
+      // Missing OpenClaw curator install is expected.
     }
 
     return NextResponse.json({
