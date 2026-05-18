@@ -25,6 +25,9 @@ The curator uses:
 - `evogent.browse_cache.query`
 - `evogent.preferences.match`
 - `evogent.interactions.recent`
+- `evogent.skill_runs.list`
+- `evogent.skill_runs.read`
+- `evogent.chat_history.search`
 - `evogent.feed.submit`
 
 See `docs/openclaw-curator-migration.md` for the curator runtime model.

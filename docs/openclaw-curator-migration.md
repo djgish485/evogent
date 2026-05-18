@@ -42,7 +42,8 @@ The agent installer creates:
 ```
 
 It also ensures OpenClaw has a `curator` agent using the configured runtime and
-model, then creates a cron job named `Evogent curator` unless it already exists.
+model, grants that agent the `evogent-curator-tools` tool plugin, then creates a
+cron job named `Evogent curator` unless it already exists.
 
 ## Manual Run
 
