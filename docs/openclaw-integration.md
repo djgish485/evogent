@@ -3,7 +3,7 @@
 Evogent integrates with OpenClaw in two live ways:
 
 - The OpenClaw `curator` agent selects feed items and submits them through
-  `evogent.feed.submit`.
+  `evogent_feed_submit`.
 - Evogent mirrors local OpenClaw chat sessions through the OpenClaw gateway.
 
 Evogent no longer installs an OpenClaw channel adapter and no longer auto-posts
@@ -22,13 +22,13 @@ bash scripts/install-openclaw-curator-agent.sh
 
 The curator uses:
 
-- `evogent.browse_cache.query`
-- `evogent.preferences.match`
-- `evogent.interactions.recent`
-- `evogent.skill_runs.list`
-- `evogent.skill_runs.read`
-- `evogent.chat_history.search`
-- `evogent.feed.submit`
+- `evogent_browse_cache_query`
+- `evogent_preferences_match`
+- `evogent_interactions_recent`
+- `evogent_skill_runs_list`
+- `evogent_skill_runs_read`
+- `evogent_chat_history_search`
+- `evogent_feed_submit`
 
 See `docs/openclaw-curator-migration.md` for the curator runtime model.
 

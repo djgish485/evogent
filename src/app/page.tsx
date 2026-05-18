@@ -3158,8 +3158,8 @@ export default function Home() {
       return;
     }
     const message = command === '/curate-latest'
-      ? 'Run one Evogent curation cycle focused on the LATEST content only. Pull only the freshest items from evogent.browse_cache.query (last 2 hours), rank them tightly, ship a smaller-than-usual batch. Use evogent.feed.submit to submit to the live feed.'
-      : 'Run one Evogent live curation cycle now. Use evogent.browse_cache.query for candidates, evogent.preferences.match to score, evogent.interactions.recent for recent feedback, evogent.skill_runs.list/read for installed skill outputs, evogent.chat_history.search for follow-ups and open questions. Use evogent.feed.submit to ship selected items to the live feed.';
+      ? 'Run one Evogent curation cycle focused on the LATEST content only. Pull only the freshest items from evogent_browse_cache_query (last 2 hours), rank them tightly, ship a smaller-than-usual batch. Use evogent_feed_submit to submit to the live feed.'
+      : 'Run one Evogent live curation cycle now. Use evogent_browse_cache_query for candidates, evogent_preferences_match to score, evogent_interactions_recent for recent feedback, evogent_skill_runs_list and evogent_skill_runs_read for installed skill outputs, evogent_chat_history_search for follow-ups and open questions. Use evogent_feed_submit to ship selected items to the live feed.';
 
     setCurateNowPendingSessionIds((current) => ({
       ...current,

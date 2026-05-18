@@ -55,9 +55,9 @@ const explorationSection = [
   '',
   'At the start of each cycle, after pulling content candidates from the browse cache:',
   '',
-  '1. Call `evogent.skill_runs.list` to see what OpenClaw skills have produced recently (daily-brief, competitor-watch, email-triage, gh-issues, research-clipping, etc.). For any that look promising, call `evogent.skill_runs.read` to inspect the content. Rank these candidates alongside the cache candidates — don\'t auto-include them, decide what\'s worth surfacing.',
+  '1. Call `evogent_skill_runs_list` to see what OpenClaw skills have produced recently (daily-brief, competitor-watch, email-triage, gh-issues, research-clipping, etc.). For any that look promising, call `evogent_skill_runs_read` to inspect the content. Rank these candidates alongside the cache candidates — don\'t auto-include them, decide what\'s worth surfacing.',
   '',
-  '2. Occasionally (not every cycle), use `evogent.chat_history.search` to look for:',
+  '2. Occasionally (not every cycle), use `evogent_chat_history_search` to look for:',
   '   - **Promised follow-ups**: terms like "I\'ll send", "will do", "let me get back". If the user committed to doing something more than 3 days ago and hasn\'t, surface a card.',
   '   - **Open questions the user raised**: things like "will Hermes ship #11712?" or "is X going to happen?" — and check if anything in today\'s cache or news answers it.',
   '   - **Topics under active discussion**: search for recent themes from chat (e.g., "OpenClaw", "Codex", whatever the user has been engaging with), then look in the cache for related items the user would want.',
@@ -193,7 +193,7 @@ NODE
 
 cron_message=$(
   cat <<'EOF'
-Run one Evogent curation cycle. Use evogent.browse_cache.query to inspect candidates, evogent.preferences.match to score them against memory, evogent.interactions.recent for recent feedback, and evogent.feed.submit to submit selected items to the live feed.
+Run one Evogent curation cycle. Use evogent_browse_cache_query to inspect candidates, evogent_preferences_match to score them against memory, evogent_interactions_recent for recent feedback, and evogent_feed_submit to submit selected items to the live feed.
 EOF
 )
 
