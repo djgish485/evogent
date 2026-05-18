@@ -20,6 +20,11 @@ The installer registers this folder with OpenClaw:
 openclaw plugins install plugins/openclaw-curator-tools
 ```
 
+If the OpenClaw `curator` agent already exists, the installer also adds
+`evogent-curator-tools` to that agent's tool allow additions. This is required
+when OpenClaw uses the default `coding` tool profile, because that profile only
+allows core coding tools unless a plugin is explicitly added.
+
 Restart OpenClaw after installing so the manifest and runtime entrypoint are
 discovered.
 
