@@ -4,6 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 plugin_dir="$repo_dir/plugins/openclaw-curator-tools"
 openclaw_home="${OPENCLAW_HOME:-$HOME/.openclaw}"
+config_file="${OPENCLAW_CONFIG_PATH:-$openclaw_home/openclaw.json}"
 
 if [[ ! -d "$openclaw_home" ]]; then
   echo "OpenClaw home not found: $openclaw_home" >&2
@@ -21,6 +22,65 @@ if ! command -v openclaw >/dev/null 2>&1; then
 fi
 
 openclaw plugins install "$plugin_dir"
+
+OPENCLAW_CONFIG_PATH="$config_file" node <<'NODE'
+const fs = require('node:fs');
+
+const configPath = process.env.OPENCLAW_CONFIG_PATH;
+const agentId = 'curator';
+const curatorToolPluginId = 'evogent-curator-tools';
+
+if (!configPath || !fs.existsSync(configPath) || !fs.readFileSync(configPath, 'utf8').trim()) {
+  process.exit(0);
+}
+
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (error) {
+  console.error(`Could not parse ${configPath} as JSON.`);
+  console.error('Use OpenClaw doctor/config tooling to repair it, then rerun this installer.');
+  throw error;
+}
+
+const agents = config && typeof config === 'object' && !Array.isArray(config)
+  ? config.agents
+  : null;
+const agentList = agents && typeof agents === 'object' && !Array.isArray(agents) && Array.isArray(agents.list)
+  ? agents.list
+  : [];
+const agent = agentList.find((entry) => entry && typeof entry === 'object' && entry.id === agentId);
+
+if (!agent) {
+  console.log(`OpenClaw curator agent is not configured yet; scripts/install-openclaw-curator-agent.sh will grant ${curatorToolPluginId}.`);
+  process.exit(0);
+}
+
+agent.tools = agent.tools && typeof agent.tools === 'object' && !Array.isArray(agent.tools)
+  ? agent.tools
+  : {};
+
+let changed = false;
+if (Array.isArray(agent.tools.allow) && agent.tools.allow.length > 0) {
+  if (!agent.tools.allow.includes(curatorToolPluginId)) {
+    agent.tools.allow = [...agent.tools.allow, curatorToolPluginId];
+    changed = true;
+  }
+} else {
+  const currentAlsoAllow = Array.isArray(agent.tools.alsoAllow) ? agent.tools.alsoAllow : [];
+  if (!currentAlsoAllow.includes(curatorToolPluginId)) {
+    agent.tools.alsoAllow = [...currentAlsoAllow, curatorToolPluginId];
+    changed = true;
+  }
+}
+
+if (changed) {
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  console.log(`Updated OpenClaw curator agent tool allowlist: ${curatorToolPluginId}`);
+} else {
+  console.log(`OpenClaw curator agent already allows ${curatorToolPluginId}.`);
+}
+NODE
 
 cat <<EOF
 

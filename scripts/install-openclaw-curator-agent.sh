@@ -109,6 +109,7 @@ const agentDir = process.env.CURATOR_AGENT_DIR;
 const model = process.env.CURATOR_MODEL;
 const runtimeId = process.env.CURATOR_RUNTIME_ID;
 const agentId = 'curator';
+const curatorToolPluginId = 'evogent-curator-tools';
 
 if (!configPath || !agentDir || !model || !runtimeId) {
   throw new Error('Missing OpenClaw curator installer environment.');
@@ -165,11 +166,29 @@ if (currentRuntime.id !== runtimeId) {
   if (action === 'unchanged') action = 'updated';
 }
 
+agent.tools = agent.tools && typeof agent.tools === 'object' && !Array.isArray(agent.tools)
+  ? agent.tools
+  : {};
+
+if (Array.isArray(agent.tools.allow) && agent.tools.allow.length > 0) {
+  if (!agent.tools.allow.includes(curatorToolPluginId)) {
+    agent.tools.allow = [...agent.tools.allow, curatorToolPluginId];
+    if (action === 'unchanged') action = 'updated';
+  }
+} else {
+  const currentAlsoAllow = Array.isArray(agent.tools.alsoAllow) ? agent.tools.alsoAllow : [];
+  if (!currentAlsoAllow.includes(curatorToolPluginId)) {
+    agent.tools.alsoAllow = [...currentAlsoAllow, curatorToolPluginId];
+    if (action === 'unchanged') action = 'updated';
+  }
+}
+
 fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 console.log(`OpenClaw config ${action} for agent "${agentId}":`);
 console.log(`  ${configPath}`);
 console.log(`  model: ${model}`);
 console.log(`  agentRuntime.id: ${runtimeId}`);
+console.log(`  tools: ${curatorToolPluginId} allowed`);
 NODE
 
 cron_message=$(
