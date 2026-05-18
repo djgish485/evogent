@@ -32,6 +32,45 @@ copy_if_missing() {
   echo "  $source_file -> $target_file"
 }
 
+detect_gmail_calendar_adapter() {
+  export GMAIL_TOOL_KIND='none'
+  export GMAIL_TOOL_LIST=''
+  export GMAIL_TOOL_SEARCH=''
+  export GMAIL_TOOL_READ=''
+  export CAL_TOOL_LIST=''
+  export CAL_TOOL_CALENDARS=''
+  export GMAIL_TOOL_READONLY_NOTE=''
+
+  if command -v gog >/dev/null 2>&1; then
+    if timeout 8 gog gmail list -n 1 >/dev/null 2>&1; then
+      export GMAIL_TOOL_KIND='gog'
+      export GMAIL_TOOL_LIST='gog gmail list -n 50'
+      export GMAIL_TOOL_SEARCH='gog gmail list -n 50 "<gmail query, e.g. subject:invoice OR renewal OR receipt>"'
+      export GMAIL_TOOL_READ='gog gmail thread show <threadId>'
+      export CAL_TOOL_LIST='gog calendar events --max 20'
+      export CAL_TOOL_CALENDARS='gog calendar calendars'
+      export GMAIL_TOOL_READONLY_NOTE='Read-only. Curator MUST NOT call `gog gmail send/draft/trash/modify`, any label/batch mutation, or any calendar mutation. `/root/.config/gogcli/config.json` already has `no_send_accounts` set for this account; AGENTS.md still must forbid the mutating calls explicitly.'
+      return
+    fi
+  fi
+
+  local ezg_root="$HOME/.openclaw/workspace/skills/ez-google"
+  local ezg_scripts="$ezg_root/scripts"
+  if [[ -f "$ezg_scripts/gmail.py" ]] \
+    && [[ -f "$ezg_scripts/gcal.py" ]] \
+    && [[ -f "$ezg_scripts/auth.py" ]] \
+    && (cd "$ezg_root" && timeout 8 uv run scripts/auth.py status 2>/dev/null | grep -q AUTHENTICATED); then
+    export GMAIL_TOOL_KIND='ez-google'
+    export GMAIL_TOOL_LIST="cd $ezg_root && uv run scripts/gmail.py list -n 50"
+    export GMAIL_TOOL_SEARCH="cd $ezg_root && uv run scripts/gmail.py search '<gmail query>'"
+    export GMAIL_TOOL_READ="cd $ezg_root && uv run scripts/gmail.py get <MESSAGE_ID>"
+    export CAL_TOOL_LIST="cd $ezg_root && uv run scripts/gcal.py list today"
+    export CAL_TOOL_CALENDARS="cd $ezg_root && uv run scripts/gcal.py calendars"
+    export GMAIL_TOOL_READONLY_NOTE='Read-only. Curator MUST NOT call `gmail.py send/draft/bulk-trash/bulk-label`, any Gmail modify/trash/label mutation, or any calendar create/delete/mutation.'
+    return
+  fi
+}
+
 write_curator_agents_file() {
   local source_file="$1"
   local target_file="$2"
@@ -43,6 +82,13 @@ write_curator_agents_file() {
 
   AGENTS_SOURCE_FILE="$source_file" \
   AGENTS_TARGET_FILE="$target_file" \
+  GMAIL_TOOL_KIND="${GMAIL_TOOL_KIND:-none}" \
+  GMAIL_TOOL_LIST="${GMAIL_TOOL_LIST:-}" \
+  GMAIL_TOOL_SEARCH="${GMAIL_TOOL_SEARCH:-}" \
+  GMAIL_TOOL_READ="${GMAIL_TOOL_READ:-}" \
+  CAL_TOOL_LIST="${CAL_TOOL_LIST:-}" \
+  CAL_TOOL_CALENDARS="${CAL_TOOL_CALENDARS:-}" \
+  GMAIL_TOOL_READONLY_NOTE="${GMAIL_TOOL_READONLY_NOTE:-}" \
   node <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
@@ -50,16 +96,45 @@ const path = require('node:path');
 const sourceFile = process.env.AGENTS_SOURCE_FILE;
 const targetFile = process.env.AGENTS_TARGET_FILE;
 const sectionHeading = '## Beyond installed skills — exploration';
+
+const gmailToolKind = process.env.GMAIL_TOOL_KIND || 'none';
+const gmailCalendarCommands = {
+  list: process.env.GMAIL_TOOL_LIST || '',
+  search: process.env.GMAIL_TOOL_SEARCH || '',
+  read: process.env.GMAIL_TOOL_READ || '',
+  calendarEvents: process.env.CAL_TOOL_LIST || '',
+  calendars: process.env.CAL_TOOL_CALENDARS || '',
+  readOnlyNote: process.env.GMAIL_TOOL_READONLY_NOTE || '',
+};
+
+function buildGmailCalendarBlock() {
+  if (gmailToolKind === 'gog' || gmailToolKind === 'ez-google') {
+    return [
+      `   - **Gmail/Calendar (${gmailToolKind})**: use these every cycle as first-class cross-source observation inputs, not as an occasional bonus. If any Gmail/Calendar command exits non-zero, submit one \`notification\` feed item saying "Gmail/Calendar via ${gmailToolKind} failed; user may need to re-auth" and continue the rest of the cycle without Gmail/Calendar.`,
+      `     - List Gmail: \`${gmailCalendarCommands.list}\``,
+      `     - Search Gmail: \`${gmailCalendarCommands.search}\``,
+      `     - Read Gmail thread/message: \`${gmailCalendarCommands.read}\``,
+      `     - List calendar events: \`${gmailCalendarCommands.calendarEvents}\``,
+      `     - List calendars: \`${gmailCalendarCommands.calendars}\``,
+      '     - Required checks every cycle: renewal alarms from Gmail subjects like `invoice`, `renewal`, or `receipt` plus calendar windows; calendar prep briefs for events in the next 48h with attendees\' public activity; surprising bridges that combine a Gmail thread with tweet/HN/chat context.',
+      `     - ${gmailCalendarCommands.readOnlyNote}`,
+    ];
+  }
+
+  return [
+    '   - **Gmail/Calendar setup**: Gmail/Calendar is not connected yet. Submit one `notification` feed item per cycle saying "Gmail/Calendar not connected yet. In a chat with me say \\"set up Gmail and Calendar\\" and I will walk you through OAuth via gog." Do not call any Gmail or Calendar tools this cycle; that includes send, draft, modify, trash, label, and calendar-mutation actions.',
+  ];
+}
+
 const explorationSection = [
   sectionHeading,
   '',
   'At the start of each cycle, after pulling content candidates from the browse cache:',
   '',
   '1. Make open-ended cross-source observation the primary new capability. Use `evogent_chat_history_search` and your normal tools to notice connections the browse cache alone cannot see:',
-  '   - **Renewal alarms**: cross-reference Gmail receipts (via ez-google if granted) + calendar events + recent chat threads. Surface a card 3-7 days before a subscription renews.',
+  ...buildGmailCalendarBlock(),
   '   - **Promised follow-ups**: scan `evogent_chat_history_search` for phrases like "I\'ll send", "will do", "let me get back" older than 3 days. Draft the reply.',
   '   - **Surprising bridges**: spot when items from different sources (tweet + HN comment + your chat) connect. Bridge them in one card.',
-  '   - **Calendar prep**: 48h before a meeting, scan that person\'s recent public activity. Surface a brief.',
   '   - **Open question tracking**: search chat history for unresolved questions. When the news answers them, surface a status-change card.',
   '   - **Activity awareness**: notice YOUR patterns (e.g., quiet on Twitter for 3 days). Surface what you\'d usually engage with.',
   '',
@@ -97,6 +172,8 @@ NODE
 
 mkdir -p "$agent_dir/sessions"
 
+detect_gmail_calendar_adapter
+echo "Gmail/Calendar adapter detected: $GMAIL_TOOL_KIND"
 write_curator_agents_file "$repo_dir/data/curation-prompt.md" "$agent_dir/AGENTS.md"
 copy_if_missing "$repo_dir/data/preferences-context.md" "$agent_dir/MEMORY.md" "MEMORY.md"
 copy_if_missing "$repo_dir/data/preference-insights.md" "$agent_dir/USER.md" "USER.md"
