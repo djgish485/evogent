@@ -10,6 +10,8 @@ import { type ChatMessage } from '@/types/chat';
 import { type ConversationSessionSummary, type ConversationSessionType } from '@/types/conversation';
 import { type ChatSessionSearchMatch, type FeedItem } from '@/types/feed';
 
+const OPENCLAW_SESSION_PREFIX = 'openclaw:';
+
 export type ConversationContextKind = 'global' | 'post';
 
 export type ChatAuthorMessage = {
@@ -215,6 +217,7 @@ export function buildSessionCards(
   const messagesBySessionId = new Map<string, ChatMessage[]>();
   for (const message of messages) {
     if (!message.sessionId) continue;
+    if (message.sessionId.startsWith(OPENCLAW_SESSION_PREFIX)) continue;
     const existing = messagesBySessionId.get(message.sessionId) ?? [];
     existing.push(message);
     messagesBySessionId.set(message.sessionId, existing);
@@ -257,6 +260,7 @@ export function buildSessionCards(
   ]);
 
   return Array.from(sessionIds)
+    .filter((sessionId) => !sessionId.startsWith(OPENCLAW_SESSION_PREFIX))
     .map((sessionId): ConversationCardViewModel | null => {
       const producedFeedItems = (feedItemsBySessionId.get(sessionId) ?? [])
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt));

@@ -841,6 +841,47 @@ describe('chat sessions', () => {
     assert.strictEqual(secondPage.sessions[0]?.previewText, 'oldest answer');
   });
 
+  test('conversation session pages exclude OpenClaw-backed session rows', () => {
+    const nativeSession = createChatSession({ title: 'Native Chat' });
+    const openClawSessionId = 'openclaw:agent:curator:main';
+    const db = getDb();
+
+    db.prepare(`
+      INSERT INTO chat_sessions (
+        id,
+        provider,
+        provider_session_id,
+        claude_session_id,
+        title,
+        session_type,
+        created_at,
+        updated_at
+      ) VALUES (?, 'claude', ?, ?, 'OpenClaw Curator', 'curator', '2026-05-18 10:00:00', '2026-05-18 10:00:00')
+    `).run(openClawSessionId, openClawSessionId, openClawSessionId);
+
+    insertChatMessage({
+      id: 'msg-native-user',
+      role: 'user',
+      sessionId: nativeSession.id,
+      text: 'native question',
+      timestamp: '2026-05-18T10:01:00.000Z',
+      status: 'delivered',
+    });
+    insertChatMessage({
+      id: 'msg-openclaw-user',
+      role: 'user',
+      sessionId: openClawSessionId,
+      text: 'openclaw question',
+      timestamp: '2026-05-18T10:02:00.000Z',
+      status: 'delivered',
+    });
+
+    const page = getConversationSessionPage({ limit: 10, offset: 0 });
+    assert.strictEqual(page.totalCount, 1);
+    assert.deepStrictEqual(page.sessions.map((session) => session.sessionId), [nativeSession.id]);
+    assert.strictEqual(getConversationSessionSummary(openClawSessionId), null);
+  });
+
   test('deleteChatSession removes the session row and its messages', () => {
     const firstSession = createChatSession();
     const secondSession = createChatSession();

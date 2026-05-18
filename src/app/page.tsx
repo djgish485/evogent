@@ -2054,14 +2054,7 @@ export default function Home() {
 
   const conversationCardMap = useMemo(() => {
     const map: Record<string, ConversationCardViewModel> = {};
-    const hasOpenClawCuratorCard = openClawConversationCards.some((conversation) => conversation.sessionType === 'curator');
-    const nativeConversationCards = hasOpenClawCuratorCard
-      ? conversationCards.filter((conversation) => !(
-        conversation.sessionType === 'curator'
-        && !conversation.sessionId.startsWith(OPENCLAW_SESSION_PREFIX)
-      ))
-      : conversationCards;
-    for (const conversation of [...nativeConversationCards, ...openClawConversationCards]) {
+    for (const conversation of [...conversationCards, ...openClawConversationCards]) {
       map[conversation.sessionId] = conversation;
     }
     return map;
@@ -4414,6 +4407,7 @@ export default function Home() {
         body: JSON.stringify({
           provider: pendingBrainProvider,
           codexReasoningEffort: pendingCodexReasoningEffort,
+          sessionId: selectedSessionIdRef.current,
         }),
       });
 
@@ -4424,19 +4418,28 @@ export default function Home() {
         sessions?: ConversationSessionSummary[];
       });
 
-      if (!response.ok || typeof payload.content !== 'string' || !payload.sessionId) {
+      if (!response.ok || typeof payload.content !== 'string') {
         throw new Error(payload.error || `Error ${response.status}`);
       }
 
+      const switchedSessionId = payload.sessionId?.trim() ? payload.sessionId.trim() : null;
       setBrainProviderStatus(payload);
       setConfigContent(payload.content);
-      hydratedConversationSessionIdsRef.current.delete(payload.sessionId);
-      void loadConversationSessions({ reset: true, ensureSessionId: payload.sessionId });
-      updateSelectedChatSession(payload.sessionId, { pauseAutoCorrection: false });
-      setConversationHighlightId(payload.sessionId);
-      setConversationScrollToBottomId(payload.sessionId);
-      if (isChatDetailOpen) {
-        openConversationDetail(payload.sessionId, null, { replaceTop: true });
+      if (switchedSessionId) {
+        hydratedConversationSessionIdsRef.current.delete(switchedSessionId);
+        void loadConversationSessions({ reset: true, ensureSessionId: switchedSessionId });
+        updateSelectedChatSession(switchedSessionId, { pauseAutoCorrection: false });
+        setConversationHighlightId(switchedSessionId);
+        setConversationScrollToBottomId(switchedSessionId);
+        if (isChatDetailOpen) {
+          openConversationDetail(switchedSessionId, null, { replaceTop: true });
+        }
+      } else {
+        skipSelectedSessionAutoCorrectionRef.current = true;
+        updateSelectedChatSession(null);
+        if (isChatDetailOpen) {
+          openConversationDetail(null, null, { replaceTop: true });
+        }
       }
       setStreamingChat(null);
       setChatProgress(null);
