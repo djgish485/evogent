@@ -1,8 +1,21 @@
+import { type CSSProperties } from 'react';
+
 export const OLED_MIN_VISIBLE_CHANNEL_DELTA = 5;
 
 export const CONVERSATION_CARD_BASE_RGB = [5, 5, 5] as const;
 
 export const SESSION_TINT_BG_ALPHA = 0.14;
+
+export const CURATOR_CURATE_BUTTON_BASE_CLASS_NAME = 'group inline-flex min-h-8 shrink-0 flex-col items-center justify-center rounded-xl border py-1.5 text-[11px] font-semibold leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_0_rgba(0,0,0,0.28)] transition hover:brightness-125 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:flex-row sm:gap-1.5 sm:px-2 sm:py-0 sm:pr-3 sm:text-[13px] sm:whitespace-nowrap';
+
+export const CURATOR_CURATE_FULL_LABEL_MIN_ROW_WIDTH = 250;
+
+export const CURATOR_CURATE_HEADER_FULL_LABEL_MIN_ROW_WIDTH = 340;
+
+export const CURATOR_CURATE_COMMANDS = [
+  { command: '/curate', label: 'Curate', mobileLabel: 'Curate' },
+  { command: '/curate-latest', label: 'Curate Latest', mobileLabel: 'Latest' },
+] as const;
 
 export type RgbColor = readonly [number, number, number];
 
@@ -88,4 +101,22 @@ export function getSessionTint(sessionId: string, storedColor?: string | null): 
     hash = ((hash << 5) - hash + sessionId.charCodeAt(i)) | 0;
   }
   return SESSION_TINT_PALETTE[Math.abs(hash) % SESSION_TINT_PALETTE.length];
+}
+
+export function getCuratorCurateButtonStyle(tint: SessionTint | undefined): CSSProperties {
+  const resolvedTint = tint ?? SESSION_TINT_PALETTE[3];
+  return {
+    background: `linear-gradient(180deg, ${resolvedTint.icon} 0%, ${resolvedTint.bg} 100%)`,
+    borderColor: resolvedTint.iconBorder,
+    color: '#fff',
+  };
+}
+
+export function getCuratorCurateButtonIconStyle(tint: SessionTint | undefined): CSSProperties {
+  const resolvedTint = tint ?? SESSION_TINT_PALETTE[3];
+  return {
+    backgroundColor: resolvedTint.icon,
+    borderColor: resolvedTint.iconBorder,
+    color: resolvedTint.text,
+  };
 }
