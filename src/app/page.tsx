@@ -2002,6 +2002,14 @@ export default function Home() {
       const previewMessages = [...sessionMessages.filter((message) => message.type === 'chat').slice(-3)].reverse();
       const lastMessage = sessionMessages.at(-1) ?? null;
       const lastTimestamp = lastMessage?.timestamp ?? session.updatedAt;
+      const firstUserMessage = sessionMessages.find((message) => message.role === 'user' && message.type === 'chat') ?? null;
+      const firstUserTitle = firstUserMessage
+        ? buildConversationPreviewText(firstUserMessage, searchQuery)
+        : session.firstUserMessageText?.trim() ?? '';
+      const sessionLabel = session.label.trim();
+      const title = session.sessionType === 'curator'
+        ? (firstUserTitle ? `Curator: ${firstUserTitle}` : sessionLabel || 'Curator')
+        : (/^openclaw session$/i.test(sessionLabel) && firstUserTitle ? firstUserTitle : sessionLabel || 'OpenClaw session');
       const summarySource = lastMessage
         ? buildConversationPreviewText(lastMessage, searchQuery)
         : session.preview || 'OpenClaw session ready';
@@ -2013,7 +2021,7 @@ export default function Home() {
         messages: sessionMessages,
         previewMessages,
         feedItems: [],
-        title: session.label,
+        title,
         color: 'teal',
         workingDirectory: '',
         summary: summarySource,
@@ -2443,6 +2451,33 @@ export default function Home() {
   }, [conversationSessions, hasLoadedSelectedSessionId, isSendingChat, selectedSessionId, updateSelectedChatSession]);
 
   useEffect(() => {
+    const openClawSessionKey = fromOpenClawSessionId(selectedSessionId);
+    if (!openClawSessionKey || openClawSessionsStatus !== 'loaded') return;
+    if (!hasLoadedSelectedSessionId || isSendingChat) return;
+    if (openClawSessions.some((session) => session.key === openClawSessionKey)) return;
+    const selectedHasLocalUserMessage = chatMessages.some((message) => (
+      message.sessionId === selectedSessionId
+      && message.role === 'user'
+      && message.type === 'chat'
+    ));
+    if (selectedHasLocalUserMessage) return;
+
+    updateSelectedChatSession(
+      openClawSessions[0]?.sessionId ?? conversationSessions[0]?.sessionId ?? null,
+      { pauseAutoCorrection: false },
+    );
+  }, [
+    chatMessages,
+    conversationSessions,
+    hasLoadedSelectedSessionId,
+    isSendingChat,
+    openClawSessions,
+    openClawSessionsStatus,
+    selectedSessionId,
+    updateSelectedChatSession,
+  ]);
+
+  useEffect(() => {
     if (!conversationHighlightId) return;
     const timer = window.setTimeout(() => setConversationHighlightId(null), 2_000);
     return () => window.clearTimeout(timer);
@@ -2547,7 +2582,11 @@ export default function Home() {
   // This handles Cloudflare tunnel WebSocket buffering/dropping.
   useEffect(() => {
     // Find the most recent user message that hasn't been replied to
-    const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user' && m.type === 'chat');
+    const lastUserMsg = [...chatMessages].reverse().find(m => (
+      m.role === 'user'
+      && m.type === 'chat'
+      && fromOpenClawSessionId(m.sessionId) === null
+    ));
     if (!lastUserMsg) return;
     const hasReply = chatMessages.some(m => m.role === 'agent' && m.type === 'chat' && m.inReplyTo === lastUserMsg.id);
     if (hasReply) return;
@@ -3062,10 +3101,29 @@ export default function Home() {
     }
   }, [hasLoadedSelectedSessionId, refreshConversationSessionSummary, updateSelectedChatSession]);
 
-  const loadOpenClawSessions = useCallback(async () => {
+  const loadOpenClawSessions = useCallback(async (options?: {
+    includeSessionKey?: string | null;
+  }) => {
     setOpenClawSessionsStatus((current) => (current === 'idle' ? 'loading' : current));
     try {
-      const response = await fetch('/api/openclaw/sessions', { cache: 'no-store' });
+      const requestedIncludeSessionKey = options?.includeSessionKey?.trim() || null;
+      const selectedOpenClawSessionKey = fromOpenClawSessionId(selectedSessionIdRef.current);
+      const selectedOpenClawSessionId = selectedOpenClawSessionKey ? toOpenClawSessionId(selectedOpenClawSessionKey) : null;
+      const selectedHasLocalUserMessage = selectedOpenClawSessionId
+        ? chatMessagesRef.current.some((message) => (
+          message.sessionId === selectedOpenClawSessionId
+          && message.role === 'user'
+          && message.type === 'chat'
+        ))
+        : false;
+      const includeSessionKey = requestedIncludeSessionKey
+        ?? (selectedHasLocalUserMessage ? selectedOpenClawSessionKey : null);
+      const query = new URLSearchParams();
+      if (includeSessionKey) {
+        query.set('includeSessionKey', includeSessionKey);
+      }
+      const queryString = query.toString();
+      const response = await fetch(`/api/openclaw/sessions${queryString ? `?${queryString}` : ''}`, { cache: 'no-store' });
       const data = (await response.json().catch(() => ({}))) as {
         reachable?: boolean;
         sessions?: OpenClawSession[];
@@ -5421,6 +5479,13 @@ export default function Home() {
           const tool = typeof payload.tool === 'string' && payload.tool.trim() ? payload.tool.trim() : 'OpenClaw';
           if (sessionId && activity) {
             markChatActivity();
+            setBrainTyping(true);
+            setChatProgress({
+              activity,
+              tool,
+              inReplyTo: null,
+              sessionId,
+            });
             rememberLiveActivity(sessionId, {
               label: 'OpenClaw tool activity',
               detail: activity,
@@ -5438,6 +5503,7 @@ export default function Home() {
             const nextStreamingChat = { text, inReplyTo: null, sessionId };
             streamingChatRef.current = nextStreamingChat;
             markChatActivity();
+            setBrainTyping(true);
             rememberLiveActivity(sessionId, {
               label: 'OpenClaw streaming reply',
               detail: getStreamingPreviewLine(text),
@@ -5484,6 +5550,7 @@ export default function Home() {
               streamingChatRef.current = null;
             }
             setStreamingChat((current) => (current?.sessionId === sessionId ? null : current));
+            setChatProgress((current) => (current?.sessionId === sessionId ? null : current));
             clearRetainedLiveActivity(sessionId);
           }
           setBrainTyping(false);
@@ -5498,8 +5565,9 @@ export default function Home() {
           const incoming = payload.message;
           clearDeliveredAgentChatState([incoming]);
           setChatMessages((current) => mergeChatMessages(current, [incoming]));
-          if (incoming.sessionId) {
+          if (incoming.role === 'agent' && incoming.sessionId) {
             clearRetainedLiveActivity(incoming.sessionId);
+            setChatProgress((current) => (current?.sessionId === incoming.sessionId ? null : current));
           }
           void loadOpenClawSessions();
         }
@@ -5967,6 +6035,21 @@ export default function Home() {
           throw new Error('OpenClaw chat mirror does not support attachments yet.');
         }
 
+        const openClawSessionId = toOpenClawSessionId(openClawSessionKey);
+        setChatProgress({
+          activity: 'Working...',
+          tool: 'OpenClaw',
+          inReplyTo: null,
+          sessionId: openClawSessionId,
+        });
+        markChatActivity();
+        rememberLiveActivity(openClawSessionId, {
+          label: 'OpenClaw is thinking',
+          detail: 'Waiting for the mirrored session reply.',
+          badge: 'OpenClaw',
+          status: 'running',
+        });
+
         response = await fetch(`/api/openclaw/chat/${encodeURIComponent(openClawSessionKey)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5979,27 +6062,31 @@ export default function Home() {
           ok?: boolean;
           error?: string;
           sessionId?: string | null;
+          userMessage?: ChatMessage;
         };
 
         if (!response.ok || !data.ok) {
           throw new Error(data.error || OPENCLAW_UNREACHABLE_MESSAGE);
         }
 
-        const openClawSessionId = data.sessionId || toOpenClawSessionId(openClawSessionKey);
-        updateSelectedChatSession(openClawSessionId);
-        setConversationHighlightId(openClawSessionId);
-        setConversationScrollToBottomId(openClawSessionId);
-        rememberLiveActivity(openClawSessionId, {
+        const deliveredOpenClawSessionId = data.sessionId || openClawSessionId;
+        if (data.userMessage) {
+          setChatMessages((current) => mergeChatMessages(current, [data.userMessage as ChatMessage]));
+        }
+        updateSelectedChatSession(deliveredOpenClawSessionId);
+        setConversationHighlightId(deliveredOpenClawSessionId);
+        setConversationScrollToBottomId(deliveredOpenClawSessionId);
+        rememberLiveActivity(deliveredOpenClawSessionId, {
           label: 'OpenClaw is thinking',
           detail: 'Waiting for the mirrored session reply.',
           badge: 'OpenClaw',
           status: 'running',
         });
-        openConversationDetail(openClawSessionId, null, {
+        openConversationDetail(deliveredOpenClawSessionId, null, {
           replaceTop: true,
         });
 
-        void loadOpenClawSessions();
+        void loadOpenClawSessions({ includeSessionKey: openClawSessionKey });
         setChatInput('');
         setChatContext(null);
         setChatAttachments([]);
