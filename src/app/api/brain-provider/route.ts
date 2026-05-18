@@ -2,7 +2,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { NextResponse } from 'next/server';
 import { CONFIG_DOCUMENT_TARGETS, ensureConfigTargetIntegrity, persistConfigContent } from '@/lib/config-storage';
-import { createChatSession, getConversationSessions } from '@/lib/db/chat-sessions';
+import {
+  getChatSession,
+  getChatSessionMessageCount,
+  getConversationSessions,
+  updateChatSession,
+} from '@/lib/db/chat-sessions';
 import { getOrchestratorStatus } from '@/lib/orchestrator';
 import {
   getBrainProviderBinary,
@@ -73,6 +78,12 @@ function parseRequestedProvider(value: unknown): BrainProviderName | null {
     return 'codex';
   }
   return null;
+}
+
+function sanitizeOptionalText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 function isBrainProviderSwitchBlocked(currentTask: BrainProviderSwitchTask): boolean {
@@ -164,6 +175,7 @@ export async function POST(request: Request) {
   const codexReasoningEffort = normalizeCodexReasoningEffort(
     (payload as { codexReasoningEffort?: unknown }).codexReasoningEffort,
   ) as CodexReasoningEffort;
+  const requestedSessionId = sanitizeOptionalText((payload as { sessionId?: unknown }).sessionId);
 
   const state = await loadBrainProviderState();
   if (isBrainProviderSwitchBlocked(state.currentTask)) {
@@ -217,7 +229,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const session = createChatSession({ provider, codexReasoningEffort });
+  const currentSession = requestedSessionId ? getChatSession(requestedSessionId) : null;
+  const session = currentSession && getChatSessionMessageCount(currentSession.id) === 0
+    ? updateChatSession({
+        sessionId: currentSession.id,
+        provider,
+        codexReasoningEffort,
+        updateProvider: true,
+        updateCodexReasoningEffort: true,
+      })
+    : null;
   const sessions = getConversationSessions();
   const nextState = await loadBrainProviderState();
 
@@ -225,7 +246,7 @@ export async function POST(request: Request) {
     ok: true,
     content: nextContent,
     session,
-    sessionId: session.id,
+    sessionId: session?.id ?? null,
     sessions,
     ...nextState,
   });

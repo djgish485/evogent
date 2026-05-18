@@ -6,7 +6,7 @@ import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
 import { BrainProviderSwitcherModal, SidebarAutomationControls } from '@/components/chat/chat-control-panels';
 import { CHAT_COMPOSER_FORM_TEXT_ENTRY_ATTRIBUTES, CHAT_COMPOSER_TEXTBOX_TEXT_ENTRY_ATTRIBUTES, shouldSubmitChatComposerKeyDown } from '@/lib/chat-composer-helpers';
 import { getChatMessageAuthorLabel, mergeComposerAttachments } from '@/lib/chat-messages';
-import { buildConversationPreviewMessages, buildConversationPreviewText } from '@/lib/conversation-summary';
+import { buildConversationPreviewMessages, buildConversationPreviewText, buildSessionCards } from '@/lib/conversation-summary';
 import { appendFeedFilterToFeedQuery, buildBaseFeedFilters, buildDynamicFeedSourceFilters, hasTweetFeedSource, resolveFeedFilterClickAction } from '@/lib/feed-filters';
 import { getOldestLoadedPrimaryFeedItemTimestamp, shouldIncludeConversationTimelineEntry, shouldRenderFeedEmptyState } from '@/lib/feed-normalize';
 import { canOpenChatSessionCompactPopover, formatCompactTokenCount, getChatSessionCompactButtonState, getChatSessionContextHeaderMetrics, getChatSessionHeaderProviderLabel, getCodexBrowserToolsStatus, getProviderModelDisplayName } from '@/lib/brain-provider';
@@ -128,6 +128,30 @@ describe('dynamic feed source filters', () => {
 });
 
 describe('conversation search previews', () => {
+  test('excludes OpenClaw-prefixed messages from native session cards', () => {
+    const cards = buildSessionCards(
+      [
+        buildChatMessage({
+          id: 'openclaw-user',
+          sessionId: 'openclaw:agent:curator:main',
+          text: 'openclaw question',
+          timestamp: '2026-05-18T10:00:00.000Z',
+        }),
+        buildChatMessage({
+          id: 'native-user',
+          sessionId: 'native-session',
+          text: 'native question',
+          timestamp: '2026-05-18T10:01:00.000Z',
+        }),
+      ],
+      [],
+      [],
+      null,
+    );
+
+    assert.deepStrictEqual(cards.map((card) => card.sessionId), ['native-session']);
+  });
+
   test('uses matching messages instead of the latest messages when search is active', () => {
     const messages = [
       buildChatMessage({
