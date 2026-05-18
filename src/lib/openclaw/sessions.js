@@ -7,6 +7,9 @@ const {
   getOpenClawGatewayClient,
   normalizeGatewayErrorMessage,
 } = require('./gateway-client.js');
+const {
+  isOpenClawHeartbeatMessage,
+} = require('./heartbeat.js');
 
 const OPENCLAW_SESSION_PREFIX = 'openclaw:';
 
@@ -181,17 +184,24 @@ function titleFromUserText(value) {
 function getFirstUserMessageTextFromMessages(messages) {
   for (const message of Array.isArray(messages) ? messages : []) {
     if (getMessageRole(message) !== 'user') continue;
+    if (isOpenClawHeartbeatMessage(message)) continue;
     const text = getMessageText(message).trim();
     if (text) return text;
   }
   return '';
 }
 
+function getVisibleUserMessageText(value) {
+  const message = typeof value === 'string' ? { role: 'user', text: value } : value;
+  if (!message || isOpenClawHeartbeatMessage(message)) return '';
+  return getMessageText(message).trim();
+}
+
 function getFirstUserMessageTextFromSession(session) {
   return firstTrimmedString(
-    session?.firstUserMessageText,
-    getMessageText(session?.firstUserMessage),
-    getMessageText(session?.lastUserMessage),
+    getVisibleUserMessageText(session?.firstUserMessageText),
+    getVisibleUserMessageText(session?.firstUserMessage),
+    getVisibleUserMessageText(session?.lastUserMessage),
     getFirstUserMessageTextFromMessages(session?.messages),
     getFirstUserMessageTextFromMessages(session?.history),
     getFirstUserMessageTextFromMessages(session?.recentMessages),
@@ -228,21 +238,54 @@ function normalizeSessionLabel(session) {
 }
 
 function normalizeLastMessagePreview(value) {
-  if (typeof value === 'string') return truncateText(value);
+  if (typeof value === 'string') {
+    if (isOpenClawHeartbeatMessage({ role: 'user', text: value }) || isOpenClawHeartbeatMessage({ role: 'agent', text: value })) {
+      return '';
+    }
+    return truncateText(value);
+  }
   if (value && typeof value === 'object') {
+    if (isOpenClawHeartbeatMessage(value)) return '';
     return truncateText(getMessageText(value) || value.text || value.preview || '');
   }
   return '';
+}
+
+function getLastVisibleMessagePreviewFromMessages(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    if (isOpenClawHeartbeatMessage(message)) continue;
+    const preview = normalizeLastMessagePreview(message);
+    if (preview) return preview;
+  }
+  return '';
+}
+
+function countVisibleMessages(messages) {
+  if (!Array.isArray(messages)) return null;
+  return messages.filter((message) => !isOpenClawHeartbeatMessage(message)).length;
 }
 
 function normalizeOpenClawSession(session) {
   const key = typeof session?.key === 'string' && session.key.trim() ? session.key.trim() : '';
   if (!key) return null;
   const updatedAt = normalizeTimestamp(session.updatedAt ?? session.lastInteractionAt ?? session.startedAt);
-  const preview = normalizeLastMessagePreview(session.lastMessagePreview);
+  const preview = firstTrimmedString(
+    normalizeLastMessagePreview(session.lastMessagePreview),
+    normalizeLastMessagePreview(session.lastMessage),
+    getLastVisibleMessagePreviewFromMessages(session.messages),
+    getLastVisibleMessagePreviewFromMessages(session.history),
+    getLastVisibleMessagePreviewFromMessages(session.recentMessages),
+  );
   const sessionType = /^agent:curator:/.test(key) ? 'curator' : null;
   const firstUserMessageText = getFirstUserMessageTextFromSession(session);
   const rawUserMessageCount = Number(session.userMessageCount ?? session.userAuthoredMessageCount ?? session.userMessages);
+  const visibleMessageCount = firstTrimmedString(
+    countVisibleMessages(session.messages)?.toString(),
+    countVisibleMessages(session.history)?.toString(),
+    countVisibleMessages(session.recentMessages)?.toString(),
+  );
   return {
     key,
     sessionId: toOpenClawSessionId(key),
@@ -250,7 +293,9 @@ function normalizeOpenClawSession(session) {
     sessionType,
     preview,
     updatedAt,
-    messageCount: typeof session.messageCount === 'number' && Number.isFinite(session.messageCount)
+    messageCount: visibleMessageCount
+      ? Number(visibleMessageCount)
+      : typeof session.messageCount === 'number' && Number.isFinite(session.messageCount)
       ? Math.max(0, session.messageCount)
       : null,
     hasUserActivity: Boolean(firstUserMessageText) || (Number.isFinite(rawUserMessageCount) && rawUserMessageCount > 0),
@@ -265,18 +310,24 @@ async function fetchOpenClawSessionUserActivity(client, sessionKey) {
   try {
     const payload = await client.request('chat.history', {
       sessionKey,
-      limit: 25,
-      maxChars: 5_000,
+      limit: 1_000,
+      maxChars: 100_000,
     });
+    const visibleMessages = (Array.isArray(payload?.messages) ? payload.messages : [])
+      .filter((message) => !isOpenClawHeartbeatMessage(message));
     const firstUserMessageText = getFirstUserMessageTextFromMessages(payload?.messages);
     return {
       hasUserActivity: Boolean(firstUserMessageText),
       firstUserMessageText,
+      lastMessagePreview: getLastVisibleMessagePreviewFromMessages(visibleMessages),
+      visibleMessageCount: visibleMessages.length,
     };
   } catch {
     return {
       hasUserActivity: false,
       firstUserMessageText: '',
+      lastMessagePreview: '',
+      visibleMessageCount: null,
     };
   }
 }
@@ -298,12 +349,15 @@ async function listOpenClawSessions(options = {}) {
       .map(normalizeOpenClawSession)
       .filter(Boolean);
     const inspectedSessions = await Promise.all(sessions.map(async (session) => {
-      if (session.hasUserActivity || (session.messageCount !== 0 && session.messageCount !== null)) {
+      const shouldInspectHistory = session.sessionType === 'curator'
+        || (!session.firstUserMessageText && (session.messageCount ?? 0) > 0)
+        || (!session.hasUserActivity && (session.messageCount === 0 || session.messageCount === null));
+      if (!shouldInspectHistory) {
         return session;
       }
 
       const activity = await fetchOpenClawSessionUserActivity(client, session.key);
-      if (!activity.hasUserActivity && !activity.firstUserMessageText) {
+      if (!activity.hasUserActivity && !activity.firstUserMessageText && activity.visibleMessageCount === null) {
         return session;
       }
 
@@ -311,6 +365,8 @@ async function listOpenClawSessions(options = {}) {
         ...session,
         hasUserActivity: activity.hasUserActivity,
         firstUserMessageText: activity.firstUserMessageText,
+        preview: activity.lastMessagePreview || session.preview,
+        messageCount: activity.visibleMessageCount ?? session.messageCount,
         label: normalizeSessionLabel({
           ...session.raw,
           key: session.key,
@@ -544,6 +600,7 @@ module.exports = {
   normalizeOpenClawGatewayEvent,
   normalizeOpenClawMessage,
   normalizeOpenClawMessages,
+  isOpenClawHeartbeatMessage,
   sendOpenClawMessage,
   toOpenClawSessionId,
 };
