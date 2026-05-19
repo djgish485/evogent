@@ -43,7 +43,9 @@ const port = Number.parseInt(process.env.PORT || '3001', 10);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
-const internalBaseUrl = process.env.ORCHESTRATOR_INTERNAL_URL || `http://127.0.0.1:${port}`;
+const internalBaseUrl = process.env.MEDIA_AGENT_INTERNAL_BASE_URL
+  || process.env.ORCHESTRATOR_INTERNAL_URL
+  || `http://127.0.0.1:${port}`;
 const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
 const ADAPTIVE_HEARTBEAT_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const trustNetwork = process.env.MEDIA_AGENT_TRUST_NETWORK === '1' || process.env.MEDIA_AGENT_TRUST_NETWORK === 'true';
@@ -3115,6 +3117,7 @@ async function runAdaptiveHeartbeatCheck(triggeredBy = 'timer') {
 
   try {
     const result = await postInternal('/api/internal/heartbeat/check', { triggeredBy });
+    console.log(`[adaptive-heartbeat] check result.ok=${result?.ok === true} triggered=${result?.triggered === true} reason=${result?.triggerReason || result?.decisionReason || 'none'}`);
     if (result?.triggered) {
       console.log(`[adaptive-heartbeat] triggered OpenClaw curator run: ${result.triggerReason || 'triggered'}`);
     }

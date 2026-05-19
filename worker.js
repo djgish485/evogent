@@ -13,6 +13,7 @@ const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { readConfigUsageLevel } = require('./lib/cache-refresh-config');
+const { persistFailedCacheRefreshRun } = require('./lib/cache-refresh-task-result');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { upsertChatSessionContextMetrics } = require('./lib/chat-session-context-metrics');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
@@ -26,7 +27,9 @@ const {
 } = require('./lib/queue');
 
 const port = Number.parseInt(process.env.PORT || '3001', 10);
-const internalBaseUrl = process.env.ORCHESTRATOR_INTERNAL_URL || `http://127.0.0.1:${port}`;
+const internalBaseUrl = process.env.MEDIA_AGENT_INTERNAL_BASE_URL
+  || process.env.ORCHESTRATOR_INTERNAL_URL
+  || `http://127.0.0.1:${port}`;
 const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
 const REFLECTION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const REFLECTION_MESSAGE = 'Reflection: review recent feedback and consider config suggestions';
@@ -371,6 +374,27 @@ function assignTaskLogFile(task) {
   const logFile = resolveTaskLogFilePath(task.id);
   task.logFile = logFile;
   return logFile;
+}
+
+function appendCacheRefreshWorkerFailureLog(task, errorMessage) {
+  const logFile = assignTaskLogFile(task);
+  if (!logFile) return;
+
+  try {
+    ensureTaskLogsDir();
+    if (!fs.existsSync(logFile)) {
+      fs.writeFileSync(logFile, '', 'utf8');
+    }
+    fs.appendFileSync(logFile, `${JSON.stringify({
+      type: 'system',
+      subtype: 'cache_refresh_worker_failed',
+      error: errorMessage,
+      timestamp: new Date().toISOString(),
+    })}\n`, 'utf8');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[worker] failed to persist cache-refresh worker failure log: ${message}`);
+  }
 }
 
 function normalizePriority(priority) {
@@ -1540,10 +1564,41 @@ async function runReflectionTimerTick(triggeredBy = 'timer') {
 
 function createBackgroundWorker() {
   const worker = new Worker(BACKGROUND_QUEUE_NAME, async (job) => {
+    if (job.name === BACKGROUND_JOB_NAMES.CACHE_REFRESH) {
+      const taskLike = {
+        ...(job.data && typeof job.data === 'object' ? job.data : {}),
+        id: typeof job.data?.requestId === 'string' && job.data.requestId.trim()
+          ? job.data.requestId.trim()
+          : String(job.id || ''),
+      };
+      try {
+        const enqueueResult = backgroundOrchestrator.enqueue(job.data);
+        if (!enqueueResult?.ok) {
+          throw new Error(enqueueResult?.error || `Failed to enqueue ${job.name} task`);
+        }
+        if (typeof enqueueResult.requestId !== 'string' || !enqueueResult.requestId.trim()) {
+          throw new Error(`Failed to resolve orchestrator task id for ${job.name} job ${job.id}`);
+        }
+        const completedTask = await backgroundOrchestrator.waitForTaskCompletion(enqueueResult.requestId);
+        return {
+          ...enqueueResult,
+          completedAt: completedTask.completedAt || null,
+          state: completedTask.state,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        persistFailedCacheRefreshRun(taskLike, {
+          getDb: getChatStatusDb,
+          errorMessage: `Cache refresh worker failed before recording a terminal run: ${message}`,
+        });
+        appendCacheRefreshWorkerFailureLog(taskLike, message);
+        throw error;
+      }
+    }
+
     if (
       job.name === BACKGROUND_JOB_NAMES.USER_CHAT
       || job.name === BACKGROUND_JOB_NAMES.POST_ENRICHMENT
-      || job.name === BACKGROUND_JOB_NAMES.CACHE_REFRESH
     ) {
       const enqueueResult = backgroundOrchestrator.enqueue(job.data);
       if (!enqueueResult?.ok) {

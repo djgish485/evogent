@@ -81,6 +81,45 @@ test('cache refresh validation fails when no new terminal run is recorded', () =
   }
 });
 
+test('cache refresh validation persists a failed run when a worker exits without recording a run', () => {
+  const db = createDb();
+  try {
+    const task = createTask({
+      id: 'cache-refresh-youtube-unit',
+      message: '/cache-refresh youtube',
+      metadata: { cacheSource: 'youtube', triggerSource: 'pre_curation' },
+      enqueuedAt: '2026-05-18T23:45:00.000Z',
+      startedAt: '2026-05-18T23:45:00.000Z',
+    });
+
+    const result = validateCacheRefreshTaskResult(task, {
+      getDb: () => db,
+      logger: null,
+      persistNoRunFailure: true,
+      failureCause: 'worker exited 0 without writing browse_cache_refresh_runs',
+      completedAtMs: Date.parse('2026-05-18T23:45:30.000Z'),
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.run?.id, 'cache-refresh-youtube-unit');
+    assert.equal(result.run?.status, 'failed');
+    assert.match(result.error, /persisted failed run cache-refresh-youtube-unit/);
+
+    const row = db.prepare(`
+      SELECT source, status, items_added AS itemsAdded, error
+      FROM browse_cache_refresh_runs
+      WHERE id = ?
+    `).get('cache-refresh-youtube-unit');
+
+    assert.equal(row.source, 'youtube');
+    assert.equal(row.status, 'failed');
+    assert.equal(row.itemsAdded, 0);
+    assert.match(row.error, /worker exited 0 without writing browse_cache_refresh_runs/);
+  } finally {
+    db.close();
+  }
+});
+
 test('cache refresh validation fails completed runs with zero added rows', () => {
   const db = createDb();
   try {
