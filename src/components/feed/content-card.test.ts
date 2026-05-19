@@ -747,6 +747,50 @@ describe('ArticleCard', () => {
     assert.doesNotMatch(markup, /Plain analysis fallback/);
   });
 
+  test('renders declared OpenClaw skill action buttons with payload data', () => {
+    const item = createArticleItem({
+      id: 'email-card-1',
+      source: 'openclaw',
+      title: 'Inbox needs triage',
+      text: 'Three messages need replies.',
+      metadata: {
+        openClaw: {
+          skill: 'email-triage',
+        },
+        senderDomain: 'example.com',
+      } as FeedItem['metadata'],
+    });
+
+    const markup = renderToStaticMarkup(createElement(ArticleCard, {
+      item,
+      agentName: 'Agent',
+      isLiked: false,
+      isDisliked: false,
+      votePending: false,
+      onThumbsUp: () => {},
+      onThumbsDown: () => {},
+      expanded: false,
+      onToggleExpand: () => {},
+      showReasonInput: null,
+      onReasonSubmit: () => {},
+      onDismissReasonInput: () => {},
+      skillSlug: 'email-triage',
+      skillActions: [{
+        id: 'skip-sender',
+        label: 'Skip sender',
+        confirms: 'Will skip future emails from this sender?',
+        externalLink: false,
+        requiresSelection: 'senderDomain',
+      }],
+      onSkillAction: () => {},
+    }));
+
+    assert.match(markup, /data-evogent-action="email-triage\.skip-sender"/);
+    assert.match(markup, /Skip sender/);
+    assert.match(markup, /senderDomain/);
+    assert.match(markup, /example.com/);
+  });
+
   test('renders Hacker News discussion and original article actions separately', () => {
     const item = createArticleItem({
       source: 'hackernews',
