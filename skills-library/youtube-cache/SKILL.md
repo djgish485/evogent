@@ -31,11 +31,8 @@ Install this skill when you want YouTube to behave like the other browse-cache-b
 - Read the full fetch plan from the prompt and visit every source in order: home page (`youtube.com`), subscriptions, planned channels, and planned searches.
 - For the home step, navigate to `youtube.com` (not `youtube.com/feed/subscriptions`) and extract recommended videos from the algorithmic home feed.
 - Stay inside the shared authenticated Chrome session. Do not spawn another agent and do not use repo-specific browser scripts.
-- Persist kept videos directly into SQLite as you go with `INSERT ... ON CONFLICT(source, tweet_id) DO UPDATE` against `tweet_cache_items`.
-- Always set `source='youtube'`, `last_seen_run_id`, `fetch_kind`, `fetch_contexts`, `topic_tags`, `cached_at`, and `expires_at`. Set `first_seen_run_id` only on inserts.
-- Store video metadata compactly in `metadata` with title, description, duration, channel info, publish labels, thumbnail URL, canonical watch URL, view-count fields, and live/scheduled fields when present.
+- Store video metadata compactly in each cache item's `payload` with title, description, duration, channel info, publish labels, thumbnail URL, canonical watch URL, view-count fields, and live/scheduled fields when present.
 - Submit `publishedAtMs` as integer epoch ms when you can compute it from the rendered publish label or schema.org `datePublished`. Omit it (null) rather than guessing.
-- Use the title as `text`, appending a blank line and description when the description is available. Put the thumbnail URL into `media_urls` when present.
 - Skip curated video ids, rows outside the TTL window, duplicate video ids, and rows over the prompt-specified per-channel caps. Skip rows missing a canonical watch URL, title, publish time/label, or thumbnail.
 - Never report a source as `blocked`, rate-limited, or unavailable without specific page-level evidence such as a visible rate-limit banner, `429` status, login wall, or explicit error message. A slow load or initially empty page is not evidence.
 - If a page looks empty or redirects unexpectedly on first load, wait 3 seconds and retry once before concluding the source failed.
@@ -43,6 +40,21 @@ Install this skill when you want YouTube to behave like the other browse-cache-b
 - Use precise failure descriptions in the summary, such as `no new videos past cached timestamp`, `page showed login wall`, or `search returned no results`. Do not use vague labels like `blocked`.
 - If a source that succeeded in a previous run now fails, note that regression in the summary.
 - Finish with one terse status line summarizing persisted row count plus any failed sources. Do not output a JSON document of videos.
+
+## Cacher Mode
+
+- Cacher runs use the same YouTube surfaces, browser session, selectors, and quality thresholds as the Refresh Task. The only difference is the destination: Cacher writes to `/api/internal/browse-cache/submit`.
+- Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"`.
+- Treat `MEDIA_AGENT_CACHE_REFRESH_SOURCE=youtube` as the requested source when set.
+- Treat `MEDIA_AGENT_CACHE_REFRESH_RUN_ID` as the run id when set. Submit it as `runId`.
+- Submit `triggeredBy` as `MEDIA_AGENT_CACHE_REFRESH_TRIGGERED_BY` when set; otherwise use `cache_refresh`.
+- Every cached item must include `source: "youtube"`, `sourceId` as the canonical YouTube video id, `payload`, `fetchedAtMs`, and `expiresAtMs`.
+- Include `url`, `title`, `authorUsername`, `authorDisplayName`, and `publishedAtMs` when known. Use the canonical watch URL `https://www.youtube.com/watch?v=<videoId>`.
+- Put the complete extracted video object in `payload`, including channel facts, thumbnail URL, duration, publish label, source surface, and any extraction diagnostics useful for curation.
+- Persist the run through `POST ${API_BASE}/api/internal/browse-cache/submit`.
+- On success, submit `status: "completed"` with the kept `items` array and a `cycleSummary` containing per-surface counts and skipped reasons.
+- If the refresh cannot produce at least one persisted item, submit `status: "failed"`, `items: []`, and an `error` beginning `no_rows:`.
+- On browser, login, provider, scraper, or submit failure, submit `status: "failed"`, `items: []`, and a concise `error` beginning one of `chrome_login:`, `provider_mcp_endpoint:`, `unsupported_provider_cli:`, `scraper_runtime:`, or `submit_failure:`.
 
 ## Guardrails
 
