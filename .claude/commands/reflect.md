@@ -44,6 +44,7 @@ Read all of the following before deciding whether to propose any change:
 
 Also gather:
 
+- recent raw interaction rows from `interactions`, joined to their feed items. Prefer `GET ${API_BASE}/api/internal/interactions/recent?limit=200` when reachable; otherwise query SQLite directly for the last 48 hours of `action`, `created_at`, feed id, title, source, author, and text.
 - recent preferences and reasoned likes/dislikes
 - rejection scorecard
 - `GET ${API_BASE}/api/internal/reflection/upstream-health?hours=168`
@@ -160,8 +161,17 @@ Add `Code Audit Patterns` only when recurring recent-merge audit evidence suppor
 Rules:
 
 - Replies signal engagement, not agreement.
+- Weight interaction evidence explicitly:
+  - `like` / `thumbsup` = strong positive.
+  - `dislike` / `thumbsdown` = strong negative.
+  - `expand` = moderate positive; the user was curious enough to open detail.
+  - `view` = mild positive only when paired with a pattern; it means the user read long enough to count.
+  - `suggestion_dismissed` / `dismiss_suggestion` = strong negative on the underlying suggestion topic.
+  - `view` with no `expand`, `like`, or `dislike` = neutral "saw it, did not react", not a strong preference.
+  - No `view` row = genuinely unread; preserve that as latent signal for curator reordering rather than interpreting it as dislike.
 - Synthesize, do not dump.
 - Cite evidence counts.
 - Favor recent signals.
 - Replace stale sections when evidence no longer supports them.
 - When thread-level feedback repeats across cycles, promote that pattern into `data/preference-insights.md` as durable memory rather than leaving it as one-cycle steering only.
+- While the reflection status lock is still held, write the final preference-insights bytes to both `data/preference-insights.md` and `~/.openclaw/agents/curator/USER.md`. Use a temp file plus atomic `mv` for `USER.md`; the two files must be byte-identical before the lock is released. Do not update `MEMORY.md` here.

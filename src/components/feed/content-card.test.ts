@@ -22,6 +22,7 @@ import {
   resolveYouTubeViewLabel,
   shouldRenderContentCardChildPreviews,
   shouldRenderContentCardParentTweetPreview,
+  shouldTrackPassiveFeedView,
 } from './content-card';
 import type { FeedItem } from '@/types/feed';
 
@@ -358,6 +359,17 @@ describe('resolveContentCardOuterClass', () => {
 
     assert.match(className, /\brounded-2xl\b/);
     assert.match(className, /\bborder-zinc-700\b/);
+  });
+});
+
+describe('shouldTrackPassiveFeedView', () => {
+  test('tracks only actual feed cards that are not waiting on enrichment', () => {
+    assert.equal(shouldTrackPassiveFeedView({ detail: false, batchEnrichmentState: 'none' }), true);
+    assert.equal(shouldTrackPassiveFeedView({ detail: false, batchEnrichmentState: 'complete' }), true);
+    assert.equal(shouldTrackPassiveFeedView({ detail: true, batchEnrichmentState: 'complete' }), false);
+    assert.equal(shouldTrackPassiveFeedView({ detail: false, batchEnrichmentState: 'enriching' }), false);
+    assert.equal(shouldTrackPassiveFeedView({ detail: false, batchEnrichmentState: 'incomplete' }), false);
+    assert.equal(shouldTrackPassiveFeedView({ detail: false, batchEnrichmentState: 'failed' }), false);
   });
 });
 

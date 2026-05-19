@@ -32,6 +32,28 @@ copy_if_missing() {
   echo "  $source_file -> $target_file"
 }
 
+copy_overwrite() {
+  local source_file="$1"
+  local target_file="$2"
+  local label="$3"
+
+  if [[ ! -f "$source_file" ]]; then
+    echo "Required Evogent source file missing: $source_file" >&2
+    exit 1
+  fi
+
+  local target_dir
+  target_dir="$(dirname "$target_file")"
+  mkdir -p "$target_dir"
+
+  local tmp_file
+  tmp_file="$(mktemp "$target_dir/.${label}.tmp.XXXXXX")"
+  cp "$source_file" "$tmp_file"
+  mv "$tmp_file" "$target_file"
+  echo "Synced $label:"
+  echo "  $source_file -> $target_file"
+}
+
 write_curator_agents_file() {
   local source_file="$1"
   local target_file="$2"
@@ -118,7 +140,7 @@ mkdir -p "$agent_dir/sessions"
 
 write_curator_agents_file "$repo_dir/data/curation-prompt.md" "$agent_dir/AGENTS.md"
 copy_if_missing "$repo_dir/data/preferences-context.md" "$agent_dir/MEMORY.md" "MEMORY.md"
-copy_if_missing "$repo_dir/data/preference-insights.md" "$agent_dir/USER.md" "USER.md"
+copy_overwrite "$repo_dir/data/preference-insights.md" "$agent_dir/USER.md" "USER.md"
 
 OPENCLAW_CONFIG_PATH="$config_file" \
 CURATOR_AGENT_DIR="$agent_dir" \

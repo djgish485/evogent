@@ -37,7 +37,7 @@ import {
   stripTrailingTweetMediaUrls,
   truncateTextForCollapsedDisplay,
 } from '@/lib/tweet-text';
-import { getFeedItemBatchEnrichmentState } from '@/lib/feed-enrichment-state';
+import { getFeedItemBatchEnrichmentState, type FeedItemBatchEnrichmentState } from '@/lib/feed-enrichment-state';
 import { isProminentFeedItem } from '@/lib/feed-prominence';
 import { getYouTubeFeedData, isYouTubeSource, type YouTubeFeedData } from '@/lib/youtube-feed';
 import { resolveHackerNewsDiscussionUrl } from '@/lib/hacker-news';
@@ -196,6 +196,16 @@ export function shouldRenderContentCardParentTweetPreview(
   return Boolean(parentTweet && parentTweet.id !== detailMainItemId);
 }
 
+export function shouldTrackPassiveFeedView({
+  detail,
+  batchEnrichmentState,
+}: {
+  detail: boolean;
+  batchEnrichmentState: FeedItemBatchEnrichmentState;
+}): boolean {
+  return !detail && (batchEnrichmentState === 'none' || batchEnrichmentState === 'complete');
+}
+
 const TEXT_CHAR_LIMIT_MAIN = 280;
 const TEXT_LINE_LIMIT_MAIN = 6;
 const TEXT_CHAR_LIMIT_CHILD = 140;
@@ -208,6 +218,35 @@ const COLLAPSE_LABEL = 'Less';
 const CHILD_ANALYSIS_EXPAND_LABEL = 'Read full article';
 const CHILD_ANALYSIS_COLLAPSE_LABEL = 'Collapse article';
 const CHILD_ANALYSIS_BODY_CLASS_NAME = FEED_MARKDOWN_COMPACT_BODY_CLASS_NAME;
+const VIEW_INTERACTION_VISIBLE_MS = 2000;
+const VIEW_INTERACTION_DEBOUNCE_MS = 30_000;
+const viewedItemIdsThisSession = new Set<string>();
+const expandedItemIdsThisSession = new Set<string>();
+const viewInteractionAttemptedAtByItemId = new Map<string, number>();
+type PassiveInteractionAction = 'view' | 'expand';
+
+function postPassiveInteraction(feedItemId: string, action: PassiveInteractionAction): void {
+  if (typeof fetch !== 'function') {
+    return;
+  }
+
+  const body = JSON.stringify({ feedItemId, action });
+  void fetch('/api/interactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: body.length < 60_000,
+  }).catch(() => {});
+}
+
+function recordExpandInteraction(feedItemId: string): void {
+  if (expandedItemIdsThisSession.has(feedItemId)) {
+    return;
+  }
+
+  expandedItemIdsThisSession.add(feedItemId);
+  postPassiveInteraction(feedItemId, 'expand');
+}
 
 interface SourceAvatarProfile {
   initials: string;
@@ -4051,6 +4090,72 @@ export function ContentCard({
     };
   }, [openClawSkillSlug]);
 
+  useEffect(() => {
+    if (
+      !shouldTrackPassiveFeedView({ detail, batchEnrichmentState })
+      || viewedItemIdsThisSession.has(item.id)
+      || typeof window === 'undefined'
+      || typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const element = cardRef.current;
+    if (!element) {
+      return;
+    }
+
+    let viewTimer: number | null = null;
+    let isVisibleEnough = false;
+    let observer: IntersectionObserver | null = null;
+
+    const clearViewTimer = () => {
+      if (viewTimer === null) return;
+      window.clearTimeout(viewTimer);
+      viewTimer = null;
+    };
+
+    const recordView = () => {
+      viewTimer = null;
+      if (!isVisibleEnough || viewedItemIdsThisSession.has(item.id)) {
+        return;
+      }
+
+      const now = Date.now();
+      const previousAttemptAt = viewInteractionAttemptedAtByItemId.get(item.id) ?? 0;
+      if (now - previousAttemptAt < VIEW_INTERACTION_DEBOUNCE_MS) {
+        return;
+      }
+
+      viewInteractionAttemptedAtByItemId.set(item.id, now);
+      viewedItemIdsThisSession.add(item.id);
+      postPassiveInteraction(item.id, 'view');
+      observer?.disconnect();
+    };
+
+    observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      isVisibleEnough = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.5);
+
+      if (!isVisibleEnough) {
+        clearViewTimer();
+        return;
+      }
+
+      if (viewTimer === null) {
+        viewTimer = window.setTimeout(recordView, VIEW_INTERACTION_VISIBLE_MS);
+      }
+    }, { threshold: [0, 0.5] });
+
+    observer.observe(element);
+
+    return () => {
+      isVisibleEnough = false;
+      clearViewTimer();
+      observer?.disconnect();
+    };
+  }, [batchEnrichmentState, detail, item.id]);
+
   const handleVote = useCallback(async (
     action: 'thumbsup' | 'thumbsdown' | 'undo_thumbsup' | 'undo_thumbsdown',
     reason?: string,
@@ -4338,6 +4443,8 @@ export function ContentCard({
     return !hasSelection;
   };
   const openFeedItemDetail = useCallback((feedItem: FeedItem) => {
+    recordExpandInteraction(feedItem.id);
+
     if (onOpenDetail) {
       onOpenDetail(feedItem);
       return;

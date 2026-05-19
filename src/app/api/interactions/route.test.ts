@@ -141,4 +141,39 @@ describe('/api/interactions thread feedback', () => {
 
     await delay(500);
   });
+
+  test('records passive view and expand interactions idempotently', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO feed (id, type, source, text, published_at)
+      VALUES ('passive-item-1', 'article', 'unit-test', 'Passive item body', ?)
+    `).run('2026-04-26T12:00:00.000Z');
+
+    for (const action of ['view', 'view', 'expand'] as const) {
+      const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedItemId: 'passive-item-1',
+          action,
+        }),
+      }));
+
+      assert.strictEqual(response.status, 200);
+    }
+
+    const rows = db.prepare(`
+      SELECT action, COUNT(*) AS count
+      FROM interactions
+      WHERE feed_item_id = 'passive-item-1'
+      GROUP BY action
+      ORDER BY action
+    `).all() as Array<{ action: string; count: number }>;
+
+    assert.deepStrictEqual(rows, [
+      { action: 'expand', count: 1 },
+      { action: 'view', count: 1 },
+    ]);
+  });
 });
