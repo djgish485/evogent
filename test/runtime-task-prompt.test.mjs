@@ -62,6 +62,7 @@ test('buildRuntimeTaskPrompt injects bounded setup-source smoke values for cache
   );
 
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SOURCE=twitter/);
+  assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SKILL_SLUG=tweet-cache/);
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_MODE=setup-smoke/);
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_TRIGGERED_BY=setup-source-smoke/);
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_RUN_ID=setup-source-twitter-setup-source-twitter-20260427120000/);
@@ -99,6 +100,40 @@ test('buildRuntimeTaskPrompt gives normal cache refresh runs a stable run id', a
   );
 
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SOURCE=twitter/);
+  assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SKILL_SLUG=tweet-cache/);
   assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_RUN_ID=cache-refresh-twitter-unit-test/);
   assert.doesNotMatch(prompt, /^MEDIA_AGENT_CACHE_REFRESH_MODE=setup-smoke$/m);
+});
+
+test('buildRuntimeTaskPrompt injects the installed YouTube cache skill slug', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'evogent-runtime-task-'));
+  const commandsDir = path.join(rootDir, '.claude', 'commands');
+
+  await fs.mkdir(commandsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(commandsDir, 'cache-refresh.md'),
+    'Refresh exactly one source into the ambient browse cache.\n',
+    'utf8',
+  );
+
+  const prompt = buildRuntimeTaskPrompt(
+    {
+      id: 'cache-refresh-youtube-unit-test',
+      priority: 'cache_refresh',
+      source: 'pre_curation:youtube',
+      message: '/cache-refresh youtube',
+      metadata: {
+        cacheSource: 'youtube',
+        triggerSource: 'pre_curation',
+      },
+    },
+    {
+      rootDir,
+      dataDir: '/tmp/evogent-validation/source-setup/data',
+      internalBaseUrl: 'http://127.0.0.1:3270',
+    },
+  );
+
+  assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SOURCE=youtube/);
+  assert.match(prompt, /MEDIA_AGENT_CACHE_REFRESH_SKILL_SLUG=youtube-cache/);
 });

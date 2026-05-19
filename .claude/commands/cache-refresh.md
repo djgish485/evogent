@@ -7,9 +7,12 @@ Usage: `/cache-refresh <source>`
 - Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"`.
 - Refresh only the requested source for this run.
 - If `MEDIA_AGENT_CACHE_REFRESH_SOURCE` is set, it is the requested source and must match the invocation source.
-- Read the matching source skill directly at `.claude/skills/<source>-cache/SKILL.md`, where `<source>` is the source argument or `MEDIA_AGENT_CACHE_REFRESH_SOURCE`, and follow its **Cacher Mode** instructions.
+- Resolve `SKILL_SLUG="${MEDIA_AGENT_CACHE_REFRESH_SKILL_SLUG:-<source>-cache}"`, where `<source>` is the source argument or `MEDIA_AGENT_CACHE_REFRESH_SOURCE`.
+- Read the matching source skill directly at `.claude/skills/${SKILL_SLUG}/SKILL.md` and follow its **Cacher Mode** instructions.
   Use a direct read (`cat` or Read tool). Do not use `rg`, `find`, or any tool that respects `.gitignore` for skill discovery, because the cache-skill directories are runtime-installed and gitignored.
 - Cacher Mode must use the same selectors, extracted fields, and quality thresholds as that skill's Curation Mode.
+- If the skill file is missing, submit a failed refresh run through `/api/internal/browse-cache/submit` with `items: []` and an error beginning `skill_missing:`.
+- If the skill has legacy storage instructions or no explicit Cacher Mode, use its source browsing guidance only; persistence still MUST use `/api/internal/browse-cache/submit` and the submit contract below.
 
 ## Setup Smoke Mode
 
