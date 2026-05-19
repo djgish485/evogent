@@ -7,9 +7,8 @@ import { isOpenClawHeartbeatMessage } from '@/lib/openclaw/heartbeat';
 import { getChatMessagesPage, persistChatMessage } from '@/lib/db/chat';
 import { mergeChatMessages } from '@/lib/chat-messages';
 import { normalizeGatewayErrorMessage } from '@/lib/openclaw/gateway-client';
-import { getDataPath } from '@/lib/data-dir';
+import { getInternalBaseUrl } from '@/lib/internal-api';
 import { type ChatMessage } from '@/types/chat';
-import { enqueueCacheRefreshForCuration } from '../../../../../../lib/cache-refresh-on-demand.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,18 +42,32 @@ async function refreshCachesBeforeOpenClawCuration(message: string, requestId: s
   }
 
   try {
-    await enqueueCacheRefreshForCuration({
-      id: requestId || `openclaw-curation-${Date.now()}`,
-      priority: 'heartbeat',
-      message,
-      metadata: {
-        automatedCuration: true,
-        curationCommand: '/curate',
+    const response = await fetch(`${getInternalBaseUrl()}/api/internal/cache-refresh/pre-curation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    }, {
-      rootDir: process.cwd(),
-      configPath: getDataPath('config.md'),
+      cache: 'no-store',
+      body: JSON.stringify({
+        task: {
+          id: requestId || `openclaw-curation-${Date.now()}`,
+          priority: 'heartbeat',
+          message,
+          metadata: {
+            automatedCuration: true,
+            curationCommand: '/curate',
+          },
+        },
+      }),
     });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`pre-curation cache refresh trigger failed (${response.status})${body ? `: ${body}` : ''}`);
+    }
+    const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+    if (payload?.ok === false) {
+      throw new Error(payload.error || 'pre-curation cache refresh trigger failed');
+    }
   } catch (error) {
     console.warn('[openclaw] pre-curation cache refresh failed:', error instanceof Error ? error.message : String(error));
   }
