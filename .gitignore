@@ -39,6 +39,16 @@
 !.claude/skills/tweet-cache/**
 !.claude/skills/youtube-cache/
 !.claude/skills/youtube-cache/**
+!.claude/skills/github-pr-watch/
+!.claude/skills/github-pr-watch/**
+!.claude/skills/email-triage/
+!.claude/skills/email-triage/**
+!.claude/skills/competitor-watch/
+!.claude/skills/competitor-watch/**
+!.claude/skills/daily-brief/
+!.claude/skills/daily-brief/**
+!.claude/skills/research-clipping/
+!.claude/skills/research-clipping/**
 !.claude/hooks/
 !.claude/hooks/**
 

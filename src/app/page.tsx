@@ -151,15 +151,46 @@ function fromOpenClawSessionId(sessionId: string | null | undefined): string | n
   return sessionId.slice(OPENCLAW_SESSION_PREFIX.length);
 }
 
-function buildOpenClawCardQuote(item: FeedItem): string {
-  const title = item.title?.trim() || 'OpenClaw card';
-  const excerpt = (item.excerpt || item.text || '').replace(/\s+/g, ' ').trim();
-  const briefExcerpt = excerpt.length > 420 ? `${excerpt.slice(0, 417).trimEnd()}...` : excerpt;
-  return [
-    `> ${title}`,
-    ...(briefExcerpt ? [`> ${briefExcerpt}`] : []),
+function buildCardChatPrefill(item: FeedItem, selectedText: string | null, curatorSnippet: string): string {
+  const title = item.title?.trim() || 'Untitled card';
+  const source = item.source?.trim() || 'unknown source';
+  const cardText = (item.excerpt || item.text || '').replace(/\s+/g, ' ').trim();
+  const briefCardText = cardText.length > 1200 ? `${cardText.slice(0, 1197).trimEnd()}...` : cardText;
+  const lines = [
+    selectedText ? 'Discuss this excerpt from the card:' : 'Chat about this card:',
+    ...(selectedText ? [`"${selectedText}"`, ''] : []),
+    `Title: ${title}`,
+    `Source: ${source}`,
+    ...(item.url ? [`URL: ${item.url}`] : []),
+    ...(briefCardText ? ['', briefCardText] : []),
+    ...(curatorSnippet ? ['', 'Relevant curator context:', curatorSnippet] : []),
     '',
-  ].join('\n');
+  ];
+
+  return lines.join('\n');
+}
+
+async function loadCuratorUserSnippetForCard(item: FeedItem): Promise<string> {
+  try {
+    const response = await fetch('/api/openclaw/curator-user-snippet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({
+        title: item.title,
+        text: item.text,
+        excerpt: item.excerpt,
+        tags: item.tags,
+      }),
+    });
+    if (!response.ok) {
+      return '';
+    }
+    const payload = await response.json().catch(() => ({})) as { snippet?: unknown };
+    return typeof payload.snippet === 'string' ? payload.snippet.slice(0, 200) : '';
+  } catch {
+    return '';
+  }
 }
 
 function AgentUnavailableBanner({
@@ -4655,7 +4686,7 @@ export default function Home() {
     updateSelectedChatSession,
   ]);
 
-  const prepareChatAboutPost = useCallback((item: FeedItem, selectedText?: string) => {
+  const prepareChatAboutPost = useCallback((item: FeedItem, selectedText: string | undefined, prefill: string) => {
     const trimmedSelectedText = selectedText?.trim() ? selectedText.trim() : null;
     const linkedConversation = conversationCards.find((conversation) => (
       conversation.contextKind === 'post' && conversation.contextRefId === item.id
@@ -4668,9 +4699,7 @@ export default function Home() {
       updateSelectedChatSession(linkedConversation.sessionId);
       setConversationScrollToBottomId(linkedConversation.sessionId);
     }
-    if (trimmedSelectedText) {
-      setChatInput(`Discuss this excerpt:\n"${trimmedSelectedText}"\n\n`);
-    }
+    setChatInput(prefill);
     return linkedConversation;
   }, [conversationCards, updateSelectedChatSession]);
 
@@ -4689,10 +4718,15 @@ export default function Home() {
     });
   }, [focusChatInput, openConversationDetail, updateSelectedChatSession]);
 
-  const handleOpenClawCardChat = useCallback(async (item: FeedItem) => {
-    const prefill = `${buildOpenClawCardQuote(item)}\n`;
+  const handleOpenClawCardChat = useCallback(async (item: FeedItem, selectedText?: string) => {
+    const trimmedSelectedText = selectedText?.trim() ? selectedText.trim() : null;
+    const curatorSnippet = await loadCuratorUserSnippetForCard(item);
+    const prefill = buildCardChatPrefill(item, trimmedSelectedText, curatorSnippet);
     const sessions = await loadOpenClawSessions();
     const defaultSessionKey = openClawDefaultSessionKeyRef.current;
+    const activeSessionKey = targetOpenClawSessionKey && sessions.some((session) => session.key === targetOpenClawSessionKey)
+      ? targetOpenClawSessionKey
+      : '';
 
     if (openClawSessionsStatus === 'unreachable' && sessions.length === 0) {
       setChatStatus(openClawSessionsError || OPENCLAW_UNREACHABLE_MESSAGE);
@@ -4701,6 +4735,11 @@ export default function Home() {
 
     if (sessions.length === 0) {
       setChatStatus(openClawSessionsError || 'No OpenClaw sessions found. Create one in OpenClaw first.');
+      return;
+    }
+
+    if (activeSessionKey) {
+      applyOpenClawCardChatPrefill(activeSessionKey, prefill);
       return;
     }
 
@@ -4715,23 +4754,28 @@ export default function Home() {
     loadOpenClawSessions,
     openClawSessionsError,
     openClawSessionsStatus,
+    targetOpenClawSessionKey,
   ]);
 
-  const handleChatAboutPost = useCallback((item: FeedItem, selectedText?: string) => {
+  const handleChatAboutPost = useCallback(async (item: FeedItem, selectedText?: string) => {
     if (item.source === 'openclaw') {
-      void handleOpenClawCardChat(item);
+      await handleOpenClawCardChat(item, selectedText);
       return;
     }
-    prepareChatAboutPost(item, selectedText);
+    const trimmedSelectedText = selectedText?.trim() ? selectedText.trim() : null;
+    const curatorSnippet = await loadCuratorUserSnippetForCard(item);
+    prepareChatAboutPost(item, selectedText, buildCardChatPrefill(item, trimmedSelectedText, curatorSnippet));
     focusChatInput(true);
   }, [focusChatInput, handleOpenClawCardChat, prepareChatAboutPost]);
 
-  const handleChatAboutPostInDetail = useCallback((item: FeedItem, selectedText?: string) => {
+  const handleChatAboutPostInDetail = useCallback(async (item: FeedItem, selectedText?: string) => {
     if (item.source === 'openclaw') {
-      void handleOpenClawCardChat(item);
+      await handleOpenClawCardChat(item, selectedText);
       return;
     }
-    prepareChatAboutPost(item, selectedText);
+    const trimmedSelectedText = selectedText?.trim() ? selectedText.trim() : null;
+    const curatorSnippet = await loadCuratorUserSnippetForCard(item);
+    prepareChatAboutPost(item, selectedText, buildCardChatPrefill(item, trimmedSelectedText, curatorSnippet));
     focusChatInput(true);
   }, [focusChatInput, handleOpenClawCardChat, prepareChatAboutPost]);
 

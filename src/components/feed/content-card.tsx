@@ -64,6 +64,14 @@ interface ContentCardProps {
   onSuggestionDismiss?: (item: FeedItem) => void | Promise<void>;
 }
 
+interface FeedCardSkillAction {
+  id: string;
+  label: string;
+  confirms: boolean | string;
+  externalLink: boolean;
+  requiresSelection: string | null;
+}
+
 const fullWidthDetailCardClass = 'group relative w-full px-4 py-2 sm:px-5';
 const detailReplyChildCardClass = 'group relative w-full px-4 py-3 sm:px-5';
 const defaultContentCardClass = 'group relative w-full rounded-2xl border border-zinc-700 bg-zinc-950/90 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow] hover:border-zinc-600 hover:bg-zinc-950 hover:shadow-[0_18px_44px_rgba(0,0,0,0.24)]';
@@ -470,6 +478,128 @@ function readMetadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function readOpenClawSkillSlug(item: Pick<FeedItem, 'source' | 'metadata'>): string | null {
+  const metadata = readMetadataRecord(item.metadata);
+  const metadataSource = typeof metadata?.source === 'string' ? metadata.source.trim().toLowerCase() : '';
+  if (item.source !== 'openclaw' && metadataSource !== 'openclaw') {
+    return null;
+  }
+
+  const openClaw = readMetadataRecord(metadata?.openClaw) ?? readMetadataRecord(metadata?.openclaw);
+  const skill = typeof openClaw?.skill === 'string' ? openClaw.skill.trim().toLowerCase() : '';
+  return /^[a-z0-9-]{1,64}$/.test(skill) ? skill : null;
+}
+
+function compactPayloadText(value: string | null | undefined, maxLength = 700): string | null {
+  const text = value?.replace(/\s+/g, ' ').trim() ?? '';
+  if (!text) return null;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3).trimEnd()}...` : text;
+}
+
+function sanitizePayloadValue(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return compactPayloadText(value, 500);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 12).map((item) => sanitizePayloadValue(item, depth + 1));
+  }
+  if (depth >= 2 || typeof value !== 'object') {
+    return null;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, childValue] of Object.entries(value as Record<string, unknown>)) {
+    if (key === 'mcpAppHtml') continue;
+    const sanitized = sanitizePayloadValue(childValue, depth + 1);
+    if (sanitized !== null && sanitized !== undefined) {
+      result[key] = sanitized;
+    }
+  }
+  return result;
+}
+
+function findPayloadValueByKey(value: unknown, key: string, depth = 0): unknown {
+  if (!key || depth > 4 || !value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, key)) {
+    return record[key];
+  }
+
+  for (const childValue of Object.values(record)) {
+    const found = findPayloadValueByKey(childValue, key, depth + 1);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+
+  return undefined;
+}
+
+function readPayloadValueAtPath(value: unknown, pathName: string): unknown {
+  const parts = pathName.split('.').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) {
+    return undefined;
+  }
+
+  let current: unknown = value;
+  for (const part of parts) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function readRequiredSelectionValue(item: FeedItem, selectionKey: string | null): unknown {
+  if (!selectionKey) {
+    return undefined;
+  }
+
+  const metadata = readMetadataRecord(item.metadata);
+  return readPayloadValueAtPath(metadata, selectionKey)
+    ?? readPayloadValueAtPath(readMetadataRecord(metadata?.openClaw), selectionKey)
+    ?? findPayloadValueByKey(metadata, selectionKey);
+}
+
+function buildSkillActionPayload(item: FeedItem, action: FeedCardSkillAction): Record<string, unknown> {
+  const metadata = readMetadataRecord(item.metadata);
+  const openClaw = readMetadataRecord(metadata?.openClaw) ?? readMetadataRecord(metadata?.openclaw);
+  const payload: Record<string, unknown> = {
+    feedItemId: item.id,
+    source: item.source,
+    sourceId: item.sourceId,
+    url: item.url,
+    title: item.title,
+    text: compactPayloadText(item.text),
+    excerpt: compactPayloadText(item.excerpt),
+    authorUsername: item.authorUsername,
+    authorDisplayName: item.authorDisplayName,
+  };
+
+  const sanitizedOpenClaw = sanitizePayloadValue(openClaw);
+  if (sanitizedOpenClaw && typeof sanitizedOpenClaw === 'object' && Object.keys(sanitizedOpenClaw as Record<string, unknown>).length > 0) {
+    payload.openClaw = sanitizedOpenClaw;
+  }
+
+  if (action.requiresSelection) {
+    payload.selection = {
+      [action.requiresSelection]: sanitizePayloadValue(readRequiredSelectionValue(item, action.requiresSelection)),
+    };
+  }
+
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== null && value !== undefined));
 }
 
 export function isHackerNewsFeedItem(item: Pick<FeedItem, 'source'>): boolean {
@@ -1662,6 +1792,61 @@ function AgentActionButton({
         <span className="truncate">{agentName}</span>
       </span>
     </button>
+  );
+}
+
+function SkillActionButtonRow({
+  item,
+  skillSlug,
+  actions,
+  pendingActionId,
+  onAction,
+}: {
+  item: FeedItem;
+  skillSlug: string | null;
+  actions: FeedCardSkillAction[];
+  pendingActionId?: string | null;
+  onAction?: (action: FeedCardSkillAction, payload: Record<string, unknown>) => void | Promise<void>;
+}) {
+  if (!skillSlug || actions.length === 0 || !onAction) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3">
+      {actions.map((action) => {
+        const fullActionId = `${skillSlug}.${action.id}`;
+        const payload = buildSkillActionPayload(item, action);
+        const pending = pendingActionId === fullActionId;
+        return (
+          <button
+            key={fullActionId}
+            type="button"
+            data-evogent-action={fullActionId}
+            data-evogent-payload={JSON.stringify(payload)}
+            data-feed-item-id={item.id}
+            disabled={pending}
+            aria-busy={pending ? 'true' : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const confirmText = typeof action.confirms === 'string'
+                ? action.confirms
+                : action.confirms
+                  ? `Run ${action.label}?`
+                  : '';
+              if (confirmText && !window.confirm(confirmText)) {
+                return;
+              }
+              void onAction(action, payload);
+            }}
+            className="inline-flex min-h-9 items-center rounded-lg border border-zinc-700 bg-zinc-900/70 px-2.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 disabled:cursor-default disabled:opacity-70"
+          >
+            {pending ? 'Working...' : action.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -2916,6 +3101,10 @@ export function ArticleCard({
   onDismissReasonInput,
   onChat,
   onGeneratedUiAction,
+  skillSlug = null,
+  skillActions = [],
+  skillActionPendingId = null,
+  onSkillAction,
   searchQuery,
   useSearchSnippet = true,
 }: {
@@ -2935,6 +3124,10 @@ export function ArticleCard({
   onDismissReasonInput: () => void;
   onChat?: (item: FeedItem, selectedText?: string) => void;
   onGeneratedUiAction?: (event: MCPAppActionEvent) => void | Promise<void>;
+  skillSlug?: string | null;
+  skillActions?: FeedCardSkillAction[];
+  skillActionPendingId?: string | null;
+  onSkillAction?: (action: FeedCardSkillAction, payload: Record<string, unknown>) => void | Promise<void>;
   searchQuery?: string | null;
   useSearchSnippet?: boolean;
 }) {
@@ -3141,6 +3334,14 @@ export function ArticleCard({
           </div>
         )}
 
+        <SkillActionButtonRow
+          item={item}
+          skillSlug={skillSlug}
+          actions={skillActions}
+          pendingActionId={skillActionPendingId}
+          onAction={onSkillAction}
+        />
+
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
           {footerParts.map((part, index) => (
             <span key={`${part}-${index}`} className="contents">
@@ -3267,6 +3468,13 @@ export function ArticleCard({
                 </button>
               </div>
             )}
+            <SkillActionButtonRow
+              item={item}
+              skillSlug={skillSlug}
+              actions={skillActions}
+              pendingActionId={skillActionPendingId}
+              onAction={onSkillAction}
+            />
             {actionBar}
             {showReasonInput && (
               <ReasonInput
@@ -3379,6 +3587,14 @@ export function ArticleCard({
           )}
         </div>
       )}
+
+      <SkillActionButtonRow
+        item={item}
+        skillSlug={skillSlug}
+        actions={skillActions}
+        pendingActionId={skillActionPendingId}
+        onAction={onSkillAction}
+      />
 
       {actionBar}
 
@@ -3770,6 +3986,9 @@ export function ContentCard({
   const [enrichmentIndicatorState, setEnrichmentIndicatorState] = useState<CardEnrichmentIndicatorState>(
     batchIndicatorState ?? 'hidden',
   );
+  const openClawSkillSlug = useMemo(() => readOpenClawSkillSlug(item), [item]);
+  const [skillActions, setSkillActions] = useState<FeedCardSkillAction[]>([]);
+  const [skillActionPendingId, setSkillActionPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsLiked(item.isLiked);
@@ -3796,6 +4015,41 @@ export function ContentCard({
   useEffect(() => {
     setExpandedChildPreviews({});
   }, [item.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSkillActions([]);
+    setSkillActionPendingId(null);
+
+    if (!openClawSkillSlug) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetch(`/api/feed-actions/registry?skill=${encodeURIComponent(openClawSkillSlug)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) {
+          return [];
+        }
+        const payload = await response.json().catch(() => ({})) as { actions?: unknown };
+        return Array.isArray(payload.actions) ? payload.actions as FeedCardSkillAction[] : [];
+      })
+      .then((actions) => {
+        if (!cancelled) {
+          setSkillActions(actions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkillActions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openClawSkillSlug]);
 
   const handleVote = useCallback(async (
     action: 'thumbsup' | 'thumbsdown' | 'undo_thumbsup' | 'undo_thumbsdown',
@@ -4186,6 +4440,37 @@ export function ContentCard({
       }),
     });
   }, [handleVote, item, onChat, onSuggestionAccept, onSuggestionDismiss, openFeedItemDetail]);
+  const handleSkillAction = useCallback(async (
+    action: FeedCardSkillAction,
+    payload: Record<string, unknown>,
+  ) => {
+    if (!openClawSkillSlug) {
+      return;
+    }
+
+    const actionId = `${openClawSkillSlug}.${action.id}`;
+    setSkillActionPendingId(actionId);
+    setVoteError(null);
+    try {
+      const response = await fetch('/api/feed-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionId,
+          feedItemId: item.id,
+          payload,
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || `Action failed (${response.status})`);
+      }
+    } catch (error) {
+      setVoteError(error instanceof Error && error.message ? error.message : 'Failed to run feed action');
+    } finally {
+      setSkillActionPendingId(null);
+    }
+  }, [item.id, openClawSkillSlug]);
   const handleQuoteTweetClick = useCallback(async (quote: QuoteTweet) => {
     const quoteIdentifier = quote.id?.trim() || quote.url?.trim() || null;
     const fallbackUrl = quote.url?.trim() || (quote.id?.trim() ? `https://x.com/i/web/status/${quote.id.trim()}` : null);
@@ -4356,6 +4641,13 @@ export function ContentCard({
       {openClawMcpAppHtml && (
         <div className="space-y-2">
           <MCPAppFrame html={openClawMcpAppHtml} onAction={handleGeneratedUiAction} />
+          <SkillActionButtonRow
+            item={item}
+            skillSlug={openClawSkillSlug}
+            actions={skillActions}
+            pendingActionId={skillActionPendingId}
+            onAction={handleSkillAction}
+          />
           <div className="flex justify-end px-1">
             <button
               type="button"
@@ -4435,6 +4727,10 @@ export function ContentCard({
           onDismissReasonInput={() => setShowReasonInput(null)}
           onChat={onChat}
           onGeneratedUiAction={handleGeneratedUiAction}
+          skillSlug={openClawSkillSlug}
+          skillActions={skillActions}
+          skillActionPendingId={skillActionPendingId}
+          onSkillAction={handleSkillAction}
           searchQuery={searchQuery}
           useSearchSnippet={useSearchSnippet}
         />
@@ -4458,6 +4754,10 @@ export function ContentCard({
           onDismissReasonInput={() => setShowReasonInput(null)}
           onChat={onChat}
           onGeneratedUiAction={handleGeneratedUiAction}
+          skillSlug={openClawSkillSlug}
+          skillActions={skillActions}
+          skillActionPendingId={skillActionPendingId}
+          onSkillAction={handleSkillAction}
           searchQuery={searchQuery}
           useSearchSnippet={useSearchSnippet}
         />
