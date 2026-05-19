@@ -21,6 +21,7 @@ const { failStaleQueuedChatMessages } = require('./lib/chat-message-cleanup.js')
 const { recoverClaudeSessionPoison } = require('./lib/chat-session-repair');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
 const { resolveBrainProviderByName } = require('./lib/brain-provider');
+const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
 const { dispatchCodeFixSuggestionsInBackground } = require('./lib/code-fix-dispatch');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
 const { buildRuntimeTaskPrompt } = require('./lib/runtime-tasks');
@@ -3505,6 +3506,35 @@ app.prepare().then(() => {
       } catch {
         res.statusCode = 400;
         res.end(JSON.stringify({ ok: false, error: 'Invalid JSON payload' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && parsedUrl.pathname === '/api/internal/cache-refresh/pre-curation') {
+      res.setHeader('Content-Type', 'application/json');
+
+      try {
+        const body = await readJsonBody(req);
+        const task = body?.task && typeof body.task === 'object' && !Array.isArray(body.task)
+          ? body.task
+          : body;
+        const options = {
+          rootDir: process.cwd(),
+          configPath: dataPath('config.md'),
+        };
+        if (Number.isInteger(body?.timeoutMs) && body.timeoutMs > 0) {
+          options.timeoutMs = body.timeoutMs;
+        }
+        const result = await enqueueCacheRefreshForCuration(task, options);
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ok: true, result }));
+      } catch (error) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to enqueue pre-curation cache refresh',
+        }));
       }
       return;
     }

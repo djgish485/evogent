@@ -38,7 +38,7 @@ When `MEDIA_AGENT_CACHE_REFRESH_MODE=setup-smoke`, this run is source setup proo
 ## Submit Contract
 
 - Success payload:
-  - `runId` (required in setup smoke mode)
+  - `runId` from `MEDIA_AGENT_CACHE_REFRESH_RUN_ID` when set (required in setup smoke mode)
   - `source`
   - `triggeredBy`
   - `startedAtMs`
@@ -51,6 +51,7 @@ When `MEDIA_AGENT_CACHE_REFRESH_MODE=setup-smoke`, this run is source setup proo
   - `status: "failed"`
   - `error` with the exact failure layer prefix in setup smoke mode
   - `items: []`
+- If the refresh cannot produce at least one persisted item, submit a failure payload with `error` beginning `no_rows:`. Do not exit successfully after a zero-row refresh.
 
 ## Item Contract
 
