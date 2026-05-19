@@ -4,6 +4,7 @@ import {
   getFeedItemById,
   getInteractionStates,
   hasFeedItemInteraction,
+  recordFeedItemInteraction,
   setFeedItemDisliked,
   setFeedItemLiked,
   setFeedItemSuggestionStatus,
@@ -104,6 +105,8 @@ export async function POST(request: Request) {
     'dismiss_suggestion',
     'undo_suggestion',
     'thread_feedback',
+    'view',
+    'expand',
   ]);
 
   if (!feedItemId || !action || !supportedActions.has(action)) {
@@ -113,6 +116,11 @@ export async function POST(request: Request) {
   const item = getFeedItemById(feedItemId);
   if (!item) {
     return NextResponse.json({ error: 'Feed item not found' }, { status: 404 });
+  }
+
+  if (action === 'view' || action === 'expand') {
+    recordFeedItemInteraction(feedItemId, action);
+    return NextResponse.json({ ok: true, action });
   }
 
   if (action === 'like' || action === 'unlike') {
