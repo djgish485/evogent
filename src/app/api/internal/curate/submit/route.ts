@@ -33,6 +33,7 @@ import {
   canonicalizeTwitterFeedItemForSubmit,
   extractTweetIdFromStatusUrl,
 } from '@/lib/twitter-feed-canonicalization';
+import { listOpenClawSessions } from '@/lib/openclaw/sessions';
 import { pickNextThreadColor, sanitizeThreadColor } from '@/lib/thread-colors';
 import { readUsageLevelConfig } from '@/lib/usage-level';
 import type { FeedInsertInput } from '@/lib/db/feed';
@@ -54,6 +55,8 @@ const articleUrlValidationTimeoutMs = 6_000;
 const maxBatchEnrichmentChunkSize = 4;
 const openClawMcpAppHtmlError = 'openclaw cards must include metadata.mcpAppHtml — markdown-only openclaw submissions are no longer accepted';
 const evogentSkillSourceIdPrefix = 'evogent-skill:';
+const openClawSessionPrefix = 'openclaw:';
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const articleUrlValidationUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
   'AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -66,6 +69,7 @@ const deadArticlePageDescriptions = [
   'this page does not exist',
   'article not found',
 ];
+const warnedInvalidOriginSessionIds = new Set<string>();
 
 type SubmitError = {
   scope: 'item' | 'candidate' | 'cycleSummary' | 'system';
@@ -109,8 +113,97 @@ type ChatSuggestionEvent = {
   };
 };
 
+type OriginSessionValidationContext = {
+  openClawSessionChecks: Map<string, Promise<boolean>>;
+};
+
+type OpenClawSessionListResult = {
+  sessions?: Array<{
+    key?: unknown;
+    sessionId?: unknown;
+  }>;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function warnInvalidOriginSessionId(originSessionId: string) {
+  if (warnedInvalidOriginSessionIds.has(originSessionId)) {
+    return;
+  }
+  warnedInvalidOriginSessionIds.add(originSessionId);
+  console.warn(`[curate-submit] Dropping invalid originSessionId: ${originSessionId}`);
+}
+
+function hasExistingChatSessionId(originSessionId: string): boolean {
+  if (!uuidPattern.test(originSessionId)) {
+    return false;
+  }
+
+  const row = getDb().prepare(`
+    SELECT id
+    FROM chat_sessions
+    WHERE id = ?
+    LIMIT 1
+  `).get(originSessionId) as { id: string } | undefined;
+
+  return Boolean(row);
+}
+
+async function hasExistingOpenClawSessionId(
+  originSessionId: string,
+  validationContext: OriginSessionValidationContext,
+): Promise<boolean> {
+  if (!originSessionId.startsWith(openClawSessionPrefix)) {
+    return false;
+  }
+
+  const sessionKey = originSessionId.slice(openClawSessionPrefix.length).trim();
+  if (!sessionKey) {
+    return false;
+  }
+
+  const existingCheck = validationContext.openClawSessionChecks.get(originSessionId);
+  if (existingCheck) {
+    return existingCheck;
+  }
+
+  const check = (async () => {
+    try {
+      const result = await listOpenClawSessions({ includeSessionKey: sessionKey }) as OpenClawSessionListResult;
+      return Array.isArray(result.sessions)
+        && result.sessions.some((session) => (
+          session.sessionId === originSessionId
+          || session.key === sessionKey
+        ));
+    } catch {
+      return false;
+    }
+  })();
+
+  validationContext.openClawSessionChecks.set(originSessionId, check);
+  return check;
+}
+
+async function normalizeOriginSessionId(
+  originSessionId: string | null,
+  validationContext: OriginSessionValidationContext,
+): Promise<string | null> {
+  if (!originSessionId) {
+    return null;
+  }
+
+  if (hasExistingChatSessionId(originSessionId)) {
+    return originSessionId;
+  }
+
+  if (await hasExistingOpenClawSessionId(originSessionId, validationContext)) {
+    return originSessionId;
+  }
+
+  warnInvalidOriginSessionId(originSessionId);
+  return null;
 }
 
 function readThreadColorCounts(db: ReturnType<typeof getDb>): Record<string, number> {
@@ -843,11 +936,11 @@ function canonicalizeTwitterItemForSubmit(
   return { ok: true, normalized: result.item };
 }
 
-function normalizeFeedItemProvenance(
+async function normalizeFeedItemProvenance(
   item: FeedInsertInput,
-  index: number,
   requestOriginSessionId: string | null,
-): { ok: true; normalized: FeedInsertInput } | { ok: false; error: SubmitError } {
+  validationContext: OriginSessionValidationContext,
+): Promise<{ ok: true; normalized: FeedInsertInput }> {
   const metadata = isRecord(item.metadata) ? { ...item.metadata } : {};
   const hasMetadataOriginSessionId = Object.prototype.hasOwnProperty.call(metadata, 'originSessionId');
   const metadataOriginSessionId = typeof metadata.originSessionId === 'string' && metadata.originSessionId.trim()
@@ -859,25 +952,14 @@ function normalizeFeedItemProvenance(
   const effectiveOriginSessionId = typeof item.originSessionId === 'string' && item.originSessionId.trim()
     ? item.originSessionId.trim()
     : metadataOriginSessionId ?? requestOriginSessionId;
+  const normalizedOriginSessionId = await normalizeOriginSessionId(effectiveOriginSessionId ?? null, validationContext);
 
-  if (originKind === 'curator_chat' && !effectiveOriginSessionId) {
-    return {
-      ok: false,
-      error: {
-        scope: 'item',
-        index,
-        sourceId: item.sourceId ?? null,
-        error: 'Curator-chat submitted items must include originSessionId.',
-      },
-    };
-  }
-
-  item.originSessionId = effectiveOriginSessionId ?? null;
+  item.originSessionId = normalizedOriginSessionId;
 
   if (effectiveOriginSessionId || hasMetadataOriginSessionId || originKind) {
     item.metadata = {
       ...metadata,
-      originSessionId: effectiveOriginSessionId ?? null,
+      originSessionId: normalizedOriginSessionId,
       ...(originKind ? { originKind } : {}),
     };
   }
@@ -979,6 +1061,9 @@ export async function POST(request: Request) {
   let hasArticleBodyValidationError = false;
   let hasOpenClawMcpAppHtmlValidationError = false;
   let duplicates = 0;
+  const originSessionValidation: OriginSessionValidationContext = {
+    openClawSessionChecks: new Map(),
+  };
   const requestOriginSessionId = typeof payload.originSessionId === 'string' && payload.originSessionId.trim()
     ? payload.originSessionId.trim()
     : typeof payload.origin_session_id === 'string' && payload.origin_session_id.trim()
@@ -1087,11 +1172,11 @@ export async function POST(request: Request) {
         linkPreviews,
       };
     }
-    const normalizedProvenance = normalizeFeedItemProvenance(normalized, index, requestOriginSessionId);
-    if (!normalizedProvenance.ok) {
-      errors.push(normalizedProvenance.error);
-      continue;
-    }
+    const normalizedProvenance = await normalizeFeedItemProvenance(
+      normalized,
+      requestOriginSessionId,
+      originSessionValidation,
+    );
     const normalizedWithProvenance = normalizedProvenance.normalized;
     const canonicalSourceId = normalizedWithProvenance.sourceId
       ? normalizedWithProvenance.type === 'tweet'

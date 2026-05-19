@@ -75,7 +75,9 @@ const explorationSection = [
   '',
   '5. Read-only on private data. Do not call `gog gmail send/draft/trash/modify`, any Gmail label/batch mutation, or any calendar create/delete/mutation.',
   '',
-  '6. Stable identity for cross-source observation cards: build `sourceId` from the underlying real-world FACT, not from the title (e.g. `evogent-obs:calendar:<eventId>`, `evogent-obs:gmail-renewal:<vendor>:<date>`). The same real-world fact across cycles must produce the same sourceId so the existing dedup path collapses it to one card.',
+  '6. `originSessionId` links a feed item to the chat session that produced it. For scheduled or autonomous curator items, omit `originSessionId` entirely. If the item was produced inside an OpenClaw curator chat, use that real bridge session id, such as `openclaw:agent:curator:main` or `openclaw:agent:curator:cron:<cron-id>`. Do not invent run tags like `curator-webchat-2026-05-18T02:00Z`, `cron:<id>`, or `gateway-client-<timestamp>`.',
+  '',
+  '7. Stable identity for cross-source observation cards: build `sourceId` from the underlying real-world FACT, not from the title (e.g. `evogent-obs:calendar:<eventId>`, `evogent-obs:gmail-renewal:<vendor>:<date>`). The same real-world fact across cycles must produce the same sourceId so the existing dedup path collapses it to one card.',
 ].join('\n');
 
 if (!sourceFile || !targetFile) {

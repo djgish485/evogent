@@ -3740,7 +3740,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       const tweetId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
       const articleSourceId = `https://example.com/?enrichment=${randomUUID()}`;
       const hackerNewsSourceId = `hn-submit-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
-      const originSessionId = createValidationOriginSessionId('api-submit-enrich');
+      const originSessionId = createChatSession({ title: 'API submit enrich origin' }).id;
 
       try {
         const response = await requestJson('/api/internal/curate/submit', {
@@ -3929,7 +3929,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
 
     test('POST /api/internal/curate/submit rejects YouTube items that drop thumbnail and raw publish metadata', async () => {
       const videoId = `video-submit-bad-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
-      const originSessionId = createValidationOriginSessionId('api-submit-youtube-missing');
+      const originSessionId = createChatSession({ title: 'API submit YouTube validation origin' }).id;
 
       const response = await requestJson('/api/internal/curate/submit', {
         method: 'POST',
@@ -3965,7 +3965,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
 
     test('POST /api/internal/curate/submit accepts notification items and stores notification metadata', async () => {
       const notificationId = `submit-notification-${randomUUID()}`;
-      const originSessionId = createValidationOriginSessionId('api-submit-notification');
+      const originSessionId = createChatSession({ title: 'API submit notification origin' }).id;
       try {
         const response = await requestJson('/api/internal/curate/submit', {
           method: 'POST',
@@ -4071,7 +4071,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       const childSourceId = `curate-child-${randomUUID()}`;
       const candidatesPath = getDataPath('curation-candidates.jsonl');
       const candidatesOffset = await getFileSize(candidatesPath);
-      const originSessionId = createValidationOriginSessionId('api-submit-batch');
+      const originSessionId = createChatSession({ title: 'API submit batch origin' }).id;
 
       try {
         const response = await requestJson('/api/internal/curate/submit', {
@@ -4264,8 +4264,8 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       const videoId = `video-${randomUUID().replace(/-/g, '').slice(0, 10)}`;
       const analysisSourceId = `analysis-${randomUUID()}`;
       const suggestionSourceId = `suggestion-${randomUUID()}`;
-      const requestOriginSessionId = createValidationOriginSessionId('api-submit-meta-request');
-      const itemOriginSessionId = createValidationOriginSessionId('api-submit-meta-item');
+      const requestOriginSessionId = createChatSession({ title: 'API submit metadata request origin' }).id;
+      const itemOriginSessionId = createChatSession({ title: 'API submit metadata item origin' }).id;
 
       try {
         const response = await requestJson('/api/internal/curate/submit', {
@@ -4499,10 +4499,11 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
         }, BASE_URL);
       }
     });
-    test('POST /api/internal/curate/submit preserves heartbeat provenance metadata and rejects curator-chat items missing originSessionId', async () => {
+    test('POST /api/internal/curate/submit preserves heartbeat provenance metadata and strips bogus curator-chat originSessionId', async () => {
       const db = getDb();
       const heartbeatSourceId = `https://example.com/?heartbeat=${randomUUID()}`;
-      const missingOriginSourceId = `https://example.com/?missingOrigin=${randomUUID()}`;
+      const bogusOriginSourceId = `https://example.com/?bogusOrigin=${randomUUID()}`;
+      const bogusOriginSessionId = `curator-webchat-${randomUUID()}`;
 
       try {
         const heartbeatResponse = await requestJson('/api/internal/curate/submit', {
@@ -4546,19 +4547,20 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
         assert.strictEqual(heartbeatMetadata.originSessionId, null);
         assert.strictEqual(heartbeatMetadata.originKind, 'heartbeat');
 
-        const missingOriginResponse = await requestJson('/api/internal/curate/submit', {
+        const bogusOriginResponse = await requestJson('/api/internal/curate/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            originSessionId: bogusOriginSessionId,
             items: [
               {
-                id: `ma-curator-provenance-missing-${randomUUID()}`,
+                id: `ma-curator-provenance-bogus-${randomUUID()}`,
                 type: 'article',
                 source: 'substack',
-                sourceId: missingOriginSourceId,
-                title: 'Missing curator provenance item',
-                text: 'Curator-chat submissions must provide an origin session.',
-                url: missingOriginSourceId,
+                sourceId: bogusOriginSourceId,
+                title: 'Bogus curator provenance item',
+                text: 'Curator-chat submissions with bogus origin session ids should still be accepted.',
+                url: bogusOriginSourceId,
                 reason: 'Curator provenance validation coverage',
                 publishedAt: '2026-03-08T08:30:00.000Z',
                 metadata: {
@@ -4570,20 +4572,22 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
           }),
         });
 
-        assert.strictEqual(missingOriginResponse.status, 200);
-        assertObject(missingOriginResponse.data, 'Expected missing-origin payload');
-        assert.strictEqual(missingOriginResponse.data.accepted, 0);
-        assert.ok(Array.isArray(missingOriginResponse.data.errors));
-        assert.strictEqual(missingOriginResponse.data.errors[0]?.error, 'Curator-chat submitted items must include originSessionId.');
-        const missingOriginRow = db.prepare(`
-          SELECT id
+        assert.strictEqual(bogusOriginResponse.status, 200);
+        assertObject(bogusOriginResponse.data, 'Expected bogus-origin payload');
+        assert.strictEqual(bogusOriginResponse.data.accepted, 1);
+        const bogusOriginRow = db.prepare(`
+          SELECT origin_session_id AS originSessionId, metadata
           FROM feed
           WHERE source_id = ?
-        `).get(missingOriginSourceId);
-        assert.strictEqual(missingOriginRow, undefined);
+        `).get(bogusOriginSourceId) as { originSessionId: string | null; metadata: string | null } | undefined;
+        assert.ok(bogusOriginRow, 'Expected stored bogus-origin row');
+        assert.strictEqual(bogusOriginRow?.originSessionId, null);
+        const bogusOriginMetadata = JSON.parse(bogusOriginRow?.metadata ?? '{}') as Record<string, unknown>;
+        assert.strictEqual(bogusOriginMetadata.originSessionId, null);
+        assert.strictEqual(bogusOriginMetadata.originKind, 'curator_chat');
       } finally {
         await cleanupValidationFixtures({
-          sourceIds: [heartbeatSourceId, missingOriginSourceId],
+          sourceIds: [heartbeatSourceId, bogusOriginSourceId],
         }, BASE_URL);
       }
     });
@@ -4595,7 +4599,7 @@ describe('API Integration Tests', { concurrency: false, skip: INTEGRATION_SKIP_R
       const canonicalSourceId = `https://${articleSlug}.substack.com/p/dedup-check`;
       const reverseCanonicalSourceId = `https://reverse-test-${randomUUID()}.substack.com/p/dedup-check`;
       const reverseLegacySourceId = reverseCanonicalSourceId.replace(/^https:\/\//, '').replace('/p/', ':/p/');
-      const originSessionId = createValidationOriginSessionId('api-submit-article-dedup');
+      const originSessionId = createChatSession({ title: 'API submit article dedup origin' }).id;
 
       db.prepare(`
         INSERT INTO feed (id, type, source, source_id, title, text, url, published_at, created_at)
