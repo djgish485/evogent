@@ -44,6 +44,26 @@ const registry = {
     description: 'Direct-browse Hacker News source guidance for curation using public HN surfaces',
     sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/hackernews-cache/SKILL.md',
   },
+  'github-pr-watch': {
+    description: 'Watch GitHub pull requests that may need review or follow-up',
+    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/github-pr-watch/SKILL.md',
+  },
+  'email-triage': {
+    description: 'Triage important inbox updates surfaced as feed cards',
+    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/email-triage/SKILL.md',
+  },
+  'competitor-watch': {
+    description: 'Track competitor and market updates that deserve follow-up',
+    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/competitor-watch/SKILL.md',
+  },
+  'daily-brief': {
+    description: 'Turn daily brief cards into focused follow-up work',
+    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/daily-brief/SKILL.md',
+  },
+  'research-clipping': {
+    description: 'Capture and organize research clippings from feed cards',
+    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/research-clipping/SKILL.md',
+  },
 } as const;
 
 const skillNamePattern = /^[a-z0-9-]{1,64}$/;
@@ -57,6 +77,8 @@ export interface SkillMetadataEvogent {
   requires?: SkillRequires;
   'feed-source'?: string;
   'feed-source-label'?: string;
+  'action-namespaces'?: string[];
+  'feed-actions'?: Array<Record<string, unknown>>;
   installRequiresExplicitOptIn?: boolean;
   reasonForGate?: string;
 }
@@ -196,7 +218,36 @@ function parseYamlSubset(input: string): Record<string, unknown> {
       if (!Array.isArray(parent)) {
         throw new Error(`Invalid YAML list item at line ${index + 1}`);
       }
-      parent.push(parseScalar(trimmed.slice(2)));
+
+      const listValue = trimmed.slice(2).trim();
+      if (!listValue) {
+        const lookahead = nextContentLine(lines, index + 1);
+        const nested: Record<string, unknown> | unknown[] = lookahead?.trimmed.startsWith('- ') ? [] : {};
+        parent.push(nested);
+        stack.push({ indent, container: nested });
+        continue;
+      }
+
+      const colonIndex = listValue.indexOf(':');
+      if (colonIndex > 0) {
+        const key = listValue.slice(0, colonIndex).trim();
+        const remainder = listValue.slice(colonIndex + 1).trim();
+        if (key && /^[A-Za-z0-9_-]+$/.test(key)) {
+          const item: Record<string, unknown> = {};
+          if (remainder) {
+            item[key] = parseScalar(remainder);
+          } else {
+            const lookahead = nextContentLine(lines, index + 1);
+            const nested: Record<string, unknown> | unknown[] = lookahead?.trimmed.startsWith('- ') ? [] : {};
+            item[key] = nested;
+          }
+          parent.push(item);
+          stack.push({ indent, container: item });
+          continue;
+        }
+      }
+
+      parent.push(parseScalar(listValue));
       continue;
     }
 

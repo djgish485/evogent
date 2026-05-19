@@ -87,6 +87,39 @@ Source cache body.
     assert.strictEqual(parsed.frontmatter.metadata?.['evogent']?.['feed-source-label'], 'YouTube');
   });
 
+  test('parseSkillMarkdown extracts feed-action object lists', () => {
+    const parsed = parseSkillMarkdown(`---
+name: email-triage
+description: Triage important inbox updates
+metadata:
+  evogent:
+    feed-actions:
+      - id: triage-all
+        label: Triage all
+        confirms: false
+      - id: skip-sender
+        label: Skip sender
+        confirms: Will skip future emails from this sender?
+        requiresSelection: senderDomain
+---
+Triage email.
+`);
+
+    assert.deepStrictEqual(parsed.frontmatter.metadata?.['evogent']?.['feed-actions'], [
+      {
+        id: 'triage-all',
+        label: 'Triage all',
+        confirms: false,
+      },
+      {
+        id: 'skip-sender',
+        label: 'Skip sender',
+        confirms: 'Will skip future emails from this sender?',
+        requiresSelection: 'senderDomain',
+      },
+    ]);
+  });
+
   test('listInstalledSkills migrates legacy media-agent metadata to evogent', async () => {
     const originalSkillsDir = process.env.MEDIA_AGENT_SKILLS_DIR;
     const skillsRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-legacy-skill-test-'));
@@ -184,12 +217,12 @@ body
     }
   });
 
-  test('getSkillsRegistry returns 10 entries', () => {
+  test('getSkillsRegistry returns 15 entries', () => {
     const registry = getSkillsRegistry();
     const names = registry.map((entry) => entry.name).sort();
 
-    assert.strictEqual(registry.length, 10);
-    assert.deepStrictEqual(names, ['account-mirror', 'archive-import', 'current-event-tracker', 'full-text', 'hackernews-cache', 'setup-wizard', 'substack-cache', 'tweet-cache', 'tweet-cache-bird', 'youtube-cache']);
+    assert.strictEqual(registry.length, 15);
+    assert.deepStrictEqual(names, ['account-mirror', 'archive-import', 'competitor-watch', 'current-event-tracker', 'daily-brief', 'email-triage', 'full-text', 'github-pr-watch', 'hackernews-cache', 'research-clipping', 'setup-wizard', 'substack-cache', 'tweet-cache', 'tweet-cache-bird', 'youtube-cache']);
     assert.ok(registry.every((entry) => typeof entry.installed === 'boolean'));
   });
 
