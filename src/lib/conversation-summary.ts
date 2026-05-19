@@ -254,7 +254,6 @@ export function buildSessionCards(
   const sessionById = new Map(sessions.map((session) => [session.sessionId, session]));
   const sessionIds = new Set<string>([
     ...messagesBySessionId.keys(),
-    ...feedItemsBySessionId.keys(),
     ...sessions.map((session) => session.sessionId),
     ...chatSessionMatches.map((match) => match.sessionId),
   ]);
@@ -272,7 +271,7 @@ export function buildSessionCards(
         mergeChatMessages(persistedSessionMessages, chatSessionMatch?.messages ?? []),
         buildInlineCodeFixChatMessagesFromFeedItems(producedFeedItems),
       );
-      if (!sessionSummary && sessionMessages.length === 0 && producedFeedItems.length === 0) {
+      if (!sessionSummary && sessionMessages.length === 0) {
         return null;
       }
 

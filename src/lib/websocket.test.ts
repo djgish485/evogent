@@ -6,7 +6,6 @@ import { insertChatMessage } from '@/lib/db/chat';
 import { createChatSession } from '@/lib/db/chat-sessions';
 import {
   cleanupValidationFixtures,
-  createValidationOriginSessionId,
   getIntegrationTestBaseUrl,
   getIntegrationTestWsBaseUrl,
 } from '../../test/integration-fixture-helpers';
@@ -246,7 +245,7 @@ describe('WebSocket Channel Tests', { concurrency: false, skip: INTEGRATION_SKIP
     const suggestionId = `ws-code-fix-${randomUUID()}`;
     const sourceId = `ws-code-fix-source-${randomUUID()}`;
     const proposedValue = 'Add src/app/api/ws-audit/route.ts for websocket audit status.';
-    const originSessionId = createValidationOriginSessionId('ws-code-fix');
+    const originSessionId = createChatSession({ title: 'WS code-fix origin' }).id;
 
     t.after(async () => {
       await cleanupValidationFixtures({
@@ -561,7 +560,7 @@ describe('WebSocket Channel Tests', { concurrency: false, skip: INTEGRATION_SKIP
     });
 
     const sourceId = `ws-curate-${Date.now()}`;
-    const originSessionId = createValidationOriginSessionId('ws-feed-submit');
+    const originSessionId = createChatSession({ title: 'WS feed submit origin' }).id;
     t.after(async () => {
       await cleanupValidationFixtures({
         sourceIds: [sourceId],
@@ -630,7 +629,7 @@ describe('WebSocket Channel Tests', { concurrency: false, skip: INTEGRATION_SKIP
     });
 
     const tweetId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    const originSessionId = createValidationOriginSessionId('ws-feed-enrich');
+    const originSessionId = createChatSession({ title: 'WS feed enrich origin' }).id;
     t.after(async () => {
       await cleanupValidationFixtures({
         sourceIds: [tweetId],
