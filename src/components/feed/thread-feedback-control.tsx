@@ -7,7 +7,6 @@ export type ThreadFeedbackVote = 'up' | 'down';
 
 interface ThreadFeedbackControlProps {
   threadId: string;
-  cycleId: string;
   threadTitle: string;
   feedbackProbe?: FeedbackProbeMetadata | null;
   sourceItemIds?: string[];
@@ -15,7 +14,6 @@ interface ThreadFeedbackControlProps {
   onThumbsDown: () => void;
   onSubmit: (input: {
     threadId: string;
-    cycleId: string;
     threadTitle: string;
     vote: ThreadFeedbackVote;
     reason: string;
@@ -37,7 +35,6 @@ function ThumbIcon({ direction }: { direction: ThreadFeedbackVote }) {
 
 export function ThreadFeedbackControl({
   threadId,
-  cycleId,
   threadTitle,
   feedbackProbe = null,
   sourceItemIds = [],
@@ -62,7 +59,6 @@ export function ThreadFeedbackControl({
     try {
       await onSubmit({
         threadId,
-        cycleId,
         threadTitle,
         vote: 'up',
         reason: reason.trim(),

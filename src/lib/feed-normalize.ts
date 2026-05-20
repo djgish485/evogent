@@ -114,17 +114,15 @@ export function readTrimmedMetadataString(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
-export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId: string; cycleId: string } | null {
-  const threadId = readTrimmedMetadataString(item.metadata?.thread?.threadId);
-  const cycleId = readTrimmedMetadataString(item.metadata?.cycleId);
-  if (!threadId || !cycleId) {
+export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId: string } | null {
+  const threadId = item.threadId?.trim() || readTrimmedMetadataString(item.metadata?.thread?.threadId);
+  if (!threadId) {
     return null;
   }
 
   return {
-    key: `${threadId}::${cycleId}`,
+    key: threadId,
     threadId,
-    cycleId,
   };
 }
 

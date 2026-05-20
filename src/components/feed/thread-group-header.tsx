@@ -7,9 +7,8 @@ import type { FeedbackProbeMetadata, FeedProminence } from '@/types/feed';
 
 interface ThreadGroupHeaderProps {
   threadId: string;
-  cycleId: string;
   threadTitle: string;
-  threadRationale: string | null;
+  threadSubtitle: string | null;
   threadProminence: FeedProminence | null;
   feedbackProbe?: FeedbackProbeMetadata | null;
   sourceItemIds?: string[];
@@ -22,7 +21,6 @@ interface ThreadGroupHeaderProps {
   onThumbsDownThread: () => void;
   onSubmitFeedback: (input: {
     threadId: string;
-    cycleId: string;
     threadTitle: string;
     vote: ThreadFeedbackVote;
     reason: string;
@@ -33,9 +31,8 @@ interface ThreadGroupHeaderProps {
 
 export function ThreadGroupHeader({
   threadId,
-  cycleId,
   threadTitle,
-  threadRationale,
+  threadSubtitle,
   threadProminence,
   feedbackProbe = null,
   sourceItemIds = [],
@@ -91,7 +88,6 @@ export function ThreadGroupHeader({
         <div onClick={stopFeedbackPropagation} onKeyDown={stopFeedbackPropagation}>
           <ThreadFeedbackControl
             threadId={threadId}
-            cycleId={cycleId}
             threadTitle={threadTitle}
             feedbackProbe={feedbackProbe}
             sourceItemIds={sourceItemIds}
@@ -103,8 +99,8 @@ export function ThreadGroupHeader({
       </div>
       <div className="mt-2 space-y-1">
         <h2 className={titleClassName} data-prominence={threadProminence?.level}>{threadTitle}</h2>
-        {threadRationale ? (
-          <p className="text-sm leading-6 text-zinc-300">{threadRationale}</p>
+        {threadSubtitle ? (
+          <p className="text-sm leading-6 text-zinc-300">{threadSubtitle}</p>
         ) : null}
       </div>
     </header>

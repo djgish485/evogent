@@ -23,9 +23,8 @@ type HeaderProps = Parameters<typeof ThreadGroupHeader>[0];
 
 const defaultHeaderProps: HeaderProps = {
   threadId: 'thread-1',
-  cycleId: 'cycle-1',
   threadTitle: 'Ordinary thread',
-  threadRationale: null,
+  threadSubtitle: null,
   threadProminence: null,
   continuing: false,
   threadTint,
@@ -166,9 +165,8 @@ async function renderThreadGroupForInteraction() {
       <AppRouterContext.Provider value={createTestRouter()}>
         <ThreadGroup
           threadId="thread-1"
-          cycleId="cycle-1"
           threadTitle="Collapsible thread"
-          threadRationale="A short reason for this thread."
+          threadSubtitle="A short reason for this thread."
           threadProminence={{ level: 'prominent' }}
           continuing={false}
           analysisItems={[createFeedItem('analysis-1', 'Analysis item one', 'analysis')]}
@@ -256,10 +254,10 @@ describe('ThreadGroupHeader', () => {
     assert.doesNotMatch(markup, /Tune this lane/);
   });
 
-  test('lets thread title and rationale sit below the feedback row at full width', () => {
+  test('lets thread title and subtitle sit below the feedback row at full width', () => {
     const markup = renderHeaderMarkup({
       threadTitle: 'Long ordinary thread title',
-      threadRationale: 'This rationale should use the natural card width instead of a capped text column.',
+      threadSubtitle: 'This subtitle should use the natural card width instead of a capped text column.',
       continuing: true,
     });
 

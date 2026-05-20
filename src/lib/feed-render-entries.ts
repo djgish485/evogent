@@ -27,9 +27,8 @@ export interface ThreadGroupRenderEntry {
   kind: 'thread-group';
   groupId: string;
   threadId: string;
-  cycleId: string;
   threadTitle: string;
-  threadRationale: string | null;
+  threadSubtitle: string | null;
   threadProminence: FeedProminence | null;
   feedbackProbe: FeedbackProbeMetadata | null;
   sourceItemIds: string[];
