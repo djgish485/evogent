@@ -24,6 +24,7 @@
       "evogent_browse_cache_query",
       "evogent_preferences_match",
       "evogent_feed_submit",
+      "evogent_feed_arrange",
       "evogent_interactions_recent",
       "evogent_skill_runs_list",
       "evogent_skill_runs_read",

@@ -84,6 +84,16 @@ export function normalizePendingCounts(counts?: Partial<FeedPendingCounts> | nul
 }
 
 export function compareFeedItems(left: FeedItem, right: FeedItem, sortOrder: FeedSortOrder): number {
+  const leftHasDisplayOrder = typeof left.displayOrder === 'number';
+  const rightHasDisplayOrder = typeof right.displayOrder === 'number';
+  if (leftHasDisplayOrder !== rightHasDisplayOrder) {
+    return leftHasDisplayOrder ? -1 : 1;
+  }
+  if (leftHasDisplayOrder && rightHasDisplayOrder) {
+    const byDisplayOrder = (left.displayOrder ?? 0) - (right.displayOrder ?? 0);
+    if (byDisplayOrder !== 0) return byDisplayOrder;
+  }
+
   if (sortOrder === 'published') {
     const byPublished = right.publishedAt.localeCompare(left.publishedAt);
     if (byPublished !== 0) return byPublished;
