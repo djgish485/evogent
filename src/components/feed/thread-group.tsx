@@ -24,9 +24,8 @@ const THREAD_BRIDGE_DOT_RING_COLOR = 'rgba(113,113,122,0.24)';
 
 interface ThreadGroupProps {
   threadId: string;
-  cycleId: string;
   threadTitle: string;
-  threadRationale: string | null;
+  threadSubtitle: string | null;
   threadProminence: FeedProminence | null;
   feedbackProbe?: FeedbackProbeMetadata | null;
   sourceItemIds?: string[];
@@ -39,7 +38,6 @@ interface ThreadGroupProps {
   searchQuery?: string | null;
   onSubmitFeedback: (input: {
     threadId: string;
-    cycleId: string;
     threadTitle: string;
     vote: ThreadFeedbackVote;
     reason: string;
@@ -199,9 +197,8 @@ function ThreadItemBridge({
 
 export function ThreadGroup({
   threadId,
-  cycleId,
   threadTitle,
-  threadRationale,
+  threadSubtitle,
   threadProminence,
   feedbackProbe = null,
   sourceItemIds = [],
@@ -304,9 +301,8 @@ export function ThreadGroup({
   }, [postThreadDislike]);
   const headerProps = {
     threadId,
-    cycleId,
     threadTitle,
-    threadRationale,
+    threadSubtitle,
     threadProminence,
     feedbackProbe,
     sourceItemIds,

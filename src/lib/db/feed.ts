@@ -182,18 +182,9 @@ function createEmptyPendingCounts(): FeedPendingCounts {
 }
 
 function readThreadPaginationKey(item: FeedItem): string | null {
-  const threadId = typeof item.metadata?.thread?.threadId === 'string'
-    ? item.metadata.thread.threadId.trim()
-    : '';
-  const cycleId = typeof item.metadata?.cycleId === 'string'
-    ? item.metadata.cycleId.trim()
-    : '';
-
-  if (!threadId || !cycleId) {
-    return null;
-  }
-
-  return `${threadId}::${cycleId}`;
+  return item.threadId?.trim()
+    || (typeof item.metadata?.thread?.threadId === 'string' ? item.metadata.thread.threadId.trim() : '')
+    || null;
 }
 
 function getThreadAwareFeedPageItems(items: FeedItem[], offset: number, limit: number): FeedItem[] {

@@ -53,7 +53,6 @@ interface ContentCardProps {
   hideFeedbackActions?: boolean;
   onChat?: (item: FeedItem, selectedText?: string) => void;
   onOpenDetail?: (item: FeedItem) => void;
-  onThreadClick?: (threadId: string) => void;
   detailMainItemId?: string | null;
   suppressedChildPreviewIds?: string[];
   suggestionStatus?: SuggestionStatus;
@@ -293,9 +292,11 @@ sourceAliasMap[legacyAgentSourceCompact] = 'evogent';
 sourceAliasMap[legacyAgentSourceUnderscore] = 'evogent';
 
 function isAgentCreatedSource(source: string | null | undefined): boolean {
-  const normalized = source?.trim().toLowerCase() ?? '';
+  const normalized = normalizeSourceKey(source);
   return normalized === 'claude'
     || normalized === 'evogent'
+    || normalized === 'openclaw'
+    || normalized === 'research'
     || normalized === legacyAgentSourceHyphen
     || normalized === legacyAgentSourceCompact
     || normalized === legacyAgentSourceUnderscore;
@@ -707,6 +708,11 @@ export function resolveSourceDisplayLabel(source: string | null | undefined): st
       return 'YouTube';
     case 'substack':
       return 'Substack';
+    case 'claude':
+    case 'evogent':
+    case 'openclaw':
+    case 'research':
+      return 'Agent';
     default:
       return fallbackSourceName(source);
   }
@@ -878,7 +884,7 @@ function formatPossessive(name: string): string {
 
 function resolveSourceAvatarProfile(source: string | null | undefined, agentName = 'Agent'): SourceAvatarProfile {
   const normalized = normalizeSourceKey(source);
-  if (normalized === 'claude' || normalized === 'evogent' || normalized === 'research') {
+  if (normalized === 'claude' || normalized === 'evogent' || normalized === 'openclaw' || normalized === 'research') {
     return resolveAgentSourceProfile(agentName);
   }
   const mapped = sourceAvatarMap[normalized];
@@ -918,6 +924,9 @@ export function resolveArticleHeaderDisplayName(
 
   const metadataAuthorName = readMetadataString(item.metadata, 'authorName') ?? '';
   if (metadataAuthorName) {
+    if (normalizeSourceKey(metadataAuthorName) === 'openclaw') {
+      return sourceProfile.displayName;
+    }
     return metadataAuthorName;
   }
 
@@ -926,11 +935,19 @@ export function resolveArticleHeaderDisplayName(
 
 export function resolveArticleHeaderSubline(
   item: Pick<FeedItem, 'metadata' | 'source'>,
+  agentName = 'Agent',
 ): string {
   const metadataHandle = readMetadataString(item.metadata, 'authorHandle')
     ?? readMetadataString(item.metadata, 'sourceHandle');
   if (metadataHandle) {
+    if (normalizeSourceKey(metadataHandle) === 'openclaw') {
+      return normalizeAgentName(agentName);
+    }
     return metadataHandle;
+  }
+
+  if (isAgentCreatedSource(item.source)) {
+    return normalizeAgentName(agentName);
   }
 
   return item.source?.trim() || 'Article';
@@ -3293,7 +3310,7 @@ export function ArticleCard({
     const agentChildren = item.children ?? [];
     const footerParts = [
       articleHeaderDisplayName,
-      resolveArticleHeaderSubline(item),
+      resolveArticleHeaderSubline(item, agentName),
       resolveAgentSessionChildCountLabel(item, agentChildren.length),
       formatRelativeTime(item.createdAt),
     ].filter(Boolean);
@@ -3551,7 +3568,7 @@ export function ArticleCard({
             <span className="shrink-0 text-zinc-500">·</span>
             <p className="shrink-0 text-sm text-zinc-500">{formatFeedTimestamp(item)}</p>
           </div>
-          <p className="text-sm text-zinc-500">{resolveArticleHeaderSubline(item)}</p>
+          <p className="text-sm text-zinc-500">{resolveArticleHeaderSubline(item, agentName)}</p>
         </div>
       </div>
 
@@ -3986,7 +4003,6 @@ export function ContentCard({
   hideFeedbackActions = false,
   onChat,
   onOpenDetail,
-  onThreadClick,
   detailMainItemId = null,
   suppressedChildPreviewIds = [],
   suggestionStatus = 'pending',
@@ -4437,9 +4453,6 @@ export function ContentCard({
   const agentSessionTint = !openClawMcpAppHtml && item.type === 'article' && isAgentSessionArticleLayout(item)
     ? resolveAgentSessionTint(item)
     : null;
-  const displaySubtitle = item.displaySubtitle?.trim() ?? '';
-  const threadId = item.threadId?.trim() ?? '';
-  const threadLabel = item.threadTitle?.trim() || threadId;
 
   const metricsLikes = Math.max(0, item.metrics.likes + tweetLikeDelta);
   const shouldOpenDetail = () => {
@@ -4609,13 +4622,6 @@ export function ContentCard({
   const handleCardAskAgent = useCallback((selectedText: string) => {
     onChat?.(item, selectedText);
   }, [item, onChat]);
-  const handleThreadChipClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (threadId) {
-      onThreadClick?.(threadId);
-    }
-  }, [onThreadClick, threadId]);
   const parentTweet = item.type === 'tweet'
     ? (item.parentItem ?? null)
     : null;
@@ -4756,36 +4762,6 @@ export function ContentCard({
       {!openClawMcpAppHtml && <div className="pointer-events-none absolute right-3 top-3 z-10">
         <CompactEnrichmentIndicator state={enrichmentIndicatorState} />
       </div>}
-
-      {(threadId || displaySubtitle) && (
-        <div className="mb-3 flex flex-col gap-2 pr-9">
-          {threadId ? (
-            onThreadClick ? (
-              <button
-                type="button"
-                data-testid="feed-thread-chip"
-                onClick={handleThreadChipClick}
-                className="inline-flex max-w-full items-center self-start rounded-full border border-teal-500/35 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium text-teal-100 transition hover:border-teal-400/60 hover:bg-teal-500/20"
-                aria-label={`Filter to thread ${threadLabel}`}
-              >
-                <span className="truncate">{threadLabel}</span>
-              </button>
-            ) : (
-              <span
-                data-testid="feed-thread-chip"
-                className="inline-flex max-w-full items-center self-start rounded-full border border-teal-500/35 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium text-teal-100"
-              >
-                <span className="truncate">{threadLabel}</span>
-              </span>
-            )
-          ) : null}
-          {displaySubtitle ? (
-            <p data-testid="feed-display-subtitle" className="text-sm italic leading-relaxed text-zinc-400">
-              {displaySubtitle}
-            </p>
-          ) : null}
-        </div>
-      )}
 
       {openClawMcpAppHtml && (
         <div className="space-y-2">

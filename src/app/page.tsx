@@ -2244,14 +2244,19 @@ export default function Home() {
     ));
     const threadMemberGroups = new Map<string, FeedItem[]>();
     const threadGroupedItemIds = new Set<string>();
+    const threadItemById = new Map(visibleThreadItems.map((item) => [item.id, item]));
+    const activeThreadById = new Map(activeThreads.map((thread) => [thread.id, thread]));
 
     for (const item of visibleThreadItems) {
-      if (item.type === 'analysis') {
-        continue;
-      }
-
       const identity = getThreadGroupIdentity(item);
       if (!identity) {
+        continue;
+      }
+      const parentItem = item.type === 'analysis' && item.parentId
+        ? threadItemById.get(item.parentId) ?? null
+        : null;
+      const parentIdentity = parentItem ? getThreadGroupIdentity(parentItem) : null;
+      if (parentIdentity?.key === identity.key) {
         continue;
       }
 
@@ -2282,10 +2287,11 @@ export default function Home() {
       if (!identity) {
         continue;
       }
+      const activeThread = activeThreadById.get(identity.threadId) ?? null;
 
       const analysisItems = visibleThreadItems
         .filter((item) => {
-          if (item.type !== 'analysis' || item.parentId === null || !memberIds.has(item.parentId)) {
+          if (item.type !== 'analysis' || item.parentId === null || !memberIds.has(item.parentId) || memberIds.has(item.id)) {
             return false;
           }
 
@@ -2301,14 +2307,18 @@ export default function Home() {
         });
 
       const headerCandidates = [...analysisItems, ...members].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-      const threadTitle = headerCandidates
+      const threadTitle = activeThread?.title.trim()
+        || headerCandidates.map((item) => item.threadTitle?.trim()).find((value): value is string => Boolean(value))
+        || headerCandidates
         .map((item) => readTrimmedMetadataString(item.metadata?.thread?.threadTitle))
         .find((value): value is string => Boolean(value))
-        ?? 'Thread';
-      const threadRationale = headerCandidates
+        || 'Thread';
+      const threadSubtitle = activeThread?.subtitle?.trim()
+        || headerCandidates.map((item) => item.threadSubtitle?.trim()).find((value): value is string => Boolean(value))
+        || headerCandidates
         .map((item) => readTrimmedMetadataString(item.metadata?.thread?.threadRationale))
         .find((value): value is string => Boolean(value))
-        ?? null;
+        || null;
       const threadProminence = getThreadGroupProminence(headerCandidates);
       const feedbackProbe = getThreadFeedbackProbe(headerCandidates);
       const sourceItemIds = getThreadSourceItemIds(members, feedbackProbe);
@@ -2328,9 +2338,8 @@ export default function Home() {
         kind: 'thread-group',
         groupId: `thread:${groupKey}`,
         threadId: identity.threadId,
-        cycleId: identity.cycleId,
         threadTitle,
-        threadRationale,
+        threadSubtitle,
         threadProminence,
         feedbackProbe,
         sourceItemIds,
@@ -2483,6 +2492,7 @@ export default function Home() {
 
     return entries.sort((left, right) => compareTimelineEntries(left, right, conversationCardMap));
   }, [
+    activeThreads,
     conversationCardMap,
     conversationCards,
     openClawConversationCards,
@@ -6166,20 +6176,17 @@ export default function Home() {
 
   const submitThreadFeedback = useCallback(async (input: {
     threadId: string;
-    cycleId: string;
+    cycleId?: string | null;
     threadTitle: string;
     vote: 'up' | 'down';
     reason: string;
     feedbackProbe?: FeedbackProbeMetadata | null;
     sourceItemIds?: string[];
   }) => {
-    const matchingThreadItem = pendingItems.find((item) => (
-      readTrimmedMetadataString(item.metadata?.cycleId) === input.cycleId
-      && readTrimmedMetadataString(item.metadata?.thread?.threadId) === input.threadId
-    )) ?? items.find((item) => (
-      readTrimmedMetadataString(item.metadata?.cycleId) === input.cycleId
-      && readTrimmedMetadataString(item.metadata?.thread?.threadId) === input.threadId
-    )) ?? null;
+    const matchingThreadItem = pendingItems.find((item) => getThreadGroupIdentity(item)?.threadId === input.threadId)
+      ?? items.find((item) => getThreadGroupIdentity(item)?.threadId === input.threadId)
+      ?? null;
+    const cycleId = input.cycleId ?? readTrimmedMetadataString(matchingThreadItem?.metadata?.cycleId);
     const originSessionId = readTrimmedMetadataString(matchingThreadItem?.metadata?.originSessionId)
       ?? readTrimmedMetadataString(matchingThreadItem?.originSessionId);
     const originSession = originSessionId
@@ -6203,7 +6210,7 @@ export default function Home() {
             action: 'thread_feedback',
             threadFeedback: {
               threadId: input.threadId,
-              cycleId: input.cycleId,
+              cycleId,
               vote: input.vote === 'up' ? 'more' : 'less',
               threadTitle: normalizedTitle,
               reason: normalizedReason,
@@ -6267,7 +6274,7 @@ export default function Home() {
     const context = [
       'Thread feedback:',
       `Thread ID: ${input.threadId}`,
-      `Cycle ID: ${input.cycleId}`,
+      ...(cycleId ? [`Cycle ID: ${cycleId}`] : []),
       `Vote: ${input.vote}`,
       `Title: ${normalizedTitle}`,
       `Reason: ${normalizedReason || '(none)'}`,
@@ -6289,7 +6296,7 @@ export default function Home() {
           metadata: {
             threadFeedback: {
               threadId: input.threadId,
-              cycleId: input.cycleId,
+              cycleId,
               vote: input.vote,
               threadTitle: normalizedTitle,
               reason: normalizedReason,
@@ -8932,9 +8939,8 @@ export default function Home() {
                 <ThreadGroup
                   key={entry.groupId}
                   threadId={entry.threadId}
-                  cycleId={entry.cycleId}
                   threadTitle={entry.threadTitle}
-                  threadRationale={entry.threadRationale}
+                  threadSubtitle={entry.threadSubtitle}
                   threadProminence={entry.threadProminence}
                   feedbackProbe={entry.feedbackProbe}
                   sourceItemIds={entry.sourceItemIds}
@@ -8990,7 +8996,6 @@ export default function Home() {
                 agentName={agentName}
                 onChat={handleChatAboutPost}
                 onOpenDetail={openPostDetail}
-                onThreadClick={handleThreadFilterClick}
                 searchQuery={searchQuery}
               />
             );
