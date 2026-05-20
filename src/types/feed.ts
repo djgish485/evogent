@@ -393,4 +393,5 @@ export interface FeedListResponse {
   suggestionGroup?: FeedSuggestionGroup | null;
   chatSessionMatches?: ChatSessionSearchMatch[];
   activeThreads?: FeedThread[];
+  lastArrangeAtMs?: number | null;
 }

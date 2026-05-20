@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   getFeedPage,
   getActiveFeedThreads,
+  getLastArrangeAtMs,
   getPendingFeedCounts,
   hydrateFeedItemsForList,
   getSuggestionFeedGroup,
@@ -22,11 +23,13 @@ export async function GET(request: Request) {
   const sort = parseSort(searchParams.get('sort'));
   const search = parseSearchQuery(searchParams.get('q'));
   const threadId = parseThreadFilter(searchParams.get('thread'));
+  const lastArrangeAtMs = getLastArrangeAtMs();
+  const orderFreshness = { lastArrangeAtMs };
 
-  const page = getFeedPage({ offset, limit, types, sources, sort, search, threadId });
+  const page = getFeedPage({ offset, limit, types, sources, sort, search, threadId }, orderFreshness);
   const items = await enrichFeedItemsWithNotificationTaskContext(hydrateFeedItemsForList(page.items));
   const pendingCounts = getPendingFeedCounts();
-  const suggestionGroup = getSuggestionFeedGroup({ offset, limit, types, sources, sort, search, threadId });
+  const suggestionGroup = getSuggestionFeedGroup({ offset, limit, types, sources, sort, search, threadId }, orderFreshness);
   const chatSessionMatches = search && offset === 0 && types.length === 0 && sources.length === 0
     ? getChatSessionSearchMatches(search)
     : [];
@@ -42,5 +45,6 @@ export async function GET(request: Request) {
     suggestionGroup,
     chatSessionMatches,
     activeThreads,
+    lastArrangeAtMs,
   });
 }
