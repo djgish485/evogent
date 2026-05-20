@@ -48,3 +48,10 @@ export function parseSearchQuery(raw: string | null): string | null {
 
   return normalized || null;
 }
+
+export function parseThreadFilter(raw: string | null): string | null {
+  if (!raw) return null;
+
+  const normalized = raw.trim().slice(0, 200);
+  return normalized || null;
+}

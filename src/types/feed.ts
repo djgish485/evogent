@@ -63,6 +63,15 @@ export interface FeedMetrics {
   views?: number;
 }
 
+export interface FeedThread {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  createdAtMs: number;
+  updatedAtMs: number;
+  active: boolean;
+}
+
 export interface MediaItem {
   type: 'image' | 'video' | 'gif';
   url: string;
@@ -330,6 +339,11 @@ export interface FeedItem {
   reason: string | null;
   tags: string[];
   mediaUrls: string[];
+  displayOrder?: number | null;
+  threadId?: string | null;
+  displaySubtitle?: string | null;
+  threadTitle?: string | null;
+  threadSubtitle?: string | null;
   metrics: FeedMetrics;
   authorAvatarUrl: string | null;
   isLiked: boolean;
@@ -378,4 +392,5 @@ export interface FeedListResponse {
   pendingCounts?: Partial<FeedPendingCounts>;
   suggestionGroup?: FeedSuggestionGroup | null;
   chatSessionMatches?: ChatSessionSearchMatch[];
+  activeThreads?: FeedThread[];
 }
