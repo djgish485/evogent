@@ -53,10 +53,33 @@ const articleBodySourceSynopsisError = [
 const minTitlePrefixRemainderLength = 100;
 const articleUrlValidationTimeoutMs = 6_000;
 const maxBatchEnrichmentChunkSize = 4;
+const originalPublishDateSubmitTimeWindowMs = 60_000;
 const openClawMcpAppHtmlError = 'openclaw cards must include metadata.mcpAppHtml — markdown-only openclaw submissions are no longer accepted';
 const evogentSkillSourceIdPrefix = 'evogent-skill:';
 const openClawSessionPrefix = 'openclaw:';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const sourceOwnedPublishDateSources = new Set([
+  'youtube',
+  'hackernews',
+  'hacker-news',
+  'hn',
+  'article',
+  'substack',
+  'tweet',
+  'twitter',
+  'twitter.com',
+  'x',
+  'x.com',
+]);
+const publishDateBypassSources = new Set([
+  'openclaw',
+  'chat-curator',
+  'curation',
+]);
+const missingRealPublishDateError = (source: string) => (
+  `Submission missing real publish date. Source <${source}> requires a published_at from the original source. `
+  + 'Pull it from browse_cache_items.published_at_ms or fetch it from the URL before submitting.'
+);
 const articleUrlValidationUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
   'AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -126,6 +149,68 @@ type OpenClawSessionListResult = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function trimString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function getInputSourceId(input: Record<string, unknown>): string | null {
+  return typeof input.sourceId === 'string'
+    ? input.sourceId
+    : typeof input.source_id === 'string'
+      ? input.source_id
+      : null;
+}
+
+function normalizeSourceName(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function requiredSourceOwnedPublishDateSource(
+  input: Record<string, unknown>,
+  type: FeedInsertInput['type'],
+): string | null {
+  const source = normalizeSourceName(input.source);
+  const metadata = isRecord(input.metadata) ? input.metadata : null;
+  const metadataSource = normalizeSourceName(metadata?.source);
+
+  if (publishDateBypassSources.has(source) || publishDateBypassSources.has(metadataSource)) {
+    return null;
+  }
+
+  if (type === 'tweet') {
+    return source || 'tweet';
+  }
+
+  return sourceOwnedPublishDateSources.has(source) ? source : null;
+}
+
+function validateSourceOwnedPublishedAt(
+  value: unknown,
+  source: string,
+  requestReceivedAtMs: number,
+): string | null {
+  const trimmed = trimString(value);
+  if (!trimmed || !iso8601Pattern.test(trimmed)) {
+    return missingRealPublishDateError(source);
+  }
+
+  const parsed = new Date(trimmed);
+  const publishedAtMs = parsed.getTime();
+  if (!Number.isFinite(publishedAtMs)) {
+    return missingRealPublishDateError(source);
+  }
+
+  if (publishedAtMs > requestReceivedAtMs) {
+    return missingRealPublishDateError(source);
+  }
+
+  if (Math.abs(publishedAtMs - requestReceivedAtMs) <= originalPublishDateSubmitTimeWindowMs) {
+    return missingRealPublishDateError(source);
+  }
+
+  return null;
 }
 
 function warnInvalidOriginSessionId(originSessionId: string) {
@@ -509,11 +594,29 @@ async function notifyChatSuggestionEvents(events: ChatSuggestionEvent[]) {
   }
 }
 
-function parseFeedInsertInput(input: unknown, index: number): { ok: true; normalized: FeedInsertInput } | { ok: false; error: SubmitError } {
+function parseFeedInsertInput(
+  input: unknown,
+  index: number,
+  requestReceivedAtMs: number,
+): { ok: true; normalized: FeedInsertInput } | { ok: false; error: SubmitError; publishDateValidationError?: boolean } {
   if (!isRecord(input)) {
     return {
       ok: false,
       error: { scope: 'item', index, error: 'Item must be a JSON object' },
+    };
+  }
+
+  const sourceId = getInputSourceId(input);
+  const normalizedType = normalizeType(input.type);
+  if (!normalizedType) {
+    return {
+      ok: false,
+      error: {
+        scope: 'item',
+        index,
+        sourceId,
+        error: buildInvalidTypeMessage(typeof input.type === 'string' ? input.type.trim() || String(input.type) : String(input.type)),
+      },
     };
   }
 
@@ -526,7 +629,7 @@ function parseFeedInsertInput(input: unknown, index: number): { ok: true; normal
         error: {
           scope: 'item',
           index,
-          sourceId: typeof input.sourceId === 'string' ? input.sourceId : typeof input.source_id === 'string' ? input.source_id : null,
+          sourceId,
           error: prominenceError,
         },
       };
@@ -548,7 +651,7 @@ function parseFeedInsertInput(input: unknown, index: number): { ok: true; normal
         error: {
           scope: 'item',
           index,
-          sourceId: typeof input.sourceId === 'string' ? input.sourceId : typeof input.source_id === 'string' ? input.source_id : null,
+          sourceId,
           error: prominenceError,
         },
       };
@@ -556,28 +659,42 @@ function parseFeedInsertInput(input: unknown, index: number): { ok: true; normal
   }
 
   const publishedAtRaw = input.publishedAt ?? input.published_at;
-  const publishedAt = parseIso8601Timestamp(publishedAtRaw, 'publishedAt');
+  const requiredPublishDateSource = requiredSourceOwnedPublishDateSource(input, normalizedType);
+  if (requiredPublishDateSource) {
+    const publishDateError = validateSourceOwnedPublishedAt(
+      publishedAtRaw,
+      requiredPublishDateSource,
+      requestReceivedAtMs,
+    );
+    if (publishDateError) {
+      return {
+        ok: false,
+        publishDateValidationError: true,
+        error: {
+          scope: 'item',
+          index,
+          sourceId,
+          error: publishDateError,
+        },
+      };
+    }
+  }
+
+  const isMissingPublishedAt = publishedAtRaw === undefined
+    || publishedAtRaw === null
+    || (typeof publishedAtRaw === 'string' && !publishedAtRaw.trim());
+  const publishedAtInput = isMissingPublishedAt
+    ? new Date(requestReceivedAtMs).toISOString()
+    : publishedAtRaw;
+  const publishedAt = parseIso8601Timestamp(publishedAtInput, 'publishedAt');
   if (!publishedAt.ok) {
     return {
       ok: false,
       error: {
         scope: 'item',
         index,
-        sourceId: typeof input.sourceId === 'string' ? input.sourceId : typeof input.source_id === 'string' ? input.source_id : null,
+        sourceId,
         error: publishedAt.error,
-      },
-    };
-  }
-
-  const normalizedType = normalizeType(input.type);
-  if (!normalizedType) {
-    return {
-      ok: false,
-      error: {
-        scope: 'item',
-        index,
-        sourceId: typeof input.sourceId === 'string' ? input.sourceId : typeof input.source_id === 'string' ? input.source_id : null,
-        error: buildInvalidTypeMessage(typeof input.type === 'string' ? input.type.trim() || String(input.type) : String(input.type)),
       },
     };
   }
@@ -1077,6 +1194,7 @@ function getExistingOpenClawSkillDuplicateKey(
 }
 
 export async function POST(request: Request) {
+  const requestReceivedAtMs = Date.now();
   let payload: unknown;
   try {
     payload = await request.json();
@@ -1104,6 +1222,7 @@ export async function POST(request: Request) {
   const acceptedIdentifiers = new Map<string, string>();
   let hasArticleBodyValidationError = false;
   let hasOpenClawMcpAppHtmlValidationError = false;
+  let hasPublishDateValidationError = false;
   let duplicates = 0;
   const originSessionValidation: OriginSessionValidationContext = {
     openClawSessionChecks: new Map(),
@@ -1125,8 +1244,11 @@ export async function POST(request: Request) {
   }> = [];
 
   for (const [index, rawItem] of payload.items.entries()) {
-    const parsed = parseFeedInsertInput(rawItem, index);
+    const parsed = parseFeedInsertInput(rawItem, index, requestReceivedAtMs);
     if (!parsed.ok) {
+      if (parsed.publishDateValidationError) {
+        hasPublishDateValidationError = true;
+      }
       errors.push(parsed.error);
       continue;
     }
@@ -1458,6 +1580,6 @@ export async function POST(request: Request) {
     acceptedIds,
     duplicateSourceIds: Array.from(duplicateSourceIds),
   }, {
-    status: hasArticleBodyValidationError || hasOpenClawMcpAppHtmlValidationError ? 400 : 200,
+    status: hasArticleBodyValidationError || hasOpenClawMcpAppHtmlValidationError || hasPublishDateValidationError ? 400 : 200,
   });
 }

@@ -89,6 +89,8 @@ const explorationSection = [
   '   - User interactions (likes, dismisses, dwell) via `evogent_interactions_recent`',
   '   - Any web page via `web_fetch` / `web_search`',
   '',
+  '- When you ship a card derived from a cache item (youtube, hackernews, substack, tweet), pass through `published_at` from the cache row VERBATIM. `evogent_browse_cache_query` returns it as `publishedAtMs` (integer epoch ms) — convert to ISO and include in your submission. If the cache row has no published_at, either fetch the URL and read the source\'s own `og:article:published_time` / schema.org `datePublished`, or skip the candidate entirely. Don\'t submit without a real publish date; the UI shows it as "just now" and the user will think it is fresh content.',
+  '',
   '2. Skill outputs split into two categories. Treat each differently:',
   '',
   '   (a) **Scheduled daily / rich-UI skills** — these produce a fresh `output.mcpapp.html` on a regular cadence and are designed to be shown as the flagship card for that surface. Default set: daily-brief, research-clipping, competitor-watch. For these:',
