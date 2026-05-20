@@ -35,6 +35,10 @@ const articleBodySourceSynopsisError = [
   'The body cannot be the article title or title + curator boilerplate.',
   'Fetch the URL and use the source-owned text verbatim, or drop the candidate.',
 ].join(' ');
+const missingRealPublishDateError = (source: string) => (
+  `Submission missing real publish date. Source <${source}> requires a published_at from the original source. `
+  + 'Pull it from browse_cache_items.published_at_ms or fetch it from the URL before submitting.'
+);
 
 const globalWithDb = globalThis as GlobalWithDb;
 
@@ -220,6 +224,81 @@ describe('curate submit article body validation', { concurrency: false }, () => 
     assert.equal(result.body.accepted, 0);
     assert.equal(result.body.errors?.[0]?.sourceId, sourceId);
     assert.equal(result.body.errors?.[0]?.error, articleBodySourceSynopsisError);
+  });
+
+  test('rejects YouTube submissions without source-owned publishedAt', async () => {
+    const videoId = `video-no-published-at-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    const result = await submitItems([{
+      id: `ma-submit-youtube-no-published-at-${randomUUID()}`,
+      type: 'article',
+      source: 'youtube',
+      sourceId: videoId,
+      title: 'Missing YouTube publish date',
+      text: 'A source-owned synopsis explains what this YouTube video covers.',
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      metadata: {
+        thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        publishDate: '2026-03-07T09:00:00.000Z',
+      },
+    }]);
+
+    assert.equal(result.status, 400);
+    assert.equal(result.body.accepted, 0);
+    assert.equal(result.body.duplicates, 0);
+    assert.equal(result.body.errors?.length, 1);
+    assert.equal(result.body.errors?.[0]?.scope, 'item');
+    assert.equal(result.body.errors?.[0]?.sourceId, videoId);
+    assert.equal(result.body.errors?.[0]?.error, missingRealPublishDateError('youtube'));
+  });
+
+  test('rejects YouTube submissions that use submit time as publishedAt', async () => {
+    const videoId = `video-submit-time-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    const result = await submitItems([{
+      id: `ma-submit-youtube-submit-time-${randomUUID()}`,
+      type: 'article',
+      source: 'youtube',
+      sourceId: videoId,
+      title: 'Submit-time YouTube publish date',
+      text: 'A source-owned synopsis explains what this YouTube video covers.',
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      publishedAt: new Date().toISOString(),
+      metadata: {
+        thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        publishDate: '2026-03-07T09:00:00.000Z',
+      },
+    }]);
+
+    assert.equal(result.status, 400);
+    assert.equal(result.body.accepted, 0);
+    assert.equal(result.body.duplicates, 0);
+    assert.equal(result.body.errors?.length, 1);
+    assert.equal(result.body.errors?.[0]?.scope, 'item');
+    assert.equal(result.body.errors?.[0]?.sourceId, videoId);
+    assert.equal(result.body.errors?.[0]?.error, missingRealPublishDateError('youtube'));
+  });
+
+  test('allows OpenClaw skill submissions to use submit time when publishedAt is omitted', async () => {
+    const sourceId = `openclaw-missing-published-at-${randomUUID()}`;
+    const result = await submitItems([{
+      id: `ma-${sourceId}`,
+      type: 'notification',
+      source: 'openclaw',
+      sourceId,
+      title: 'Daily Brief',
+      text: 'OpenClaw skill output is generated at submit time.',
+      metadata: {
+        mcpAppHtml: '<article>Daily Brief output</article>',
+        openClaw: {
+          skill: 'daily-brief',
+          bundleDir: path.join(tempDir, 'skill-runs', 'daily-brief', sourceId),
+          outputPath: path.join(tempDir, 'skill-runs', 'daily-brief', sourceId, 'output.mcpapp.html'),
+        },
+      },
+    }]);
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.accepted, 1);
+    assert.deepEqual(result.body.errors, []);
   });
 
   test('deduplicates OpenClaw skill submissions by bundle dir when sourceId changes', async () => {
