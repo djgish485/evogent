@@ -775,11 +775,41 @@ function isTitleOnlyArticleBody(value: string | null | undefined, title: string 
   return remainder.length < minTitlePrefixRemainderLength;
 }
 
+function isRichOpenClawSkillCard(item: FeedInsertInput): boolean {
+  const metadata = isRecord(item.metadata) ? item.metadata : null;
+  if (!metadata) {
+    return false;
+  }
+
+  const source = typeof item.source === 'string'
+    ? item.source.trim().toLowerCase()
+    : '';
+  const metadataSource = typeof metadata.source === 'string'
+    ? metadata.source.trim().toLowerCase()
+    : '';
+  const mcpAppHtml = typeof metadata.mcpAppHtml === 'string'
+    ? metadata.mcpAppHtml.trim()
+    : '';
+  const openClaw = isRecord(metadata.openClaw) ? metadata.openClaw : null;
+  const skill = typeof openClaw?.skill === 'string'
+    ? openClaw.skill.trim()
+    : '';
+
+  return source === 'openclaw'
+    && metadataSource === 'openclaw'
+    && Boolean(mcpAppHtml)
+    && Boolean(skill);
+}
+
 function validateArticleBody(
   item: FeedInsertInput,
   index: number,
 ): { ok: true; normalized: FeedInsertInput } | { ok: false; error: SubmitError } {
   if (item.type !== 'article') {
+    return { ok: true, normalized: item };
+  }
+
+  if (isRichOpenClawSkillCard(item)) {
     return { ok: true, normalized: item };
   }
 
