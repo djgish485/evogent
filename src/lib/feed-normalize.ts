@@ -5,6 +5,19 @@ import { type FeedItem, type FeedPendingCounts, type FeedProminence } from '@/ty
 
 export type FeedSortOrder = 'created' | 'published';
 
+export const FEED_DISPLAY_ORDER_FRESHNESS_MS = 12 * 60 * 60 * 1000;
+
+export function isFeedDisplayOrderFresh(
+  lastArrangeAtMs: number | null | undefined,
+  nowMs = Date.now(),
+  maxAgeMs = FEED_DISPLAY_ORDER_FRESHNESS_MS,
+): boolean {
+  return typeof lastArrangeAtMs === 'number'
+    && Number.isFinite(lastArrangeAtMs)
+    && Number.isFinite(nowMs)
+    && nowMs - lastArrangeAtMs <= maxAgeMs;
+}
+
 export function normalizeFeedItems(items: FeedItem[]) {
   const map = new Map<string, FeedItem>();
   for (const item of items) {
@@ -83,15 +96,24 @@ export function normalizePendingCounts(counts?: Partial<FeedPendingCounts> | nul
   };
 }
 
-export function compareFeedItems(left: FeedItem, right: FeedItem, sortOrder: FeedSortOrder): number {
+export function compareFeedItems(
+  left: FeedItem,
+  right: FeedItem,
+  sortOrder: FeedSortOrder,
+  options: { lastArrangeAtMs?: number | null; nowMs?: number } = {},
+): number {
+  const useDisplayOrder = options.lastArrangeAtMs === undefined
+    || isFeedDisplayOrderFresh(options.lastArrangeAtMs, options.nowMs);
   const leftHasDisplayOrder = typeof left.displayOrder === 'number';
   const rightHasDisplayOrder = typeof right.displayOrder === 'number';
-  if (leftHasDisplayOrder !== rightHasDisplayOrder) {
-    return leftHasDisplayOrder ? -1 : 1;
-  }
-  if (leftHasDisplayOrder && rightHasDisplayOrder) {
-    const byDisplayOrder = (left.displayOrder ?? 0) - (right.displayOrder ?? 0);
-    if (byDisplayOrder !== 0) return byDisplayOrder;
+  if (useDisplayOrder) {
+    if (leftHasDisplayOrder !== rightHasDisplayOrder) {
+      return leftHasDisplayOrder ? -1 : 1;
+    }
+    if (leftHasDisplayOrder && rightHasDisplayOrder) {
+      const byDisplayOrder = (left.displayOrder ?? 0) - (right.displayOrder ?? 0);
+      if (byDisplayOrder !== 0) return byDisplayOrder;
+    }
   }
 
   if (sortOrder === 'published') {
