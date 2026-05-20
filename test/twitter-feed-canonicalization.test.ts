@@ -228,6 +228,7 @@ describe('twitter canonicalization submit route', { concurrency: false }, () => 
   test('persists tweet-shaped Twitter articles as tweets before cache enrichment and batch routing', async () => {
     const tweetId = `2030455675357${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
     const now = Date.now();
+    const cachedPublishedAt = '2026-04-28T01:02:00.000Z';
     recordBrowseCacheRefresh({
       source: 'twitter',
       triggeredBy: 'test',
@@ -241,7 +242,7 @@ describe('twitter canonicalization submit route', { concurrency: false }, () => 
         title: 'Cached tweet title',
         authorUsername: 'example',
         authorDisplayName: 'Example User',
-        publishedAtMs: Date.parse('2026-04-28T01:02:00.000Z'),
+        publishedAtMs: Date.parse(cachedPublishedAt),
         fetchedAtMs: now,
         expiresAtMs: now + 60_000,
         payload: {
@@ -273,7 +274,7 @@ describe('twitter canonicalization submit route', { concurrency: false }, () => 
           text: 'Tweet text from curation',
           url: `https://x.com/example/status/${tweetId}`,
           authorUsername: 'example',
-          publishedAt: new Date().toISOString(),
+          publishedAt: cachedPublishedAt,
           metadata: {
             cycleId: 'twitter-canonicalization-route-test',
           },
