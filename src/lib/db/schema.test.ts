@@ -31,6 +31,7 @@ describe('ensureFeedSchema', () => {
       assert.ok(tables.has('preferences'));
       assert.ok(tables.has('preference_vectors'));
       assert.ok(tables.has('thread_feedback'));
+      assert.ok(tables.has('feed_threads'));
       assert.ok(tables.has('threads'));
       assert.ok(tables.has('agents'));
       assert.ok(tables.has('browse_cache_items'));
@@ -239,6 +240,9 @@ describe('ensureFeedSchema', () => {
         'reason',
         'tags',
         'media_urls',
+        'display_order',
+        'thread_id',
+        'display_subtitle',
         'published_at',
         'published_at_ms',
         'created_at',
@@ -253,6 +257,17 @@ describe('ensureFeedSchema', () => {
 
       for (const column of expected) {
         assert.ok(columns.has(column), `missing feed column: ${column}`);
+      }
+    });
+  });
+
+  test('feed_threads table includes expected live-thread columns', () => {
+    withSchemaDb((db) => {
+      const rows = db.prepare("PRAGMA table_info('feed_threads')").all() as Array<{ name: string }>;
+      const columns = new Set(rows.map((row) => row.name));
+
+      for (const column of ['id', 'title', 'subtitle', 'created_at_ms', 'updated_at_ms', 'active']) {
+        assert.ok(columns.has(column), `missing feed_threads column: ${column}`);
       }
     });
   });

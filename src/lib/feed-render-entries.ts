@@ -51,6 +51,33 @@ export type FeedRenderEntry =
   | ThreadGroupRenderEntry
   | ConversationRenderEntry;
 
+function minDisplayOrder(items: FeedItem[]): number | null {
+  let current: number | null = null;
+  for (const item of items) {
+    if (typeof item.displayOrder !== 'number') {
+      continue;
+    }
+    current = current === null ? item.displayOrder : Math.min(current, item.displayOrder);
+  }
+  return current;
+}
+
+export function getFeedEntryDisplayOrder(entry: FeedRenderEntry): number | null {
+  if (entry.kind === 'item') {
+    return typeof entry.item.displayOrder === 'number' ? entry.item.displayOrder : null;
+  }
+  if (entry.kind === 'group') {
+    return minDisplayOrder(entry.items);
+  }
+  if (entry.kind === 'analysis-series') {
+    return minDisplayOrder(entry.series.items);
+  }
+  if (entry.kind === 'thread-group') {
+    return minDisplayOrder([...entry.analysisItems, ...entry.items]);
+  }
+  return null;
+}
+
 export function getFeedEntryTimestamp(entry: FeedRenderEntry, conversations: Record<string, ConversationCardViewModel>): string {
   if (entry.kind === 'conversation') {
     const conversation = conversations[entry.conversationId];
@@ -73,5 +100,14 @@ export function compareTimelineEntries(
   right: FeedRenderEntry,
   conversations: Record<string, ConversationCardViewModel>,
 ): number {
+  const leftDisplayOrder = getFeedEntryDisplayOrder(left);
+  const rightDisplayOrder = getFeedEntryDisplayOrder(right);
+  if (leftDisplayOrder !== null || rightDisplayOrder !== null) {
+    if (leftDisplayOrder === null) return 1;
+    if (rightDisplayOrder === null) return -1;
+    const byDisplayOrder = leftDisplayOrder - rightDisplayOrder;
+    if (byDisplayOrder !== 0) return byDisplayOrder;
+  }
+
   return getFeedEntryTimestamp(right, conversations).localeCompare(getFeedEntryTimestamp(left, conversations));
 }

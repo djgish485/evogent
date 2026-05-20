@@ -41,6 +41,7 @@ import type {
   FeedMetrics,
   FeedMediaType,
   FeedMetadata,
+  FeedThread,
   FeedThreadMetadata,
   LinkCard,
   LinkPreview,
@@ -67,6 +68,12 @@ interface FeedRow {
   reason: string | null;
   tags: string | null;
   media_urls: string | null;
+  display_order: number | null;
+  thread_id: string | null;
+  display_subtitle: string | null;
+  display_thread_title?: string | null;
+  display_thread_subtitle?: string | null;
+  display_thread_active?: number | null;
   metrics_likes: number | null;
   metrics_reposts: number | null;
   metrics_replies: number | null;
@@ -137,6 +144,28 @@ export interface FeedQuery {
   sources: string[];
   sort: FeedSortOrder;
   search: string | null;
+  threadId?: string | null;
+}
+
+export interface FeedArrangeOrderingInput {
+  feedItemId: string;
+  displayOrder: number;
+  threadId?: string | null;
+  displaySubtitle?: string | null;
+}
+
+export interface FeedArrangeThreadInput {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  active: boolean;
+}
+
+export interface FeedArrangeResult {
+  updatedItemIds: string[];
+  activeThreads: FeedThread[];
+  orderingCount: number;
+  threadCount: number;
 }
 
 export const allowedFeedTypes: FeedItemType[] = ['tweet', 'article', 'analysis', 'suggestion', 'notification'];
@@ -1648,6 +1677,7 @@ function findQuotedTweetFeedItemByIdentifier(identifier: string): FeedItem | nul
 
 function rowToFeedItem(row: FeedRow): FeedItem {
   const metadata = normalizeMetadata(parseJsonRecord(row.metadata));
+  const shouldShowThread = row.display_thread_active !== 0;
 
   return {
     id: row.id,
@@ -1666,6 +1696,11 @@ function rowToFeedItem(row: FeedRow): FeedItem {
     reason: row.reason,
     tags: parseJsonArray(row.tags),
     mediaUrls: parseJsonArray(row.media_urls),
+    displayOrder: typeof row.display_order === 'number' ? row.display_order : null,
+    threadId: shouldShowThread ? row.thread_id : null,
+    displaySubtitle: row.display_subtitle,
+    threadTitle: shouldShowThread ? row.display_thread_title ?? null : null,
+    threadSubtitle: shouldShowThread ? row.display_thread_subtitle ?? null : null,
     metrics: {
       likes: toCount(row.metrics_likes),
       reposts: toCount(row.metrics_reposts),
@@ -2905,6 +2940,122 @@ function dismissExpiredNotifications(): void {
   }
 }
 
+interface FeedThreadRow {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  created_at_ms: number;
+  updated_at_ms: number;
+  active: number;
+}
+
+function rowToFeedThread(row: FeedThreadRow): FeedThread {
+  return {
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    createdAtMs: row.created_at_ms,
+    updatedAtMs: row.updated_at_ms,
+    active: row.active === 1,
+  };
+}
+
+function trimToNullableText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function getActiveFeedThreads(): FeedThread[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id, title, subtitle, created_at_ms, updated_at_ms, active
+    FROM feed_threads
+    WHERE active = 1
+    ORDER BY updated_at_ms DESC, title ASC, id ASC
+  `).all() as FeedThreadRow[];
+
+  return rows.map(rowToFeedThread);
+}
+
+export function arrangeFeedDisplay(input: {
+  ordering: FeedArrangeOrderingInput[];
+  threads: FeedArrangeThreadInput[];
+}): FeedArrangeResult {
+  const db = getDb();
+  const nowMs = Date.now();
+  const updatedItemIds: string[] = [];
+
+  const applyArrange = db.transaction(() => {
+    const liveThreadIds = input.threads.map((thread) => thread.id);
+    if (liveThreadIds.length === 0) {
+      db.prepare(`
+        UPDATE feed_threads
+        SET active = 0, updated_at_ms = ?
+        WHERE active != 0
+      `).run(nowMs);
+    } else {
+      const placeholders = liveThreadIds.map(() => '?').join(', ');
+      db.prepare(`
+        UPDATE feed_threads
+        SET active = 0, updated_at_ms = ?
+        WHERE id NOT IN (${placeholders})
+          AND active != 0
+      `).run(nowMs, ...liveThreadIds);
+    }
+
+    const upsertThread = db.prepare(`
+      INSERT INTO feed_threads (id, title, subtitle, created_at_ms, updated_at_ms, active)
+      VALUES (@id, @title, @subtitle, @created_at_ms, @updated_at_ms, @active)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        subtitle = excluded.subtitle,
+        updated_at_ms = excluded.updated_at_ms,
+        active = excluded.active
+    `);
+
+    for (const thread of input.threads) {
+      upsertThread.run({
+        id: thread.id,
+        title: thread.title,
+        subtitle: trimToNullableText(thread.subtitle),
+        created_at_ms: nowMs,
+        updated_at_ms: nowMs,
+        active: thread.active ? 1 : 0,
+      });
+    }
+
+    const updateFeedItem = db.prepare(`
+      UPDATE feed
+      SET
+        display_order = @display_order,
+        thread_id = @thread_id,
+        display_subtitle = @display_subtitle
+      WHERE id = @id
+    `);
+
+    for (const item of input.ordering) {
+      const result = updateFeedItem.run({
+        id: item.feedItemId,
+        display_order: item.displayOrder,
+        thread_id: trimToNullableText(item.threadId),
+        display_subtitle: trimToNullableText(item.displaySubtitle),
+      });
+      if (result.changes > 0) {
+        updatedItemIds.push(item.feedItemId);
+      }
+    }
+  });
+
+  applyArrange();
+
+  return {
+    updatedItemIds,
+    activeThreads: getActiveFeedThreads(),
+    orderingCount: input.ordering.length,
+    threadCount: input.threads.length,
+  };
+}
+
 function buildFeedSearchExpression(alias: string): string {
   return `lower(trim(
     coalesce(${alias}.title, '') || ' ' ||
@@ -2943,7 +3094,7 @@ function buildPendingSuggestionClause(alias: string): string {
 }
 
 function buildFeedListWhereClause(
-  query: Pick<FeedQuery, 'types' | 'sources' | 'search'>,
+  query: Pick<FeedQuery, 'types' | 'sources' | 'search' | 'threadId'>,
   options?: {
     forcedTypes?: FeedItemType[];
     excludeDismissedSuggestions?: boolean;
@@ -2996,6 +3147,12 @@ function buildFeedListWhereClause(
     values.push(...query.sources);
   }
 
+  const normalizedThreadId = query.threadId?.trim() ?? '';
+  if (normalizedThreadId) {
+    whereClauses.push('f.thread_id = ?');
+    values.push(normalizedThreadId);
+  }
+
   if (searchTokens.length > 0) {
     const searchExpr = buildFeedSearchExpression('f');
     const searchClauses = searchTokens.map(() => `${searchExpr} LIKE ? ESCAPE '\\'`);
@@ -3012,14 +3169,23 @@ export function getFeedPage(query: FeedQuery): { items: FeedItem[]; total: numbe
   dismissExpiredNotifications();
 
   const { whereSql, values } = buildFeedListWhereClause(query);
-  const orderBySql = query.sort === 'published'
+  const fallbackOrderBySql = query.sort === 'published'
     ? 'feed_with_state.published_at_ms DESC, feed_with_state.created_at_ms DESC'
     : 'feed_with_state.created_at_ms DESC, feed_with_state.published_at_ms DESC';
+  const orderBySql = `
+    CASE WHEN feed_with_state.display_order IS NULL THEN 1 ELSE 0 END ASC,
+    feed_with_state.display_order ASC,
+    ${fallbackOrderBySql},
+    feed_with_state.id DESC
+  `;
 
   const rows = db.prepare(`
     WITH feed_with_state AS (
       SELECT
         f.*,
+        ft.title AS display_thread_title,
+        ft.subtitle AS display_thread_subtitle,
+        CASE WHEN f.thread_id IS NOT NULL AND ft.id IS NULL THEN 0 ELSE 1 END AS display_thread_active,
         CASE
           WHEN f.type = 'suggestion' AND NOT EXISTS (
             SELECT 1
@@ -3030,6 +3196,7 @@ export function getFeedPage(query: FeedQuery): { items: FeedItem[]; total: numbe
           ELSE 0
         END AS is_pending_suggestion
       FROM feed f
+      LEFT JOIN feed_threads ft ON ft.id = f.thread_id AND ft.active = 1
       ${whereSql}
     )
     SELECT feed_with_state.* FROM feed_with_state
@@ -3059,12 +3226,23 @@ export function getSuggestionFeedGroup(query: FeedQuery): FeedSuggestionGroup | 
     forcedTypes: ['suggestion'],
     excludeDismissedSuggestions: true,
   });
-  const orderBySql = query.sort === 'published'
+  const fallbackOrderBySql = query.sort === 'published'
     ? 'f.published_at_ms DESC, f.created_at_ms DESC'
     : 'f.created_at_ms DESC, f.published_at_ms DESC';
+  const orderBySql = `
+    CASE WHEN f.display_order IS NULL THEN 1 ELSE 0 END ASC,
+    f.display_order ASC,
+    ${fallbackOrderBySql},
+    f.id DESC
+  `;
   const rows = db.prepare(`
-    SELECT f.*
+    SELECT
+      f.*,
+      ft.title AS display_thread_title,
+      ft.subtitle AS display_thread_subtitle,
+      CASE WHEN f.thread_id IS NOT NULL AND ft.id IS NULL THEN 0 ELSE 1 END AS display_thread_active
     FROM feed f
+    LEFT JOIN feed_threads ft ON ft.id = f.thread_id AND ft.active = 1
     ${whereSql}
     ORDER BY ${orderBySql}
   `).all(...values) as FeedRow[];

@@ -168,6 +168,34 @@ describe('/api/feed suggestion counts', () => {
     });
   });
 
+  test('returns curator display order and active live thread metadata', async () => {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO feed_threads (id, title, subtitle, created_at_ms, updated_at_ms, active)
+      VALUES ('route-thread', 'Route thread', 'Route thread subtitle', 1000, 2000, 1)
+    `).run();
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, title, text, display_order, thread_id, display_subtitle, published_at, created_at
+      )
+      VALUES
+        ('route-unordered', 'article', 'manual', 'Unordered', 'Created later', NULL, NULL, NULL, '2026-04-25T13:00:00.000Z', '2026-04-25T13:00:00.000Z'),
+        ('route-arranged', 'article', 'manual', 'Arranged', 'Bumped item', 1, 'route-thread', 'matches the thread you started', '2026-04-25T12:00:00.000Z', '2026-04-25T12:00:00.000Z')
+    `).run();
+
+    const response = await GET(new Request('http://127.0.0.1/api/feed?limit=5'));
+    assert.strictEqual(response.status, 200);
+
+    const data = await response.json() as FeedListResponse;
+    assert.deepStrictEqual(data.items.map((item) => item.id), ['route-arranged', 'route-unordered']);
+    assert.strictEqual(data.items[0]?.displayOrder, 1);
+    assert.strictEqual(data.items[0]?.threadId, 'route-thread');
+    assert.strictEqual(data.items[0]?.threadTitle, 'Route thread');
+    assert.strictEqual(data.items[0]?.threadSubtitle, 'Route thread subtitle');
+    assert.strictEqual(data.items[0]?.displaySubtitle, 'matches the thread you started');
+    assert.deepStrictEqual(data.activeThreads?.map((thread) => thread.id), ['route-thread']);
+  });
+
   test('returns chat session matches when search only matches chat message text', async () => {
     const session = createChatSession({
       id: '11111111-1111-4111-8111-111111111111',

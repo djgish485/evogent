@@ -53,6 +53,7 @@ interface ContentCardProps {
   hideFeedbackActions?: boolean;
   onChat?: (item: FeedItem, selectedText?: string) => void;
   onOpenDetail?: (item: FeedItem) => void;
+  onThreadClick?: (threadId: string) => void;
   detailMainItemId?: string | null;
   suppressedChildPreviewIds?: string[];
   suggestionStatus?: SuggestionStatus;
@@ -3985,6 +3986,7 @@ export function ContentCard({
   hideFeedbackActions = false,
   onChat,
   onOpenDetail,
+  onThreadClick,
   detailMainItemId = null,
   suppressedChildPreviewIds = [],
   suggestionStatus = 'pending',
@@ -4435,6 +4437,9 @@ export function ContentCard({
   const agentSessionTint = !openClawMcpAppHtml && item.type === 'article' && isAgentSessionArticleLayout(item)
     ? resolveAgentSessionTint(item)
     : null;
+  const displaySubtitle = item.displaySubtitle?.trim() ?? '';
+  const threadId = item.threadId?.trim() ?? '';
+  const threadLabel = item.threadTitle?.trim() || threadId;
 
   const metricsLikes = Math.max(0, item.metrics.likes + tweetLikeDelta);
   const shouldOpenDetail = () => {
@@ -4604,6 +4609,13 @@ export function ContentCard({
   const handleCardAskAgent = useCallback((selectedText: string) => {
     onChat?.(item, selectedText);
   }, [item, onChat]);
+  const handleThreadChipClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (threadId) {
+      onThreadClick?.(threadId);
+    }
+  }, [onThreadClick, threadId]);
   const parentTweet = item.type === 'tweet'
     ? (item.parentItem ?? null)
     : null;
@@ -4744,6 +4756,36 @@ export function ContentCard({
       {!openClawMcpAppHtml && <div className="pointer-events-none absolute right-3 top-3 z-10">
         <CompactEnrichmentIndicator state={enrichmentIndicatorState} />
       </div>}
+
+      {(threadId || displaySubtitle) && (
+        <div className="mb-3 flex flex-col gap-2 pr-9">
+          {threadId ? (
+            onThreadClick ? (
+              <button
+                type="button"
+                data-testid="feed-thread-chip"
+                onClick={handleThreadChipClick}
+                className="inline-flex max-w-full items-center self-start rounded-full border border-teal-500/35 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium text-teal-100 transition hover:border-teal-400/60 hover:bg-teal-500/20"
+                aria-label={`Filter to thread ${threadLabel}`}
+              >
+                <span className="truncate">{threadLabel}</span>
+              </button>
+            ) : (
+              <span
+                data-testid="feed-thread-chip"
+                className="inline-flex max-w-full items-center self-start rounded-full border border-teal-500/35 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium text-teal-100"
+              >
+                <span className="truncate">{threadLabel}</span>
+              </span>
+            )
+          ) : null}
+          {displaySubtitle ? (
+            <p data-testid="feed-display-subtitle" className="text-sm italic leading-relaxed text-zinc-400">
+              {displaySubtitle}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {openClawMcpAppHtml && (
         <div className="space-y-2">

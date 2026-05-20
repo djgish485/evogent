@@ -6,6 +6,7 @@ import type { FeedInsertInput } from '@/lib/db/feed';
 import type { FeedItem } from '@/types/feed';
 
 const defaultFeedNotifyUrl = `http://127.0.0.1:${process.env.PORT || '3001'}/api/internal/feed-notify`;
+const defaultFeedArrangedNotifyUrl = `http://127.0.0.1:${process.env.PORT || '3001'}/api/internal/feed-arranged`;
 
 export const feedOutputPath = getDataPath('feed-output.jsonl');
 export const curationCandidatesPath = getDataPath('curation-candidates.jsonl');
@@ -44,6 +45,20 @@ export async function notifyFeedUpdate(items: FeedItem[]) {
     });
   } catch (error) {
     console.warn('[curation-submit] failed to notify websocket clients', error);
+  }
+}
+
+export async function notifyFeedArranged(snapshot: unknown) {
+  const notifyUrl = process.env.INTERNAL_FEED_ARRANGED_NOTIFY_URL || defaultFeedArrangedNotifyUrl;
+
+  try {
+    await fetch(notifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot ?? {}),
+    });
+  } catch (error) {
+    console.warn('[curation-submit] failed to notify feed arrangement websocket clients', error);
   }
 }
 

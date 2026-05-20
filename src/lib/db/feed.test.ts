@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import {
+  arrangeFeedDisplay,
   findTweetFeedItemByIdentifier,
+  getActiveFeedThreads,
   getFeedChildren,
   getFeedItemById,
   getFeedItemBySourceId,
@@ -913,6 +915,59 @@ describe('feed timestamp persistence and ordering', () => {
 
     assert.deepStrictEqual(publishedPage.items.map((item) => item.id), ['feed-space-newer', 'feed-iso-older']);
     assert.deepStrictEqual(createdPage.items.map((item) => item.id), ['feed-space-newer', 'feed-iso-older']);
+  });
+
+  test('arrangeFeedDisplay stores curator order and live thread metadata', () => {
+    const db = getDb();
+
+    db.prepare(`
+      INSERT INTO feed (id, type, source, text, title, published_at, created_at)
+      VALUES
+        ('arrange-old', 'article', 'unit_test', 'older article', 'Older', '2026-03-02T08:00:00.000Z', '2026-03-02T08:00:00.000Z'),
+        ('arrange-new', 'article', 'unit_test', 'newer article', 'Newer', '2026-03-02T10:00:00.000Z', '2026-03-02T10:00:00.000Z'),
+        ('arrange-middle', 'article', 'unit_test', 'middle article', 'Middle', '2026-03-02T09:00:00.000Z', '2026-03-02T09:00:00.000Z')
+    `).run();
+
+    const firstResult = arrangeFeedDisplay({
+      ordering: [
+        {
+          feedItemId: 'arrange-old',
+          displayOrder: 1,
+          threadId: 'thread-ai',
+          displaySubtitle: 'matches the article you opened yesterday',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-ai',
+          title: 'Your AI tool stack drift this week',
+          subtitle: 'Fresh items connected by tool changes',
+          active: true,
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(firstResult.updatedItemIds, ['arrange-old']);
+    assert.strictEqual(firstResult.activeThreads.length, 1);
+
+    const page = getFeedPage({
+      offset: 0,
+      limit: 10,
+      types: [],
+      sources: [],
+      sort: 'created',
+      search: null,
+    });
+
+    assert.deepStrictEqual(page.items.map((item) => item.id), ['arrange-old', 'arrange-new', 'arrange-middle']);
+    assert.strictEqual(page.items[0]?.displayOrder, 1);
+    assert.strictEqual(page.items[0]?.threadId, 'thread-ai');
+    assert.strictEqual(page.items[0]?.threadTitle, 'Your AI tool stack drift this week');
+    assert.strictEqual(page.items[0]?.threadSubtitle, 'Fresh items connected by tool changes');
+    assert.strictEqual(page.items[0]?.displaySubtitle, 'matches the article you opened yesterday');
+
+    arrangeFeedDisplay({ ordering: [], threads: [] });
+    assert.deepStrictEqual(getActiveFeedThreads(), []);
   });
 
   test('getFeedPage excludes items with persisted dislikes', () => {
