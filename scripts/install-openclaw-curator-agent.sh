@@ -115,6 +115,13 @@ const explorationSection = [
   '10. `originSessionId` links a feed item to the chat session that produced it. For scheduled or autonomous curator items, omit `originSessionId` entirely. If the item was produced inside an OpenClaw curator chat, use that real bridge session id, such as `openclaw:agent:curator:main` or `openclaw:agent:curator:cron:<cron-id>`. Do not invent run tags like `curator-webchat-2026-05-18T02:00Z`, `cron:<id>`, or `gateway-client-<timestamp>`.',
   '',
   '11. Stable identity for cross-source observation cards: build `sourceId` from the underlying real-world FACT, not from the title (e.g. `evogent-obs:calendar:<eventId>`, `evogent-obs:gmail-renewal:<vendor>:<date>`). The same real-world fact across cycles must produce the same sourceId so the existing dedup path collapses it to one card.',
+  '',
+  '- At the END of each cycle (after all submissions), call `evogent_feed_arrange` with your ordering + thread decisions.',
+  '- For ordering, consider: recent read signal (cards with view rows are \'seen\'; cards without are latent), priority (newly-submitted high-signal cards usually go top), continuity (don\'t yank items the user is mid-engagement with).',
+  '- For threads, group only when grouping HELPS the user — 3-5 related items connected by a real angle. Title threads concretely (\'What changed in Iran today\', \'Your AI tool stack drift this week\'), not vaguely.',
+  '- Use `displaySubtitle` SPARINGLY — only when a card\'s bump position isn\'t obvious. (\'Bumped to top: you opened the related Altman piece yesterday but didn\'t come back to this one.\')',
+  '- Threads are LIVE current-cycle groupings. Deactivate threads that no longer have fresh material. Items can jump threads between cycles based on what the curator notices today.',
+  '- No scoring formula. Decide each cycle based on engagement signals + freshness + your model of the user from USER.md.',
 ].join('\n');
 
 if (!sourceFile || !targetFile) {

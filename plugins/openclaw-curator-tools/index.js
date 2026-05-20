@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const defaultBaseUrl = 'http://127.0.0.1:3001';
 const liveSubmitPath = '/api/internal/curate/submit';
+const liveArrangePath = '/api/internal/curate/arrange';
 const skillOutputFilePattern = /^output(?:\..+)?$/i;
 const skillRunPreviewChars = 200;
 const maxSkillRunScanDepth = 6;
@@ -294,6 +295,23 @@ export async function submitFeed(input) {
   });
 }
 
+export async function arrangeFeed(input) {
+  const body = requireRecordParams(input, 'evogent_feed_arrange');
+
+  if (!Array.isArray(body.ordering)) {
+    throw new Error('evogent_feed_arrange requires an ordering array.');
+  }
+  if (!Array.isArray(body.threads)) {
+    throw new Error('evogent_feed_arrange requires a threads array.');
+  }
+
+  return requestJson(liveArrangePath, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function recentInteractions(input = {}) {
   const params = new URLSearchParams();
   params.set('limit', String(normalizeLimit(input.limit, 50, 200)));
@@ -455,6 +473,52 @@ const feedSubmitTool = {
   },
 };
 
+const feedArrangeTool = {
+  name: 'evogent_feed_arrange',
+  description: 'Arrange Evogent feed display order and live thread groupings after a curator cycle.',
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['ordering', 'threads'],
+    properties: {
+      ordering: {
+        type: 'array',
+        description: 'Only include feed items whose display order/thread/subtitle the curator wants to control.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['feedItemId', 'displayOrder'],
+          properties: {
+            feedItemId: { type: 'string', minLength: 1 },
+            displayOrder: { type: 'integer' },
+            threadId: { type: 'string' },
+            displaySubtitle: { type: 'string' },
+          },
+        },
+      },
+      threads: {
+        type: 'array',
+        description: 'Live current-cycle threads. Threads omitted from this list are deactivated.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['id', 'title', 'active'],
+          properties: {
+            id: { type: 'string', minLength: 1 },
+            title: { type: 'string', minLength: 1 },
+            subtitle: { type: 'string' },
+            active: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  },
+  async execute(idOrParams, maybeParams) {
+    const params = toolParams(idOrParams, maybeParams);
+    return textResult(await arrangeFeed(params));
+  },
+};
+
 const interactionsRecentTool = {
   name: 'evogent_interactions_recent',
   description: 'Return recent Evogent interaction signals joined to the corresponding feed item title and source fields.',
@@ -543,6 +607,7 @@ export const tools = [
   browseCacheQueryTool,
   preferencesMatchTool,
   feedSubmitTool,
+  feedArrangeTool,
   interactionsRecentTool,
   skillRunsListTool,
   skillRunsReadTool,

@@ -2431,6 +2431,16 @@ function broadcastFeedUpdate(items) {
   sendToClients(feedClients, payload);
 }
 
+function broadcastFeedArranged(snapshot) {
+  const payload = JSON.stringify({
+    ...(snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}),
+    type: 'feed:arranged',
+    ts: new Date().toISOString(),
+  });
+
+  sendToClients(feedClients, payload);
+}
+
 function broadcastChatUpdate(items) {
   if (!Array.isArray(items) || items.length === 0) return;
 
@@ -3177,6 +3187,22 @@ app.prepare().then(() => {
 
         res.statusCode = 200;
         res.end(JSON.stringify({ ok: true, deliveredToClients: feedClients.size, count: items.length }));
+      } catch {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON payload' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && parsedUrl.pathname === '/api/internal/feed-arranged') {
+      res.setHeader('Content-Type', 'application/json');
+
+      try {
+        const body = await readJsonBody(req);
+        broadcastFeedArranged(body);
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ok: true, deliveredToClients: feedClients.size }));
       } catch {
         res.statusCode = 400;
         res.end(JSON.stringify({ ok: false, error: 'Invalid JSON payload' }));

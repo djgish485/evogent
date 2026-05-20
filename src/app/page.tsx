@@ -67,7 +67,7 @@ import { normalizeTimeZoneConfigView, parseTimeZoneConfig, type TimeZoneConfigVi
 import { formatWorkingDirectoryLabel } from '@/lib/working-directory';
 import { type ChatAttachment, type ChatMessage, type ConfigSuggestionDecision, type OpenClawSession } from '@/types/chat';
 import { type ConversationSessionSummary, type ConversationSessionType } from '@/types/conversation';
-import { type ChatSessionSearchMatch, type FeedbackProbeMetadata, type FeedItem, type FeedListResponse, type FeedPendingCounts, type FeedSuggestionGroup, type SuggestionStatus } from '@/types/feed';
+import { type ChatSessionSearchMatch, type FeedbackProbeMetadata, type FeedItem, type FeedListResponse, type FeedPendingCounts, type FeedSuggestionGroup, type FeedThread, type SuggestionStatus } from '@/types/feed';
 import { type ChangeEvent, Fragment, type DragEvent as ReactDragEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 type DetailViewEntry =
@@ -90,6 +90,14 @@ type DetailViewEntry =
     title: string;
     items: FeedItem[];
   };
+
+interface FeedArrangementSnapshot {
+  items: FeedItem[];
+  hasMore: boolean;
+  pendingCounts: FeedPendingCounts;
+  suggestionGroup: FeedSuggestionGroup | null;
+  activeThreads: FeedThread[];
+}
 
 // Chat session cards sit on a #050505 surface; keep the tint visible after compositing.
 
@@ -211,6 +219,87 @@ function AgentUnavailableBanner({
       </p>
     </div>
   );
+}
+
+function mergeFeedItemsInServerOrder(serverItems: FeedItem[], currentItems: FeedItem[]): FeedItem[] {
+  const currentById = new Map(currentItems.map((item) => [item.id, item]));
+  const seen = new Set<string>();
+  const merged: FeedItem[] = [];
+
+  for (const item of serverItems) {
+    const existing = currentById.get(item.id);
+    merged.push(existing ? { ...existing, ...item } : item);
+    seen.add(item.id);
+  }
+
+  for (const item of currentItems) {
+    if (!seen.has(item.id)) {
+      merged.push(item);
+      seen.add(item.id);
+    }
+  }
+
+  return merged;
+}
+
+function pinVisibleFeedItems(nextItems: FeedItem[], currentItems: FeedItem[], pinnedItemIds: Set<string>): FeedItem[] {
+  if (pinnedItemIds.size === 0) {
+    return nextItems;
+  }
+
+  const nextById = new Map(nextItems.map((item) => [item.id, item]));
+  const remaining = nextItems.filter((item) => !pinnedItemIds.has(item.id));
+  const used = new Set<string>();
+  const pinnedOutput: FeedItem[] = [];
+  let remainingIndex = 0;
+
+  for (const currentItem of currentItems) {
+    if (pinnedItemIds.has(currentItem.id)) {
+      const nextPinnedItem = nextById.get(currentItem.id);
+      if (nextPinnedItem) {
+        pinnedOutput.push(nextPinnedItem);
+        used.add(currentItem.id);
+      }
+      continue;
+    }
+
+    while (remainingIndex < remaining.length && used.has(remaining[remainingIndex]!.id)) {
+      remainingIndex += 1;
+    }
+
+    const nextItem = remaining[remainingIndex];
+    if (nextItem) {
+      pinnedOutput.push(nextItem);
+      used.add(nextItem.id);
+      remainingIndex += 1;
+    }
+  }
+
+  for (const item of nextItems) {
+    if (!used.has(item.id)) {
+      pinnedOutput.push(item);
+      used.add(item.id);
+    }
+  }
+
+  return pinnedOutput;
+}
+
+function countReorganizedItems(nextItems: FeedItem[], currentItems: FeedItem[], pinnedItemIds = new Set<string>()): number {
+  const currentIndexById = new Map(currentItems.map((item, index) => [item.id, index]));
+  let count = 0;
+
+  nextItems.forEach((item, index) => {
+    if (pinnedItemIds.has(item.id)) {
+      return;
+    }
+    const previousIndex = currentIndexById.get(item.id);
+    if (previousIndex !== undefined && previousIndex !== index) {
+      count += 1;
+    }
+  });
+
+  return count;
 }
 
 
@@ -1257,6 +1346,9 @@ export default function Home() {
   const [notificationPendingActions, setNotificationPendingActions] = useState<Record<string, 'dismiss' | null>>({});
   const [notificationFeedback, setNotificationFeedback] = useState<Record<string, string>>({});
   const [pendingCounts, setPendingCounts] = useState<FeedPendingCounts>(createEmptyPendingCounts());
+  const [activeThreads, setActiveThreads] = useState<FeedThread[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [feedReorderNotice, setFeedReorderNotice] = useState<{ count: number } | null>(null);
   const [skillsFeedSources, setSkillsFeedSources] = useState<FeedSourceOption[]>([]);
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [showPreferencesPanel, setShowPreferencesPanel] = useState(false);
@@ -1377,6 +1469,8 @@ export default function Home() {
   const isFetchingRef = useRef(false);
   const itemsRef = useRef<FeedItem[]>([]);
   const pendingItemsRef = useRef<FeedItem[]>([]);
+  const pendingFeedArrangementRef = useRef<FeedArrangementSnapshot | null>(null);
+  const deferredFeedArrangementRef = useRef(false);
   const chatMessagesRef = useRef<ChatMessage[]>([]);
   const conversationSessionsRef = useRef<ConversationSessionSummary[]>([]);
   const openClawSessionsRef = useRef<OpenClawSession[]>([]);
@@ -1531,7 +1625,10 @@ export default function Home() {
   }, []);
   const appendSelectedFilterToFeedQuery = useCallback((query: URLSearchParams, filter: FeedFilter) => {
     appendFeedFilterToFeedQuery(query, filter, sourceFilterValues);
-  }, [sourceFilterValues]);
+    if (selectedThreadId) {
+      query.set('thread', selectedThreadId);
+    }
+  }, [selectedThreadId, sourceFilterValues]);
   const rememberLiveActivity = useCallback((sessionId: string | null, snapshot: LiveActivitySnapshot | null) => {
     if (!sessionId || !snapshot) {
       return;
@@ -1949,6 +2046,9 @@ export default function Home() {
     if (selectedFilter === 'agent') {
       return false;
     }
+    if (selectedThreadId && item.threadId !== selectedThreadId) {
+      return false;
+    }
     if (shouldSuppressFeedSystemNotice(item)) {
       return false;
     }
@@ -1976,7 +2076,7 @@ export default function Home() {
       return false;
     }
     return true;
-  }, [isSourceFilter, resolveSuggestionStatus, selectedFilter]);
+  }, [isSourceFilter, resolveSuggestionStatus, selectedFilter, selectedThreadId]);
 
   const activeNonChatTask = useMemo(() => {
     if (!orchestratorStatus?.currentTask) return null;
@@ -2419,6 +2519,26 @@ export default function Home() {
       scrollFeedToTop();
     }
   }, [hasOpenDetailView, scrollFeedToTop, selectedFilter, showConfigEditor, showPreferencesPanel]);
+
+  const selectedThread = useMemo(() => (
+    selectedThreadId
+      ? activeThreads.find((thread) => thread.id === selectedThreadId) ?? null
+      : null
+  ), [activeThreads, selectedThreadId]);
+
+  const handleThreadFilterClick = useCallback((threadId: string) => {
+    const normalizedThreadId = threadId.trim();
+    if (!normalizedThreadId) return;
+    setSelectedThreadId(normalizedThreadId);
+    setSelectedFilter('all');
+    setIsMobileMenuOpen(false);
+    scrollFeedToTop();
+  }, [scrollFeedToTop]);
+
+  const clearSelectedThread = useCallback(() => {
+    setSelectedThreadId(null);
+    scrollFeedToTop();
+  }, [scrollFeedToTop]);
 
   // Re-render every 60s so relative timestamps stay fresh
   useEffect(() => {
@@ -2944,6 +3064,7 @@ export default function Home() {
 
       const data = (await response.json()) as FeedListResponse;
       setPendingCounts(normalizePendingCounts(data.pendingCounts));
+      setActiveThreads(Array.isArray(data.activeThreads) ? data.activeThreads : []);
       setSuggestionGroup(normalizeSuggestionGroup(data.suggestionGroup));
       const incomingChatSessionMatches = Array.isArray(data.chatSessionMatches) ? data.chatSessionMatches : [];
       if (reset || incomingChatSessionMatches.length > 0) {
@@ -3537,6 +3658,7 @@ export default function Home() {
 
       const data = (await response.json()) as FeedListResponse;
       setPendingCounts(normalizePendingCounts(data.pendingCounts));
+      setActiveThreads(Array.isArray(data.activeThreads) ? data.activeThreads : []);
       setSuggestionGroup(normalizeSuggestionGroup(data.suggestionGroup));
       if (searchQuery) {
         const nextItems = Array.isArray(data.items) ? data.items : [];
@@ -3553,6 +3675,149 @@ export default function Home() {
       // best effort realtime feed sync if websocket events are missed
     }
   }, [appendSelectedFilterToFeedQuery, applyIncomingFeedItems, feedRequestLimit, normalizeSuggestionGroup, searchQuery, selectedFilter, sortOrder]);
+
+  const getViewportFeedItemIds = useCallback((): Set<string> => {
+    if (typeof document === 'undefined') {
+      return new Set();
+    }
+
+    const viewportTop = headerMeasuredHeight;
+    const viewportBottom = window.innerHeight;
+    const visibleIds = new Set<string>();
+    const elements = document.querySelectorAll<HTMLElement>('[data-feed-item-id]');
+
+    elements.forEach((element) => {
+      const itemId = element.dataset.feedItemId?.trim();
+      if (!itemId) {
+        return;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+        visibleIds.add(itemId);
+      }
+    });
+
+    return visibleIds;
+  }, [headerMeasuredHeight]);
+
+  const fetchFeedArrangementSnapshot = useCallback(async (): Promise<FeedArrangementSnapshot | null> => {
+    const query = new URLSearchParams();
+    query.set('offset', '0');
+    query.set('limit', String(Math.max(feedRequestLimit, offsetRef.current || feedRequestLimit)));
+    query.set('sort', sortOrder);
+    if (searchQuery) {
+      query.set('q', searchQuery);
+    }
+    appendSelectedFilterToFeedQuery(query, selectedFilter);
+
+    const response = await fetch(`/api/feed?${query.toString()}`, { cache: 'no-store' });
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as FeedListResponse;
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      hasMore: Boolean(data.hasMore),
+      pendingCounts: normalizePendingCounts(data.pendingCounts),
+      suggestionGroup: normalizeSuggestionGroup(data.suggestionGroup),
+      activeThreads: Array.isArray(data.activeThreads) ? data.activeThreads : [],
+    };
+  }, [appendSelectedFilterToFeedQuery, feedRequestLimit, normalizeSuggestionGroup, searchQuery, selectedFilter, sortOrder]);
+
+  const applyFeedArrangementSnapshot = useCallback((
+    snapshot: FeedArrangementSnapshot,
+    options?: { pinnedItemIds?: Set<string>; showNotice?: boolean },
+  ) => {
+    const currentItems = itemsRef.current;
+    const serverOrderedItems = mergeFeedItemsInServerOrder(snapshot.items, currentItems);
+    const pinnedItemIds = options?.pinnedItemIds ?? new Set<string>();
+    const nextItems = pinnedItemIds.size > 0
+      ? pinVisibleFeedItems(serverOrderedItems, currentItems, pinnedItemIds)
+      : serverOrderedItems;
+    const reorganizedCount = countReorganizedItems(serverOrderedItems, currentItems, pinnedItemIds);
+
+    setPendingCounts(snapshot.pendingCounts);
+    setActiveThreads(snapshot.activeThreads);
+    setSuggestionGroup(snapshot.suggestionGroup);
+    setItems(nextItems);
+    offsetRef.current = nextItems.length;
+    setHasMore(snapshot.hasMore);
+    setPendingItems((current) => {
+      const visibleIds = new Set(nextItems.map((item) => item.id));
+      return current.filter((item) => !visibleIds.has(item.id));
+    });
+
+    if (options?.showNotice && reorganizedCount > 0) {
+      pendingFeedArrangementRef.current = snapshot;
+      setFeedReorderNotice({ count: reorganizedCount });
+      return;
+    }
+
+    pendingFeedArrangementRef.current = null;
+    setFeedReorderNotice(null);
+  }, []);
+
+  const refreshArrangedFeed = useCallback(async () => {
+    if (detailStackRef.current.length > 0) {
+      deferredFeedArrangementRef.current = true;
+      return;
+    }
+
+    let snapshot: FeedArrangementSnapshot | null = null;
+    try {
+      snapshot = await fetchFeedArrangementSnapshot();
+    } catch {
+      return;
+    }
+    if (!snapshot) {
+      return;
+    }
+
+    if (detailStackRef.current.length > 0) {
+      pendingFeedArrangementRef.current = snapshot;
+      deferredFeedArrangementRef.current = true;
+      return;
+    }
+
+    const visibleItemIds = getViewportFeedItemIds();
+    const isAtTop = window.scrollY <= 4;
+    if (!isAtTop && visibleItemIds.size > 0) {
+      applyFeedArrangementSnapshot(snapshot, {
+        pinnedItemIds: visibleItemIds,
+        showNotice: true,
+      });
+      return;
+    }
+
+    applyFeedArrangementSnapshot(snapshot);
+  }, [applyFeedArrangementSnapshot, fetchFeedArrangementSnapshot, getViewportFeedItemIds]);
+
+  const showArrangedFeedOrder = useCallback(() => {
+    const snapshot = pendingFeedArrangementRef.current;
+    if (!snapshot) {
+      setFeedReorderNotice(null);
+      return;
+    }
+
+    applyFeedArrangementSnapshot(snapshot);
+    scrollFeedToTop();
+  }, [applyFeedArrangementSnapshot, scrollFeedToTop]);
+
+  useEffect(() => {
+    if (detailStack.length > 0 || !deferredFeedArrangementRef.current) {
+      return;
+    }
+
+    deferredFeedArrangementRef.current = false;
+    const pendingSnapshot = pendingFeedArrangementRef.current;
+    if (pendingSnapshot) {
+      applyFeedArrangementSnapshot(pendingSnapshot);
+      return;
+    }
+
+    void refreshArrangedFeed();
+  }, [applyFeedArrangementSnapshot, detailStack.length, refreshArrangedFeed]);
 
   const revealPendingItems = useCallback(() => {
     if (pendingItems.length === 0) return;
@@ -4953,6 +5218,7 @@ export default function Home() {
   const feedWsHandlersRef = useRef<{
     applyIncomingFeedItems: typeof applyIncomingFeedItems;
     hasActiveSearch: boolean;
+    refreshArrangedFeed: typeof refreshArrangedFeed;
     syncRecentFeedItems: typeof syncRecentFeedItems;
   } | null>(null);
 
@@ -4960,9 +5226,10 @@ export default function Home() {
     feedWsHandlersRef.current = {
       applyIncomingFeedItems,
       hasActiveSearch,
+      refreshArrangedFeed,
       syncRecentFeedItems,
     };
-  }, [applyIncomingFeedItems, hasActiveSearch, syncRecentFeedItems]);
+  }, [applyIncomingFeedItems, hasActiveSearch, refreshArrangedFeed, syncRecentFeedItems]);
 
   const chatWsHandlersRef = useRef<{
     applyDeletedSessionLocally: typeof applyDeletedSessionLocally;
@@ -5194,6 +5461,10 @@ export default function Home() {
       }
       try {
         const payload = JSON.parse(event.data) as { type?: string; items?: FeedItem[] };
+        if (payload.type === 'feed:arranged') {
+          void handlers.refreshArrangedFeed();
+          return;
+        }
         if (payload.type !== 'feed_update' || !Array.isArray(payload.items) || payload.items.length === 0) {
           return;
         }
@@ -8123,6 +8394,31 @@ export default function Home() {
                       ))}
                     </div>
                   </div>
+                  {activeThreads.length > 0 ? (
+                    <div className="mt-4 border-t border-zinc-800 pt-4">
+                      <p className="px-1 pb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">Threads</p>
+                      <div className="flex flex-col gap-1.5">
+                        {activeThreads.map((thread) => (
+                          <button
+                            key={thread.id}
+                            type="button"
+                            data-testid="sidebar-thread-filter"
+                            onClick={() => handleThreadFilterClick(thread.id)}
+                            className={`rounded-lg border px-3 py-2 text-left transition ${
+                              selectedThreadId === thread.id
+                                ? 'border-teal-400/50 bg-teal-500/15 text-teal-50'
+                                : 'border-zinc-800 bg-zinc-950/60 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900'
+                            }`}
+                          >
+                            <span className="block truncate text-sm font-medium">{thread.title}</span>
+                            {thread.subtitle ? (
+                              <span className="mt-0.5 block line-clamp-2 text-xs text-zinc-500">{thread.subtitle}</span>
+                            ) : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <section className="mt-4 rounded-2xl border border-zinc-800/90 bg-zinc-950/70 p-3">
                     <div className="flex items-center justify-end gap-3">
                       {hasActiveSearch ? (
@@ -8281,6 +8577,24 @@ export default function Home() {
               {pendingItemCount} new post{pendingItemCount === 1 ? '' : 's'}
             </button>
           )}
+          {feedReorderNotice && (
+            <div
+              data-testid="feed-reorder-banner"
+              className="sticky z-20 flex items-center justify-between gap-3 rounded-xl border border-teal-500/25 bg-zinc-950 px-4 py-3 shadow-[0_8px_20px_rgba(0,0,0,0.24)]"
+              style={{ top: `${headerMeasuredHeight}px` }}
+            >
+              <p className="min-w-0 text-sm text-zinc-200">
+                {feedReorderNotice.count} item{feedReorderNotice.count === 1 ? '' : 's'} reorganized
+              </p>
+              <button
+                type="button"
+                onClick={showArrangedFeedOrder}
+                className="shrink-0 rounded-full border border-teal-400/35 bg-teal-500/15 px-3 py-1.5 text-xs font-medium text-teal-100 transition hover:border-teal-300/55 hover:bg-teal-500/25"
+              >
+                Show new order
+              </button>
+            </div>
+          )}
           {hasActiveSearch && (
             <div
               className="sticky z-20 rounded-xl border border-sky-500/20 bg-zinc-950 px-4 py-3 shadow-[0_8px_20px_rgba(0,0,0,0.24)]"
@@ -8296,6 +8610,31 @@ export default function Home() {
                   onClick={() => commitSearchQuery('')}
                   className="inline-flex shrink-0 items-center justify-center rounded-full border border-sky-400/35 bg-sky-500/12 px-3 py-1.5 text-xs font-medium text-sky-100 transition hover:border-sky-300/55 hover:bg-sky-500/20"
                   aria-label="Clear active search"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+          {selectedThreadId && (
+            <div
+              data-testid="selected-thread-filter"
+              className="sticky z-20 rounded-xl border border-teal-500/20 bg-zinc-950 px-4 py-3 shadow-[0_8px_20px_rgba(0,0,0,0.24)]"
+              style={{ top: `${headerMeasuredHeight}px` }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-teal-200/80">Thread</p>
+                  <p className="mt-1 text-sm text-zinc-100">{selectedThread?.title ?? selectedThreadId}</p>
+                  {selectedThread?.subtitle ? (
+                    <p className="mt-0.5 text-xs text-zinc-500">{selectedThread.subtitle}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSelectedThread}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-teal-400/35 bg-teal-500/12 px-3 py-1.5 text-xs font-medium text-teal-100 transition hover:border-teal-300/55 hover:bg-teal-500/20"
+                  aria-label="Clear thread filter"
                 >
                   Clear
                 </button>
@@ -8651,6 +8990,7 @@ export default function Home() {
                 agentName={agentName}
                 onChat={handleChatAboutPost}
                 onOpenDetail={openPostDetail}
+                onThreadClick={handleThreadFilterClick}
                 searchQuery={searchQuery}
               />
             );

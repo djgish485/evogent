@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS feed (
   reason TEXT,
   tags TEXT,
   media_urls TEXT,
+  display_order INTEGER,
+  thread_id TEXT,
+  display_subtitle TEXT,
   published_at TEXT NOT NULL,
   published_at_ms INTEGER,
   created_at TEXT DEFAULT (datetime('now')),
@@ -60,6 +63,8 @@ const createIndexesSql = [
   `CREATE INDEX IF NOT EXISTS feed_origin_session_id_idx ON feed (origin_session_id, created_at_ms DESC);`,
   `CREATE INDEX IF NOT EXISTS feed_parent_id_idx ON feed (parent_id);`,
   `CREATE INDEX IF NOT EXISTS feed_relationship_idx ON feed (relationship);`,
+  `CREATE INDEX IF NOT EXISTS feed_display_order_idx ON feed (display_order ASC, created_at_ms DESC);`,
+  `CREATE INDEX IF NOT EXISTS feed_thread_id_idx ON feed (thread_id);`,
 ];
 
 const createFeedSourceIdUniqueIndexSql = `
@@ -83,6 +88,24 @@ const alterFeedTableSql = [
   `ALTER TABLE feed ADD COLUMN metrics_views INTEGER;`,
   `ALTER TABLE feed ADD COLUMN author_avatar_url TEXT;`,
   `ALTER TABLE feed ADD COLUMN metadata TEXT;`,
+  `ALTER TABLE feed ADD COLUMN display_order INTEGER;`,
+  `ALTER TABLE feed ADD COLUMN thread_id TEXT;`,
+  `ALTER TABLE feed ADD COLUMN display_subtitle TEXT;`,
+];
+
+const createFeedThreadsTableSql = `
+CREATE TABLE IF NOT EXISTS feed_threads (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1
+);
+`;
+
+const createFeedThreadIndexesSql = [
+  `CREATE INDEX IF NOT EXISTS feed_threads_active_updated_idx ON feed_threads (active, updated_at_ms DESC);`,
 ];
 
 const createInteractionsTableSql = `
@@ -382,7 +405,7 @@ function readThreadIdFromMetadata(metadata: Record<string, unknown>): string | n
 function backfillThreadColors(db: Database.Database): void {
   const missingThreads = db.prepare(`
     SELECT
-      TRIM(json_extract(metadata, '$.thread.threadId')) AS thread_id,
+      TRIM(json_extract(metadata, '$.thread.threadId')) AS metadata_thread_id,
       MIN(COALESCE(created_at_ms, published_at_ms)) AS first_seen_ms
     FROM feed
     WHERE metadata IS NOT NULL
@@ -393,9 +416,9 @@ function backfillThreadColors(db: Database.Database): void {
         FROM threads
         WHERE threads.thread_id = TRIM(json_extract(feed.metadata, '$.thread.threadId'))
       )
-    GROUP BY thread_id
-    ORDER BY first_seen_ms ASC, thread_id ASC
-  `).all() as Array<{ thread_id: string; first_seen_ms: number | null }>;
+    GROUP BY metadata_thread_id
+    ORDER BY first_seen_ms ASC, metadata_thread_id ASC
+  `).all() as Array<{ metadata_thread_id: string; first_seen_ms: number | null }>;
 
   const colorCounts = readThreadColorCounts(db);
   const insertThread = db.prepare(`
@@ -405,7 +428,7 @@ function backfillThreadColors(db: Database.Database): void {
   const now = Date.now();
 
   for (const row of missingThreads) {
-    const threadId = row.thread_id.trim();
+    const threadId = row.metadata_thread_id.trim();
     if (!threadId) {
       continue;
     }
@@ -1565,6 +1588,10 @@ export function ensureFeedSchema(db: Database.Database): void {
   db.exec(createFeedTimestampUpdateTriggerSql);
   db.exec(backfillTweetMetricsFromMetadataSql);
   db.exec(backfillOpenClawChatCuratorSourceSql);
+  db.exec(createFeedThreadsTableSql);
+  for (const stmt of createFeedThreadIndexesSql) {
+    db.exec(stmt);
+  }
   db.exec(createInteractionsTableSql);
   for (const stmt of createInteractionIndexesSql) {
     db.exec(stmt);

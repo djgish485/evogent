@@ -43,6 +43,12 @@ Scores text against Evogent's preference vector matcher.
 Posts the same request body shape accepted by `/api/internal/curate/submit` and
 writes accepted items into Evogent's live feed.
 
+### `evogent_feed_arrange`
+
+Posts curator-owned display order, live thread declarations, and optional
+display subtitles to `/api/internal/curate/arrange`. Omitted threads are
+deactivated; omitted feed items keep their stored order or created-at fallback.
+
 ### `evogent_interactions_recent`
 
 Returns recent engagement signals joined to feed item titles and source ids.
