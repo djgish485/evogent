@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { after, before, describe, test } from 'node:test';
+import { getDb } from '../src/lib/db/client';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -213,6 +214,90 @@ describe('curate submit article body validation', { concurrency: false }, () => 
     assert.equal(secondResult.body.accepted, 0);
     assert.equal(secondResult.body.duplicates, 1);
     assert.deepEqual(secondResult.body.duplicateSourceIds, [`openclaw-bundle:${bundleDir}`]);
+  });
+
+  test('rewrites legacy curation source cards to openclaw without clobbering explicit sources', async () => {
+    const curationSourceId = `curator-source-alias-${randomUUID()}`;
+    const preservedMetadataSourceId = `curator-source-preserve-${randomUUID()}`;
+    const explicitSourceId = `curator-source-explicit-${randomUUID()}`;
+
+    const result = await submitItems([
+      {
+        id: `ma-submit-curation-source-${randomUUID()}`,
+        type: 'analysis',
+        source: 'Curation',
+        sourceId: curationSourceId,
+        title: 'Curator source alias observation',
+        text: 'A curator observation submitted with the legacy curation source should be stored as OpenClaw.',
+        reason: 'Exercise curation source alias normalization',
+        tags: ['test'],
+        publishedAt: '2026-05-20T00:15:00.000Z',
+        metadata: {
+          kind: 'observation',
+          bridges: ['gmail', 'web'],
+        },
+      },
+      {
+        id: `ma-submit-curation-source-preserve-${randomUUID()}`,
+        type: 'analysis',
+        source: 'curation',
+        sourceId: preservedMetadataSourceId,
+        title: 'Curator source alias with metadata source',
+        text: 'An explicit metadata source should survive top-level source normalization.',
+        reason: 'Exercise metadata source preservation',
+        tags: ['test'],
+        publishedAt: '2026-05-20T00:16:00.000Z',
+        metadata: {
+          source: 'custom-curator',
+          mcpAppHtml: '<section>Custom curator card</section>',
+        },
+      },
+      {
+        id: `ma-submit-explicit-source-${randomUUID()}`,
+        type: 'analysis',
+        source: 'gmail-substack',
+        sourceId: explicitSourceId,
+        title: 'Explicit bridge source',
+        text: 'An explicit non-curation source should not be clobbered by curator metadata.',
+        reason: 'Exercise explicit source preservation',
+        tags: ['test'],
+        publishedAt: '2026-05-20T00:17:00.000Z',
+        metadata: {
+          source: 'chat-curator',
+          kind: 'analysis',
+        },
+      },
+    ]);
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.accepted, 3);
+    assert.equal(result.body.duplicates, 0);
+    assert.deepEqual(result.body.errors, []);
+
+    const rows = getDb().prepare(`
+      SELECT source_id AS sourceId, source, metadata
+      FROM feed
+      WHERE source_id IN (?, ?, ?)
+    `).all(curationSourceId, preservedMetadataSourceId, explicitSourceId) as Array<{
+      sourceId: string;
+      source: string | null;
+      metadata: string | null;
+    }>;
+    const bySourceId = new Map(rows.map((row) => [row.sourceId, row]));
+
+    const normalizedAlias = bySourceId.get(curationSourceId);
+    assert.equal(normalizedAlias?.source, 'openclaw');
+    const normalizedAliasMetadata = JSON.parse(normalizedAlias?.metadata ?? '{}') as Record<string, unknown>;
+    assert.equal(normalizedAliasMetadata.source, 'chat-curator');
+    assert.equal(normalizedAliasMetadata.kind, 'observation');
+
+    const preservedMetadataSource = bySourceId.get(preservedMetadataSourceId);
+    assert.equal(preservedMetadataSource?.source, 'openclaw');
+    const preservedMetadata = JSON.parse(preservedMetadataSource?.metadata ?? '{}') as Record<string, unknown>;
+    assert.equal(preservedMetadata.source, 'custom-curator');
+
+    const explicitSource = bySourceId.get(explicitSourceId);
+    assert.equal(explicitSource?.source, 'gmail-substack');
   });
 
   test('rejects article submissions when excerpt is just the title', async () => {

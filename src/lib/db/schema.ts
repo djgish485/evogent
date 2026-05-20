@@ -748,10 +748,13 @@ WHERE type = 'tweet'
 const backfillOpenClawChatCuratorSourceSql = `
 UPDATE feed
 SET source = 'openclaw'
-WHERE source IS NULL
-  AND metadata IS NOT NULL
-  AND json_valid(metadata)
-  AND json_extract(metadata, '$.source') = 'chat-curator';
+WHERE LOWER(TRIM(COALESCE(source, ''))) = 'curation'
+  OR (
+    source IS NULL
+    AND metadata IS NOT NULL
+    AND json_valid(metadata)
+    AND json_extract(metadata, '$.source') = 'chat-curator'
+  );
 `;
 
 const clampFutureChatTimestampsSql = `

@@ -44,6 +44,35 @@ describe('ensureFeedSchema', () => {
     });
   });
 
+  test('backfills legacy curator source aliases to openclaw without clobbering explicit bridge sources', () => {
+    withSchemaDb((db) => {
+      db.exec(`
+        INSERT INTO feed (id, type, source, source_id, text, metadata, published_at)
+        VALUES
+          ('curator-source-lower', 'analysis', 'curation', 'curator-source-lower', 'legacy lower source', '{"kind":"observation"}', '2026-05-20T00:15:00.000Z'),
+          ('curator-source-mixed', 'analysis', 'Curation', 'curator-source-mixed', 'legacy mixed source', '{"kind":"analysis"}', '2026-05-20T00:16:00.000Z'),
+          ('curator-source-null', 'analysis', NULL, 'curator-source-null', 'legacy chat-curator metadata', '{"source":"chat-curator"}', '2026-05-20T00:17:00.000Z'),
+          ('curator-source-explicit', 'analysis', 'gmail-substack', 'curator-source-explicit', 'explicit bridge source', '{"source":"chat-curator"}', '2026-05-20T00:18:00.000Z');
+      `);
+
+      ensureFeedSchema(db);
+
+      const rows = db.prepare(`
+        SELECT id, source
+        FROM feed
+        WHERE id LIKE 'curator-source-%'
+        ORDER BY id
+      `).all() as Array<{ id: string; source: string | null }>;
+
+      assert.deepStrictEqual(rows, [
+        { id: 'curator-source-explicit', source: 'gmail-substack' },
+        { id: 'curator-source-lower', source: 'openclaw' },
+        { id: 'curator-source-mixed', source: 'openclaw' },
+        { id: 'curator-source-null', source: 'openclaw' },
+      ]);
+    });
+  });
+
   test('chat session schema backfill ignores agent-only orphan messages', () => {
     const db = new Database(':memory:');
 
