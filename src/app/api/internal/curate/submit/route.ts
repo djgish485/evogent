@@ -600,7 +600,21 @@ function parseFeedInsertInput(input: unknown, index: number): { ok: true; normal
     };
   }
 
-  if (
+  const topLevelSource = typeof normalized.source === 'string'
+    ? normalized.source.trim().toLowerCase()
+    : '';
+  if (topLevelSource === 'curation') {
+    normalized.source = 'openclaw';
+    if (
+      !normalized.metadata
+      || !Object.prototype.hasOwnProperty.call(normalized.metadata, 'source')
+    ) {
+      normalized.metadata = {
+        ...(normalized.metadata ?? {}),
+        source: 'chat-curator',
+      };
+    }
+  } else if (
     normalized.source == null
     && normalized.metadata?.source === 'chat-curator'
   ) {
