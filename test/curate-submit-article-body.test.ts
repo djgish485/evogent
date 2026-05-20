@@ -170,6 +170,58 @@ describe('curate submit article body validation', { concurrency: false }, () => 
     assert.equal(result.body.errors?.[0]?.error, articleBodySourceSynopsisError);
   });
 
+  test('accepts rich OpenClaw skill article cards even when text mirrors the title', async () => {
+    const title = 'Daily Brief';
+    const sourceId = `evogent-skill:daily-brief:${Math.floor(Date.now() / 1000)}`;
+    const result = await submitItems([{
+      id: `ma-openclaw-rich-skill-${randomUUID()}`,
+      type: 'article',
+      source: 'openclaw',
+      sourceId,
+      title,
+      text: title,
+      publishedAt: '2026-03-08T10:00:00.000Z',
+      metadata: {
+        source: 'openclaw',
+        mcpAppHtml: '<section><h1>Daily Brief</h1><div>Rich grid content</div></section>',
+        openClaw: {
+          bundleDir: path.join(tempDir, 'skill-runs', 'daily-brief'),
+          skill: 'daily-brief',
+          outputPath: path.join(tempDir, 'skill-runs', 'daily-brief', 'output.mcpapp.html'),
+        },
+      },
+    }]);
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.accepted, 1);
+    assert.equal(result.body.duplicates, 0);
+    assert.deepEqual(result.body.errors, []);
+  });
+
+  test('still rejects OpenClaw article cards without a skill marker when text mirrors the title', async () => {
+    const title = 'OpenClaw Digest';
+    const sourceId = `openclaw-rich-without-skill-${randomUUID()}`;
+    const result = await submitItems([{
+      id: `ma-openclaw-no-skill-${randomUUID()}`,
+      type: 'article',
+      source: 'openclaw',
+      sourceId,
+      title,
+      text: title,
+      publishedAt: '2026-03-08T10:00:00.000Z',
+      metadata: {
+        source: 'openclaw',
+        mcpAppHtml: '<section><h1>OpenClaw Digest</h1></section>',
+        openClaw: {},
+      },
+    }]);
+
+    assert.equal(result.status, 400);
+    assert.equal(result.body.accepted, 0);
+    assert.equal(result.body.errors?.[0]?.sourceId, sourceId);
+    assert.equal(result.body.errors?.[0]?.error, articleBodySourceSynopsisError);
+  });
+
   test('deduplicates OpenClaw skill submissions by bundle dir when sourceId changes', async () => {
     const bundleDir = path.join(tempDir, 'skill-runs', 'competitor-watch');
     const outputPath = path.join(bundleDir, 'output.md');
