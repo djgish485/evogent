@@ -53,6 +53,15 @@ function buildSlashCommandInstructionBlock(input: {
   ];
 }
 
+function buildGoalEscapeHatchInstruction(message: string): string | null {
+  const trimmedMessage = message.trim();
+  if (getSlashCommandName(message) !== 'goal' || !/^\/goal\s+/i.test(trimmedMessage)) {
+    return null;
+  }
+
+  return 'Goal escape hatch (/goal): If the current chat task is running under the Claude provider, then for this one /goal task you MAY edit tracked product source, run verification gates, commit with a concise message, and push to origin/main after all gates pass, even when resolved mode is suggestion-local or suggestion-remote. This escape hatch requires the Claude provider; if this task is running under Codex, reply that /goal autonomous mode is Claude-only today and offer to submit a code_fix suggestion or work in direct mode if the user prefers. Do not push while any gate is red, and do not use --no-verify, --no-gpg-sign, or --force. The /goal command\'s own checker model decides when the goal is met; commit and push only after that checker reports completion. Include the pushed commit SHA in the final chat reply.';
+}
+
 function buildSharedChatEnvelope(input: {
   message: string;
   context: string | null;
@@ -97,6 +106,7 @@ export function buildChatInstruction(input: {
   const cwd = input.cwd ?? process.cwd();
   const chatAddon = readPromptAddon(cwd, '.claude/chat-addon.md');
   const chatAddonBody = renderPromptAddonBody(chatAddon.body, { sessionId: input.sessionId });
+  const goalEscapeHatchInstruction = buildGoalEscapeHatchInstruction(input.message);
 
   return [
     ...buildSharedChatEnvelope(input),
@@ -115,6 +125,7 @@ export function buildChatInstruction(input: {
     'If resolved mode is suggestion-local or suggestion-remote, submit code_fix suggestions as today. In suggestion-local, approved fixes merge onto local main and do not push. In suggestion-remote, mergeAfterGates: true or false governs auto-merge and push exactly as before.',
     chatAddonBody,
     'Direct-mode override: If resolved mode is direct, you MAY edit files directly in this repo for this chat session and going forward; this explicitly overrides any loaded .claude/chat-addon.md instruction that says not to directly edit tracked product source, tracked docs, commands, skills, or code.',
+    goalEscapeHatchInstruction,
   ].filter(Boolean).join('\n');
 }
 
