@@ -3,7 +3,6 @@ import path from 'node:path';
 import { getDataPath } from '@/lib/data-dir';
 import type { ChatMessage } from '@/types/chat';
 
-const chatOutputPath = getDataPath('chat-output.jsonl');
 const defaultChatNotifyUrl = `http://127.0.0.1:${process.env.PORT || '3001'}/api/internal/chat-notify`;
 
 function buildChatAuditRecord(message: ChatMessage): Record<string, unknown> {
@@ -20,6 +19,7 @@ function buildChatAuditRecord(message: ChatMessage): Record<string, unknown> {
 }
 
 export async function appendChatAuditMessage(message: ChatMessage): Promise<void> {
+  const chatOutputPath = getDataPath('chat-output.jsonl');
   await fs.promises.mkdir(path.dirname(chatOutputPath), { recursive: true });
   await fs.promises.appendFile(chatOutputPath, `${JSON.stringify(buildChatAuditRecord(message))}\n`, 'utf8');
 }

@@ -89,6 +89,109 @@ describe('internal chat submit route', { concurrency: false }, () => {
     }
   });
 
+  test('rejects submissions without resolvable session routing before persistence', async () => {
+    assert.ok(routeModule);
+
+    const response = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-unrouted',
+        role: 'agent',
+        text: 'Answer without a route',
+        timestamp: '2026-05-21T19:21:00.000Z',
+      }),
+    }));
+    const body = await response.json() as { error?: string };
+
+    assert.strictEqual(response.status, 400);
+    assert.strictEqual(body.error, 'submit payload requires resolvable sessionId, inReplyTo, or originSessionId');
+
+    const unknownSessionId = randomUUID();
+    const unknownSessionResponse = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-unknown-session',
+        taskId: 'task-submit-unknown-session',
+        sessionId: unknownSessionId,
+        text: 'Answer for a missing session',
+      }),
+    }));
+    const unknownSessionBody = await unknownSessionResponse.json() as { error?: string };
+
+    assert.strictEqual(unknownSessionResponse.status, 400);
+    assert.strictEqual(unknownSessionBody.error, 'submit payload requires resolvable sessionId, inReplyTo, or originSessionId');
+
+    const db = getDb();
+    const counts = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM chat_messages) AS messageCount,
+        (SELECT COUNT(*) FROM chat_sessions) AS sessionCount
+    `).get() as { messageCount: number; sessionCount: number };
+    const phantomRow = db.prepare('SELECT id FROM chat_sessions WHERE id = ?').get(unknownSessionId);
+
+    assert.strictEqual(counts.messageCount, 0);
+    assert.strictEqual(counts.sessionCount, 0);
+    assert.strictEqual(phantomRow, undefined);
+  });
+
+  test('routes submissions by real inReplyTo or originSessionId without creating sessions', async () => {
+    assert.ok(routeModule);
+
+    const session = createChatSession({ id: randomUUID(), title: 'Route Lookup' });
+    const userMessage = insertChatMessage({
+      id: 'msg-submit-route-lookup',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Question',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    const beforeSessionCount = (
+      getDb().prepare('SELECT COUNT(*) AS count FROM chat_sessions').get() as { count: number }
+    ).count;
+    const replyResponse = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-route-lookup',
+        inReplyTo: userMessage.id,
+        taskId: 'task-submit-route-lookup',
+        text: 'Answer routed by reply target',
+      }),
+    }));
+    const replyBody = await replyResponse.json() as { item?: { sessionId?: string | null } };
+
+    assert.strictEqual(replyResponse.status, 200);
+    assert.strictEqual(replyBody.item?.sessionId, session.id);
+
+    const originResponse = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-origin-route',
+        taskId: 'task-submit-origin-route',
+        originSessionId: session.id,
+        text: 'Answer routed by origin session',
+      }),
+    }));
+    const originBody = await originResponse.json() as { item?: { sessionId?: string | null } };
+
+    assert.strictEqual(originResponse.status, 200);
+    assert.strictEqual(originBody.item?.sessionId, session.id);
+
+    const afterSessionCount = (
+      getDb().prepare('SELECT COUNT(*) AS count FROM chat_sessions').get() as { count: number }
+    ).count;
+    assert.strictEqual(afterSessionCount, beforeSessionCount);
+  });
+
   test('persists one agent reply, audits, broadcasts, marks delivered, and dedups by task reply target', async () => {
     assert.ok(routeModule);
 

@@ -8,6 +8,7 @@ If yes, prefer instructions, skills, or diagnostics instead of encoding new agen
 When you identify a code problem, submit a code_fix suggestion promptly. Do not repeatedly diagnose or report status without proposing a fix. One round of diagnosis then a concrete suggestion is the right ratio.
 Before submitting a new code_fix suggestion, review currently pending code_fix suggestions for the same problem or topic and leave unrelated suggestions alone.
 If an older pending suggestion overlaps with your current understanding, update it when the revision is small; otherwise dismiss it via POST /api/interactions with {"feedItemId":"<old-id>","action":"dismiss_suggestion"} before or right after submitting the new suggestion. PATCH /api/feed/[id] metadata.supersededBy alone does not dismiss it.
+When POSTing a chat reply, include session routing in the submit JSON: {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"...","text":"...","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"{{sessionId}}"}.
 When writing code_fix suggestions, scope them to the problem boundary, not a single file. Name the subsystem and all contributing files.
 Prefer a code_fix suggestion over /develop. Do not call /develop directly; code_fix suggestions go through the approval pipeline.
 The per-message `/goal ...` escape hatch may also override the no-edit rule when the assembled chat instruction explicitly grants it.
