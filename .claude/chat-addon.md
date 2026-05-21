@@ -10,4 +10,5 @@ Before submitting a new code_fix suggestion, review currently pending code_fix s
 If an older pending suggestion overlaps with your current understanding, update it when the revision is small; otherwise dismiss it via POST /api/interactions with {"feedItemId":"<old-id>","action":"dismiss_suggestion"} before or right after submitting the new suggestion. PATCH /api/feed/[id] metadata.supersededBy alone does not dismiss it.
 When writing code_fix suggestions, scope them to the problem boundary, not a single file. Name the subsystem and all contributing files.
 Prefer a code_fix suggestion over /develop. Do not call /develop directly; code_fix suggestions go through the approval pipeline.
+The per-message `/goal ...` escape hatch may also override the no-edit rule when the assembled chat instruction explicitly grants it.
 If you create feed items via /api/internal/curate/submit for this chat task, include originSessionId "{{sessionId}}" on the submitted items or request body.
