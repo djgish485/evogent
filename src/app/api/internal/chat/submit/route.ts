@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { appendChatAuditMessage, notifyChatUpdate } from '@/lib/chat-output';
 import { getMostRecentActivity } from '@/lib/db/activity';
-import { markChatMessageDelivered, normalizeAgentChatOutput, persistChatMessage } from '@/lib/db/chat';
+import {
+  markChatMessageDelivered,
+  normalizeAgentChatOutput,
+  persistChatMessage,
+  type ChatMessageInsertInput,
+} from '@/lib/db/chat';
+import { getDb } from '@/lib/db/client';
 import {
   getPushNotificationEventConfig,
   readPushNotificationConfig,
@@ -12,6 +18,47 @@ import type { ChatMessage } from '@/types/chat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const MISSING_SESSION_ROUTING_ERROR = 'submit payload requires resolvable sessionId, inReplyTo, or originSessionId';
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readTrimmedString(record: Record<string, unknown> | null, key: string): string | null {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function chatSessionExists(db: ReturnType<typeof getDb>, sessionId: string | null): sessionId is string {
+  if (!sessionId) return false;
+  return Boolean(db.prepare('SELECT 1 FROM chat_sessions WHERE id = ?').get(sessionId));
+}
+
+function resolveSubmitSessionId(input: ChatMessageInsertInput, rawBody: unknown): string | null {
+  const db = getDb();
+  const directSessionId = input.sessionId?.trim() || null;
+  if (chatSessionExists(db, directSessionId)) {
+    return directSessionId;
+  }
+
+  const replyTarget = input.inReplyTo
+    ? db.prepare('SELECT session_id FROM chat_messages WHERE id = ?')
+      .get(input.inReplyTo) as { session_id: string | null } | undefined
+    : undefined;
+  const replySessionId = replyTarget?.session_id?.trim() || null;
+  if (chatSessionExists(db, replySessionId)) {
+    return replySessionId;
+  }
+
+  const raw = asRecord(rawBody);
+  const metadata = asRecord(raw?.metadata) ?? asRecord(input.metadata);
+  const originSessionId = readTrimmedString(raw, 'originSessionId')
+    ?? readTrimmedString(metadata, 'originSessionId');
+  return chatSessionExists(db, originSessionId) ? originSessionId : null;
+}
 
 function queueChatReplyPushNotification(message: ChatMessage): void {
   void (async () => {
@@ -46,16 +93,28 @@ export async function POST(request: Request) {
   const taskIdHeader = request.headers.get('x-evogent-task-id');
   const normalized = normalizeAgentChatOutput(body, {
     defaultTaskId: taskIdHeader,
-    requireTaskIdForChat: true,
+    requireTaskIdForChat: false,
   });
   if (!normalized) {
     return NextResponse.json({
       ok: false,
-      error: 'Payload must be a valid agent chat or agent_event message. Chat replies must include a taskId.',
+      error: 'Payload must be a valid agent chat or agent_event message.',
     }, { status: 400 });
   }
 
-  const persisted = persistChatMessage(normalized, { ignoreConflicts: true });
+  const sessionId = resolveSubmitSessionId(normalized, body);
+  if (!sessionId) {
+    return NextResponse.json({ ok: false, error: MISSING_SESSION_ROUTING_ERROR }, { status: 400 });
+  }
+
+  if (normalized.type === 'chat' && !normalized.taskId) {
+    return NextResponse.json({
+      ok: false,
+      error: 'Payload must be a valid agent chat message. Chat replies must include a taskId.',
+    }, { status: 400 });
+  }
+
+  const persisted = persistChatMessage({ ...normalized, sessionId }, { ignoreConflicts: true });
   if (!persisted) {
     return NextResponse.json({ ok: false, error: 'Failed to persist chat output' }, { status: 500 });
   }
