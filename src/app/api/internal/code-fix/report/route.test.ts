@@ -134,14 +134,15 @@ describe('internal code-fix report route', { concurrency: false }, () => {
     assert.strictEqual(enqueueBody.priority, 'user_chat');
     assert.strictEqual(enqueueBody.source, 'code_fix_self_report');
     assert.strictEqual(enqueueBody.requestId, `chat-queue-${callbackMessageId}`);
-    assert.match(String(enqueueBody.message), /Chat: A code-fix you authorized just merged\./);
-    assert.match(String(enqueueBody.message), /Submit \{"type":"chat"/);
+    assert.match(String(enqueueBody.message), /^A code-fix you authorized just merged\./);
+    assert.doesNotMatch(String(enqueueBody.message), /^Chat: /);
 
     assertObject(enqueueBody.metadata, 'Expected enqueue metadata');
     assert.strictEqual(enqueueBody.metadata.chatMessageId, callbackMessageId);
     assert.strictEqual(enqueueBody.metadata.inReplyTo, callbackMessageId);
     assert.strictEqual(enqueueBody.metadata.sessionId, session.id);
     assert.strictEqual(enqueueBody.metadata.endpoint, '/api/internal/code-fix/report');
+    assert.match(String(enqueueBody.metadata.appendSystemPrompt), /Submit \{"type":"chat"/);
   });
 
   test('enqueue still fires when callback persistence fails', async () => {
