@@ -299,9 +299,10 @@ test('/setup-wizard is discoverable and injected as a chat instruction', async (
     cwd: process.cwd(),
   });
 
-  assert.match(instruction, /The user invoked \/setup-wizard/i);
-  assert.match(instruction, /CommandDocumentPath: \.claude\/commands\/setup-wizard\.md/);
-  assert.match(instruction, /## Slash Command Document: \/setup-wizard/);
-  assert.match(instruction, /Diagnose Evogent setup state/);
-  assert.match(instruction, /not a React wizard/);
+  assert.strictEqual(instruction.prompt, '/setup-wizard');
+  assert.match(instruction.appendSystemPrompt, /The user invoked \/setup-wizard/i);
+  assert.match(instruction.appendSystemPrompt, /CommandDocumentPath: \.claude\/commands\/setup-wizard\.md/);
+  assert.match(instruction.appendSystemPrompt, /## Slash Command Document: \/setup-wizard/);
+  assert.match(instruction.appendSystemPrompt, /Diagnose Evogent setup state/);
+  assert.match(instruction.appendSystemPrompt, /not a React wizard/);
 });

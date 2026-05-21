@@ -108,8 +108,11 @@ test('submitChatMessage queues Codex xhigh reasoning and Fast mode metadata from
   });
 
   assert.strictEqual(result.ok, true);
+  assert.strictEqual(enqueuePayload?.message, 'Use the selected Codex settings.');
   const metadata = enqueuePayload?.metadata as Record<string, unknown> | undefined;
   assert.strictEqual(metadata?.provider, 'codex');
   assert.strictEqual(metadata?.codexReasoningEffort, 'xhigh');
   assert.strictEqual(metadata?.codexFastMode, true);
+  assert.match(String(metadata?.appendSystemPrompt), /ChatMessageId: msg-/);
+  assert.match(String(metadata?.appendSystemPrompt), /POSTing exactly one JSON body/);
 });

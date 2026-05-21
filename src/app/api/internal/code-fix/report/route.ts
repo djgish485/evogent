@@ -88,13 +88,14 @@ async function postChatCallback(args: { sessionId: string; message: string; task
   const callbackMessageId = `chat-code-fix-${randomUUID()}`;
   const session = getChatSession(args.sessionId);
   const metadata = { callbackSource: 'code_fix_self_report', taskId: args.taskId, suggestionId: args.suggestionId, status: args.status, phase: args.phase, sessionId: args.sessionId };
+  const instruction = buildChatInstruction({ message: args.message, context: null, inReplyTo: callbackMessageId, messageId: callbackMessageId, sessionId: args.sessionId, cwd: session?.workingDirectory || process.cwd() });
   await postInternalJson('/api/internal/chat/submit', { type: 'chat', id: callbackMessageId, text: args.message, taskId: args.taskId, sessionId: args.sessionId, metadata }, 'persist chat callback');
   await postInternalJson('/api/internal/orchestrator/enqueue', {
-    message: buildChatInstruction({ message: args.message, context: null, inReplyTo: callbackMessageId, messageId: callbackMessageId, sessionId: args.sessionId, cwd: session?.workingDirectory || process.cwd() }),
+    message: instruction.prompt,
     priority: 'user_chat',
     source: 'code_fix_self_report',
     requestId: `chat-queue-${callbackMessageId}`,
-    metadata: { ...metadata, endpoint: '/api/internal/code-fix/report', chatMessageId: callbackMessageId, inReplyTo: callbackMessageId, provider: session?.provider, providerSessionId: session?.providerSessionId, claudeReasoningEffort: session?.claudeReasoningEffort, codexReasoningEffort: session?.codexReasoningEffort, codexFastMode: session?.codexFastMode, workingDirectory: session?.workingDirectory, sessionType: session?.sessionType, forceFreshChatSession: false, attachments: [] },
+    metadata: { ...metadata, endpoint: '/api/internal/code-fix/report', chatMessageId: callbackMessageId, inReplyTo: callbackMessageId, provider: session?.provider, providerSessionId: session?.providerSessionId, claudeReasoningEffort: session?.claudeReasoningEffort, codexReasoningEffort: session?.codexReasoningEffort, codexFastMode: session?.codexFastMode, workingDirectory: session?.workingDirectory, sessionType: session?.sessionType, forceFreshChatSession: false, attachments: [], appendSystemPrompt: instruction.appendSystemPrompt },
   }, 'enqueue chat audit callback');
 }
 

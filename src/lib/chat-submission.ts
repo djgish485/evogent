@@ -131,7 +131,7 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
     const taskWorkingDirectory = typeof input.workingDirectory === 'string' && input.workingDirectory.trim()
       ? input.workingDirectory.trim()
       : session.workingDirectory;
-    const taskPrompt = session.sessionType === 'curator'
+    const taskInstruction = session.sessionType === 'curator'
       ? buildCuratorChatInstruction({
           message: input.message,
           context: input.context ?? null,
@@ -152,7 +152,7 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         });
 
     const result = await enqueueOrchestratorMessage({
-      message: taskPrompt,
+      message: taskInstruction.prompt,
       priority: input.priority ?? 'user_chat',
       source: input.source ?? 'user_chat',
       metadata: {
@@ -170,6 +170,7 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         forceFreshChatSession,
         inReplyTo: input.inReplyTo ?? null,
         attachments: attachmentPaths,
+        appendSystemPrompt: taskInstruction.appendSystemPrompt,
         sessionType: session.sessionType,
         requiresBrowserTools: session.sessionType === 'curator',
       },
