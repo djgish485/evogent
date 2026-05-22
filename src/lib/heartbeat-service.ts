@@ -15,6 +15,9 @@ import {
   hasPendingCurationCycle,
   insertCurationLogStart,
 } from '@/lib/db/activity';
+import { arrangeFeedBackstopForCycle } from '@/lib/db/feed';
+import { notifyFeedArranged } from '@/lib/curation-submit';
+import { getActiveFeedThreads } from '@/lib/db/feed';
 import { getSourceReadiness } from '@/lib/setup-readiness';
 
 const adaptiveHeartbeatDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
@@ -204,10 +207,37 @@ export function completeAdaptiveHeartbeat(requestId: string, input: CompleteAdap
   const completionStatus = input.completionStatus
     ?? (itemsAdded > 0 ? 'success' : 'empty');
 
-  return completeCurationLogByRequestId(trimmed, {
+  const completed = completeCurationLogByRequestId(trimmed, {
     completedAt: new Date().toISOString(),
     itemsAdded,
     completionStatus,
     completionReason: input.completionReason ?? null,
   });
+
+  if (completed && itemsAdded > 0) {
+    const startedAtMs = Date.parse(entry.startedAt);
+    if (Number.isFinite(startedAtMs) && startedAtMs > 0) {
+      try {
+        const backstop = arrangeFeedBackstopForCycle(startedAtMs);
+        if (backstop.fired) {
+          console.log('[arrange-backstop] curator skipped evogent_feed_arrange; mechanical fallback applied', {
+            requestId: trimmed,
+            itemCount: backstop.itemCount,
+          });
+          void notifyFeedArranged({
+            ordering: [],
+            activeThreads: getActiveFeedThreads(),
+            updatedItemIds: [],
+            orderingCount: backstop.itemCount,
+            threadCount: 0,
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[arrange-backstop] backstop failed', { requestId: trimmed, error: message });
+      }
+    }
+  }
+
+  return completed;
 }
