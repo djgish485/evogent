@@ -62,6 +62,14 @@ function buildGoalEscapeHatchInstruction(message: string): string | null {
   return 'Goal escape hatch (/goal): If the current chat task is running under the Claude provider, then for this one /goal task you MAY edit tracked product source, run verification gates, commit with a concise message, and push to origin/main after all gates pass, even when resolved mode is suggestion-local or suggestion-remote. This escape hatch requires the Claude provider; if this task is running under Codex, reply that /goal autonomous mode is Claude-only today and offer to submit a code_fix suggestion or work in direct mode if the user prefers. Do not push while any gate is red, and do not use --no-verify, --no-gpg-sign, or --force. The /goal command\'s own checker model decides when the goal is met; commit and push only after that checker reports completion. Include the pushed commit SHA in the final chat reply.';
 }
 
+function buildRequiredChatSubmitInstruction(input: { messageId: string; sessionId: string }): string {
+  return [
+    '=== REQUIRED FINAL CHAT SUBMIT ===',
+    'Your turn MUST end by POSTing exactly one JSON body to $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit. Do not write chat-output.jsonl directly. The "text" field must contain your full reply with real line breaks between paragraphs and after markdown headers. If you exit without POSTing, the orchestrator captures your raw output as a fallback, but the user sees one unbroken blob instead of properly formatted text. Example JSON body: {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"' + input.messageId + '","text":"## Summary\\n\\nFirst paragraph.\\n\\n## Details\\n\\n- First item\\n- Second item","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"' + input.sessionId + '"}.',
+    '=== END REQUIRED FINAL CHAT SUBMIT ===',
+  ].join('\n');
+}
+
 function buildSharedChatEnvelope(input: {
   message: string;
   context: string | null;
@@ -118,8 +126,6 @@ export function buildChatInstruction(input: {
     appendSystemPrompt: [
       ...buildSharedChatEnvelope(input),
       ...buildSlashCommandInstructionBlock(input),
-      'Respond by POSTing exactly one JSON body to $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit. Do not write chat-output.jsonl directly.',
-      'Submit {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"' + input.messageId + '","text":"...","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"' + input.sessionId + '"}.',
       `Your working directory is ${cwd}. Any code_fix suggestion you author from this chat will be dispatched to a dev agent running in exactly that directory. Every metadata.targetFiles entry and every file path mentioned inside metadata.proposedValue must be inside ${cwd}. When authoring code_fix targetFiles, do not harvest candidate files by running rg, find, ls, or sed against /root, /, or sibling repos. Examples returned by GET $MEDIA_AGENT_INTERNAL_BASE_URL/api/feed are schema illustrations, not target templates; they come from /root/evogent and apply only when this chat's working directory is /root/evogent.`,
       `If you create feed items via /api/internal/curate/submit from this chat, include originSessionId "${input.sessionId}" on the submitted items or the request body. The chat UI uses originSessionId to link suggestions back to this chat thread for inline rendering. Suggestions submitted without it appear only in the main feed and the suggestions panel, never inline.`,
       'Before your first code_fix suggestion or direct product-source edit in this chat session, resolve .evogent-mode.md mode. Probe the current directory with the actual commands git -C "$PWD" rev-parse --is-inside-work-tree (git rev-parse --is-inside-work-tree) and, only when it reports true, git -C "$PWD" remote (git remote); non-empty git remote stdout means a remote is configured.',
@@ -133,6 +139,7 @@ export function buildChatInstruction(input: {
       chatAddonBody,
       'Direct-mode override: If resolved mode is direct, you MAY edit files directly in this repo for this chat session and going forward; this explicitly overrides any loaded .claude/chat-addon.md instruction that says not to directly edit tracked product source, tracked docs, commands, skills, or code.',
       goalEscapeHatchInstruction,
+      buildRequiredChatSubmitInstruction(input),
     ].filter(Boolean).join('\n'),
   };
 }
@@ -161,8 +168,7 @@ export function buildCuratorChatInstruction(input: {
       'For data/config.md, apply explicit concrete personal settings directly, such as Agent Name = Bob. Ask first when ambiguous, broad, or destructive. Never print or edit secrets.',
       'No other direct file writes are allowed from curator chat.',
       'When the user asks for fresh source material, you may enqueue a low-priority cache refresh with POST /api/internal/orchestrator/enqueue using priority "cache_refresh" and a message like "/cache-refresh twitter".',
-      'Respond by POSTing exactly one JSON body to $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit. Do not write chat-output.jsonl directly.',
-      'Submit {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"' + input.messageId + '","text":"...","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"' + input.sessionId + '"}.',
+      buildRequiredChatSubmitInstruction(input),
     ].filter(Boolean).join('\n'),
   };
 }

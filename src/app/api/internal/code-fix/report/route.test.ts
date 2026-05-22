@@ -142,7 +142,8 @@ describe('internal code-fix report route', { concurrency: false }, () => {
     assert.strictEqual(enqueueBody.metadata.inReplyTo, callbackMessageId);
     assert.strictEqual(enqueueBody.metadata.sessionId, session.id);
     assert.strictEqual(enqueueBody.metadata.endpoint, '/api/internal/code-fix/report');
-    assert.match(String(enqueueBody.metadata.appendSystemPrompt), /Submit \{"type":"chat"/);
+    assert.match(String(enqueueBody.metadata.appendSystemPrompt), /=== REQUIRED FINAL CHAT SUBMIT ===/);
+    assert.match(String(enqueueBody.metadata.appendSystemPrompt), /Your turn MUST end by POSTing exactly one JSON body/);
   });
 
   test('enqueue still fires when callback persistence fails', async () => {
