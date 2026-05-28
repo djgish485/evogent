@@ -142,7 +142,13 @@ export async function GET(request: Request) {
     search: null,
     threadId: null,
   }, orderFreshness);
-  const activeThreads = buildFeedThreadNavigation(threadNavigationPage.items, storedActiveThreads);
+  const arrangedThreadNavigationItems = threadNavigationPage.items.filter((item) => (
+    typeof item.displayOrder === 'number' && Number.isFinite(item.displayOrder)
+  ));
+  const activeThreads = buildFeedThreadNavigation(
+    arrangedThreadNavigationItems.length > 0 ? arrangedThreadNavigationItems : threadNavigationPage.items,
+    storedActiveThreads,
+  );
 
   return NextResponse.json({
     items,
