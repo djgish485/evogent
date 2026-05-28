@@ -1,4 +1,5 @@
 import type { FeedItemType } from '@/types/feed';
+import { joinThreadFilterIds, parseThreadFilterIds } from '@/lib/thread-display';
 
 const feedTypes: FeedItemType[] = ['tweet', 'article', 'analysis', 'suggestion', 'notification'];
 export type FeedSortOrder = 'created' | 'published';
@@ -50,8 +51,5 @@ export function parseSearchQuery(raw: string | null): string | null {
 }
 
 export function parseThreadFilter(raw: string | null): string | null {
-  if (!raw) return null;
-
-  const normalized = raw.trim().slice(0, 200);
-  return normalized || null;
+  return joinThreadFilterIds(parseThreadFilterIds(raw));
 }

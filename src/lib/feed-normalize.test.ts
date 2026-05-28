@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compareThreadGroupItems } from './feed-normalize';
+import { compareThreadGroupItems, getThreadDisplayGroupIdentity, getThreadGroupIdentity } from './feed-normalize';
 import type { FeedItem } from '@/types/feed';
 
 function item(id: string, createdAt: string, displayOrder: number | null = null): FeedItem {
@@ -52,4 +52,19 @@ test('compareThreadGroupItems preserves chronological thread fallback without di
   const newer = item('newer', '2026-05-02T00:00:00.000Z');
 
   assert.equal(compareThreadGroupItems(older, newer, 'created'), -1);
+});
+
+
+test('getThreadDisplayGroupIdentity coalesces duplicate visible thread lanes', () => {
+  const first = item('first-one-off', '2026-05-01T00:00:00.000Z');
+  const second = item('second-one-off', '2026-05-01T00:01:00.000Z');
+  first.threadId = 'one-offs-a';
+  second.threadId = 'one-offs-b';
+  first.threadTitle = 'One-offs';
+  second.threadTitle = 'One-offs';
+  first.threadSubtitle = "Strong items outside today’s lanes.";
+  second.threadSubtitle = "Strong items outside today's lanes.";
+
+  assert.notEqual(getThreadGroupIdentity(first)?.key, getThreadGroupIdentity(second)?.key);
+  assert.equal(getThreadDisplayGroupIdentity(first)?.key, getThreadDisplayGroupIdentity(second)?.key);
 });

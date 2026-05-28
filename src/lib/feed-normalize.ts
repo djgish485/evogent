@@ -1,6 +1,7 @@
 import { type FeedFilter } from '@/lib/feed-filters';
 import { getStrongestFeedProminence } from '@/lib/feed-prominence';
 import { shouldSuppressFeedSystemNotice } from '@/lib/system-notices';
+import { getThreadDisplayGroupKey } from '@/lib/thread-display';
 import { type FeedItem, type FeedPendingCounts, type FeedProminence } from '@/types/feed';
 
 export type FeedSortOrder = 'created' | 'published';
@@ -218,6 +219,29 @@ export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId:
   return {
     key: scope ? `${threadId}::${scope}` : threadId,
     threadId,
+  };
+}
+
+export function getThreadDisplayGroupIdentity(item: FeedItem): { key: string; threadId: string } | null {
+  const identity = getThreadGroupIdentity(item);
+  if (!identity) {
+    return null;
+  }
+
+  const threadTitle = item.threadTitle?.trim()
+    || readTrimmedMetadataString(item.metadata?.thread?.threadTitle)
+    || readTrimmedMetadataString(item.metadata?.threadTitle);
+  const threadRationale = item.threadSubtitle?.trim()
+    || readTrimmedMetadataString(item.metadata?.thread?.threadRationale)
+    || readTrimmedMetadataString(item.metadata?.threadRationale);
+
+  return {
+    key: getThreadDisplayGroupKey({
+      threadId: identity.threadId,
+      title: threadTitle,
+      subtitle: threadRationale,
+    }),
+    threadId: identity.threadId,
   };
 }
 

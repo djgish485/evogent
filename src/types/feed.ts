@@ -65,6 +65,7 @@ export interface FeedMetrics {
 
 export interface FeedThread {
   id: string;
+  threadIds?: string[];
   title: string;
   subtitle: string | null;
   createdAtMs: number;

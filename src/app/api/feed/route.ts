@@ -10,6 +10,7 @@ import {
 import { getChatSessionSearchMatches } from '@/lib/db/chat-search';
 import { parseLimit, parseOffset, parseSearchQuery, parseSort, parseSourceFilter, parseThreadFilter, parseTypeFilter } from '@/lib/feed-query';
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
+import { getThreadDisplayGroupKey } from '@/lib/thread-display';
 import type { FeedItem, FeedThread } from '@/types/feed';
 
 export const runtime = 'nodejs';
@@ -30,6 +31,7 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
   const fallbackThreadById = new Map(fallbackThreads.map((thread) => [thread.id, thread]));
   const entries = new Map<string, {
     thread: FeedThread;
+    threadIds: string[];
     firstIndex: number;
     latestTimestampMs: number;
   }>();
@@ -51,22 +53,25 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
       || readTrimmedString(item.metadata?.threadRationale)
       || fallbackThread?.subtitle?.trim()
       || null;
+    const displayGroupKey = getThreadDisplayGroupKey({ threadId, title, subtitle });
     const timestampMs = parseTimestampMs(item.createdAt)
       ?? parseTimestampMs(item.publishedAt)
       ?? fallbackThread?.updatedAtMs
       ?? Date.now();
-    const existing = entries.get(threadId);
+    const existing = entries.get(displayGroupKey);
 
     if (!existing) {
-      entries.set(threadId, {
+      entries.set(displayGroupKey, {
         thread: {
           id: threadId,
+          threadIds: [threadId],
           title,
           subtitle,
           createdAtMs: fallbackThread?.createdAtMs ?? timestampMs,
           updatedAtMs: Math.max(fallbackThread?.updatedAtMs ?? timestampMs, timestampMs),
           active: true,
         },
+        threadIds: [threadId],
         firstIndex: index,
         latestTimestampMs: timestampMs,
       });
@@ -75,6 +80,10 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
 
     existing.latestTimestampMs = Math.max(existing.latestTimestampMs, timestampMs);
     existing.thread.updatedAtMs = Math.max(existing.thread.updatedAtMs, timestampMs);
+    if (!existing.threadIds.includes(threadId)) {
+      existing.threadIds.push(threadId);
+      existing.thread.threadIds = [...existing.threadIds];
+    }
     if (!existing.thread.subtitle && subtitle) {
       existing.thread.subtitle = subtitle;
     }
