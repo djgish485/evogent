@@ -5,6 +5,7 @@ import {
 } from '@/lib/openclaw/sessions';
 import { isOpenClawHeartbeatMessage } from '@/lib/openclaw/heartbeat';
 import { getChatMessagesPage, persistChatMessage } from '@/lib/db/chat';
+import { getDb } from '@/lib/db/client';
 import { mergeChatMessages } from '@/lib/chat-messages';
 import { normalizeGatewayErrorMessage } from '@/lib/openclaw/gateway-client';
 import { getInternalBaseUrl } from '@/lib/internal-api';
@@ -34,6 +35,45 @@ function isFullCurationRequest(message: string): boolean {
 
 function sanitizeIdempotencyKey(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, 128) : null;
+}
+
+function isOpenClawCuratorSessionKey(value: string): boolean {
+  return /^agent:curator:/.test(value);
+}
+
+function ensureOpenClawChatSessionRecord(sessionKey: string): void {
+  const sessionId = `openclaw:${sessionKey}`;
+  const sessionType = isOpenClawCuratorSessionKey(sessionKey) ? 'curator' : null;
+  const title = sessionType === 'curator' ? 'Curator Agent' : 'OpenClaw Session';
+  const db = getDb();
+
+  db.prepare(`
+    INSERT OR IGNORE INTO chat_sessions (
+      id,
+      provider,
+      provider_session_id,
+      claude_session_id,
+      title,
+      session_type,
+      working_directory
+    )
+    VALUES (?, 'claude', ?, ?, ?, ?, ?)
+  `).run(sessionId, sessionId, sessionId, title, sessionType, process.cwd());
+
+  db.prepare(`
+    UPDATE chat_sessions
+    SET
+      provider = 'claude',
+      provider_session_id = ?,
+      claude_session_id = ?,
+      session_type = CASE WHEN ? IS NOT NULL THEN ? ELSE session_type END,
+      title = CASE
+        WHEN ? IS NOT NULL AND (title IS NULL OR title GLOB 'Session *') THEN ?
+        ELSE title
+      END,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(sessionId, sessionId, sessionType, sessionType, sessionType, title, sessionId);
 }
 
 async function refreshCachesBeforeOpenClawCuration(message: string, requestId: string | null): Promise<void> {
@@ -119,6 +159,7 @@ export async function GET(
   }
 
   try {
+    ensureOpenClawChatSessionRecord(key);
     const history = await getOpenClawHistory(key);
     const persistedMessages = getChatMessagesPage({
       sessionId: history.sessionId,
@@ -171,6 +212,7 @@ export async function POST(
   const idempotencyKey = sanitizeIdempotencyKey((payload as { idempotencyKey?: unknown }).idempotencyKey);
 
   try {
+    ensureOpenClawChatSessionRecord(key);
     await refreshCachesBeforeOpenClawCuration(message, idempotencyKey);
     const result = await sendOpenClawMessage(key, message, {
       ...(idempotencyKey ? { idempotencyKey } : {}),

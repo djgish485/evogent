@@ -1,73 +1,52 @@
 ---
 name: tweet-cache
-description: Direct-browse X/Twitter source guidance for curation cycles using the shared browser session and policy JSON prompts.
+description: Prefetch browser-authenticated X/Twitter home and account timelines into a local SQLite cache and expose them through /api/tweet-cache so curation stays cache-first.
 user-invocable: true
 metadata:
-  media-agent:
+  evogent:
     heartbeat-task: false
     feed-source: twitter
     feed-source-label: Twitter
-    action-namespaces: [x]
+    action-namespaces:
+      - x
 ---
-# Tweet Source
+# Tweet Cache
 
-Install this skill when this app instance should use the shared Chrome browse profile as the X/Twitter source of truth.
+Install this skill when X/Twitter should be sourced from the shared Chrome browse profile. This is the browser-first X source skill.
+If you later switch this deployment to Bird-backed fetching, uninstall this skill and install `tweet-cache-bird` instead so the active instructions stay provider-specific.
 
 ## Behavior
 
-- Curation reads this skill directly every cycle.
-- Curation also reads `data/tweet-cache-policy.json` directly every cycle.
-- Read `data/curation-prompt.md` before building the fetch plan; it is soft input for what the user cares about, including optional long-tail topics worth using when judgment says they fit.
-- The policy JSON is the editable source of truth for browser browsing tactics, phase ordering, volume expectations, priority thinkers, and the full `browserPrompt`.
-- When the policy JSON contains `browserPrompt`, curation must follow it verbatim rather than summarizing it.
-- The curation worker browses X/Twitter directly in the shared authenticated browser session. It must not expect a cache query API or server-side hydration to decide what matters.
-- The shared Chrome browse profile is the only auth source of truth for this installed skill.
+- Startup refresh runs automatically after install, and the cache refreshes again immediately before each curation cycle through the configured brain provider's short-lived nested browser task against the shared authenticated desktop Chrome session.
+- Refresh reads `data/tweet-cache-policy.json`, `data/cache-hints.json`, `data/preferences-context.md`, `data/preference-insights.md`, and `data/curation-prompt.md` on each run so policy and preference changes are picked up automatically.
+- Cached tweets are available at `GET /api/tweet-cache`.
+- The curation worker should start with `/api/tweet-cache` for Twitter/X data. It must never call Bird CLI directly and must never call the x-browser CLI directly.
+- Source-specific browsing tactics, fetch-order judgment, and extraction expectations belong in `data/tweet-cache-policy.json` plus the Twitter browser refresh prompt/skill boundary, while persistence, dedup, diagnostics, and repair routing stay in product code.
+- External linked-page cards visible on tweets are supported extracted facts. Preserve them through the cache payload as `linkCard`, `linkPreviews`, and `urlEntities` using the field shapes in `data/tweet-cache-policy.json`; do not solve those cards with product-side X DOM heuristics.
+- Video media extraction follows `data/tweet-cache-policy.json`: emit one media entry per visible video, use the poster URL for both `url` and `posterUrl`, and never persist `blob:` URLs as standalone media.
+- Avatar extraction follows `data/tweet-cache-policy.json`: capture `authorAvatarUrl` from the visible user-name block avatar image for every tweet, including reply child items, parent ancestors, and thread context tweets.
 - Reply context extraction follows `data/tweet-cache-policy.json`: on Home and Following timelines, when X renders a visible parent tweet above a reply card as its own complete article, capture that parent as a separate cache item with its own authorUsername, authorDisplayName, text, authorAvatarUrl, and media.
-- Do not only store the reply's inReplyToStatusId when X renders the parent above a reply card as its own complete article; persist the parent as its own cache row too.
+- Reply indicator extraction follows `data/tweet-cache-policy.json`: when `Replying to @handle` is visible, capture `inReplyToUsername` from that handle. Populate `inReplyToStatusId` only when X exposes the parent status URL/href or when the parent-with-child-below connector rule links the reply to the immediately preceding article. If only the `Replying to @handle` indicator is visible and no parent-rendered-above connector layout exists, `inReplyToUsername` alone is acceptable, `inReplyToStatusId` stays null, and QA should not fail the item.
+- Parent-with-child-below reply linkage follows `data/tweet-cache-policy.json`: use a two-pass extraction over `[data-testid="cellInnerDiv"]` cells. Pass 1 collects cells with articles plus their `sourceId` and author handle. Pass 2 walks cells in DOM order and treats cell N as a parent-with-child-below when its article contains a `div` with CSS classes `r-1bimlpy`, `r-f8sm7e`, and `r-m5arl1`, width 1-4px, height >= 30px, and `getBoundingClientRect().bottom > cell.getBoundingClientRect().bottom - 5`. When this signal fires, cell N+1's article is the child reply: set the child `inReplyToStatusId` to the parent `sourceId` and `inReplyToUsername` to the parent author handle. This applies to cross-author replies and same-author self-threads and does not require the visible `Replying to @handle` indicator.
+- Cache refresh cycle summaries should include `cycleSummary.replyExtractionAudit: { totalCells, cellsWithConnectorBelow, repliesLinkedFromConnector, repliesWithReplyingToIndicator }` so reply-linkage gaps stay visible in production.
+- Text-completeness extraction follows `data/tweet-cache-policy.json`: audit every timeline/profile/search tweet before cache persistence. If the main text is likely clipped, open the canonical status URL in the shared browser and recover the full rendered text from the URL-matched main article before returning the item.
+- Text-completeness cache rows must be explicit: complete status-page recoveries use `textCapture.textSource: "status_page"` and `textCapture.completeness: "complete"`; failed recoveries are either skipped or persisted with `textCapture.completeness: "incomplete"`, `cacheAudit.recoveryFailed: true`, and `sourceQuality.issue: "twitter_text_incomplete"` so cache-only curation does not count them as taste rejections.
+- Cache refresh cycle summaries should include `cycleSummary.textCompletenessAudit: { tweetRowsAudited, statusPageRecovered, skippedIncomplete, deduped }` so reflection can see whether status-page recovery is working.
+- Twitter cache source ids are bare numeric tweet ids. Deduplicate `twitter:<id>`, `tweet-<id>`, status URLs, and bare `<id>` before submit, keep the row with the best text-completeness evidence, and count duplicates in `cycleSummary.textCompletenessAudit.deduped`.
+- Edit `data/tweet-cache-policy.json` when you need to tune per-usage refresh volume, source ordering, phase ordering, search caps, or deadline budgets. Do not re-encode those judgments in product code.
+- When browser refresh diagnostics are present, read the raw probe fields directly: `currentUrl`, `pageTitle`, `visibleText`, `consoleErrors`, and `visibleMarkers`. Product code no longer classifies X pages as signed-out, consent, age-gated, interstitial, or provider-degraded from regex matches.
+- If the cache is stale or empty after diagnosis, the curation worker may use its own browser tools to recover a bounded number of Twitter items for that cycle and should record that experiment in `cycleSummary.metadata`.
+- Use `/setup-source x.com` when you need to authenticate the shared Chrome browse profile, verify provider MCP wiring, and prove packaged `/cache-refresh twitter` works.
+- The shared Chrome browse profile is the only auth source of truth for this skill. Do not require `AUTH_TOKEN` or `CT0` when this browser skill is the selected provider.
+- On deployments that provide `/root/.config/x-auth-cookies.json`, tweet-cache may dispatch the bounded `twitter-auth-repair` skill as a Twitter-specific fallback when the shared session loses auth. It is not the normal setup path and not a pattern to copy onto Google properties.
+
+See the OpenClaw curator memory for the cache-first curation workflow.
 
 ## Feed Action Handlers
 
-This skill owns the `x.*` feed action namespace. These actions are user-initiated from rendered feed cards, not autonomous curation behavior.
-
-### `x.follow`
-
-Use when a user clicks a follow button on a freeform card.
-
-Inputs:
-- `itemId`: source feed item id to update after the attempt.
-- `payload.handle`: X handle, with or without `@`.
-
-Procedure:
-- Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"`.
-- Normalize `payload.handle` to a plain handle: trim whitespace, remove a leading `@`, and reject empty or non-handle values.
-- Use the shared authenticated browser session. Do not open a separate Chrome profile and do not use cookie files as a substitute for the shared session.
-- Navigate to `https://x.com/<handle>`.
-- If the profile already shows `Following`, `Subscribed`, or another clear already-following state, treat the action as a no-op success.
-- If the profile is suspended, unavailable, protected in a way that prevents following, or the handle resolves to a different account, stop and report a clear error.
-- If X shows a rate-limit, automation, login, or retry-later state, stop and report an error with a retry hint. Do not keep retrying.
-- Otherwise click the visible `Follow` button once, then verify the state changed to `Following` or equivalent.
-
-After the attempt, PATCH the source card:
-
-```bash
-curl -sS -X PATCH "${API_BASE}/api/feed/<itemId>" \
-  -H 'Content-Type: application/json' \
-  --data '{"metadata":{"mcpAppHtml":"<div role=\"status\">Followed @handle.</div>"}}'
-```
-
-For errors, patch `metadata.mcpAppHtml` to a concise error state that preserves the handle and reason. Keep the card actionable only when a retry is reasonable.
-
-## Curation Task
-
-- Read the full OpenClaw curator memory plus the full `browserPrompt` from `data/tweet-cache-policy.json`.
-- Browse every required X surface in order: `home`, `following`, gap-detected priority thinkers, then planned searches.
-- Stay inside the shared authenticated Chrome session. Do not spawn a second agent, do not shell out to Bird CLI, and do not use repo-specific browser scripts.
-- At the start of each source step, verify the active tab and current URL match the intended X surface. If they do not, reuse the current tab by navigating it back to the target URL. Do not close other shared-browser tabs.
-- For feed scrolling, never use keyboard End, Home, Page Down, or arrow keys. Use browser JavaScript evaluation with `window.scrollBy(0, window.innerHeight * 3)`, then confirm the page is still on the intended feed URL before extracting again.
-- Treat the thresholds in `data/tweet-cache-policy.json` as minimum browsing coverage for this cycle before calling Twitter sufficiently covered.
-- Capture raw candidate details in your scratchpad, then submit only the tweets that clear the editorial bar.
-- Preserve verified reply and quote context in submitted metadata.
-- Never report the source as blocked, rate-limited, or unavailable without specific page-level evidence.
+- `x.follow`: A user clicked a feed-card follow action for a specific X/Twitter account. Use the shared authenticated Chrome profile, open the profile URL or `https://x.com/<handle>` from the action payload, verify the visible account matches the requested handle/profile, and click Follow only for that account. Do not infer or follow adjacent suggested accounts. Afterward, PATCH the originating feed item so `metadata.mcpAppHtml` reflects a completed or failed action state.
+- If the account is already followed, treat the action as successful and PATCH the card to show the already-following state.
+- If X requires login, presents a challenge, or the requested profile cannot be verified, do not click anything; PATCH the card to an error state with a short source-owned reason.
 
 ## Cacher Mode
 
@@ -90,9 +69,27 @@ MAIN-TWEET IDENTIFICATION:
 5. Before PATCHing text, compare the curator-submitted feed-row text with the freshly extracted candidate text. If they are plainly about different topics, different framings, or different tweet authors, STOP, re-check the URL match, and do not PATCH. Use agent judgment, not a JS text comparator.
 6. Do not PATCH text merely because a candidate is longer. Text replacement requires the URL-matched main article plus the sanity judgment above.
 
-## Prerequisites
+## Recovery / Resilience
 
-- Google Chrome must be installed on the server.
-- Desktop-backed Chrome must be running with remote debugging on port `9222`.
-- The shared Chrome browse profile owned by the browser service is the only browser-auth source of truth for browser-backed X access.
-- Use `/setup-source x.com` when you need to authenticate the shared Chrome browse profile, verify provider MCP wiring, and prove packaged `/cache-refresh twitter` works.
+Before accepting an empty browser refresh, distinguish one empty surface from a durably empty source. `data/tweet-cache-policy.json` owns tunable fetch wording, so its `browserPrompt` should mirror these same recovery rules without shipping a default runtime policy file.
+
+- Wait through X shell states. After landing on the target URL, run at least two short waits, about 1.5-2.5 seconds each, and re-check `article[data-testid='tweet']` before treating the page as empty.
+- Use update controls when present. If the page shows a visible `Show N posts` or `See new posts` control, click it and re-evaluate the tweet rows before deciding the surface is empty.
+- Fall back across open X tabs. If the canonical target tab, such as `x.com/home`, has zero tweet rows on the first scroll pass, inspect every other open `x.com` tab in the shared profile, including search, profile, list, and notification tabs.
+- Persist recovered rows from any fallback tab in the same run. Rows recovered from search, profile, list, notification, or other open X tabs are legitimate cache; the run should not fail just because Home was initially empty.
+- Declare source outage only after all inspected surfaces are empty. A genuine empty result requires at least two zero-row Home passes with shell waits and update-control clicks attempted, plus zero tweet rows on every other open `x.com` tab inspected.
+- Otherwise persist whatever rows were extractable and complete the run normally with diagnostic notes.
+- When the source is durably empty, include useful diagnostics with `items_added=0`: per-tab tweet-row counts, page title, visible text snippets, console errors, visible rate-limit markers, and visible login-required markers.
+- Separate suspected shadow ban or rate limit cases, where pages render normally but timelines stay empty, from auth-loss cases where a login interstitial is visible.
+
+## Guardrails
+
+- Already curated tweet IDs are excluded from cache results.
+- Author caps keep a single account from flooding the cache.
+- Tune cache breadth and fetch order in `data/tweet-cache-policy.json`, not in `src/lib/tweet-cache.ts`.
+- If the shared Chrome profile itself is logged out, re-run `/setup-source x.com`. On deployments with `/root/.config/x-auth-cookies.json`, tweet-cache may dispatch the Twitter-only `twitter-auth-repair` fallback before surfacing the warning, but the shared profile remains the source of truth.
+- Never pre-judge `/root/.config/x-auth-cookies.json` or `.env.local` `AUTH_TOKEN`/`CT0` as stale based on file age, mtime, context labels, or other a-priori freshness heuristics; when the repair fallback is available, attempt it and let the post-import `https://x.com/home` probe be the basis for declaring credentials stale.
+- If the shared Chrome profile is visibly logged in but automation pages fail, treat that as a browser/session attachment bug to diagnose rather than a Bird credential problem.
+- If the raw probe lands on login, consent, challenge, or empty pages, the runtime decides what that means from the page state. Treat the raw URL/title/text as the source of truth rather than waiting for cache infrastructure to classify it.
+- If the cache does not contain a needed Twitter item and the source is otherwise healthy, the curation worker skips it.
+- If the cache is stale or empty, the curation worker may try bounded browser recovery, but only to restore source coverage for that cycle and never by shelling out to Bird or the x-browser CLI.

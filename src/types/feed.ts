@@ -207,6 +207,9 @@ export interface FeedMetadata {
   incidentKey?: string;
   inReplyToStatusId?: string;
   conversationId?: string;
+  threadId?: string;
+  threadTitle?: string;
+  threadRationale?: string;
   thread?: FeedThreadMetadata;
   riskyTake?: {
     reason: string;

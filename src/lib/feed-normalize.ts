@@ -136,14 +136,55 @@ export function readTrimmedMetadataString(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeThreadGroupKeyPart(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return normalized || null;
+}
+
+function readThreadGroupDateScope(item: FeedItem): string | null {
+  const curatedAt = readTrimmedMetadataString(item.metadata?.curatedAt);
+  const candidate = curatedAt || item.createdAt || item.publishedAt;
+  const match = candidate.match(/^\d{4}-\d{2}-\d{2}/);
+  return match?.[0] ?? null;
+}
+
 export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId: string } | null {
-  const threadId = item.threadId?.trim() || readTrimmedMetadataString(item.metadata?.thread?.threadId);
+  const flatThreadId = readTrimmedMetadataString(item.metadata?.threadId);
+  const threadId = item.threadId?.trim()
+    || readTrimmedMetadataString(item.metadata?.thread?.threadId)
+    || flatThreadId;
   if (!threadId) {
     return null;
   }
 
+  const cycleId = readTrimmedMetadataString(item.metadata?.cycleId);
+  const threadTitle = item.threadTitle?.trim()
+    || readTrimmedMetadataString(item.metadata?.thread?.threadTitle)
+    || readTrimmedMetadataString(item.metadata?.threadTitle);
+  const threadRationale = item.threadSubtitle?.trim()
+    || readTrimmedMetadataString(item.metadata?.thread?.threadRationale)
+    || readTrimmedMetadataString(item.metadata?.threadRationale);
+  const scopeParts = cycleId
+    ? [`cycle:${cycleId}`]
+    : [
+      threadTitle ? `title:${threadTitle}` : null,
+      threadRationale ? `why:${threadRationale}` : null,
+      flatThreadId ? `day:${readThreadGroupDateScope(item) ?? ''}` : null,
+    ];
+  const scope = scopeParts
+    .map(normalizeThreadGroupKeyPart)
+    .filter((part): part is string => Boolean(part))
+    .join('|');
+
   return {
-    key: threadId,
+    key: scope ? `${threadId}::${scope}` : threadId,
     threadId,
   };
 }

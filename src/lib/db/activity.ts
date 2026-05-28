@@ -192,6 +192,45 @@ export function completeCurationLogByRequestId(requestId: string, input: Curatio
   return result.changes > 0;
 }
 
+export function completeLatestPendingAutomatedCurationCycle(input: CurationLogCompleteInput = {}): boolean {
+  const db = getDb();
+  const pendingRow = db.prepare(`
+    SELECT id
+    FROM curation_log
+    WHERE completed_at IS NULL
+      AND triggered_by LIKE 'adaptive_heartbeat:%'
+    ORDER BY datetime(started_at) DESC, id DESC
+    LIMIT 1
+  `).get() as { id: number } | undefined;
+
+  if (!pendingRow) return false;
+
+  const itemsAdded = typeof input.itemsAdded === 'number'
+    ? Math.max(0, Math.floor(input.itemsAdded))
+    : 0;
+  const completionStatus: CurationLogCompletionStatus = normalizeCompletionStatus(input.completionStatus)
+    ?? (itemsAdded > 0 ? 'success' : 'successful_empty');
+
+  const result = db.prepare(`
+    UPDATE curation_log
+    SET
+      completed_at = @completed_at,
+      items_added = @items_added,
+      completion_status = @completion_status,
+      completion_reason = @completion_reason
+    WHERE id = @id
+      AND completed_at IS NULL
+  `).run({
+    id: pendingRow.id,
+    completed_at: toIso(input.completedAt),
+    items_added: itemsAdded,
+    completion_status: completionStatus,
+    completion_reason: normalizeCompletionReason(input.completionReason),
+  });
+
+  return result.changes > 0;
+}
+
 export function deletePendingCurationLogByRequestId(requestId: string): boolean {
   const db = getDb();
   const result = db.prepare(`
@@ -306,7 +345,36 @@ export function hasPendingCurationCycle(): boolean {
     LIMIT 1
   `).get() as { timestamp: string } | undefined;
 
-  return Boolean(queuedChatRow);
+  if (queuedChatRow) {
+    return true;
+  }
+
+  const openClawPromptRow = db.prepare(`
+    SELECT m.timestamp
+    FROM chat_messages AS m
+    WHERE m.session_id LIKE 'openclaw:agent:curator:%'
+      AND m.type = 'chat'
+      AND m.role = 'user'
+      AND lower(trim(m.text)) IN ('/curate', '/curate-latest', 'run a full curation cycle now.')
+      AND COALESCE(m.status, '') NOT IN ('failed', 'cancelled', 'aborted')
+      AND datetime(m.timestamp) >= datetime('now', '-3 hours')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM curation_log AS completed
+        WHERE completed.completed_at IS NOT NULL
+          AND datetime(completed.completed_at) >= datetime(m.timestamp)
+          AND (
+            COALESCE(completed.items_added, 0) > 0
+            OR completed.completion_status = 'successful_empty'
+          )
+          AND COALESCE(completed.completion_status, '') NOT IN ('cancelled', 'failed', 'aborted', 'empty')
+        LIMIT 1
+      )
+    ORDER BY datetime(m.timestamp) DESC, datetime(m.created_at) DESC
+    LIMIT 1
+  `).get() as { timestamp: string } | undefined;
+
+  return Boolean(openClawPromptRow);
 }
 
 export function getLatestCompletedCurationTime(): string | null {

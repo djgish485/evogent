@@ -7,6 +7,8 @@ metadata:
     heartbeat-task: false
     feed-source: twitter
     feed-source-label: Twitter
+    action-namespaces:
+      - x
 ---
 # Tweet Cache
 
@@ -39,6 +41,12 @@ If you later switch this deployment to Bird-backed fetching, uninstall this skil
 - On deployments that provide `/root/.config/x-auth-cookies.json`, tweet-cache may dispatch the bounded `twitter-auth-repair` skill as a Twitter-specific fallback when the shared session loses auth. It is not the normal setup path and not a pattern to copy onto Google properties.
 
 See the OpenClaw curator memory for the cache-first curation workflow.
+
+## Feed Action Handlers
+
+- `x.follow`: A user clicked a feed-card follow action for a specific X/Twitter account. Use the shared authenticated Chrome profile, open the profile URL or `https://x.com/<handle>` from the action payload, verify the visible account matches the requested handle/profile, and click Follow only for that account. Do not infer or follow adjacent suggested accounts. Afterward, PATCH the originating feed item so `metadata.mcpAppHtml` reflects a completed or failed action state.
+- If the account is already followed, treat the action as successful and PATCH the card to show the already-following state.
+- If X requires login, presents a challenge, or the requested profile cannot be verified, do not click anything; PATCH the card to an error state with a short source-owned reason.
 
 ## Cacher Mode
 
