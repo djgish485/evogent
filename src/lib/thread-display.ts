@@ -20,6 +20,10 @@ export function getThreadDisplayGroupKey(input: {
   const title = normalizeThreadDisplayPart(input.title);
   const subtitle = normalizeThreadDisplayPart(input.subtitle);
   if (title) {
+    if (title === 'one-offs') {
+      return `display:${title}`;
+    }
+
     return `display:${title}|${subtitle ?? ''}`;
   }
 

@@ -63,8 +63,22 @@ test('getThreadDisplayGroupIdentity coalesces duplicate visible thread lanes', (
   first.threadTitle = 'One-offs';
   second.threadTitle = 'One-offs';
   first.threadSubtitle = "Strong items outside today’s lanes.";
-  second.threadSubtitle = "Strong items outside today's lanes.";
+  second.threadSubtitle = "Sharp edges worth keeping";
 
   assert.notEqual(getThreadGroupIdentity(first)?.key, getThreadGroupIdentity(second)?.key);
   assert.equal(getThreadDisplayGroupIdentity(first)?.key, getThreadDisplayGroupIdentity(second)?.key);
+});
+
+test('getThreadDisplayGroupIdentity keeps non-one-off subtitle lanes separate', () => {
+  const first = item('first-security', '2026-05-01T00:00:00.000Z');
+  const second = item('second-security', '2026-05-01T00:01:00.000Z');
+  first.threadId = 'security-a';
+  second.threadId = 'security-b';
+  first.threadTitle = 'Security hides in defaults';
+  second.threadTitle = 'Security hides in defaults';
+  first.threadSubtitle = 'Small rules stop real failures.';
+  second.threadSubtitle = 'Supply chain updates need review.';
+
+  assert.notEqual(getThreadGroupIdentity(first)?.key, getThreadGroupIdentity(second)?.key);
+  assert.notEqual(getThreadDisplayGroupIdentity(first)?.key, getThreadDisplayGroupIdentity(second)?.key);
 });
