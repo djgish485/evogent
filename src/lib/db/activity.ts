@@ -195,21 +195,31 @@ export function completeCurationLogByRequestId(requestId: string, input: Curatio
 export function completeLatestPendingAutomatedCurationCycle(input: CurationLogCompleteInput = {}): boolean {
   const db = getDb();
   const pendingRow = db.prepare(`
-    SELECT id
+    SELECT id, feed_count_before
     FROM curation_log
     WHERE completed_at IS NULL
       AND triggered_by LIKE 'adaptive_heartbeat:%'
     ORDER BY datetime(started_at) DESC, id DESC
     LIMIT 1
-  `).get() as { id: number } | undefined;
+  `).get() as { id: number; feed_count_before: number | null } | undefined;
 
   if (!pendingRow) return false;
 
-  const itemsAdded = typeof input.itemsAdded === 'number'
+  const submittedItemsAdded = typeof input.itemsAdded === 'number'
     ? Math.max(0, Math.floor(input.itemsAdded))
     : 0;
+  const baseline = typeof pendingRow.feed_count_before === 'number'
+    ? Math.max(0, Math.floor(pendingRow.feed_count_before))
+    : null;
+  const feedDelta = baseline === null
+    ? 0
+    : Math.max(0, getFeedItemCount() - baseline);
+  const itemsAdded = Math.max(submittedItemsAdded, feedDelta);
   const completionStatus: CurationLogCompletionStatus = normalizeCompletionStatus(input.completionStatus)
     ?? (itemsAdded > 0 ? 'success' : 'successful_empty');
+  const resolvedCompletionStatus = itemsAdded > 0 && completionStatus === 'successful_empty'
+    ? 'success'
+    : completionStatus;
 
   const result = db.prepare(`
     UPDATE curation_log
@@ -224,7 +234,7 @@ export function completeLatestPendingAutomatedCurationCycle(input: CurationLogCo
     id: pendingRow.id,
     completed_at: toIso(input.completedAt),
     items_added: itemsAdded,
-    completion_status: completionStatus,
+    completion_status: resolvedCompletionStatus,
     completion_reason: normalizeCompletionReason(input.completionReason),
   });
 

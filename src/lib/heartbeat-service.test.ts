@@ -443,6 +443,43 @@ Off
     assert.strictEqual(newer?.completionStatus, 'success');
   });
 
+  test('completeLatestPendingAutomatedCurationCycle uses feed delta for summary-only submits', () => {
+    insertCurationLogStart({
+      requestId: 'summary-only-after-submit',
+      triggeredBy: 'adaptive_heartbeat:cron:app_open_auto',
+      startedAt: '2026-05-01T12:00:00.000Z',
+      feedCountBefore: 0,
+    });
+
+    const db = getDb();
+    db.prepare('INSERT INTO feed (id, type, text, published_at) VALUES (?, ?, ?, ?)').run(
+      'summary-only-feed-1',
+      'article',
+      'first accepted item',
+      '2026-05-01T12:01:00.000Z',
+    );
+    db.prepare('INSERT INTO feed (id, type, text, published_at) VALUES (?, ?, ?, ?)').run(
+      'summary-only-feed-2',
+      'tweet',
+      'second accepted item',
+      '2026-05-01T12:01:00.000Z',
+    );
+
+    const completed = completeLatestPendingAutomatedCurationCycle({
+      completedAt: '2026-05-01T12:05:00.000Z',
+      itemsAdded: 0,
+      completionStatus: 'successful_empty',
+      completionReason: 'curate-submit completed without new feed items',
+    });
+
+    assert.strictEqual(completed, true);
+
+    const entry = getCurationLogByRequestId('summary-only-after-submit');
+    assert.strictEqual(entry?.completedAt, '2026-05-01T12:05:00.000Z');
+    assert.strictEqual(entry?.itemsAdded, 2);
+    assert.strictEqual(entry?.completionStatus, 'success');
+  });
+
   test('completeAdaptiveHeartbeat sets completed_at and items_added', () => {
     const requestId = `complete-${Date.now()}`;
 
