@@ -10,9 +10,84 @@ import {
 import { getChatSessionSearchMatches } from '@/lib/db/chat-search';
 import { parseLimit, parseOffset, parseSearchQuery, parseSort, parseSourceFilter, parseThreadFilter, parseTypeFilter } from '@/lib/feed-query';
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
+import type { FeedItem, FeedThread } from '@/types/feed';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const FEED_THREAD_NAVIGATION_LIMIT = 100;
+
+function readTrimmedString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function parseTimestampMs(value: string | null | undefined): number | null {
+  const parsed = Date.parse(value ?? '');
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThread[]): FeedThread[] {
+  const fallbackThreadById = new Map(fallbackThreads.map((thread) => [thread.id, thread]));
+  const entries = new Map<string, {
+    thread: FeedThread;
+    firstIndex: number;
+    latestTimestampMs: number;
+  }>();
+
+  items.forEach((item, index) => {
+    const threadId = item.threadId?.trim()
+      || readTrimmedString(item.metadata?.thread?.threadId)
+      || readTrimmedString(item.metadata?.threadId);
+    if (!threadId) return;
+
+    const fallbackThread = fallbackThreadById.get(threadId);
+    const title = item.threadTitle?.trim()
+      || readTrimmedString(item.metadata?.thread?.threadTitle)
+      || readTrimmedString(item.metadata?.threadTitle)
+      || fallbackThread?.title?.trim()
+      || threadId;
+    const subtitle = item.threadSubtitle?.trim()
+      || readTrimmedString(item.metadata?.thread?.threadRationale)
+      || readTrimmedString(item.metadata?.threadRationale)
+      || fallbackThread?.subtitle?.trim()
+      || null;
+    const timestampMs = parseTimestampMs(item.createdAt)
+      ?? parseTimestampMs(item.publishedAt)
+      ?? fallbackThread?.updatedAtMs
+      ?? Date.now();
+    const existing = entries.get(threadId);
+
+    if (!existing) {
+      entries.set(threadId, {
+        thread: {
+          id: threadId,
+          title,
+          subtitle,
+          createdAtMs: fallbackThread?.createdAtMs ?? timestampMs,
+          updatedAtMs: Math.max(fallbackThread?.updatedAtMs ?? timestampMs, timestampMs),
+          active: true,
+        },
+        firstIndex: index,
+        latestTimestampMs: timestampMs,
+      });
+      return;
+    }
+
+    existing.latestTimestampMs = Math.max(existing.latestTimestampMs, timestampMs);
+    existing.thread.updatedAtMs = Math.max(existing.thread.updatedAtMs, timestampMs);
+    if (!existing.thread.subtitle && subtitle) {
+      existing.thread.subtitle = subtitle;
+    }
+  });
+
+  if (entries.size === 0) {
+    return fallbackThreads.filter((thread) => thread.active);
+  }
+
+  return Array.from(entries.values())
+    .sort((left, right) => left.firstIndex - right.firstIndex)
+    .map((entry) => entry.thread);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -33,7 +108,17 @@ export async function GET(request: Request) {
   const chatSessionMatches = search && offset === 0 && types.length === 0 && sources.length === 0
     ? getChatSessionSearchMatches(search)
     : [];
-  const activeThreads = getActiveFeedThreads();
+  const storedActiveThreads = getActiveFeedThreads();
+  const threadNavigationPage = getFeedPage({
+    offset: 0,
+    limit: FEED_THREAD_NAVIGATION_LIMIT,
+    types: [],
+    sources: [],
+    sort,
+    search: null,
+    threadId: null,
+  }, orderFreshness);
+  const activeThreads = buildFeedThreadNavigation(threadNavigationPage.items, storedActiveThreads);
 
   return NextResponse.json({
     items,
