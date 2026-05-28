@@ -82,4 +82,19 @@ describe('NotificationCard', () => {
     assert.doesNotMatch(markup, />Info</);
     assert.doesNotMatch(markup, /Plain notification fallback/);
   });
+
+  test('does not render an identical excerpt twice', () => {
+    const markup = renderToStaticMarkup(
+      <NotificationCard
+        item={createNotificationItem({
+          text: 'Duplicate body text.',
+          excerpt: 'Duplicate body text.',
+        })}
+        pendingAction={null}
+        onDismiss={() => {}}
+      />,
+    );
+
+    assert.equal(markup.match(/Duplicate body text\./g)?.length, 1);
+  });
 });
