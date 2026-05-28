@@ -195,6 +195,10 @@ function readThreadGroupDateScope(item: FeedItem): string | null {
 }
 
 export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId: string } | null {
+  if (item.threadDisplayEnabled === false) {
+    return null;
+  }
+
   const flatThreadId = readTrimmedMetadataString(item.metadata?.threadId);
   const threadId = item.threadId?.trim()
     || readTrimmedMetadataString(item.metadata?.thread?.threadId)

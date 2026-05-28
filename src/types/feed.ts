@@ -344,6 +344,7 @@ export interface FeedItem {
   tags: string[];
   mediaUrls: string[];
   displayOrder?: number | null;
+  threadDisplayEnabled?: boolean;
   threadId?: string | null;
   displaySubtitle?: string | null;
   threadTitle?: string | null;

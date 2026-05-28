@@ -82,3 +82,21 @@ test('getThreadDisplayGroupIdentity keeps non-one-off subtitle lanes separate', 
   assert.notEqual(getThreadGroupIdentity(first)?.key, getThreadGroupIdentity(second)?.key);
   assert.notEqual(getThreadDisplayGroupIdentity(first)?.key, getThreadDisplayGroupIdentity(second)?.key);
 });
+
+test('getThreadGroupIdentity ignores archived metadata when thread display is disabled', () => {
+  const archived = item('archived-metadata-thread', '2026-05-01T00:00:00.000Z');
+  archived.threadDisplayEnabled = false;
+  archived.threadId = null;
+  archived.threadTitle = null;
+  archived.threadSubtitle = null;
+  archived.metadata = {
+    thread: {
+      threadId: 'old-thread',
+      threadTitle: 'Old curator lane',
+      threadRationale: 'No longer in the live arrange',
+    },
+  };
+
+  assert.equal(getThreadGroupIdentity(archived), null);
+  assert.equal(getThreadDisplayGroupIdentity(archived), null);
+});
