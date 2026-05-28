@@ -127,6 +127,22 @@ export function compareFeedItems(
   return right.publishedAt.localeCompare(left.publishedAt);
 }
 
+export function compareThreadGroupItems(
+  left: FeedItem,
+  right: FeedItem,
+  sortOrder: FeedSortOrder,
+  options: { lastArrangeAtMs?: number | null; nowMs?: number } = {},
+): number {
+  const hasDisplayOrder = typeof left.displayOrder === 'number' || typeof right.displayOrder === 'number';
+  if (hasDisplayOrder) {
+    return compareFeedItems(left, right, sortOrder, options);
+  }
+
+  const byCreated = left.createdAt.localeCompare(right.createdAt);
+  if (byCreated !== 0) return byCreated;
+  return left.id.localeCompare(right.id);
+}
+
 export function readTrimmedMetadataString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
