@@ -69,6 +69,22 @@ export function shouldIncludeConversationTimelineEntry({
     || conversationLastTimestamp.localeCompare(oldestLoadedPrimaryFeedItemTimestamp) >= 0;
 }
 
+export function shouldShowAgentTimelineEntries({
+  hasActiveSearch,
+  selectedFilter,
+  selectedThreadId,
+}: {
+  hasActiveSearch: boolean;
+  selectedFilter: FeedFilter;
+  selectedThreadId: string | null;
+}): boolean {
+  if (hasActiveSearch || selectedThreadId) {
+    return false;
+  }
+
+  return selectedFilter === 'all' || selectedFilter === 'agent';
+}
+
 export function shouldRenderFeedEmptyState({
   isLoading,
   visibleFeedEntryCount,
