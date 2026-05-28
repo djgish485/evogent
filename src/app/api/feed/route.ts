@@ -10,13 +10,14 @@ import {
 import { getChatSessionSearchMatches } from '@/lib/db/chat-search';
 import { parseLimit, parseOffset, parseSearchQuery, parseSort, parseSourceFilter, parseThreadFilter, parseTypeFilter } from '@/lib/feed-query';
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
-import { getThreadDisplayGroupKey } from '@/lib/thread-display';
+import { getThreadDisplayGroupKey, normalizeThreadDisplayPart } from '@/lib/thread-display';
 import type { FeedItem, FeedThread } from '@/types/feed';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const FEED_THREAD_NAVIGATION_LIMIT = 100;
+const FEED_THREAD_NAVIGATION_MAX_ENTRIES = 12;
 
 function readTrimmedString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -25,6 +26,19 @@ function readTrimmedString(value: unknown): string | null {
 function parseTimestampMs(value: string | null | undefined): number | null {
   const parsed = Date.parse(value ?? '');
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getThreadNavigationGroupKey(input: {
+  threadId: string;
+  title?: string | null;
+  subtitle?: string | null;
+}): string {
+  const normalizedTitle = normalizeThreadDisplayPart(input.title);
+  if (normalizedTitle === 'one-offs') {
+    return `display:${normalizedTitle}`;
+  }
+
+  return getThreadDisplayGroupKey(input);
 }
 
 function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThread[]): FeedThread[] {
@@ -53,7 +67,7 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
       || readTrimmedString(item.metadata?.threadRationale)
       || fallbackThread?.subtitle?.trim()
       || null;
-    const displayGroupKey = getThreadDisplayGroupKey({ threadId, title, subtitle });
+    const displayGroupKey = getThreadNavigationGroupKey({ threadId, title, subtitle });
     const timestampMs = parseTimestampMs(item.createdAt)
       ?? parseTimestampMs(item.publishedAt)
       ?? fallbackThread?.updatedAtMs
@@ -95,6 +109,7 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
 
   return Array.from(entries.values())
     .sort((left, right) => left.firstIndex - right.firstIndex)
+    .slice(0, FEED_THREAD_NAVIGATION_MAX_ENTRIES)
     .map((entry) => entry.thread);
 }
 
