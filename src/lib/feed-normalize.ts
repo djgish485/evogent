@@ -72,14 +72,20 @@ export function shouldIncludeConversationTimelineEntry({
 
 export function shouldShowAgentTimelineEntries({
   hasActiveSearch,
+  isInitialFeedLoading = false,
   selectedFilter,
   selectedThreadId,
 }: {
   hasActiveSearch: boolean;
+  isInitialFeedLoading?: boolean;
   selectedFilter: FeedFilter;
   selectedThreadId: string | null;
 }): boolean {
   if (hasActiveSearch || selectedThreadId) {
+    return false;
+  }
+
+  if (selectedFilter === 'all' && isInitialFeedLoading) {
     return false;
   }
 
