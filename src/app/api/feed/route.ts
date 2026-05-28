@@ -51,9 +51,7 @@ function buildFeedThreadNavigation(items: FeedItem[], fallbackThreads: FeedThrea
   }>();
 
   items.forEach((item, index) => {
-    const threadId = item.threadId?.trim()
-      || readTrimmedString(item.metadata?.thread?.threadId)
-      || readTrimmedString(item.metadata?.threadId);
+    const threadId = item.threadId?.trim();
     if (!threadId) return;
 
     const fallbackThread = fallbackThreadById.get(threadId);
