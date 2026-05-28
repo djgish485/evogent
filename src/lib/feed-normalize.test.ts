@@ -100,3 +100,38 @@ test('getThreadGroupIdentity ignores archived metadata when thread display is di
   assert.equal(getThreadGroupIdentity(archived), null);
   assert.equal(getThreadDisplayGroupIdentity(archived), null);
 });
+
+test('getThreadGroupIdentity trusts live arrangement when metadata has an old thread', () => {
+  const demoted = item('demoted-metadata-thread', '2026-05-01T00:00:00.000Z');
+  demoted.threadDisplayEnabled = true;
+  demoted.threadId = null;
+  demoted.threadTitle = null;
+  demoted.threadSubtitle = null;
+  demoted.metadata = {
+    thread: {
+      threadId: 'old-thread',
+      threadTitle: 'Old curator lane',
+      threadRationale: 'No longer in the live arrange',
+    },
+  };
+
+  assert.equal(getThreadGroupIdentity(demoted), null);
+  assert.equal(getThreadDisplayGroupIdentity(demoted), null);
+});
+
+test('getThreadGroupIdentity still supports legacy metadata without live arrangement state', () => {
+  const legacy = item('legacy-metadata-thread', '2026-05-01T00:00:00.000Z');
+  legacy.threadId = null;
+  legacy.threadTitle = null;
+  legacy.threadSubtitle = null;
+  legacy.metadata = {
+    thread: {
+      threadId: 'metadata-thread',
+      threadTitle: 'Metadata curator lane',
+      threadRationale: 'Pre-arrangement thread shape',
+    },
+  };
+
+  assert.equal(getThreadGroupIdentity(legacy)?.threadId, 'metadata-thread');
+  assert.equal(getThreadDisplayGroupIdentity(legacy)?.threadId, 'metadata-thread');
+});

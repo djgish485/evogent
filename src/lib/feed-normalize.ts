@@ -199,8 +199,13 @@ export function getThreadGroupIdentity(item: FeedItem): { key: string; threadId:
     return null;
   }
 
+  const arrangedThreadId = item.threadId?.trim() || null;
+  if (item.threadDisplayEnabled === true && !arrangedThreadId) {
+    return null;
+  }
+
   const flatThreadId = readTrimmedMetadataString(item.metadata?.threadId);
-  const threadId = item.threadId?.trim()
+  const threadId = arrangedThreadId
     || readTrimmedMetadataString(item.metadata?.thread?.threadId)
     || flatThreadId;
   if (!threadId) {
