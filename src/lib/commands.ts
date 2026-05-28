@@ -23,6 +23,7 @@ const CODEX_SUPPORTED_COMMANDS = new Set(commandSupport.codex);
 const USER_FACING_COMMAND_NAMES = new Set([
   'compare',
   'curate',
+  'curate-latest',
   'develop',
   'develop-claude',
   'develop-gemini',

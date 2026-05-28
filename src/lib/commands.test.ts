@@ -87,6 +87,16 @@ test('listUserFacingCommands limits Codex installs to supported slash commands',
     'utf8',
   );
   await fs.promises.writeFile(
+    path.join(cwd, '.claude', 'commands', 'curate.md'),
+    'Run a full OpenClaw curation cycle.\n',
+    'utf8',
+  );
+  await fs.promises.writeFile(
+    path.join(cwd, '.claude', 'commands', 'curate-latest.md'),
+    '---\nmetadata:\n  evogent:\n    user-facing: true\n---\n\nRun latest-content live curation.\n',
+    'utf8',
+  );
+  await fs.promises.writeFile(
     path.join(cwd, '.claude', 'commands', 'reflect.md'),
     'Run reflection.\n',
     'utf8',
@@ -107,5 +117,5 @@ test('listUserFacingCommands limits Codex installs to supported slash commands',
     'utf8',
   );
   const commands = await listUserFacingCommands({ cwd, provider: 'codex' });
-  assert.deepStrictEqual(commands.map((command) => command.name), ['new-chat-session', 'reflect', 'research', 'source-status']);
+  assert.deepStrictEqual(commands.map((command) => command.name), ['curate', 'curate-latest', 'new-chat-session', 'reflect', 'research', 'source-status']);
 });
