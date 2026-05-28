@@ -114,6 +114,10 @@ export function resolveFeedFilterClickAction(input: {
   };
 }
 
+export function shouldClearThreadFilterForFeedFilter(filter: FeedFilter): boolean {
+  return filter === 'agent' || filter === 'suggestion' || filter === 'notification';
+}
+
 export function getFeedFilterBadgeCount(filter: FeedFilter, pendingCounts: FeedPendingCounts): number {
   if (filter === 'suggestion') {
     return pendingCounts.suggestion;
