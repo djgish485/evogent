@@ -21,7 +21,7 @@ if ! command -v openclaw >/dev/null 2>&1; then
   exit 1
 fi
 
-openclaw plugins install "$plugin_dir"
+openclaw plugins install --force "$plugin_dir"
 
 OPENCLAW_CONFIG_PATH="$config_file" node <<'NODE'
 const fs = require('node:fs');
