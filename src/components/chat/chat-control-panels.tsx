@@ -487,7 +487,17 @@ export function UsageSummaryModal({
   );
 }
 
-export function FeedEmptyLoadingState() {
+type FeedEmptyLoadingStateProps = {
+  title?: string;
+  description?: string;
+  statusLabel?: string;
+};
+
+export function FeedEmptyLoadingState({
+  title = 'Gathering your first posts',
+  description = 'Checking recent sources and preparing the first set of posts for your feed.',
+  statusLabel = 'Building the feed layout',
+}: FeedEmptyLoadingStateProps) {
   return (
     <div data-testid="feed-empty-loading-state" aria-live="polite" aria-busy="true" className="space-y-2">
       <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-950 to-zinc-900 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
@@ -499,11 +509,11 @@ export function FeedEmptyLoadingState() {
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-zinc-100">Gathering your first posts</p>
-            <p className="mt-1 text-xs leading-5 text-zinc-400">Checking recent sources and preparing the first set of posts for your feed.</p>
+            <p className="text-sm font-medium text-zinc-100">{title}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
             <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black/30 px-2.5 py-1 text-[11px] text-zinc-500">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              Building the feed layout
+              {statusLabel}
             </div>
           </div>
         </div>
