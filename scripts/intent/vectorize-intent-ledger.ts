@@ -163,10 +163,30 @@ function candidateRows(db: Database.Database, limit: number): CandidateRow[] {
         'data/preference-insights.md',
         'data/config.md'
       )
+    ),
+    recent_commits AS (
+      SELECT
+        'commit:' || sha AS id,
+        'commits' AS source_table,
+        sha AS source_id,
+        subject AS title,
+        substr(
+          trim(coalesce(subject, '') || char(10) || coalesce(body, '') || char(10) || coalesce(diffstat, '')),
+          1,
+          4000
+        ) AS text,
+        commit_date AS timestamp,
+        'commit' AS source_role
+      FROM commits
+      WHERE length(coalesce(subject, '')) > 0
+      ORDER BY coalesce(commit_ts, 0) DESC
+      LIMIT 250
     )
     SELECT id, source_table, source_id, title, text, timestamp, source_role FROM ranked_signals
     UNION ALL
     SELECT id, source_table, source_id, title, text, timestamp, source_role FROM doc_rows
+    UNION ALL
+    SELECT id, source_table, source_id, title, text, timestamp, source_role FROM recent_commits
   `).all(limit) as CandidateRow[];
 }
 
