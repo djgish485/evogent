@@ -158,6 +158,21 @@ export function getMostRecentActivity(): UserActivityRecord | null {
   };
 }
 
+export function getLastAppOpenAtMs(): number | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT timestamp
+    FROM user_activity
+    WHERE event = 'app_open'
+    ORDER BY timestamp DESC
+    LIMIT 1
+  `).get() as { timestamp: string } | undefined;
+
+  if (!row?.timestamp) return null;
+  const parsedMs = Date.parse(row.timestamp);
+  return Number.isFinite(parsedMs) ? parsedMs : null;
+}
+
 export function insertCurationLogStart(input: CurationLogStartInput): number {
   const db = getDb();
   const result = db.prepare(`
