@@ -51,7 +51,7 @@ const lines = rows.map((r) => JSON.stringify(r)).join('\n');
 const prompt = `${rubric}
 
 ---
-Score each feed item below for interestingness to Dan using the rubric above.
+Score each feed item below for interestingness to the user described by the rubric above.
 Items (one JSON per line; fields: id, type, source, d=date, au=author, t=title/text, rs=reason, br=bridge):
 
 ${lines}
