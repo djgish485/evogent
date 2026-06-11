@@ -18,7 +18,12 @@ from typing import Any
 DEFAULT_DB = Path(".intent-ledger/evogent-intent-ledger.sqlite")
 AUDIT_DIR = Path("data/intent-audits")
 VECTOR_SCRIPT = Path("scripts/intent/vectorize-intent-ledger.ts")
-AUDIT_ARTIFACT_MARKERS = ("data/intent-audits/", "/data/intent-audits/")
+EXCLUDED_EVIDENCE_MARKERS = (
+    "data/intent-audits/",
+    "/data/intent-audits/",
+    "scripts/intent/ledger_search_experiments.py",
+    "/scripts/intent/ledger_search_experiments.py",
+)
 
 
 def utc_now() -> str:
@@ -308,7 +313,7 @@ def is_generated_audit_artifact(row: dict[str, Any]) -> bool:
         row.get("keyword"),
     ]
     return any(
-        any(marker in str(field) for marker in AUDIT_ARTIFACT_MARKERS)
+        any(marker in str(field) for marker in EXCLUDED_EVIDENCE_MARKERS)
         for field in fields
         if field
     )

@@ -3,9 +3,11 @@ import Database from 'better-sqlite3';
 import { generateEmbedding } from '../../src/lib/vectors/embeddings';
 
 const EMBEDDING_DIM = 384;
+const EMBEDDING_VERSION = 'turn-text-v2';
 const DEFAULT_DB = '.intent-ledger/evogent-intent-ledger.sqlite';
 const AUDIT_ARTIFACT_MARKER = '/data/intent-audits/';
 const AUDIT_ARTIFACT_PREFIX = 'data/intent-audits/';
+const RETRIEVAL_TEST_MARKER = 'scripts/intent/ledger_search_experiments.py';
 
 type CandidateRow = {
   id: string;
@@ -190,6 +192,11 @@ function candidateRows(db: Database.Database, limit: number): CandidateRow[] {
   `).all(limit) as CandidateRow[];
 }
 
+function embeddingInput(row: CandidateRow, text: string): string {
+  if (row.source_table === 'turns') return text;
+  return `${row.title || ''}\n${text}`;
+}
+
 function hashText(text: string): string {
   // Keep this dependency-free; a stable idempotence hash is enough here.
   let h1 = 0x811c9dc5;
@@ -222,11 +229,12 @@ async function build(db: Database.Database, limit: number) {
   let vectorized = 0;
   for (const row of rows) {
     const text = row.text.slice(0, 4000);
-    const textHash = hashText(text);
+    const embeddingText = embeddingInput(row, text);
+    const textHash = hashText(`${EMBEDDING_VERSION}\n${embeddingText}`);
     const existing = hasExisting.get(row.id) as { text_hash: string } | undefined;
     upsertDoc.run(row.id, row.source_table, row.source_id, row.title, text, row.timestamp, row.source_role, textHash);
     if (existing?.text_hash === textHash && hasVector.get(row.id)) continue;
-    const embedding = await generateEmbedding(`${row.title || ''}\n${text}`);
+    const embedding = await generateEmbedding(embeddingText);
     deleteVec.run(row.id);
     insertVec.run(row.id, new Float32Array(embedding));
     vectorized += 1;
@@ -260,13 +268,14 @@ async function search(db: Database.Database, query: string, limit: number) {
       WHERE instr(coalesce(d.source_id, ''), '${AUDIT_ARTIFACT_MARKER}') = 0
         AND coalesce(d.source_id, '') NOT LIKE '${AUDIT_ARTIFACT_PREFIX}%'
         AND coalesce(d.title, '') NOT LIKE '${AUDIT_ARTIFACT_PREFIX}%'
+        AND instr(coalesce(d.source_id, ''), '${RETRIEVAL_TEST_MARKER}') = 0
     )
     SELECT
       *,
       distance
-        - CASE WHEN source_role = 'user' THEN 0.08 ELSE 0 END
-        + CASE WHEN source_role = 'assistant' THEN 0.04 ELSE 0 END
-        - CASE WHEN source_role = 'doc' THEN 0.02 ELSE 0 END
+        - CASE WHEN source_role = 'user' THEN 0.03 ELSE 0 END
+        + CASE WHEN source_role = 'assistant' THEN 0.03 ELSE 0 END
+        - CASE WHEN source_role = 'doc' OR source_table = 'docs' THEN 0.05 ELSE 0 END
         AS adjusted_distance
     FROM scored
     ORDER BY adjusted_distance ASC, distance ASC
