@@ -8,7 +8,7 @@ import { getChatMessagesPage, persistChatMessage } from '@/lib/db/chat';
 import { getDb } from '@/lib/db/client';
 import { mergeChatMessages } from '@/lib/chat-messages';
 import { normalizeGatewayErrorMessage } from '@/lib/openclaw/gateway-client';
-import { getInternalBaseUrl } from '@/lib/internal-api';
+import { refreshCachesBeforeOpenClawCuration } from '@/lib/openclaw/pre-curation-cache';
 import { type ChatMessage } from '@/types/chat';
 
 export const runtime = 'nodejs';
@@ -24,13 +24,6 @@ function decodeSessionKey(value: string): string {
 
 function sanitizeMessage(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
-
-function isFullCurationRequest(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-  if (!normalized || normalized.includes('latest-content-focused')) return false;
-  return normalized === '/curate'
-    || /^run (?:a full|one evogent) curation cycle\b/.test(normalized);
 }
 
 function sanitizeIdempotencyKey(value: unknown): string | null {
@@ -74,43 +67,6 @@ function ensureOpenClawChatSessionRecord(sessionKey: string): void {
       updated_at = datetime('now')
     WHERE id = ?
   `).run(sessionId, sessionId, sessionType, sessionType, sessionType, title, sessionId);
-}
-
-async function refreshCachesBeforeOpenClawCuration(message: string, requestId: string | null): Promise<void> {
-  if (!isFullCurationRequest(message)) {
-    return;
-  }
-
-  try {
-    const response = await fetch(`${getInternalBaseUrl()}/api/internal/cache-refresh/pre-curation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-      body: JSON.stringify({
-        task: {
-          id: requestId || `openclaw-curation-${Date.now()}`,
-          priority: 'heartbeat',
-          message,
-          metadata: {
-            automatedCuration: true,
-            curationCommand: '/curate',
-          },
-        },
-      }),
-    });
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`pre-curation cache refresh trigger failed (${response.status})${body ? `: ${body}` : ''}`);
-    }
-    const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-    if (payload?.ok === false) {
-      throw new Error(payload.error || 'pre-curation cache refresh trigger failed');
-    }
-  } catch (error) {
-    console.warn('[openclaw] pre-curation cache refresh failed:', error instanceof Error ? error.message : String(error));
-  }
 }
 
 function readIdempotencyKey(message: ChatMessage): string {

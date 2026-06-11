@@ -18,7 +18,11 @@ export interface SlashCommandDocument {
   path: string;
 }
 
-const CODEX_SUPPORTED_COMMANDS = new Set(commandSupport.codex);
+const CODEX_USER_FACING_COMMANDS = new Set([
+  ...commandSupport.codex,
+  'curate',
+  'curate-latest',
+]);
 
 const USER_FACING_COMMAND_NAMES = new Set([
   'compare',
@@ -263,7 +267,7 @@ export async function listUserFacingCommands(options: {
   return Array.from(deduped.values())
     .filter((command) => (
       provider !== 'codex'
-      || CODEX_SUPPORTED_COMMANDS.has(command.name)
+      || CODEX_USER_FACING_COMMANDS.has(command.name)
     ))
     .sort((left, right) => left.name.localeCompare(right.name));
 }

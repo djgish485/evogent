@@ -241,6 +241,8 @@ export async function queryBrowseCache(input = {}) {
   const source = typeof input.source === 'string' ? input.source.trim() : '';
   const freshAfterMs = timestampMs(input.since);
   const limit = normalizeLimit(input.limit, 100, 500);
+  const requirePublishedAt = input.requirePublishedAt === false ? false : true;
+  const excludeFeedDuplicates = input.excludeFeedDuplicates === false ? false : true;
 
   if (source) {
     params.set('source', source);
@@ -251,10 +253,33 @@ export async function queryBrowseCache(input = {}) {
   if (input.includeExpired) {
     params.set('includeExpired', '1');
   }
+  if (requirePublishedAt) {
+    params.set('requirePublishedAt', '1');
+  }
+  if (excludeFeedDuplicates) {
+    params.set('excludeFeedDuplicates', '1');
+  }
   params.set('unseenFirst', input.unseenFirst === false ? '0' : '1');
   params.set('limit', String(limit));
 
   return requestJson(`/api/internal/browse-cache/items?${params.toString()}`);
+}
+
+export async function queryCarryForwardFeed(input = {}) {
+  const params = new URLSearchParams();
+  const hours = normalizeLimit(input.hours, 168, 24 * 365 * 10);
+  const limit = normalizeLimit(input.limit, 250, 500);
+  const reviewLimit = normalizeLimit(input.reviewLimit, 50000, 50000);
+  const includeAllUnviewed = input.includeAllUnviewed === false || input.all === false ? false : true;
+  const includeDisplayed = input.includeDisplayed === false ? false : true;
+
+  params.set('hours', String(hours));
+  params.set('limit', String(limit));
+  params.set('reviewLimit', String(reviewLimit));
+  params.set('includeAllUnviewed', includeAllUnviewed ? 'true' : 'false');
+  params.set('includeDisplayed', includeDisplayed ? 'true' : 'false');
+
+  return requestJson(`/api/internal/curate/carry-forward?${params.toString()}`);
 }
 
 export async function matchPreferences(input) {
@@ -398,7 +423,7 @@ export async function searchChatHistory(input) {
 
 const browseCacheQueryTool = {
   name: 'evogent_browse_cache_query',
-  description: 'Return candidate items from Evogent browse_cache_items, optionally filtered by source and freshness.',
+  description: 'Return submittable candidate items from Evogent browse_cache_items, optionally filtered by source and freshness. By default rows must have publishedAtMs and must not already exist in feed.',
   parameters: {
     type: 'object',
     additionalProperties: false,
@@ -410,6 +435,16 @@ const browseCacheQueryTool = {
       },
       limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
       includeExpired: { type: 'boolean', default: false },
+      requirePublishedAt: {
+        type: 'boolean',
+        default: true,
+        description: 'When true, omit rows without a real publishedAtMs. Disable only for diagnostics.',
+      },
+      excludeFeedDuplicates: {
+        type: 'boolean',
+        default: true,
+        description: 'When true, omit cache rows whose sourceId is already present in feed. Disable only for diagnostics.',
+      },
       unseenFirst: { type: 'boolean', default: true },
     },
   },
@@ -420,8 +455,56 @@ const browseCacheQueryTool = {
       since: params.since,
       limit: params.limit,
       includeExpired: params.includeExpired === true,
+      requirePublishedAt: params.requirePublishedAt === false ? false : true,
+      excludeFeedDuplicates: params.excludeFeedDuplicates === false ? false : true,
       unseenFirst: params.unseenFirst === false ? false : true,
     }));
+  },
+};
+
+const carryForwardFeedTool = {
+  name: 'evogent_feed_carry_forward',
+  description: 'Review accepted-but-unviewed Evogent feed items from prior cycles, rank the full eligible set, and return the strongest carry-forward candidates that can be promoted by arrange without re-submitting duplicates.',
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      hours: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 87600,
+        default: 168,
+        description: 'Lookback window in hours when includeAllUnviewed/all is false. Ignored by the default all-unviewed review.',
+      },
+      includeAllUnviewed: {
+        type: 'boolean',
+        default: true,
+        description: 'When true, review every eligible unviewed primary feed item regardless of age before returning the ranked shortlist.',
+      },
+      all: {
+        type: 'boolean',
+        default: true,
+        description: 'Alias for includeAllUnviewed.',
+      },
+      reviewLimit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50000,
+        default: 50000,
+        description: 'Maximum eligible rows to score before ranking. Default is high enough to cover the current full unviewed backlog.',
+      },
+      includeDisplayed: {
+        type: 'boolean',
+        default: true,
+        description: 'When true, still-unviewed rows that already have a display_order remain in the reviewed set instead of being hidden from curator review.',
+      },
+      limit: { type: 'integer', minimum: 1, maximum: 500, default: 250 },
+    },
+  },
+  async execute(idOrParams, maybeParams) {
+    const params = toolParams(idOrParams, maybeParams);
+    const input = isRecord(params) ? params : {};
+    return textResult(await queryCarryForwardFeed(input));
   },
 };
 
@@ -510,6 +593,16 @@ const feedArrangeTool = {
             active: { type: 'boolean' },
           },
         },
+      },
+      carryForwardAudit: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional curator-written audit of which older accepted-but-unviewed items were promoted or deliberately dropped.',
+      },
+      cycleSummary: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional curator summary metadata, including carryForwardAudit when available.',
       },
     },
   },
@@ -605,6 +698,7 @@ const chatHistorySearchTool = {
 
 export const tools = [
   browseCacheQueryTool,
+  carryForwardFeedTool,
   preferencesMatchTool,
   feedSubmitTool,
   feedArrangeTool,

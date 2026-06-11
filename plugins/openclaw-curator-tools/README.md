@@ -32,7 +32,16 @@ discovered.
 
 ### `evogent_browse_cache_query`
 
-Returns candidates from `browse_cache_items`.
+Returns submittable candidates from `browse_cache_items`. By default it only
+returns rows with a real `publishedAtMs` and no existing `feed.source_id`
+duplicate. Set `requirePublishedAt: false` or `excludeFeedDuplicates: false`
+only for diagnostics when you intentionally need raw cache rows.
+
+### `evogent_feed_carry_forward`
+
+Returns the ranked accepted-but-unviewed feed candidates that can be promoted by
+`evogent_feed_arrange` without re-submitting duplicates. By default it reviews
+the full unviewed backlog, including already-displayed-but-still-unread rows.
 
 ### `evogent_preferences_match`
 
