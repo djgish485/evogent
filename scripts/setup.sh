@@ -264,3 +264,6 @@ echo "     so Chrome starts inside one long-lived desktop/keyring session"
 echo ""
 echo "Chat runs in the web server. Background tasks (curation, reflection,"
 echo "code-fix agents) run in the worker. Desktop Chrome is optional for browser-backed sources."
+
+# Intent ledger reminder hook (warn-only)
+git config core.hooksPath .githooks 2>/dev/null || true

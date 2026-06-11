@@ -1,0 +1,15 @@
+#!/bin/sh
+# Intent ledger reminder (warn-only, never blocks).
+# Behavior changes should land with their intent: check .intent/ before and append after.
+changed=$(git diff --cached --name-only)
+touches_behavior=$(echo "$changed" | grep -cE '^(src/|lib/|server\.js|plugins/|scripts/|\.claude/commands/|data/.*\.default\.md)' || true)
+touches_intent=$(echo "$changed" | grep -cE '^\.intent/' || true)
+if [ "$touches_behavior" -gt 0 ] && [ "$touches_intent" -eq 0 ]; then
+  echo "" >&2
+  echo "[intent-ledger] This commit changes behavior but not .intent/." >&2
+  echo "  1. Did you check .intent/contracts.jsonl (esp. status=law) and the backlog for this area?" >&2
+  echo "  2. If this implements/fixes/supersedes a backlog entry, update its status." >&2
+  echo "  3. If the user expressed new intent behind this change, append it (see AGENTS.md > Intent Backlog)." >&2
+  echo "  Proceeding anyway - this is a reminder, not a gate." >&2
+fi
+exit 0
