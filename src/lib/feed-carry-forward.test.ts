@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 import { getDb } from '@/lib/db/client';
 import {
   type FeedCarryForwardCandidate,
+  durabilityDecay,
   listFeedCarryForwardCandidates,
+  readEffectiveInterestByItemId,
   recordCarryForwardPromotions,
   selectCarryForwardPromotions,
 } from './feed-carry-forward';
@@ -112,6 +114,7 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
           prominence: { level: 'high' },
         },
         preferenceMatch: { relevanceScore: 0.92 },
+        interest: { score: 0.9, durability: 'evergreen', scoredBy: 'claude-bootstrap-20260611' },
       }),
       42,
       olderCreatedAt,
@@ -189,6 +192,7 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
           threadRationale: 'Every unviewed row must be reviewed before ranking.',
           prominence: { level: 'high' },
         },
+        interest: { score: 0.92, durability: 'evergreen', scoredBy: 'claude-bootstrap-20260611' },
       }),
       olderCreatedAt,
       olderCreatedAt,
@@ -365,6 +369,66 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
       noGapSelection.promoted.map((candidate) => candidate.id),
       ['ancient-1', 'ancient-2', 'ancient-3', 'ancient-4'],
     );
+  });
+
+  test('durabilityDecay holds evergreen flat and decays news fast', () => {
+    assert.strictEqual(durabilityDecay(24 * 90, 'evergreen'), 1);
+    assert.strictEqual(durabilityDecay(100, 'dated'), 1);
+    // 30 days dated: noticeably faded but alive.
+    const dated30d = durabilityDecay(24 * 30, 'dated');
+    assert.ok(dated30d > 0.3 && dated30d < 0.45, String(dated30d));
+    // 6 weeks dated: at/near the floor — the "out of date Codex take" case.
+    assert.ok(durabilityDecay(24 * 42, 'dated') <= 0.3);
+    assert.strictEqual(durabilityDecay(24, 'news'), 1);
+    // A week-old news item is mostly gone.
+    const news7d = durabilityDecay(24 * 7, 'news');
+    assert.ok(news7d < 0.35, String(news7d));
+    // Unknown class behaves like dated.
+    assert.strictEqual(durabilityDecay(100, null), 1);
+  });
+
+  test('persisted interest with durability dominates ranking', () => {
+    const db = getDb();
+    const nowMs = Date.UTC(2026, 5, 11, 12, 0, 0);
+    const insert = db.prepare(`
+      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
+      VALUES (?, 'article', 'unit-test', ?, ?, 'Body', ?, ?, NULL, NULL, ?, ?, ?)
+    `);
+    const oldMs = nowMs - 45 * 24 * 60 * 60 * 1000;
+    const oldAt = new Date(oldMs).toISOString();
+    insert.run('evergreen-45d', 'evergreen-45d', 'Evergreen gem', 'Mechanism that still lands.',
+      JSON.stringify({ interest: { score: 0.9, durability: 'evergreen' } }), oldAt, oldAt, oldMs);
+    insert.run('news-45d', 'news-45d', 'Stale breaking news', 'Release-day coverage.',
+      JSON.stringify({ interest: { score: 0.9, durability: 'news' } }), oldAt, oldAt, oldMs);
+    const freshMs = nowMs - 2 * 60 * 60 * 1000;
+    const freshAt = new Date(freshMs).toISOString();
+    insert.run('fresh-unscored', 'fresh-unscored', 'Fresh unscored item', 'Just curated.',
+      JSON.stringify({}), freshAt, freshAt, freshMs);
+
+    const candidates = listFeedCarryForwardCandidates({ includeAllUnviewed: true, limit: 5, nowMs });
+    assert.deepStrictEqual(
+      candidates.map((candidate) => candidate.id),
+      ['evergreen-45d', 'fresh-unscored', 'news-45d'],
+    );
+    assert.ok((candidates[0]?.scoreBreakdown.effectiveInterest ?? 0) > 0.85);
+    assert.ok((candidates[2]?.scoreBreakdown.effectiveInterest ?? 1) < 0.15);
+  });
+
+  test('readEffectiveInterestByItemId decays scored items and defaults unscored ones', () => {
+    const db = getDb();
+    const nowMs = Date.UTC(2026, 5, 11, 12, 0, 0);
+    const oldMs = nowMs - 45 * 24 * 60 * 60 * 1000;
+    const oldAt = new Date(oldMs).toISOString();
+    db.prepare(`
+      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
+      VALUES ('scored-news', 'article', 'unit-test', 'scored-news', 'Old news', 'Body', 'r', ?, NULL, NULL, ?, ?, ?)
+    `).run(JSON.stringify({ interest: { score: 0.8, durability: 'news' } }), oldAt, oldAt, oldMs);
+
+    const map = readEffectiveInterestByItemId(['scored-news', 'missing-row'], nowMs);
+    assert.ok((map.get('scored-news')?.effectiveInterest ?? 1) < 0.1);
+    assert.strictEqual(map.get('scored-news')?.scored, true);
+    assert.strictEqual(map.get('missing-row')?.scored, false);
+    assert.strictEqual(map.get('missing-row')?.effectiveInterest, 0.55);
   });
 
   test('recordCarryForwardPromotions increments the persisted promotion count', () => {
