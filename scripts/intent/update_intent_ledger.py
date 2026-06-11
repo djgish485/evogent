@@ -27,6 +27,12 @@ DEFAULT_DOCS = [
 
 DEFAULT_CLAUDE_PROJECT_GLOBS = [
     "/root/.claude/projects/-root-media-agent*",
+    # Evogent evidence also lives outside the repo-cwd project dir: early
+    # the-algo-era sessions, sessions run from /root, and the OpenClaw
+    # curator's own workspace sessions.
+    "/root/.claude/projects/-root-the-algo*",
+    "/root/.claude/projects/-root",
+    "/root/.claude/projects/-root--openclaw-workspace*",
 ]
 
 KEYWORDS = {
@@ -580,10 +586,10 @@ def delete_turn_signals_for_path(conn: sqlite3.Connection, path: str) -> None:
     )
 
 
-def discover_missing_claude_jsonl(conn: sqlite3.Connection, limit: int | None = None) -> list[Path]:
+def discover_missing_claude_jsonl(conn: sqlite3.Connection, limit: int | None = None, extra_globs: list[str] | None = None) -> list[Path]:
     known = {row[0] for row in conn.execute("select path from session_files")}
     candidates: list[Path] = []
-    for pattern in DEFAULT_CLAUDE_PROJECT_GLOBS:
+    for pattern in [*DEFAULT_CLAUDE_PROJECT_GLOBS, *(extra_globs or [])]:
         for root in Path("/").glob(pattern.lstrip("/")):
             if not root.exists():
                 continue
