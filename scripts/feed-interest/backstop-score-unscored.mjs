@@ -9,14 +9,15 @@
  * Run via evogent-interest-backstop.timer (or manually).
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const dbPath = process.env.MEDIA_AGENT_DB_PATH || path.join(repoRoot, 'data', 'media-agent.db');
-const rubricPath = path.join(repoRoot, 'docs', 'interestingness-rubric.md');
+const userRubricPath = path.join(repoRoot, 'data', 'interestingness-rubric.md');
+const templateRubricPath = path.join(repoRoot, 'data', 'interestingness-rubric.default.md');
 const batchLimit = Number(process.env.INTEREST_BACKSTOP_LIMIT || 150);
 
 const db = new Database(dbPath);
@@ -42,7 +43,10 @@ if (rows.length === 0) {
   process.exit(0);
 }
 
-const rubric = readFileSync(rubricPath, 'utf8');
+const rubric = readFileSync(
+  existsSync(userRubricPath) ? userRubricPath : templateRubricPath,
+  'utf8',
+);
 const lines = rows.map((r) => JSON.stringify(r)).join('\n');
 const prompt = `${rubric}
 
