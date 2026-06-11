@@ -23,7 +23,8 @@ const batchLimit = Number(process.env.INTEREST_BACKSTOP_LIMIT || 150);
 const db = new Database(dbPath);
 const rows = db.prepare(`
   SELECT id, type, source, substr(created_at,1,10) AS d, coalesce(author_username,'') AS au,
-    substr(coalesce(nullif(title,''), text, ''),1,160) AS t, substr(coalesce(reason,''),1,110) AS rs,
+    substr(coalesce(nullif(title,''), text, ''),1,160) AS t, substr(coalesce(text,''),1,700) AS tx,
+    substr(coalesce(reason,''),1,110) AS rs,
     substr(coalesce(json_extract(metadata,'$.bridge'),''),1,110) AS br
   FROM feed
   WHERE type IN ('tweet','article','analysis','youtube','hackernews')
@@ -52,7 +53,8 @@ const prompt = `${rubric}
 
 ---
 Score each feed item below for interestingness to the user described by the rubric above.
-Items (one JSON per line; fields: id, type, source, d=date, au=author, t=title/text, rs=reason, br=bridge):
+Items (one JSON per line; fields: id, type, source, d=date, au=author, t=title, tx=body excerpt, rs=reason, br=bridge).
+Judge on the actual content in t+tx, not the container: a digest-format card whose excerpt contains a concrete mechanism, named actors, or a real delta scores on that substance; one whose excerpt is boilerplate sections, null reports, or repeats scores near zero.
 
 ${lines}
 
