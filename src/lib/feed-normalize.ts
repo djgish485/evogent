@@ -42,6 +42,17 @@ export function isPrimaryFeedItem(item: FeedItem) {
     && !shouldSuppressFeedSystemNotice(item);
 }
 
+export function isReflectionFeedItem(item: FeedItem): boolean {
+  if (item.type !== 'analysis') {
+    return false;
+  }
+  // Reflection rows have drifted across three metadata shapes over time;
+  // detect all of them so process notices never pass as editorial analysis.
+  return item.metadata?.reflectionCycle === true
+    || readTrimmedMetadataString(item.metadata?.mode)?.toLowerCase() === 'reflection'
+    || item.id.startsWith('reflection-');
+}
+
 export function countPrimaryFeedItems(items: FeedItem[]) {
   return items.filter((item) => isPrimaryFeedItem(item)).length;
 }
@@ -63,16 +74,22 @@ export function getOldestLoadedPrimaryFeedItemTimestamp(
   }, null);
 }
 
+export const CONVERSATION_TIMELINE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
 export function shouldIncludeConversationTimelineEntry({
   selectedFilter,
   oldestLoadedPrimaryFeedItemTimestamp,
   conversationLastTimestamp,
+  conversationMessageCount = null,
   isInitialPrimaryFeedLoading = false,
+  nowMs = Date.now(),
 }: {
   selectedFilter: FeedFilter;
   oldestLoadedPrimaryFeedItemTimestamp: string | null;
   conversationLastTimestamp: string;
+  conversationMessageCount?: number | null;
   isInitialPrimaryFeedLoading?: boolean;
+  nowMs?: number;
 }): boolean {
   if (selectedFilter === 'agent') {
     return true;
@@ -82,8 +99,25 @@ export function shouldIncludeConversationTimelineEntry({
     return false;
   }
 
-  return oldestLoadedPrimaryFeedItemTimestamp === null
-    || conversationLastTimestamp.localeCompare(oldestLoadedPrimaryFeedItemTimestamp) >= 0;
+  // With no curated content loaded at all (fresh install), sessions are the
+  // only surface the user has — keep them visible.
+  if (oldestLoadedPrimaryFeedItemTimestamp === null) {
+    return true;
+  }
+
+  // Once content exists, sessions earn a timeline slot only with real,
+  // recent activity: empty shells and long-idle dev sessions otherwise pile
+  // up below the curated feed and push the load-more sentinel out of reach.
+  if (typeof conversationMessageCount === 'number' && conversationMessageCount <= 0) {
+    return false;
+  }
+
+  const lastActivityMs = Date.parse(conversationLastTimestamp);
+  if (Number.isFinite(lastActivityMs) && nowMs - lastActivityMs > CONVERSATION_TIMELINE_MAX_AGE_MS) {
+    return false;
+  }
+
+  return conversationLastTimestamp.localeCompare(oldestLoadedPrimaryFeedItemTimestamp) >= 0;
 }
 
 export function shouldRenderFeedEmptyState({

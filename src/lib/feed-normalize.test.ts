@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compareThreadGroupItems } from './feed-render-entries';
-import { getThreadDisplayGroupIdentity, getThreadGroupIdentity } from './feed-normalize';
+import {
+  getThreadDisplayGroupIdentity,
+  getThreadGroupIdentity,
+  isReflectionFeedItem,
+  shouldIncludeConversationTimelineEntry,
+} from './feed-normalize';
 import type { FeedItem } from '@/types/feed';
 
 function item(id: string, createdAt: string, displayOrder: number | null = null): FeedItem {
@@ -133,4 +138,76 @@ test('getThreadGroupIdentity still supports legacy metadata without live arrange
 
   assert.equal(getThreadGroupIdentity(legacy)?.threadId, 'metadata-thread');
   assert.equal(getThreadDisplayGroupIdentity(legacy)?.threadId, 'metadata-thread');
+});
+
+test('shouldIncludeConversationTimelineEntry excludes empty sessions outside the agent filter', () => {
+  const nowMs = Date.parse('2026-06-10T12:00:00.000Z');
+  const base = {
+    selectedFilter: 'all' as const,
+    oldestLoadedPrimaryFeedItemTimestamp: '2026-04-22T00:00:00.000Z',
+    conversationLastTimestamp: '2026-06-10T11:00:00.000Z',
+    nowMs,
+  };
+
+  assert.equal(shouldIncludeConversationTimelineEntry({ ...base, conversationMessageCount: 0 }), false);
+  assert.equal(shouldIncludeConversationTimelineEntry({ ...base, conversationMessageCount: 12 }), true);
+  assert.equal(shouldIncludeConversationTimelineEntry({
+    ...base,
+    selectedFilter: 'agent',
+    conversationMessageCount: 0,
+  }), true);
+});
+
+test('shouldIncludeConversationTimelineEntry excludes long-idle sessions outside the agent filter', () => {
+  const nowMs = Date.parse('2026-06-10T12:00:00.000Z');
+  const base = {
+    selectedFilter: 'all' as const,
+    oldestLoadedPrimaryFeedItemTimestamp: '2026-04-22T00:00:00.000Z',
+    conversationMessageCount: 40,
+    nowMs,
+  };
+
+  // 20 days idle: out, even though it is newer than the oldest loaded carry-forward item.
+  assert.equal(shouldIncludeConversationTimelineEntry({
+    ...base,
+    conversationLastTimestamp: '2026-05-21T12:00:00.000Z',
+  }), false);
+  // Active within the last 48h: in.
+  assert.equal(shouldIncludeConversationTimelineEntry({
+    ...base,
+    conversationLastTimestamp: '2026-06-09T13:00:00.000Z',
+  }), true);
+  // Agent filter always shows sessions regardless of idleness.
+  assert.equal(shouldIncludeConversationTimelineEntry({
+    ...base,
+    selectedFilter: 'agent',
+    conversationLastTimestamp: '2026-05-21T12:00:00.000Z',
+  }), true);
+});
+
+test('isReflectionFeedItem detects all reflection metadata shapes', () => {
+  const legacyShape = item('legacy-reflection', '2026-06-10T00:00:00.000Z');
+  legacyShape.type = 'analysis';
+  legacyShape.metadata = { reflectionCycle: true };
+
+  const modeShape = item('mode-reflection', '2026-06-10T00:00:00.000Z');
+  modeShape.type = 'analysis';
+  modeShape.metadata = { mode: 'reflection' };
+
+  const idShape = item('reflection-20260610T1114Z-f8e1523a', '2026-06-10T00:00:00.000Z');
+  idShape.type = 'analysis';
+  idShape.metadata = {};
+
+  const editorialAnalysis = item('curate-20260610-analysis-1', '2026-06-10T00:00:00.000Z');
+  editorialAnalysis.type = 'analysis';
+  editorialAnalysis.metadata = { bridge: 'A concrete claim with sources.' };
+
+  const reflectionTitledTweet = item('reflection-id-but-tweet', '2026-06-10T00:00:00.000Z');
+  reflectionTitledTweet.type = 'tweet';
+
+  assert.equal(isReflectionFeedItem(legacyShape), true);
+  assert.equal(isReflectionFeedItem(modeShape), true);
+  assert.equal(isReflectionFeedItem(idShape), true);
+  assert.equal(isReflectionFeedItem(editorialAnalysis), false);
+  assert.equal(isReflectionFeedItem(reflectionTitledTweet), false);
 });
