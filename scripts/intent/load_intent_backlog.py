@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Load/append intent backlog entries into the canonical intent ledger.
+"""Append intent backlog entries: writes to .intent/backlog.jsonl (the
+committed, append-only source of truth) and re-syncs the SQLite index.
 
 The backlog is the fine-grained, dated register of the product owner's
 intentions (Drew Breunig-style: the story of why, mined from chat logs and
@@ -115,6 +116,31 @@ def main() -> None:
             )
             upserted += 1
     conn.commit()
+    # source of truth: append normalized entries to the repo JSONL
+    import os
+    repo_jsonl = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".intent", "backlog.jsonl")
+    existing_keys = set()
+    if os.path.exists(repo_jsonl):
+        with open(repo_jsonl) as rf:
+            for raw in rf:
+                raw = raw.strip()
+                if raw:
+                    try:
+                        existing_keys.add(json.loads(raw)["key"])
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+    appended = 0
+    with open(repo_jsonl, "a") as af:
+        for row in conn.execute("SELECT key, ts, kind, area, intent, quote, status, status_note, supersedes, added_by FROM intent_backlog"):
+            if row[0] in existing_keys:
+                continue
+            entry = {"key": row[0], "ts": row[1], "kind": row[2], "area": row[3], "intent": row[4],
+                     "quote": row[5], "status": row[6], "status_note": row[7], "supersedes": row[8],
+                     "author": args.added_by, "added_by": row[9]}
+            af.write(json.dumps({k: v for k, v in entry.items() if v not in (None, "")}, ensure_ascii=False) + "\n")
+            appended += 1
+    if appended:
+        print(f"appended {appended} entries to .intent/backlog.jsonl - COMMIT IT")
     total = conn.execute("SELECT count(*) FROM intent_backlog").fetchone()[0]
     print(f"upserted {upserted}, skipped {skipped}, total {total}")
 
