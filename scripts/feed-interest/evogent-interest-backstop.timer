@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Evogent interest backstop scorer every 2 hours
+
+[Timer]
+OnCalendar=*-*-* 00/2:45:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

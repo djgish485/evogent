@@ -1,0 +1,9 @@
+[Unit]
+Description=Evogent interest backstop scorer (stamps metadata.interest on unscored curated items)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/media-agent
+ExecStart=/usr/bin/node /root/media-agent/scripts/feed-interest/backstop-score-unscored.mjs
+TimeoutStartSec=900
