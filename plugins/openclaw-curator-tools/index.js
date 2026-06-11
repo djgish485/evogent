@@ -531,7 +531,7 @@ const preferencesMatchTool = {
 
 const feedSubmitTool = {
   name: 'evogent_feed_submit',
-  description: 'Submit curated feed items to Evogent live feed storage through /api/internal/curate/submit.',
+  description: 'Submit curated feed items to Evogent live feed storage through /api/internal/curate/submit. EVERY item must include metadata.interest = { score: 0-1 judged as-if-fresh, durability: evergreen|dated|news } — this persisted judgment decides all future top slates.',
   parameters: {
     type: 'object',
     additionalProperties: true,
