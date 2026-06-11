@@ -51,6 +51,7 @@ Install this skill when you want YouTube to behave like the other browse-cache-b
 - Every cached item must include `source: "youtube"`, `sourceId` as the canonical YouTube video id, `payload`, `fetchedAtMs`, and `expiresAtMs`.
 - Include `url`, `title`, `authorUsername`, `authorDisplayName`, and `publishedAtMs` when known. Use the canonical watch URL `https://www.youtube.com/watch?v=<videoId>`.
 - Put the complete extracted video object in `payload`, including channel facts, thumbnail URL, duration, publish label, source surface, and any extraction diagnostics useful for curation.
+- `payload` must include the view-count fields exactly as the surface displays them: `viewCountText` (the verbatim label, e.g. `1.2M views`) and numeric `viewCount` when parseable from that label. A row missing `viewCountText` when the listing surface visibly shows one is an extraction failure, not an optional field — the feed card renders these metrics. Include `likeCount` too whenever a watch page is visited and shows it.
 - Persist the run through `POST ${API_BASE}/api/internal/browse-cache/submit`.
 - On success, submit `status: "completed"` with the kept `items` array and a `cycleSummary` containing per-surface counts and skipped reasons.
 - If the refresh cannot produce at least one persisted item, submit `status: "failed"`, `items: []`, and an `error` beginning `no_rows:`.

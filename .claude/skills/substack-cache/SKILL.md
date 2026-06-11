@@ -28,6 +28,7 @@ Install this skill when you want Substack to be an active direct-browse source.
 - Stay inside the shared authenticated browser session. Do not spawn another agent and do not use repo-specific browser scripts.
 - Capture the strongest raw candidates in your scratchpad, then submit only the posts that clear the editorial bar.
 - Preserve canonical URLs, publication identity, visible publish times, and verified images in submitted metadata.
+- Every cached item's `payload` must include `imageUrl`: the post's `og:image`, cover image, or first in-article hero image as an absolute URL. Favicon- or icon-scale images (anything roughly 200px wide or smaller) do not count as the article image. If the post genuinely exposes no usable image, set `imageUrl: null` and note it in extraction diagnostics — the feed card shows this image, so silently omitting it produces image-less cards.
 
 ## Cacher Mode
 

@@ -182,6 +182,13 @@ export function isPostMergeReviewCallbackMessage(message: ChatAuthorMessage): bo
     && message.metadata?.source === 'post_merge_review';
 }
 
+export function isAutomatedCurationTriggerMessage(message: ChatAuthorMessage): boolean {
+  const idempotencyKey = typeof message.metadata?.idempotencyKey === 'string'
+    ? message.metadata.idempotencyKey
+    : '';
+  return message.role === 'user' && idempotencyKey.startsWith('openclaw-heartbeat-');
+}
+
 export function getChatMessageAuthorLabel(
   message: ChatAuthorMessage,
   agentName: string,
@@ -193,7 +200,9 @@ export function getChatMessageAuthorLabel(
 
   const baseLabel = isPostMergeReviewCallbackMessage(message)
     ? 'Code fix callback'
-    : 'You';
+    : isAutomatedCurationTriggerMessage(message)
+      ? 'Automated'
+      : 'You';
   const isCancelled = options.isCancelled ?? message.status === 'cancelled';
   return isCancelled ? `${baseLabel} • Cancelled` : baseLabel;
 }
