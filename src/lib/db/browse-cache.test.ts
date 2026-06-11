@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -225,6 +226,70 @@ describe('browse cache refresh run timestamps', () => {
       twitterOnly.slice(0, 3).map((item) => item.sourceId),
       ['twitter-0', 'twitter-1', 'twitter-2'],
     );
+  });
+
+  test('submittable item listing can require published timestamps and exclude feed duplicates', () => {
+    const now = Date.now();
+    const db = getDb();
+    const insertCacheItem = db.prepare(`
+      INSERT INTO browse_cache_items (
+        source,
+        source_id,
+        title,
+        published_at_ms,
+        payload_json,
+        fetched_at_ms,
+        expires_at_ms
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertCacheItem.run(
+      'hackernews',
+      'fresh-unique',
+      'Fresh unique story',
+      now - 1_000,
+      JSON.stringify({ sourceId: 'fresh-unique' }),
+      now,
+      now + 60_000,
+    );
+    insertCacheItem.run(
+      'hackernews',
+      'missing-published',
+      'Missing published story',
+      null,
+      JSON.stringify({ sourceId: 'missing-published' }),
+      now - 1,
+      now + 60_000,
+    );
+    insertCacheItem.run(
+      'hackernews',
+      'already-in-feed',
+      'Already in feed story',
+      now - 2_000,
+      JSON.stringify({ sourceId: 'already-in-feed' }),
+      now - 2,
+      now + 60_000,
+    );
+    db.prepare(`
+      INSERT INTO feed (id, type, source, source_id, title, text, url, published_at, created_at)
+      VALUES (?, 'article', 'hackernews', 'already-in-feed', 'Existing feed story', 'Already accepted', 'https://example.com/already-in-feed', '2026-06-07T20:00:00.000Z', '2026-06-07T20:01:00.000Z')
+    `).run(`existing-feed-${randomUUID()}`);
+
+    const rawItems = listBrowseCacheItems({ source: 'hackernews', includeExpired: true, limit: 20 });
+    assert.deepStrictEqual(
+      new Set(rawItems.map((item) => item.sourceId)),
+      new Set(['fresh-unique', 'missing-published', 'already-in-feed']),
+    );
+
+    const submittableItems = listBrowseCacheItems({
+      source: 'hackernews',
+      includeExpired: true,
+      requirePublishedAt: true,
+      excludeFeedDuplicates: true,
+      limit: 20,
+    });
+    assert.deepStrictEqual(submittableItems.map((item) => item.sourceId), ['fresh-unique']);
   });
 
   test('twitter refresh canonicalizes prefixed source ids and keeps complete status-page text', () => {

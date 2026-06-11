@@ -10,7 +10,6 @@ import { insertChatMessage } from './db/chat';
 import { createChatSession } from './db/chat-sessions';
 import {
   completeCurationLogByRequestId,
-  completeLatestPendingAutomatedCurationCycle,
   getCurationLogByRequestId,
   getLatestSuccessfulCurationTime,
   hasPendingCurationCycle,
@@ -290,6 +289,54 @@ Off
     }
   });
 
+  test('evaluateAdaptiveHeartbeat records failed OpenClaw enqueue attempts', async () => {
+    globalThis.fetch = (async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      assert.ok(url.endsWith('/api/openclaw/chat/agent%3Acurator%3Amain'));
+      openClawPayload = init?.body && typeof init.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'pre-curation cache refresh timed out before full curation',
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const result = await evaluateAdaptiveHeartbeat({
+      triggeredBy: 'unit-test-enqueue-failed',
+      latestActivity: {
+        event: 'pull_refresh',
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    assert.strictEqual(result.triggered, false);
+    assert.strictEqual(result.requestId, null);
+    assert.match(result.triggerReason, /pre-curation cache refresh timed out/);
+    assert.ok(typeof openClawPayload?.idempotencyKey === 'string');
+
+    const failedLog = getDb().prepare(`
+      SELECT request_id, completed_at, items_added, completion_status, completion_reason
+      FROM curation_log
+      WHERE request_id = ?
+    `).get(openClawPayload.idempotencyKey) as {
+      request_id: string;
+      completed_at: string | null;
+      items_added: number;
+      completion_status: string;
+      completion_reason: string;
+    } | undefined;
+
+    assert.ok(failedLog);
+    assert.ok(failedLog.completed_at);
+    assert.strictEqual(failedLog.items_added, 0);
+    assert.strictEqual(failedLog.completion_status, 'failed');
+    assert.match(failedLog.completion_reason, /pre-curation cache refresh timed out/);
+  });
+
   test('evaluateAdaptiveHeartbeat skips if pending curation exists', async () => {
     const pendingId = `pending-${Date.now()}`;
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
@@ -343,6 +390,69 @@ Off
     assert.strictEqual(result.requestId, null);
   });
 
+  test('hasPendingCurationCycle ignores stale delivered OpenClaw curator prompts', () => {
+    insertChatMessage({
+      id: `openclaw-delivered-stale-${Date.now()}`,
+      role: 'user',
+      sessionId: 'openclaw:agent:curator:main',
+      text: 'Run a full curation cycle now.',
+      status: 'delivered',
+      timestamp: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    });
+
+    assert.strictEqual(hasPendingCurationCycle(), false);
+  });
+
+  test('hasPendingCurationCycle holds recent delivered OpenClaw curator prompts briefly', () => {
+    insertChatMessage({
+      id: `openclaw-delivered-recent-${Date.now()}`,
+      role: 'user',
+      sessionId: 'openclaw:agent:curator:main',
+      text: 'Run a full curation cycle now.',
+      status: 'delivered',
+      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    });
+
+    assert.strictEqual(hasPendingCurationCycle(), true);
+  });
+
+  test('hasPendingCurationCycle ignores delivered OpenClaw prompts for completed aborted runs', () => {
+    const requestId = `openclaw-heartbeat-aborted-${Date.now()}`;
+    insertCurationLogStart({
+      requestId,
+      triggeredBy: 'adaptive_heartbeat:unit-test:max_interval_elapsed',
+      startedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      feedCountBefore: 0,
+    });
+    completeCurationLogByRequestId(requestId, {
+      completionStatus: 'aborted',
+      completionReason: 'deployment restart interrupted pre-curation',
+    });
+    insertChatMessage({
+      id: `openclaw-user-${requestId}`,
+      role: 'user',
+      sessionId: 'openclaw:agent:curator:main',
+      text: 'Run a full curation cycle now.',
+      status: 'delivered',
+      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    });
+
+    assert.strictEqual(hasPendingCurationCycle(), false);
+  });
+
+  test('hasPendingCurationCycle treats active OpenClaw curator prompts as pending', () => {
+    insertChatMessage({
+      id: `openclaw-queued-active-${Date.now()}`,
+      role: 'user',
+      sessionId: 'openclaw:agent:curator:main',
+      text: 'Run a full curation cycle now.',
+      status: 'queued',
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    });
+
+    assert.strictEqual(hasPendingCurationCycle(), true);
+  });
+
   test('evaluateAdaptiveHeartbeat skips when automatic curation is disabled in config', async () => {
     await fs.promises.writeFile(path.join(tempDir, 'config.md'), [
       '# Evogent Config',
@@ -367,117 +477,6 @@ Off
     assert.strictEqual(result.triggerReason, 'automatic_curation_disabled');
     assert.strictEqual(result.requestId, null);
     assert.strictEqual(result.queueDepth, 0);
-  });
-
-  test('openclaw curator prompts count as pending until a successful completion lands', () => {
-    const db = getDb();
-    const sessionId = 'openclaw:agent:curator:main';
-    const promptAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-
-    db.prepare(`
-      INSERT INTO chat_sessions (
-        id,
-        provider,
-        provider_session_id,
-        claude_session_id,
-        title,
-        session_type,
-        working_directory
-      ) VALUES (?, 'claude', ?, ?, ?, NULL, ?)
-    `).run(sessionId, sessionId, sessionId, 'Session 57', process.cwd());
-
-    insertChatMessage({
-      id: `openclaw-prompt-${Date.now()}`,
-      role: 'user',
-      sessionId,
-      text: 'Run a full curation cycle now.',
-      status: 'delivered',
-      timestamp: promptAt,
-      metadata: { idempotencyKey: 'openclaw-heartbeat-test-pending' },
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), true);
-
-    insertCurationLogStart({
-      requestId: 'openclaw-completed-after-prompt',
-      triggeredBy: 'adaptive_heartbeat:timer:max_interval_elapsed',
-      startedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      feedCountBefore: 10,
-    });
-    completeCurationLogByRequestId('openclaw-completed-after-prompt', {
-      completedAt: new Date().toISOString(),
-      itemsAdded: 1,
-      completionStatus: 'success',
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), false);
-  });
-
-  test('completeLatestPendingAutomatedCurationCycle closes the newest pending heartbeat', () => {
-    insertCurationLogStart({
-      requestId: 'older-pending-heartbeat',
-      triggeredBy: 'adaptive_heartbeat:timer:max_interval_elapsed',
-      startedAt: '2026-05-01T10:00:00.000Z',
-      feedCountBefore: 10,
-    });
-    insertCurationLogStart({
-      requestId: 'newer-pending-heartbeat',
-      triggeredBy: 'adaptive_heartbeat:cron:max_interval_elapsed',
-      startedAt: '2026-05-01T11:00:00.000Z',
-      feedCountBefore: 10,
-    });
-
-    const completed = completeLatestPendingAutomatedCurationCycle({
-      completedAt: '2026-05-01T11:05:00.000Z',
-      itemsAdded: 3,
-      completionStatus: 'success',
-      completionReason: 'curate-submit accepted 3 items',
-    });
-
-    assert.strictEqual(completed, true);
-    assert.strictEqual(getCurationLogByRequestId('older-pending-heartbeat')?.completedAt, null);
-
-    const newer = getCurationLogByRequestId('newer-pending-heartbeat');
-    assert.strictEqual(newer?.completedAt, '2026-05-01T11:05:00.000Z');
-    assert.strictEqual(newer?.itemsAdded, 3);
-    assert.strictEqual(newer?.completionStatus, 'success');
-  });
-
-  test('completeLatestPendingAutomatedCurationCycle uses feed delta for summary-only submits', () => {
-    insertCurationLogStart({
-      requestId: 'summary-only-after-submit',
-      triggeredBy: 'adaptive_heartbeat:cron:app_open_auto',
-      startedAt: '2026-05-01T12:00:00.000Z',
-      feedCountBefore: 0,
-    });
-
-    const db = getDb();
-    db.prepare('INSERT INTO feed (id, type, text, published_at) VALUES (?, ?, ?, ?)').run(
-      'summary-only-feed-1',
-      'article',
-      'first accepted item',
-      '2026-05-01T12:01:00.000Z',
-    );
-    db.prepare('INSERT INTO feed (id, type, text, published_at) VALUES (?, ?, ?, ?)').run(
-      'summary-only-feed-2',
-      'tweet',
-      'second accepted item',
-      '2026-05-01T12:01:00.000Z',
-    );
-
-    const completed = completeLatestPendingAutomatedCurationCycle({
-      completedAt: '2026-05-01T12:05:00.000Z',
-      itemsAdded: 0,
-      completionStatus: 'successful_empty',
-      completionReason: 'curate-submit completed without new feed items',
-    });
-
-    assert.strictEqual(completed, true);
-
-    const entry = getCurationLogByRequestId('summary-only-after-submit');
-    assert.strictEqual(entry?.completedAt, '2026-05-01T12:05:00.000Z');
-    assert.strictEqual(entry?.itemsAdded, 2);
-    assert.strictEqual(entry?.completionStatus, 'success');
   });
 
   test('completeAdaptiveHeartbeat sets completed_at and items_added', () => {

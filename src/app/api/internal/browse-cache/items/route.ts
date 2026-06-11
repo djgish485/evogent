@@ -28,11 +28,15 @@ export async function GET(request: Request) {
   const freshAfterMs = parseInteger(searchParams.get('freshAfterMs'));
   const limit = parseInteger(searchParams.get('limit'), 200) ?? 200;
   const includeExpired = searchParams.get('includeExpired') === '1';
+  const requirePublishedAt = parseBoolean(searchParams.get('requirePublishedAt'));
+  const excludeFeedDuplicates = parseBoolean(searchParams.get('excludeFeedDuplicates'));
   const unseenFirst = parseBoolean(searchParams.get('unseenFirst'));
   const items = listBrowseCacheItems({
     source,
     freshAfterMs,
     includeExpired,
+    requirePublishedAt,
+    excludeFeedDuplicates,
     unseenFirst,
     limit,
   });

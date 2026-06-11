@@ -388,12 +388,16 @@ export function listBrowseCacheItems(input: {
   source?: string | null;
   freshAfterMs?: number | null;
   includeExpired?: boolean;
+  requirePublishedAt?: boolean;
+  excludeFeedDuplicates?: boolean;
   unseenFirst?: boolean;
   limit?: number;
 } = {}): BrowseCacheItemRecord[] {
   const source = trimToNull(input.source);
   const freshAfterMs = normalizeTimestampMs(input.freshAfterMs);
   const includeExpired = input.includeExpired === true;
+  const requirePublishedAt = input.requirePublishedAt === true;
+  const excludeFeedDuplicates = input.excludeFeedDuplicates === true;
   const unseenFirst = input.unseenFirst === true;
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit!)) : 200;
 
@@ -408,6 +412,20 @@ export function listBrowseCacheItems(input: {
   if (!includeExpired && freshAfterMs !== null) {
     where.push(`expires_at_ms >= ?`);
     params.push(freshAfterMs);
+  }
+
+  if (requirePublishedAt) {
+    where.push(`published_at_ms IS NOT NULL`);
+  }
+
+  if (excludeFeedDuplicates) {
+    where.push(`
+      NOT EXISTS (
+        SELECT 1
+        FROM feed
+        WHERE feed.source_id = browse_cache_items.source_id
+      )
+    `);
   }
 
   const orderBy = unseenFirst

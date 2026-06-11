@@ -84,6 +84,18 @@ async function triggerOpenClawCuratorSession(requestId: string): Promise<{ ok: b
   return { ok: true, error: null };
 }
 
+function markCurationEnqueueFailed(requestId: string, reason: string): void {
+  const completed = completeCurationLogByRequestId(requestId, {
+    completedAt: new Date().toISOString(),
+    itemsAdded: 0,
+    completionStatus: 'failed',
+    completionReason: reason,
+  });
+  if (!completed) {
+    deletePendingCurationLogByRequestId(requestId);
+  }
+}
+
 export async function evaluateAdaptiveHeartbeat(
   input: EvaluateAdaptiveHeartbeatInput,
 ): Promise<EvaluateAdaptiveHeartbeatResult> {
@@ -170,7 +182,7 @@ export async function evaluateAdaptiveHeartbeat(
     const enqueueResult = await triggerOpenClawCuratorSession(queueRequestId);
 
     if (!enqueueResult.ok) {
-      deletePendingCurationLogByRequestId(queueRequestId);
+      markCurationEnqueueFailed(queueRequestId, enqueueResult.error || 'openclaw_enqueue_failed');
       return {
         triggered: false,
         triggerReason: enqueueResult.error || 'openclaw_enqueue_failed',
@@ -188,7 +200,7 @@ export async function evaluateAdaptiveHeartbeat(
       queueDepth: 1,
     };
   } catch (error) {
-    deletePendingCurationLogByRequestId(queueRequestId);
+    markCurationEnqueueFailed(queueRequestId, error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
