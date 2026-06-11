@@ -54,6 +54,8 @@ const validCompletionStatuses: CurationLogCompletionStatus[] = [
 ];
 
 const validActivityEvents: ActivityEvent[] = ['app_open', 'pull_refresh', 'ping', 'foreground', 'background'];
+const activeCurationChatStatuses = ['pending', 'queued', 'processing', 'running'];
+const deliveredOpenClawPromptHoldMinutes = 30;
 
 function parseJsonRecord(value: string | null): Record<string, unknown> | null {
   if (!value) return null;
@@ -366,8 +368,21 @@ export function hasPendingCurationCycle(): boolean {
       AND m.type = 'chat'
       AND m.role = 'user'
       AND lower(trim(m.text)) IN ('/curate', '/curate-latest', 'run a full curation cycle now.')
-      AND COALESCE(m.status, '') NOT IN ('failed', 'cancelled', 'aborted')
-      AND datetime(m.timestamp) >= datetime('now', '-3 hours')
+      AND (
+        COALESCE(m.status, '') IN (${activeCurationChatStatuses.map(() => '?').join(', ')})
+        OR (
+          COALESCE(m.status, '') IN ('delivered', 'sent')
+          AND datetime(m.timestamp) >= datetime('now', '-' || ? || ' minutes')
+        )
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM curation_log AS matched
+        WHERE matched.request_id IS NOT NULL
+          AND matched.completed_at IS NOT NULL
+          AND m.id = 'openclaw-user-' || matched.request_id
+        LIMIT 1
+      )
       AND NOT EXISTS (
         SELECT 1
         FROM curation_log AS completed
@@ -382,7 +397,7 @@ export function hasPendingCurationCycle(): boolean {
       )
     ORDER BY datetime(m.timestamp) DESC, datetime(m.created_at) DESC
     LIMIT 1
-  `).get() as { timestamp: string } | undefined;
+  `).get(...activeCurationChatStatuses, deliveredOpenClawPromptHoldMinutes) as { timestamp: string } | undefined;
 
   return Boolean(openClawPromptRow);
 }

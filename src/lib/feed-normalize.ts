@@ -27,6 +27,16 @@ export function normalizeFeedItems(items: FeedItem[]) {
   return map;
 }
 
+export function mergeFeedItemsForPendingReveal(
+  currentItems: FeedItem[],
+  pendingItems: FeedItem[],
+  sortOrder: FeedSortOrder,
+  options: { lastArrangeAtMs?: number | null; nowMs?: number } = {},
+): FeedItem[] {
+  return Array.from(normalizeFeedItems([...currentItems, ...pendingItems]).values())
+    .sort((left, right) => compareFeedItems(left, right, sortOrder, options));
+}
+
 export function isPrimaryFeedItem(item: FeedItem) {
   return (item.type === 'tweet' || item.type === 'article' || item.type === 'analysis')
     && !shouldSuppressFeedSystemNotice(item);
@@ -57,39 +67,23 @@ export function shouldIncludeConversationTimelineEntry({
   selectedFilter,
   oldestLoadedPrimaryFeedItemTimestamp,
   conversationLastTimestamp,
+  isInitialPrimaryFeedLoading = false,
 }: {
   selectedFilter: FeedFilter;
   oldestLoadedPrimaryFeedItemTimestamp: string | null;
   conversationLastTimestamp: string;
+  isInitialPrimaryFeedLoading?: boolean;
 }): boolean {
   if (selectedFilter === 'agent') {
     return true;
   }
 
+  if (isInitialPrimaryFeedLoading) {
+    return false;
+  }
+
   return oldestLoadedPrimaryFeedItemTimestamp === null
     || conversationLastTimestamp.localeCompare(oldestLoadedPrimaryFeedItemTimestamp) >= 0;
-}
-
-export function shouldShowAgentTimelineEntries({
-  hasActiveSearch,
-  isInitialFeedLoading = false,
-  selectedFilter,
-  selectedThreadId,
-}: {
-  hasActiveSearch: boolean;
-  isInitialFeedLoading?: boolean;
-  selectedFilter: FeedFilter;
-  selectedThreadId: string | null;
-}): boolean {
-  if (hasActiveSearch || selectedThreadId) {
-    return false;
-  }
-
-  if (selectedFilter === 'all' && isInitialFeedLoading) {
-    return false;
-  }
-
-  return selectedFilter === 'all' || selectedFilter === 'agent';
 }
 
 export function shouldRenderFeedEmptyState({
@@ -148,22 +142,6 @@ export function compareFeedItems(
   const byCreated = right.createdAt.localeCompare(left.createdAt);
   if (byCreated !== 0) return byCreated;
   return right.publishedAt.localeCompare(left.publishedAt);
-}
-
-export function compareThreadGroupItems(
-  left: FeedItem,
-  right: FeedItem,
-  sortOrder: FeedSortOrder,
-  options: { lastArrangeAtMs?: number | null; nowMs?: number } = {},
-): number {
-  const hasDisplayOrder = typeof left.displayOrder === 'number' || typeof right.displayOrder === 'number';
-  if (hasDisplayOrder) {
-    return compareFeedItems(left, right, sortOrder, options);
-  }
-
-  const byCreated = left.createdAt.localeCompare(right.createdAt);
-  if (byCreated !== 0) return byCreated;
-  return left.id.localeCompare(right.id);
 }
 
 export function readTrimmedMetadataString(value: unknown): string | null {

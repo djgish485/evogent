@@ -139,7 +139,7 @@ function installDom() {
   };
 }
 
-async function renderThreadGroupForInteraction() {
+async function renderThreadGroupForInteraction(overrides: Partial<Parameters<typeof ThreadGroup>[0]> = {}) {
   const restoreDom = installDom();
   const container = document.getElementById('root');
   assert.ok(container);
@@ -180,6 +180,7 @@ async function renderThreadGroupForInteraction() {
           onSubmitFeedback={async (input) => {
             feedbackSubmissions.push({ vote: input.vote });
           }}
+          {...overrides}
         />
       </AppRouterContext.Provider>,
     );
@@ -319,6 +320,27 @@ describe('ThreadGroupHeader', () => {
       assert.equal(header.getAttribute('aria-expanded'), 'true');
       assert.doesNotMatch(rendered.container.textContent ?? '', /items hidden/);
       assert.match(rendered.container.textContent ?? '', /Regular item two/);
+    } finally {
+      await rendered.cleanup();
+    }
+  });
+
+  test('uses display subtitles for item connector copy before bridge metadata', async () => {
+    const promotedItem = createFeedItem('item-promoted', 'Promoted older item');
+    promotedItem.displaySubtitle = 'Still unread: promoted because it still matters.';
+    promotedItem.metadata = {
+      ...promotedItem.metadata,
+      bridge: 'Generic bridge fallback.',
+    };
+    const rendered = await renderThreadGroupForInteraction({
+      analysisItems: [],
+      items: [promotedItem],
+    });
+
+    try {
+      const text = rendered.container.textContent ?? '';
+      assert.match(text, /Still unread: promoted because it still matters\./);
+      assert.doesNotMatch(text, /Generic bridge fallback\./);
     } finally {
       await rendered.cleanup();
     }

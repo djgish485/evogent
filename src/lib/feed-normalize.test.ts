@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compareThreadGroupItems, getThreadDisplayGroupIdentity, getThreadGroupIdentity } from './feed-normalize';
+import { compareThreadGroupItems } from './feed-render-entries';
+import { getThreadDisplayGroupIdentity, getThreadGroupIdentity } from './feed-normalize';
 import type { FeedItem } from '@/types/feed';
 
 function item(id: string, createdAt: string, displayOrder: number | null = null): FeedItem {
@@ -42,16 +43,14 @@ test('compareThreadGroupItems honors fresh curator display order inside threads'
   const olderPromoted = item('older-promoted', '2026-05-01T00:00:00.000Z', 1);
   const newerLower = item('newer-lower', '2026-05-02T00:00:00.000Z', 2);
 
-  assert.equal(compareThreadGroupItems(olderPromoted, newerLower, 'created', {
-    lastArrangeAtMs: Date.now(),
-  }), -1);
+  assert.equal(compareThreadGroupItems(olderPromoted, newerLower), -1);
 });
 
-test('compareThreadGroupItems preserves chronological thread fallback without display order', () => {
+test('compareThreadGroupItems preserves newest-first thread fallback without display order', () => {
   const older = item('older', '2026-05-01T00:00:00.000Z');
   const newer = item('newer', '2026-05-02T00:00:00.000Z');
 
-  assert.equal(compareThreadGroupItems(older, newer, 'created'), -1);
+  assert.deepEqual([older, newer].sort(compareThreadGroupItems).map((entry) => entry.id), ['newer', 'older']);
 });
 
 
