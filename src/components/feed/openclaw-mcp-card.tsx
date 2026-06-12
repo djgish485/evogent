@@ -106,13 +106,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function MCPAppFrame({
   html,
   onAction,
+  maxHeight,
 }: {
   html: string;
   onAction?: (event: MCPAppActionEvent) => void | Promise<void>;
+  maxHeight?: number;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(180);
   const srcDoc = useMemo(() => buildSrcDoc(html), [html]);
+  const heightCap = typeof maxHeight === 'number' && Number.isFinite(maxHeight) ? maxHeight : 2400;
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -134,7 +137,7 @@ export function MCPAppFrame({
           ? Math.ceil(event.data.height)
           : null;
         if (nextHeight !== null) {
-          setHeight(Math.min(2400, Math.max(120, nextHeight)));
+          setHeight(Math.min(heightCap, Math.max(120, nextHeight)));
         }
         return;
       }
@@ -153,10 +156,10 @@ export function MCPAppFrame({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onAction]);
+  }, [onAction, heightCap]);
 
   return (
-    <div data-testid="mcp-app-frame" className="overflow-hidden rounded-lg border border-zinc-300 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/50">
+    <div data-testid="mcp-app-frame" className="overflow-hidden rounded-lg">
       <iframe
         ref={iframeRef}
         title="Card content"
