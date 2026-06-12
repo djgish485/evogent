@@ -13,6 +13,7 @@ function createSuggestion(
   id: string,
   status: SuggestionStatus,
   createdAt: string,
+  suggestionType = 'code_fix',
 ): FeedItem {
   return {
     id,
@@ -40,7 +41,7 @@ function createSuggestion(
     isDisliked: false,
     suggestionStatus: status,
     metadata: {
-      suggestionType: 'code_fix',
+      suggestionType,
       suggestionStatus: status,
       proposedValue: `${id} proposed value`,
     },
@@ -70,6 +71,22 @@ describe('feed-groups', () => {
     assert.deepStrictEqual(
       grouped.map((item) => item.id),
       ['running-1', 'running-2', 'dispatched-2', 'dispatched-1', 'pending-2', 'pending-1', 'failed-1', 'merged-1'],
+    );
+  });
+
+  test('surfaces pending personal suggestions above the code-fix backlog', () => {
+    const items = [
+      createSuggestion('code-fix-old', 'pending', '2026-03-20T08:00:00.000Z'),
+      createSuggestion('code-fix-new', 'pending', '2026-03-20T09:00:00.000Z'),
+      createSuggestion('life-admin-newest', 'pending', '2026-03-20T12:00:00.000Z', 'life_admin'),
+      createSuggestion('life-admin-older', 'pending', '2026-03-20T11:00:00.000Z', 'life_admin'),
+    ];
+
+    const grouped = buildSuggestionGroupItems(items, 'created');
+
+    assert.deepStrictEqual(
+      grouped.map((item) => item.id),
+      ['life-admin-older', 'life-admin-newest', 'code-fix-old', 'code-fix-new'],
     );
   });
 

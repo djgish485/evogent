@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  getFeedSuggestionAcceptLabel,
   getFeedSuggestionBatchSummary,
   getSuggestionStatusFeedback,
   getFeedSuggestionGroupPreview,
   getFeedSuggestionTypeBadgeLabel,
+  isLifeAdminSuggestion,
+  isPersonalSuggestion,
 } from './feed-suggestions';
 import type { FeedItem } from '@/types/feed';
 
@@ -83,6 +86,32 @@ describe('feed suggestion helpers', () => {
     assert.equal(
       getFeedSuggestionBatchSummary([genericItem, genericItem, codeFixItem]),
       '1 code fix, 2 suggestions',
+    );
+  });
+
+  test('treats life admin items as personal suggestions with approve wording', () => {
+    const lifeAdminItem = createSuggestion({
+      id: 'suggestion-3',
+      metadata: {
+        suggestionType: 'life_admin',
+      },
+    });
+    const codeFixItem = createSuggestion({
+      id: 'suggestion-4',
+      metadata: {
+        suggestionType: 'code_fix',
+      },
+    });
+
+    assert.equal(isLifeAdminSuggestion(lifeAdminItem), true);
+    assert.equal(isPersonalSuggestion(lifeAdminItem), true);
+    assert.equal(isPersonalSuggestion(codeFixItem), false);
+    assert.equal(getFeedSuggestionTypeBadgeLabel(lifeAdminItem), 'Life Admin');
+    assert.equal(getFeedSuggestionAcceptLabel(lifeAdminItem), 'Approve');
+    assert.equal(getFeedSuggestionAcceptLabel(lifeAdminItem, true), 'Approving...');
+    assert.equal(
+      getFeedSuggestionBatchSummary([lifeAdminItem, codeFixItem]),
+      '1 life admin task, 1 code fix',
     );
   });
 

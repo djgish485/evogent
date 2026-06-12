@@ -1,6 +1,7 @@
 'use client';
 
 import { SuggestionCard, type CodeFixProgress } from '@/components/feed/suggestion-card';
+import { isPersonalSuggestion } from '@/lib/feed-suggestions';
 import type { SuggestionLifecycleLane } from '@/lib/suggestion-status-lanes';
 import type { SuggestionCreatorSessionTitles } from '@/lib/suggestion-creator-label';
 import type { FeedItem, SuggestionStatus } from '@/types/feed';
@@ -73,6 +74,32 @@ export function SuggestionStatusLane({
   creatorSessionTitles,
 }: SuggestionStatusLaneProps) {
   const meta = getLaneMeta(lane);
+  // In the pending lane, personal recommendations get their own section above
+  // the code-fix dev backlog so they are not buried under hundreds of dev items.
+  const personalItems = lane === 'pending' ? items.filter((item) => isPersonalSuggestion(item)) : [];
+  const devItems = lane === 'pending' ? items.filter((item) => !isPersonalSuggestion(item)) : items;
+  const showSections = personalItems.length > 0 && devItems.length > 0;
+
+  const renderSuggestionCard = (item: FeedItem) => {
+    const status = resolveSuggestionStatus(item);
+    return (
+      <SuggestionCard
+        key={item.id}
+        item={item}
+        status={status}
+        renderDismissed
+        pendingAction={getSuggestionPendingAction(item)}
+        feedback={getSuggestionFeedback(item)}
+        codeFixProgress={codeFixProgressMap[item.id] ?? null}
+        creatorSessionTitles={creatorSessionTitles}
+        onAccept={onSuggestionAccept}
+        onDismiss={onSuggestionDismiss}
+        onChatAboutSuggestion={onSuggestionChat}
+        onRetry={onSuggestionRetry}
+        onCancel={onSuggestionCancel}
+      />
+    );
+  };
 
   return (
     <section
@@ -123,27 +150,36 @@ export function SuggestionStatusLane({
           <div className="rounded-2xl border border-dashed border-zinc-800/70 bg-black/15 px-3 py-3 text-sm text-zinc-500">
             {meta.emptyLabel}
           </div>
+        ) : showSections ? (
+          <>
+            <section
+              data-testid="suggestion-lane-personal-section"
+              className="rounded-2xl border border-sky-800/50 bg-sky-950/15 px-2.5 pb-2.5 pt-2"
+            >
+              <div className="mb-2 flex items-center gap-2 px-0.5">
+                <span className="inline-flex h-2 w-2 rounded-full bg-sky-400" aria-hidden="true" />
+                <h3 className="text-sm font-semibold text-sky-100">For you</h3>
+                <span className="rounded-full border border-sky-700/60 bg-sky-950/40 px-2 py-0.5 text-[11px] font-medium text-sky-200">
+                  {personalItems.length}
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {personalItems.map(renderSuggestionCard)}
+              </div>
+            </section>
+
+            <div data-testid="suggestion-lane-dev-section" className="space-y-2.5">
+              <div className="flex items-center gap-2 px-0.5 pt-1">
+                <h3 className="text-sm font-semibold text-zinc-400">Dev backlog</h3>
+                <span className="rounded-full border border-zinc-700/70 bg-zinc-900/55 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                  {devItems.length}
+                </span>
+              </div>
+              {devItems.map(renderSuggestionCard)}
+            </div>
+          </>
         ) : (
-          items.map((item) => {
-            const status = resolveSuggestionStatus(item);
-            return (
-              <SuggestionCard
-                key={item.id}
-                item={item}
-                status={status}
-                renderDismissed
-                pendingAction={getSuggestionPendingAction(item)}
-                feedback={getSuggestionFeedback(item)}
-                codeFixProgress={codeFixProgressMap[item.id] ?? null}
-                creatorSessionTitles={creatorSessionTitles}
-                onAccept={onSuggestionAccept}
-                onDismiss={onSuggestionDismiss}
-                onChatAboutSuggestion={onSuggestionChat}
-                onRetry={onSuggestionRetry}
-                onCancel={onSuggestionCancel}
-              />
-            );
-          })
+          items.map(renderSuggestionCard)
         )}
       </div>
     </section>

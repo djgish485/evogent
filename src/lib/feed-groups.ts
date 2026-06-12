@@ -1,4 +1,5 @@
 import type { FeedSortOrder } from '@/lib/feed-query';
+import { isPersonalSuggestion } from '@/lib/feed-suggestions';
 import type { FeedItem, SuggestionStatus } from '@/types/feed';
 
 export const SUGGESTION_GROUP_RESOLVED_HISTORY_LIMIT = 8;
@@ -73,6 +74,13 @@ export function sortSuggestionGroupItems(items: FeedItem[], sortOrder: FeedSortO
     }
 
     if (isCurrentSuggestionStatus(leftStatus) && isCurrentSuggestionStatus(rightStatus)) {
+      // Personal recommendations outrank the code-fix dev backlog; within each
+      // kind, pending items stay oldest-first.
+      const personalRank = Number(isPersonalSuggestion(right)) - Number(isPersonalSuggestion(left));
+      if (personalRank !== 0) {
+        return personalRank;
+      }
+
       return left.createdAt.localeCompare(right.createdAt)
         || left.publishedAt.localeCompare(right.publishedAt)
         || left.id.localeCompare(right.id);
