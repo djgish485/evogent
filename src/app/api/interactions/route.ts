@@ -10,6 +10,7 @@ import {
   setFeedItemSuggestionStatus,
 } from '@/lib/db/feed';
 import { getFeedSuggestionType } from '@/lib/feed-suggestions';
+import { dispatchLifeActionExecution } from '@/lib/life-execution';
 import { deletePreferenceByFeedItem, insertPreference, updatePreferenceReasonByFeedItem } from '@/lib/db/preferences';
 import { insertThreadFeedback, type ThreadFeedbackVote } from '@/lib/db/thread-feedback';
 import { regeneratePreferenceContext } from '@/lib/preferences-context';
@@ -153,6 +154,32 @@ export async function POST(request: Request) {
           ? error.message.trim()
           : 'Failed to cancel active code-fix task';
         return NextResponse.json({ error: message }, { status: 500 });
+      }
+    }
+
+    // Approve-to-execute: a life_admin card carrying an executionSpec was
+    // written to be acted on, and the user's approval is the go signal. The
+    // action dispatches to the OpenClaw main agent under the guardrail
+    // wrapper (data/life-execute-prompt*.md); dispatch failure degrades to a
+    // plain accept so approval is never lost.
+    if (action === 'accept_suggestion' && getFeedSuggestionType(item) === 'life_admin') {
+      const executionSpec = typeof item.metadata?.executionSpec === 'string'
+        ? item.metadata.executionSpec.trim()
+        : '';
+      if (executionSpec) {
+        const dispatch = await dispatchLifeActionExecution({
+          feedItemId,
+          title: item.title ?? '',
+          executionSpec,
+        });
+        if (dispatch.ok) {
+          setFeedItemSuggestionStatus(feedItemId, 'dispatched');
+          return NextResponse.json({
+            ok: true,
+            suggestionStatus: 'dispatched',
+            executionSessionKey: dispatch.sessionKey,
+          });
+        }
       }
     }
 
