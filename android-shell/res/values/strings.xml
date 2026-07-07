@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Evogent</string>
+    <string name="a11y_desc">Lets Evogent read feeds in your apps and act on your behalf. Personal use on your own device only.</string>
+</resources>
