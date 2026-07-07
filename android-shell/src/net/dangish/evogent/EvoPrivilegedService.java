@@ -58,6 +58,13 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
                     ? (DisplayManager) ctx.getSystemService(Context.DISPLAY_SERVICE)
                     : null;
             if (dm == null) { Log.e(TAG, "no DisplayManager (context=" + ctx + ")"); return -1; }
+            // Release any prior hidden display before creating a new one. Without this each
+            // createDisplay orphaned the previous VirtualDisplay (the field was overwritten but the
+            // display stayed alive until reboot); repeated op=launch — e.g. MainActivity registering
+            // its receiver more than once so one broadcast fires several launches — leaked a new
+            // "evo-hidden" display every time. Bounds the device to a single hidden display.
+            if (virtualDisplay != null) { try { virtualDisplay.release(); } catch (Throwable ignored) {} virtualDisplay = null; }
+            if (reader != null) { try { reader.close(); } catch (Throwable ignored) {} reader = null; }
             reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
             int flags = FLAG_PUBLIC | FLAG_PRESENTATION | FLAG_OWN_CONTENT_ONLY
                       | FLAG_ROTATES_WITH_CONTENT | FLAG_DESTROY_CONTENT_ON_REMOVAL
