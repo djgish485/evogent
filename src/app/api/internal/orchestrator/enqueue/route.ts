@@ -3,23 +3,6 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isHiddenCurateRequest(payload: unknown): boolean {
-  if (!payload || typeof payload !== 'object') {
-    return false;
-  }
-
-  const message = (payload as { message?: unknown }).message;
-  if (typeof message !== 'string') {
-    return false;
-  }
-
-  const normalized = message.trim().toLowerCase();
-  return normalized === '/curate'
-    || normalized.startsWith('/curate ')
-    || normalized === '/curate-latest'
-    || normalized.startsWith('/curate-latest ');
-}
-
 function getInternalBaseUrl(): string {
   if (process.env.ORCHESTRATOR_INTERNAL_URL) {
     return process.env.ORCHESTRATOR_INTERNAL_URL;
@@ -35,13 +18,6 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: 'Invalid JSON payload' }, { status: 400 });
-  }
-
-  if (isHiddenCurateRequest(payload)) {
-    return NextResponse.json({
-      ok: false,
-      error: 'Evogent-native curation has been retired; the OpenClaw curator submits directly to the live feed.',
-    }, { status: 410 });
   }
 
   const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {

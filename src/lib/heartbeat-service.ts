@@ -19,10 +19,11 @@ import { arrangeFeedBackstopForCycle } from '@/lib/db/feed';
 import { notifyFeedArranged } from '@/lib/curation-submit';
 import { getActiveFeedThreads } from '@/lib/db/feed';
 import { getSourceReadiness } from '@/lib/setup-readiness';
+import { submitChatMessage } from '@/lib/chat-submission';
+import { getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
+import { resolveRuntimeWorkingDirectory } from '@/lib/runtime-working-directory';
 
 const adaptiveHeartbeatDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
-const DEFAULT_OPENCLAW_CURATOR_SESSION_KEY = 'agent:curator:main';
-const OPENCLAW_CURATOR_MESSAGE = 'Run a full curation cycle now.';
 
 export interface EvaluateAdaptiveHeartbeatInput {
   triggeredBy: string;
@@ -48,40 +49,24 @@ function sanitizeTriggerSource(triggeredBy: string): string {
   return `adaptive_heartbeat:${trimmed}`.slice(0, 96);
 }
 
-function resolveInternalBaseUrl(): string {
-  const explicit = process.env.MEDIA_AGENT_INTERNAL_BASE_URL?.trim()
-    || process.env.ORCHESTRATOR_INTERNAL_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-  return `http://127.0.0.1:${process.env.PORT || '3001'}`;
+interface CuratorAgentSessionResolution {
+  sessionId: string;
+  workingDirectory: string;
 }
 
-function resolveOpenClawCuratorSessionKey(): string {
-  const configured = process.env.OPENCLAW_CURATOR_SESSION_KEY?.trim()
-    || process.env.OPENCLAW_CURATOR_SESSION?.trim();
-  return configured || DEFAULT_OPENCLAW_CURATOR_SESSION_KEY;
-}
-
-async function triggerOpenClawCuratorSession(requestId: string): Promise<{ ok: boolean; error: string | null }> {
-  const sessionKey = resolveOpenClawCuratorSessionKey();
-  const url = `${resolveInternalBaseUrl()}/api/openclaw/chat/${encodeURIComponent(sessionKey)}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: OPENCLAW_CURATOR_MESSAGE,
-      idempotencyKey: requestId,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    return {
-      ok: false,
-      error: `OpenClaw curator enqueue failed (${response.status})${body ? `: ${body}` : ''}`,
-    };
+/** Resolve the Curator Agent chat session the heartbeat dispatches `/curate` to. Direct
+ *  claude/codex curation runs in a real chat session (the pre-OpenClaw model); we reuse the
+ *  most-recent curator session and never auto-create one — no session means skip this cycle. */
+function resolveCuratorAgentSession(): CuratorAgentSessionResolution | null {
+  const existing = getMostRecentCuratorChatSession();
+  if (!existing) {
+    console.info('[heartbeat] skipping automatic curation because no Curator Agent chat session exists');
+    return null;
   }
-
-  return { ok: true, error: null };
+  return {
+    sessionId: existing.id,
+    workingDirectory: existing.workingDirectory || resolveRuntimeWorkingDirectory(),
+  };
 }
 
 function markCurationEnqueueFailed(requestId: string, reason: string): void {
@@ -167,7 +152,18 @@ export async function evaluateAdaptiveHeartbeat(
     };
   }
 
-  const queueRequestId = `openclaw-heartbeat-${randomUUID()}`;
+  const sessionResolution = resolveCuratorAgentSession();
+  if (!sessionResolution) {
+    return {
+      triggered: false,
+      triggerReason: 'curator_session_missing',
+      decision,
+      requestId: null,
+      queueDepth: 0,
+    };
+  }
+
+  const queueRequestId = `chat-queue-heartbeat-${randomUUID()}`;
   const triggerSource = sanitizeTriggerSource(input.triggeredBy);
   const curationTriggeredBy = `${triggerSource}:${decision.reason}`;
 
@@ -179,16 +175,32 @@ export async function evaluateAdaptiveHeartbeat(
   });
 
   try {
-    const enqueueResult = await triggerOpenClawCuratorSession(queueRequestId);
+    // Direct claude/codex curation: dispatch `/curate` into the Curator Agent chat session
+    // (the same path a user typing /curate takes), which the orchestrator runs on claude/codex.
+    const enqueueResult = await submitChatMessage({
+      message: '/curate',
+      sessionId: sessionResolution.sessionId,
+      workingDirectory: sessionResolution.workingDirectory,
+      priority: 'user_chat',
+      source: triggerSource,
+      requestId: queueRequestId,
+      metadata: {
+        triggerSource,
+        heartbeatTriggeredBy: input.triggeredBy,
+        triggerReason: decision.reason,
+        timeZone: heartbeatConfig.timeZone,
+        automatedCuration: true,
+      },
+    });
 
-    if (!enqueueResult.ok) {
-      markCurationEnqueueFailed(queueRequestId, enqueueResult.error || 'openclaw_enqueue_failed');
+    if (!enqueueResult.ok || !enqueueResult.requestId) {
+      markCurationEnqueueFailed(queueRequestId, enqueueResult.message || 'enqueue_failed');
       return {
         triggered: false,
-        triggerReason: enqueueResult.error || 'openclaw_enqueue_failed',
+        triggerReason: enqueueResult.message || 'enqueue_failed',
         decision,
         requestId: null,
-        queueDepth: 0,
+        queueDepth: enqueueResult.queueDepth,
       };
     }
 
@@ -196,8 +208,8 @@ export async function evaluateAdaptiveHeartbeat(
       triggered: true,
       triggerReason: decision.reason,
       decision,
-      requestId: queueRequestId,
-      queueDepth: 1,
+      requestId: enqueueResult.requestId,
+      queueDepth: enqueueResult.queueDepth,
     };
   } catch (error) {
     markCurationEnqueueFailed(queueRequestId, error instanceof Error ? error.message : String(error));
