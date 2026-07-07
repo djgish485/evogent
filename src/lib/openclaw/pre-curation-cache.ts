@@ -80,7 +80,12 @@ export async function refreshCachesBeforeOpenClawCuration(
     const pending = Array.isArray(payload.pendingSources) && payload.pendingSources.length > 0
       ? ` Pending sources: ${payload.pendingSources.join(', ')}.`
       : '';
-    throw new Error(`pre-curation cache refresh timed out before full curation.${pending}`);
+    // Best-effort: a source that cannot refresh server-side (an app the phone can't reach on this
+    // device, or a slow browser refresh) must not block curation forever. Proceed with the cache
+    // already filled — on the phone paradigm each source is refreshed asynchronously by the phone,
+    // and the curator judges freshness itself. (Also fixes the VM's known back-to-back 503s.)
+    console.warn(`[pre-curation] proceeding with available cache despite refresh timeout.${pending}`);
+    return;
   }
   const incompleteSources = Array.isArray(payload?.sourceResults)
     ? payload.sourceResults.filter((sourceResult) => (
@@ -98,6 +103,7 @@ export async function refreshCachesBeforeOpenClawCuration(
         return `${source}:${result}${error}`;
       })
       .join(', ');
-    throw new Error(`pre-curation cache refresh did not complete cleanly: ${detail}`);
+    // Best-effort (see above): warn and proceed rather than aborting the whole cycle.
+    console.warn(`[pre-curation] proceeding despite incomplete sources: ${detail}`);
   }
 }

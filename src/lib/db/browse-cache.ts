@@ -826,6 +826,15 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
 
   const runId = trimToNull(input.runId) ?? `browse-cache-refresh-${randomUUID()}`;
   const items = Array.isArray(input.items) ? input.items : [];
+  // Phone-paradigm ingestion: an app the phone background-browses (a YouTube video, a Substack
+  // post) rarely exposes a machine-readable publish date in the share, so phone rows arrive with
+  // publishedAtMs unset. The curator's read tool defaults to requirePublishedAt (WHERE
+  // published_at_ms IS NOT NULL), so undated phone rows are structurally invisible and the whole
+  // phone acquisition layer gets silently bypassed. For phone-sourced runs, fall back to the browse
+  // time as the recency proxy (the item was fresh in the user's feed when browsed; ORDER BY already
+  // COALESCEs to fetched_at_ms). VM cache-skill runs still set real publish dates and keep the
+  // strict filter, so their semantics are unchanged.
+  const isPhoneBrowseRun = /phone/i.test(triggeredBy ?? '');
   const normalizedItems = new Map<string, UpsertBrowseCacheItemInput>();
   let canonicalSourceIdDuplicates = 0;
 
@@ -845,6 +854,7 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       source: itemSource,
       sourceId,
       payload: normalizeBrowseCachePayload(itemSource, sourceId, item.payload),
+      publishedAtMs: normalizeTimestampMs(item.publishedAtMs) ?? (isPhoneBrowseRun ? fetchedAtMs : null),
       fetchedAtMs,
       expiresAtMs,
     };
