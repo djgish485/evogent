@@ -9,7 +9,7 @@ function chatMessage(overrides: Partial<ChatMessage>): ChatMessage {
     id: 'msg-1',
     role: 'user',
     inReplyTo: null,
-    sessionId: 'openclaw:session-a',
+    sessionId: 'session-a',
     text: 'hello',
     timestamp: '2026-05-18T12:00:00.000Z',
     context: null,
@@ -21,47 +21,16 @@ function chatMessage(overrides: Partial<ChatMessage>): ChatMessage {
 }
 
 describe('mergeChatMessages', () => {
-  test('dedupes OpenClaw optimistic and confirmed user messages by idempotency key', () => {
-    const optimistic = chatMessage({
-      id: 'openclaw-user-evogent-1',
-      metadata: {
-        source: 'openclaw',
-        openclawSessionKey: 'session-a',
-        idempotencyKey: 'evogent-1',
-      },
-    });
-    const confirmed = chatMessage({
-      id: 'openclaw-confirmed-1',
-      metadata: {
-        source: 'openclaw',
-        openclawSessionKey: 'session-a',
-        idempotencyKey: 'evogent-1',
-      },
-    });
+  test('dedupes messages sharing an id, keeping the incoming copy', () => {
+    const original = chatMessage({ id: 'msg-1', text: 'queued text', status: 'queued' });
+    const updated = chatMessage({ id: 'msg-1', text: 'delivered text', status: 'delivered' });
 
-    assert.deepStrictEqual(mergeChatMessages([optimistic], [confirmed]), [confirmed]);
-    assert.deepStrictEqual(mergeChatMessages([confirmed], [optimistic]), [confirmed]);
+    assert.deepStrictEqual(mergeChatMessages([original], [updated]), [updated]);
   });
 
-  test('keeps matching idempotency keys separate across sessions', () => {
-    const first = chatMessage({
-      id: 'openclaw-user-evogent-1',
-      sessionId: 'openclaw:session-a',
-      metadata: {
-        source: 'openclaw',
-        openclawSessionKey: 'session-a',
-        idempotencyKey: 'evogent-1',
-      },
-    });
-    const second = chatMessage({
-      id: 'openclaw-user-evogent-1-session-b',
-      sessionId: 'openclaw:session-b',
-      metadata: {
-        source: 'openclaw',
-        openclawSessionKey: 'session-b',
-        idempotencyKey: 'evogent-1',
-      },
-    });
+  test('keeps distinct message ids separate', () => {
+    const first = chatMessage({ id: 'msg-1', sessionId: 'session-a' });
+    const second = chatMessage({ id: 'msg-2', sessionId: 'session-b' });
 
     assert.strictEqual(mergeChatMessages([first], [second]).length, 2);
   });

@@ -1,6 +1,3 @@
-import { access } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { getSkillsRegistry, listInstalledSkillsWithWarnings } from '@/lib/skills';
 
@@ -24,15 +21,6 @@ export async function GET() {
 
         return { value, label };
       });
-    const openClawHome = process.env.OPENCLAW_HOME || path.join(homedir(), '.openclaw');
-    const openClawCuratorAgentPath = path.join(openClawHome, 'agents', 'curator');
-
-    try {
-      await access(openClawCuratorAgentPath);
-      feedSources.push({ value: 'openclaw', label: 'OpenClaw' });
-    } catch {
-      // Missing OpenClaw curator install is expected.
-    }
 
     return NextResponse.json({
       items: skills,

@@ -2,13 +2,25 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 import { invalidateSkillActionRegistryForTests } from '@/lib/feed-actions/skill-action-registry';
 import { POST } from './route';
+
+type GlobalWithDb = typeof globalThis & {
+  evogentDb?: {
+    close: () => void;
+  };
+};
+
+const globalWithDb = globalThis as GlobalWithDb;
 
 const originalFetch = globalThis.fetch;
 const originalInternalBaseUrl = process.env.MEDIA_AGENT_INTERNAL_BASE_URL;
 const originalSkillsDir = process.env.MEDIA_AGENT_SKILLS_DIR;
+const originalDbPath = process.env.MEDIA_AGENT_DB_PATH;
+const originalDataDir = process.env.DATA_DIR;
+const originalPath = process.env.PATH;
+let tempDir = '';
 
 async function writeEmailTriageSkill(skillsRoot: string) {
   const skillDir = path.join(skillsRoot, 'email-triage');
@@ -28,7 +40,23 @@ metadata:
 }
 
 describe('/api/feed-actions', () => {
-  afterEach(() => {
+  beforeEach(async () => {
+    tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-feed-action-route-test-'));
+
+    if (globalWithDb.evogentDb) {
+      globalWithDb.evogentDb.close();
+      delete globalWithDb.evogentDb;
+    }
+
+    process.env.MEDIA_AGENT_DB_PATH = path.join(tempDir, 'media-agent.db');
+    process.env.DATA_DIR = tempDir;
+    const binDir = path.join(tempDir, 'bin');
+    await fs.promises.mkdir(binDir, { recursive: true });
+    await fs.promises.writeFile(path.join(binDir, 'claude'), '#!/usr/bin/env sh\necho claude-test\n', { mode: 0o755 });
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ''}`;
+  });
+
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
     if (originalInternalBaseUrl === undefined) {
       delete process.env.MEDIA_AGENT_INTERNAL_BASE_URL;
@@ -41,12 +69,37 @@ describe('/api/feed-actions', () => {
       process.env.MEDIA_AGENT_SKILLS_DIR = originalSkillsDir;
     }
     invalidateSkillActionRegistryForTests();
+
+    if (globalWithDb.evogentDb) {
+      globalWithDb.evogentDb.close();
+      delete globalWithDb.evogentDb;
+    }
+
+    if (originalDbPath === undefined) {
+      delete process.env.MEDIA_AGENT_DB_PATH;
+    } else {
+      process.env.MEDIA_AGENT_DB_PATH = originalDbPath;
+    }
+    if (originalDataDir === undefined) {
+      delete process.env.DATA_DIR;
+    } else {
+      process.env.DATA_DIR = originalDataDir;
+    }
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+
+    if (tempDir) {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      tempDir = '';
+    }
   });
 
-  test('dispatches a declared skill action through the OpenClaw skill session', async () => {
+  test('dispatches a declared skill action directly into the Curator Agent chat session', async () => {
     const skillsRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-feed-action-route-'));
     process.env.MEDIA_AGENT_SKILLS_DIR = skillsRoot;
-    process.env.MEDIA_AGENT_INTERNAL_BASE_URL = 'http://127.0.0.1:3999';
     invalidateSkillActionRegistryForTests();
 
     let capturedUrl = '';
@@ -56,8 +109,11 @@ describe('/api/feed-actions', () => {
       capturedBody = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
       return Response.json({
         ok: true,
-        sessionId: 'openclaw:agent:email-triage:main',
-        runId: 'run-feed-action',
+        requestId: String((capturedBody as Record<string, unknown>)?.requestId ?? ''),
+        priority: 'user_chat',
+        queueDepth: 1,
+        position: 1,
+        acceptedAt: new Date().toISOString(),
       }, { status: 202 });
     };
 
@@ -75,17 +131,21 @@ describe('/api/feed-actions', () => {
 
       assert.equal(response.status, 202);
       assert.equal(result.ok, true);
-      assert.equal(result.runId, 'run-feed-action');
-      assert.equal(capturedUrl, 'http://127.0.0.1:3999/api/openclaw/chat/agent%3Aemail-triage%3Amain');
+      assert.equal(typeof result.runId, 'string');
+      assert.match(String(result.runId), /^feed-action-/);
+      assert.equal(typeof result.sessionId, 'string');
+      assert.ok(String(result.sessionId).length > 0);
+      assert.ok(capturedUrl.endsWith('/api/orchestrator/enqueue'));
       assert.match(String(capturedBody?.message), /Action: email-triage\.triage-all on feed item email-card-1/);
       assert.match(String(capturedBody?.message), /Payload JSON: \{"selection":\{"senderDomain":"example\.com"\}\}/);
-      assert.equal(typeof capturedBody?.idempotencyKey, 'string');
+      assert.equal(typeof capturedBody?.requestId, 'string');
+      assert.equal(capturedBody?.requestId, result.runId);
     } finally {
       await fs.promises.rm(skillsRoot, { recursive: true, force: true });
     }
   });
 
-  test('rejects undeclared skill actions without calling OpenClaw', async () => {
+  test('rejects undeclared skill actions without dispatching', async () => {
     let calledFetch = false;
     globalThis.fetch = async () => {
       calledFetch = true;

@@ -109,10 +109,6 @@ function normalizeTaskId(input: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
-function isOpenClawSessionId(sessionId: string): boolean {
-  return sessionId.startsWith('openclaw:');
-}
-
 function findExistingChatMessageForConflict(
   db: ReturnType<typeof getDb>,
   input: { id: string; type: ChatMessageType; role: ChatMessageRole; taskId?: string | null; inReplyTo?: string | null },
@@ -165,9 +161,7 @@ export function persistChatMessage(
   const sessionId = input.sessionId?.trim()
     || replyTarget?.session_id
     || 'legacy-session';
-  if (!isOpenClawSessionId(sessionId)) {
-    ensureChatSession(sessionId);
-  }
+  ensureChatSession(sessionId);
   const stmt = db.prepare(`
     INSERT OR ${options.ignoreConflicts ? 'IGNORE' : 'ABORT'} INTO chat_messages (
       id, type, role, in_reply_to, task_id, session_id, text, timestamp, context, suggestions, status, metadata

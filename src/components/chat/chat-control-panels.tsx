@@ -760,44 +760,25 @@ export type SidebarAutomationControlsProps = {
   backgroundSourceBrowsingEnabled: boolean;
   timeZoneLabel: string;
   timeZoneWarning: string | null;
-  openClawDailyTimer: OpenClawDailyTimerSidebarStatus | null;
   configLoaded: boolean;
   isSavingBackgroundSourceBrowsing: boolean;
-  isRepairingOpenClawDailyTimer: boolean;
   isStartingSourceHealth: boolean;
   backgroundSourceBrowsingError: string | null;
-  openClawDailyTimerError: string | null;
   onToggleBackgroundSourceBrowsing: () => void;
-  onRepairOpenClawDailyTimer: () => void;
   onStartSourceHealth: () => void;
-};
-
-export type OpenClawDailyTimerSidebarStatus = {
-  installed: boolean;
-  state: 'not_installed' | 'aligned' | 'misaligned' | 'unsupported';
-  desiredLocalTime: string;
-  desiredOnCalendar: string;
-  currentOnCalendar: string[];
-  repairAvailable: boolean;
-  warning: string | null;
 };
 
 export function SidebarAutomationControls({
   backgroundSourceBrowsingEnabled,
   timeZoneLabel,
   timeZoneWarning,
-  openClawDailyTimer,
   configLoaded,
   isSavingBackgroundSourceBrowsing,
-  isRepairingOpenClawDailyTimer,
   isStartingSourceHealth,
   backgroundSourceBrowsingError,
-  openClawDailyTimerError,
   onToggleBackgroundSourceBrowsing,
-  onRepairOpenClawDailyTimer,
   onStartSourceHealth,
 }: SidebarAutomationControlsProps) {
-  const shouldShowOpenClawTimer = Boolean(openClawDailyTimer?.installed && openClawDailyTimer.state !== 'aligned');
   return (
     <section className="rounded-xl border border-zinc-800/90 bg-zinc-950/70 px-3 py-3">
       <div>
@@ -858,34 +839,6 @@ export function SidebarAutomationControls({
           <p className="mt-2 text-[11px] leading-4 text-amber-200">{timeZoneWarning}</p>
         ) : null}
       </div>
-
-      {shouldShowOpenClawTimer ? (
-        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-4 text-amber-100">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-medium">OpenClaw daily brief timer</p>
-              <p className="mt-1 text-amber-100/85">
-                {openClawDailyTimer?.warning || `Use ${openClawDailyTimer?.desiredOnCalendar ?? 'the configured local morning time'}.`}
-              </p>
-            </div>
-            {openClawDailyTimer?.repairAvailable ? (
-              <button
-                type="button"
-                onClick={onRepairOpenClawDailyTimer}
-                disabled={isRepairingOpenClawDailyTimer}
-                className="shrink-0 rounded-md border border-amber-300/40 px-2 py-1 font-medium text-amber-50 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isRepairingOpenClawDailyTimer ? 'Repairing...' : 'Repair'}
-              </button>
-            ) : null}
-          </div>
-          {openClawDailyTimerError ? (
-            <p className="mt-2 text-red-200">{openClawDailyTimerError}</p>
-          ) : null}
-        </div>
-      ) : openClawDailyTimerError ? (
-        <p className="mt-2 text-[11px] text-red-300">{openClawDailyTimerError}</p>
-      ) : null}
     </section>
   );
 }

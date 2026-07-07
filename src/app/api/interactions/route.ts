@@ -159,7 +159,7 @@ export async function POST(request: Request) {
 
     // Approve-to-execute: a life_admin card carrying an executionSpec was
     // written to be acted on, and the user's approval is the go signal. The
-    // action dispatches to the OpenClaw main agent under the guardrail
+    // action dispatches to the curator life-actions agent under the guardrail
     // wrapper (data/life-execute-prompt*.md); dispatch failure degrades to a
     // plain accept so approval is never lost.
     if (action === 'accept_suggestion' && getFeedSuggestionType(item) === 'life_admin') {

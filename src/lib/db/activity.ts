@@ -54,8 +54,6 @@ const validCompletionStatuses: CurationLogCompletionStatus[] = [
 ];
 
 const validActivityEvents: ActivityEvent[] = ['app_open', 'pull_refresh', 'ping', 'foreground', 'background'];
-const activeCurationChatStatuses = ['pending', 'queued', 'processing', 'running'];
-const deliveredOpenClawPromptHoldMinutes = 30;
 
 function parseJsonRecord(value: string | null): Record<string, unknown> | null {
   if (!value) return null;
@@ -372,49 +370,7 @@ export function hasPendingCurationCycle(): boolean {
     LIMIT 1
   `).get() as { timestamp: string } | undefined;
 
-  if (queuedChatRow) {
-    return true;
-  }
-
-  const openClawPromptRow = db.prepare(`
-    SELECT m.timestamp
-    FROM chat_messages AS m
-    WHERE m.session_id LIKE 'openclaw:agent:curator:%'
-      AND m.type = 'chat'
-      AND m.role = 'user'
-      AND lower(trim(m.text)) IN ('/curate', '/curate-latest', 'run a full curation cycle now.')
-      AND (
-        COALESCE(m.status, '') IN (${activeCurationChatStatuses.map(() => '?').join(', ')})
-        OR (
-          COALESCE(m.status, '') IN ('delivered', 'sent')
-          AND datetime(m.timestamp) >= datetime('now', '-' || ? || ' minutes')
-        )
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM curation_log AS matched
-        WHERE matched.request_id IS NOT NULL
-          AND matched.completed_at IS NOT NULL
-          AND m.id = 'openclaw-user-' || matched.request_id
-        LIMIT 1
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM curation_log AS completed
-        WHERE completed.completed_at IS NOT NULL
-          AND datetime(completed.completed_at) >= datetime(m.timestamp)
-          AND (
-            COALESCE(completed.items_added, 0) > 0
-            OR completed.completion_status = 'successful_empty'
-          )
-          AND COALESCE(completed.completion_status, '') NOT IN ('cancelled', 'failed', 'aborted', 'empty')
-        LIMIT 1
-      )
-    ORDER BY datetime(m.timestamp) DESC, datetime(m.created_at) DESC
-    LIMIT 1
-  `).get(...activeCurationChatStatuses, deliveredOpenClawPromptHoldMinutes) as { timestamp: string } | undefined;
-
-  return Boolean(openClawPromptRow);
+  return Boolean(queuedChatRow);
 }
 
 export function getLatestCompletedCurationTime(): string | null {

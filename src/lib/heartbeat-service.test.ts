@@ -12,7 +12,6 @@ import {
   completeCurationLogByRequestId,
   getCurationLogByRequestId,
   getLatestSuccessfulCurationTime,
-  hasPendingCurationCycle,
   insertCurationLogStart,
 } from './db/activity';
 
@@ -33,8 +32,8 @@ describe('heartbeat service', () => {
   let originalPath: string | undefined;
   let originalFetch: typeof fetch;
   let tempDir = '';
-  let openClawPayload: Record<string, unknown> | null = null;
-  let openClawUrl: string | null = null;
+  let enqueuePayload: Record<string, unknown> | null = null;
+  let enqueueUrl: string | null = null;
 
   beforeEach(async () => {
     originalDbPath = process.env.MEDIA_AGENT_DB_PATH;
@@ -86,23 +85,25 @@ Off
 `, 'utf8');
     process.env.MEDIA_AGENT_INTERNAL_BASE_URL = 'http://evogent.test';
     process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ''}`;
-    openClawPayload = null;
-    openClawUrl = null;
+    enqueuePayload = null;
+    enqueueUrl = null;
     globalThis.fetch = (async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
-      if (url.endsWith('/api/openclaw/chat/agent%3Acurator%3Amain')) {
+      if (url.endsWith('/api/orchestrator/enqueue')) {
         const payload = init?.body && typeof init.body === 'string'
           ? JSON.parse(init.body) as { requestId?: string }
           : {};
-        openClawPayload = payload as Record<string, unknown>;
-        openClawUrl = url;
+        enqueuePayload = payload as Record<string, unknown>;
+        enqueueUrl = url;
 
         return new Response(JSON.stringify({
           ok: true,
-          sessionKey: 'agent:curator:main',
-          sessionId: 'openclaw:agent:curator:main',
-          runId: payload.requestId ?? `heartbeat-test-${Date.now()}`,
+          requestId: payload.requestId ?? `heartbeat-test-${Date.now()}`,
+          priority: 'user_chat',
+          queueDepth: 1,
+          position: 1,
+          acceptedAt: new Date().toISOString(),
         }), {
           headers: { 'Content-Type': 'application/json' },
         });
@@ -110,6 +111,15 @@ Off
 
       throw new Error(`Unexpected fetch in heartbeat-service.test: ${url}`);
     }) as typeof fetch;
+
+    // Direct claude/codex curation dispatches `/curate` into the most-recent Curator Agent
+    // chat session; without one, evaluateAdaptiveHeartbeat short-circuits with
+    // 'curator_session_missing' before ever reaching the enqueue call under test.
+    createChatSession({
+      sessionType: 'curator',
+      title: 'Curator Agent',
+      workingDirectory: tempDir,
+    });
   });
 
   afterEach(async () => {
@@ -161,7 +171,7 @@ Off
     }
   });
 
-  test('evaluateAdaptiveHeartbeat posts a full curation request to the OpenClaw curator session', async () => {
+  test('evaluateAdaptiveHeartbeat dispatches /curate into the Curator Agent chat session', async () => {
     const result = await evaluateAdaptiveHeartbeat({
       triggeredBy: 'unit-test',
       latestActivity: {
@@ -173,12 +183,12 @@ Off
     assert.strictEqual(result.triggered, true);
     assert.strictEqual(result.triggerReason, 'pull_refresh_immediate');
     assert.strictEqual(typeof result.requestId, 'string');
-    assert.ok((result.requestId ?? '').startsWith('openclaw-heartbeat-'));
+    assert.ok((result.requestId ?? '').startsWith('chat-queue-heartbeat-'));
     assert.strictEqual(result.queueDepth, 1);
-    assert.ok(openClawUrl?.endsWith('/api/openclaw/chat/agent%3Acurator%3Amain'));
-    assert.ok(openClawPayload);
-    assert.strictEqual(openClawPayload?.message, 'Run a full curation cycle now.');
-    assert.strictEqual(openClawPayload?.idempotencyKey, result.requestId);
+    assert.ok(enqueueUrl?.endsWith('/api/orchestrator/enqueue'));
+    assert.ok(enqueuePayload);
+    assert.strictEqual(enqueuePayload?.message, '/curate');
+    assert.strictEqual(enqueuePayload?.requestId, result.requestId);
 
     const curationLogEntry = getCurationLogByRequestId(result.requestId as string);
     assert.ok(curationLogEntry);
@@ -200,7 +210,7 @@ Off
     assert.strictEqual(firstResult.triggerReason, 'app_open_auto');
     assert.ok(firstResult.requestId);
 
-    openClawPayload = null;
+    enqueuePayload = null;
     const secondResult = await evaluateAdaptiveHeartbeat({
       triggeredBy: 'activity:app_open',
       latestActivity: {
@@ -212,7 +222,7 @@ Off
     assert.strictEqual(secondResult.triggered, false);
     assert.strictEqual(secondResult.triggerReason, 'curation_cycle_pending');
     assert.strictEqual(secondResult.requestId, null);
-    assert.strictEqual(openClawPayload, null);
+    assert.strictEqual(enqueuePayload, null);
     assert.ok(getCurationLogByRequestId(firstResult.requestId as string));
   });
 
@@ -235,9 +245,9 @@ Off
       completedAt: new Date().toISOString(),
       itemsAdded: 0,
       completionStatus: 'cancelled',
-      completionReason: 'OpenClaw curation was cancelled before output',
+      completionReason: 'curation was cancelled before output',
     });
-    openClawPayload = null;
+    enqueuePayload = null;
 
     const cronResult = await evaluateAdaptiveHeartbeat({
       triggeredBy: 'cron',
@@ -250,50 +260,14 @@ Off
     assert.strictEqual(cronResult.triggered, false);
     assert.strictEqual(cronResult.triggerReason, 'user_cancel_cooldown_active');
     assert.strictEqual(cronResult.requestId, null);
-    assert.strictEqual(openClawPayload, null);
+    assert.strictEqual(enqueuePayload, null);
   });
 
-  test('evaluateAdaptiveHeartbeat supports an explicit OpenClaw curator session key', async () => {
-    const originalSessionKey = process.env.OPENCLAW_CURATOR_SESSION_KEY;
-    process.env.OPENCLAW_CURATOR_SESSION_KEY = 'agent:curator:custom';
-    try {
-      globalThis.fetch = (async (input, init) => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-        assert.ok(url.endsWith('/api/openclaw/chat/agent%3Acurator%3Acustom'));
-        openClawUrl = url;
-        openClawPayload = init?.body && typeof init.body === 'string'
-          ? JSON.parse(init.body) as Record<string, unknown>
-          : {};
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }) as typeof fetch;
-
-      const result = await evaluateAdaptiveHeartbeat({
-        triggeredBy: 'unit-test-custom-session',
-        latestActivity: {
-          event: 'pull_refresh',
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      assert.strictEqual(result.triggered, true);
-      assert.ok(openClawUrl?.endsWith('/api/openclaw/chat/agent%3Acurator%3Acustom'));
-      assert.strictEqual(openClawPayload?.idempotencyKey, result.requestId);
-    } finally {
-      if (originalSessionKey === undefined) {
-        delete process.env.OPENCLAW_CURATOR_SESSION_KEY;
-      } else {
-        process.env.OPENCLAW_CURATOR_SESSION_KEY = originalSessionKey;
-      }
-    }
-  });
-
-  test('evaluateAdaptiveHeartbeat records failed OpenClaw enqueue attempts', async () => {
+  test('evaluateAdaptiveHeartbeat records failed curation enqueue attempts', async () => {
     globalThis.fetch = (async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      assert.ok(url.endsWith('/api/openclaw/chat/agent%3Acurator%3Amain'));
-      openClawPayload = init?.body && typeof init.body === 'string'
+      assert.ok(url.endsWith('/api/orchestrator/enqueue'));
+      enqueuePayload = init?.body && typeof init.body === 'string'
         ? JSON.parse(init.body) as Record<string, unknown>
         : {};
       return new Response(JSON.stringify({
@@ -316,13 +290,13 @@ Off
     assert.strictEqual(result.triggered, false);
     assert.strictEqual(result.requestId, null);
     assert.match(result.triggerReason, /pre-curation cache refresh timed out/);
-    assert.ok(typeof openClawPayload?.idempotencyKey === 'string');
+    assert.ok(typeof enqueuePayload?.requestId === 'string');
 
     const failedLog = getDb().prepare(`
       SELECT request_id, completed_at, items_added, completion_status, completion_reason
       FROM curation_log
       WHERE request_id = ?
-    `).get(openClawPayload.idempotencyKey) as {
+    `).get(enqueuePayload.requestId) as {
       request_id: string;
       completed_at: string | null;
       items_added: number;
@@ -388,69 +362,6 @@ Off
     assert.strictEqual(result.triggered, false);
     assert.strictEqual(result.triggerReason, 'curation_cycle_pending');
     assert.strictEqual(result.requestId, null);
-  });
-
-  test('hasPendingCurationCycle ignores stale delivered OpenClaw curator prompts', () => {
-    insertChatMessage({
-      id: `openclaw-delivered-stale-${Date.now()}`,
-      role: 'user',
-      sessionId: 'openclaw:agent:curator:main',
-      text: 'Run a full curation cycle now.',
-      status: 'delivered',
-      timestamp: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), false);
-  });
-
-  test('hasPendingCurationCycle holds recent delivered OpenClaw curator prompts briefly', () => {
-    insertChatMessage({
-      id: `openclaw-delivered-recent-${Date.now()}`,
-      role: 'user',
-      sessionId: 'openclaw:agent:curator:main',
-      text: 'Run a full curation cycle now.',
-      status: 'delivered',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), true);
-  });
-
-  test('hasPendingCurationCycle ignores delivered OpenClaw prompts for completed aborted runs', () => {
-    const requestId = `openclaw-heartbeat-aborted-${Date.now()}`;
-    insertCurationLogStart({
-      requestId,
-      triggeredBy: 'adaptive_heartbeat:unit-test:max_interval_elapsed',
-      startedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      feedCountBefore: 0,
-    });
-    completeCurationLogByRequestId(requestId, {
-      completionStatus: 'aborted',
-      completionReason: 'deployment restart interrupted pre-curation',
-    });
-    insertChatMessage({
-      id: `openclaw-user-${requestId}`,
-      role: 'user',
-      sessionId: 'openclaw:agent:curator:main',
-      text: 'Run a full curation cycle now.',
-      status: 'delivered',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), false);
-  });
-
-  test('hasPendingCurationCycle treats active OpenClaw curator prompts as pending', () => {
-    insertChatMessage({
-      id: `openclaw-queued-active-${Date.now()}`,
-      role: 'user',
-      sessionId: 'openclaw:agent:curator:main',
-      text: 'Run a full curation cycle now.',
-      status: 'queued',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    });
-
-    assert.strictEqual(hasPendingCurationCycle(), true);
   });
 
   test('evaluateAdaptiveHeartbeat skips when automatic curation is disabled in config', async () => {

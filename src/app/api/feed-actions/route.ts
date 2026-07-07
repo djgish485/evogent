@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getSkillAction } from '@/lib/feed-actions/skill-action-registry';
-import { getInternalBaseUrl } from '@/lib/internal-api';
+import { submitChatMessage } from '@/lib/chat-submission';
+import { getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,27 +47,42 @@ export async function POST(request: Request) {
     'Handle this according to the feed-actions instructions in the installed skill. Do not use product-side custom dispatch logic.',
   ].join('\n');
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/openclaw/chat/${encodeURIComponent(sessionKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store',
-    body: JSON.stringify({
-      message,
-      idempotencyKey,
-    }),
-  });
+  // Dispatch directly into the Curator Agent chat session (the same path a
+  // user typing into chat takes) rather than a separate agent-per-skill
+  // session; sessionKey is retained below only as a caller-facing label.
+  const curatorSession = getMostRecentCuratorChatSession();
+  const dispatchSessionId = curatorSession?.id || sessionKey;
 
-  const result = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok || result.ok === false) {
+  let result: Awaited<ReturnType<typeof submitChatMessage>>;
+  try {
+    result = await submitChatMessage({
+      message,
+      sessionId: dispatchSessionId,
+      workingDirectory: curatorSession?.workingDirectory ?? null,
+      priority: 'user_chat',
+      source: 'feed_action',
+      requestId: idempotencyKey,
+    });
+  } catch (error) {
     return NextResponse.json({
       ok: false,
-      error: typeof result.error === 'string' && result.error.trim()
-        ? result.error
-        : `OpenClaw action dispatch failed (${response.status})`,
+      error: error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Feed action dispatch failed',
       actionId,
       feedItemId,
       sessionKey,
-    }, { status: response.status || 502 });
+    }, { status: 502 });
+  }
+
+  if (!result.ok) {
+    return NextResponse.json({
+      ok: false,
+      error: result.message || 'Feed action dispatch failed',
+      actionId,
+      feedItemId,
+      sessionKey,
+    }, { status: 502 });
   }
 
   return NextResponse.json({
@@ -78,7 +94,7 @@ export async function POST(request: Request) {
     actionId,
     feedItemId,
     sessionKey,
-    sessionId: typeof result.sessionId === 'string' ? result.sessionId : `openclaw:${sessionKey}`,
-    runId: typeof result.runId === 'string' ? result.runId : idempotencyKey,
+    sessionId: result.sessionId,
+    runId: idempotencyKey,
   }, { status: 202 });
 }

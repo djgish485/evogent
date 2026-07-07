@@ -35,32 +35,19 @@ function getChatMessageIdempotencyKey(message: ChatMessage): string {
   }
 
   const source = readStringMetadata(message, 'source');
-  const sessionKey = readStringMetadata(message, 'openclawSessionKey');
   const sessionId = typeof message.sessionId === 'string' && message.sessionId.trim() ? message.sessionId.trim() : '';
   return [
     'idempotency',
     source,
-    sessionKey || sessionId,
+    sessionId,
     message.role,
     idempotencyKey,
   ].join(':');
 }
 
-function isOpenClawOptimisticUserMessage(message: ChatMessage): boolean {
-  return message.role === 'user'
-    && readStringMetadata(message, 'source') === 'openclaw'
-    && message.id.startsWith('openclaw-user-');
-}
-
 function chooseMergedChatMessage(current: ChatMessage, incoming: ChatMessage): ChatMessage {
   if (current.id === incoming.id) {
     return incoming;
-  }
-
-  const currentIsOptimistic = isOpenClawOptimisticUserMessage(current);
-  const incomingIsOptimistic = isOpenClawOptimisticUserMessage(incoming);
-  if (currentIsOptimistic !== incomingIsOptimistic) {
-    return currentIsOptimistic ? incoming : current;
   }
 
   if (current.status !== 'delivered' && incoming.status === 'delivered') {
@@ -186,7 +173,7 @@ export function isAutomatedCurationTriggerMessage(message: ChatAuthorMessage): b
   const idempotencyKey = typeof message.metadata?.idempotencyKey === 'string'
     ? message.metadata.idempotencyKey
     : '';
-  return message.role === 'user' && idempotencyKey.startsWith('openclaw-heartbeat-');
+  return message.role === 'user' && idempotencyKey.startsWith('chat-queue-heartbeat-');
 }
 
 export function getChatMessageAuthorLabel(
