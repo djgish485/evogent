@@ -62,6 +62,12 @@ for i in $(seq 1 30); do
 done
 echo "  home page: $code"
 
+echo "== ensure the on-device periodic scheduler is running =="
+# The deployed build's adaptive heartbeat dispatches automatic curation through the removed
+# /api/openclaw/chat endpoint (404), so periodic source-browse + curation are driven on-device
+# by evogent-scheduler.sh in its own tmux session. Idempotent: only starts if not already up.
+run_termux 'tmux has-session -t evo-sched 2>/dev/null && echo "  scheduler: already running" || { tmux new -d -s evo-sched "bash ~/phone-tools/evogent-scheduler.sh"; echo "  scheduler: started"; }' 2>&1 | grep -v "Permanently added" | tail -1
+
 echo "== CONVERGE: reload WebView + a11y until BOTH the feed serves AND a11y actually responds =="
 # Every force-stop can disable the a11y service (Android drops a service it thinks crashed),
 # and the boot-time WebView caches "webpage not found". So we loop: assert the a11y setting,
