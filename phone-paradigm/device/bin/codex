@@ -1,0 +1,7 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Codex CLI on-device: a static-musl aarch64 binary. It bypasses Android/bionic, so it needs
+# (a) a resolv.conf at /etc (musl reads the absolute path) — provided via a proot bind-mount,
+# and (b) an explicit CA bundle for TLS (SSL_CERT_FILE). Auth is Dan's ChatGPT subscription
+# in ~/.codex/auth.json.
+export SSL_CERT_FILE="${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}"
+exec proot -b "$PREFIX/etc/resolv.conf:/etc/resolv.conf" "$HOME/.codex-bin/codex" "$@"

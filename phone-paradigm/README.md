@@ -45,3 +45,17 @@ the hidden trusted display) can only be (re)started via an ADB command each boot
 and the a11y service don't auto-start either. So a reboot resets them, and `restore-device.sh`
 brings the whole stack back. The durable, zero-touch end state is a **system/platform-signed
 Evogent** on a flashed image (no Shizuku, everything auto-starts) — the phase-2 product tier.
+
+## Alternative brain provider: Codex CLI (subscription-powered)
+
+Evogent's brain provider is switchable (`## Brain Provider` in `data/config.md`: `Claude Code` or
+`Codex CLI`). Codex runs on the device off the user's **ChatGPT subscription**:
+
+- The Codex CLI ships a **static-musl aarch64** binary that runs directly on Android (no grun).
+- Being static it bypasses Android/bionic, so it needs a `resolv.conf` (DNS, via a `proot`
+  bind-mount) and an explicit CA bundle (`SSL_CERT_FILE`) — both handled by `device/bin/codex`.
+- Auth: copy `~/.codex/auth.json` from a machine where `codex login` (ChatGPT) succeeded.
+- Codex reads `AGENTS.md` (not `.claude/skills`), so the phone-browse capability is added there —
+  see `device/AGENTS.phone-browse.md` (appended to `~/evogent/AGENTS.md`).
+- See `device/setup-codex.sh`. Verified live: the "Spark" codex session browsed Gmail on a hidden
+  display and returned the latest email with the feed undisturbed.
