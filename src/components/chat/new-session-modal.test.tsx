@@ -27,7 +27,6 @@ const modalProps = {
   selectedColor: 'color-0',
   sessionType: 'normal' as const,
   title: 'New session',
-  workingDirectory: '/root/evogent',
   onClose: noop,
   onAskAgent: noop,
   onSubmit: noop,
@@ -38,7 +37,6 @@ const modalProps = {
   onProviderChange: noop,
   onSessionTypeChange: noop,
   onTitleChange: noop,
-  onWorkingDirectoryChange: noop,
 };
 
 afterEach(() => {
@@ -58,7 +56,6 @@ describe('NewSessionModal mobile viewport layout', () => {
       assert.ok(dialogTag.includes(token));
     }
     assert.match(dialogTag, /max-height:calc\(100dvh - max\(1rem, env\(safe-area-inset-top\)\) - max\(1rem, env\(safe-area-inset-bottom\)\)\)/);
-    assert.ok(actionsIndex > markup.indexOf('Working directory'));
     assert.ok(actionsIndex > markup.indexOf('Validation failed'));
     assert.ok(markup.includes('Create session'));
   });

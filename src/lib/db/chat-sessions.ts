@@ -137,7 +137,10 @@ function sanitizeWorkingDirectory(input: string | null | undefined): string | nu
 
 function sanitizeSessionType(input: string | null | undefined): ConversationSessionType {
   if (typeof input !== 'string') return null;
-  return input.trim().toLowerCase() === 'curator' ? 'curator' : null;
+  const normalized = input.trim().toLowerCase();
+  if (normalized === 'curator') return 'curator';
+  if (normalized === 'main') return 'main';
+  return null;
 }
 
 function normalizeBooleanFlag(input: unknown): boolean {
@@ -859,6 +862,89 @@ export function getMostRecentGeneralChatSession(): ChatSessionRecord | null {
 
 export function getMostRecentCuratorChatSession(): ChatSessionRecord | null {
   return getMostRecentChatSessionBySessionType('curator');
+}
+
+export const MAIN_SESSION_TITLE = 'Evogent';
+
+// The main session is the standing default target for the pinned composer: one durable
+// thread (OpenClaw's dmScope:"main" pattern) instead of a new session per quick question
+// or a fall-through into whichever session was touched last (which on a fresh install is
+// the Curator). Context freshness comes from rotating the provider session id when the
+// thread has been idle, not from spawning new threads.
+export const MAIN_SESSION_IDLE_RESET_MINUTES = 120;
+
+export function getMainChatSession(): ChatSessionRecord | null {
+  const row = getDb().prepare(`
+    SELECT
+      s.id,
+      s.provider,
+      s.provider_session_id,
+      s.claude_session_id,
+      s.session_type,
+      bs.claude_reasoning_effort,
+      bs.codex_reasoning_effort,
+      bs.codex_fast_mode,
+      bs.latest_context_tokens,
+      bs.latest_context_window,
+      bs.latest_context_model,
+      bs.latest_context_updated_at,
+      s.title,
+      s.color,
+      s.working_directory,
+      s.created_at,
+      s.updated_at
+    FROM chat_sessions AS s
+    LEFT JOIN chat_session_brain_settings AS bs
+      ON bs.session_id = s.id
+    WHERE s.session_type = 'main'
+    ORDER BY datetime(s.created_at) ASC
+    LIMIT 1
+  `).get() as ChatSessionRow | undefined;
+
+  return row ? rowToChatSession(row) : null;
+}
+
+function getLastUserMessageTimestampMs(sessionId: string): number | null {
+  const row = getDb().prepare(`
+    SELECT MAX(timestamp) AS last_user_at
+    FROM chat_messages
+    WHERE session_id = ?
+      AND role = 'user'
+      AND type = 'chat'
+  `).get(sessionId) as { last_user_at?: string | null } | undefined;
+
+  const raw = row?.last_user_at;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// Only real user messages count toward freshness (heartbeat/system turns must not keep
+// the context alive), mirroring how OpenClaw computes idle resets.
+export function maybeResetIdleMainSession(session: ChatSessionRecord): ChatSessionRecord {
+  if (session.sessionType !== 'main') return session;
+
+  const lastUserAtMs = getLastUserMessageTimestampMs(session.id);
+  if (lastUserAtMs === null) return session;
+
+  const idleMs = Date.now() - lastUserAtMs;
+  if (idleMs < MAIN_SESSION_IDLE_RESET_MINUTES * 60 * 1000) return session;
+
+  return rotateChatSessionClaudeSessionId(session.id) ?? session;
+}
+
+export function getOrCreateMainChatSession(input?: {
+  provider?: BrainProviderName | string | null;
+}): ChatSessionRecord {
+  const existing = getMainChatSession();
+  if (existing) return existing;
+
+  return createChatSession({
+    provider: input?.provider ?? undefined,
+    title: MAIN_SESSION_TITLE,
+    sessionType: 'main',
+    claudeReasoningEffort: 'low',
+  });
 }
 
 const CONVERSATION_SESSION_STATS_CTE = `

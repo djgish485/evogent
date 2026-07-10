@@ -6,6 +6,27 @@ export const SOURCE_STATUS_COMMAND = '/source-status';
 export const SOURCE_HEALTH_ORIGIN_VIEW = 'feed/source_health_button' as const;
 export const SOURCE_HEALTH_TRIGGER_SOURCE = 'source_health_button';
 
+// Default composer target when nothing (valid) is selected: the durable main session
+// first, then the most recently active non-curator session, then whatever exists.
+// Quick questions must not land in the Curator thread just because it was touched last.
+export function pickDefaultChatSessionId(
+  sessions: ConversationSessionSummary[],
+): string | null {
+  const main = sessions.find((session) => session.sessionType === 'main');
+  if (main) return main.sessionId;
+
+  let latestGeneral: ConversationSessionSummary | null = null;
+  for (const session of sessions) {
+    if (session.sessionType === 'curator') continue;
+    if (!latestGeneral || session.lastMaterialActivityAt > latestGeneral.lastMaterialActivityAt) {
+      latestGeneral = session;
+    }
+  }
+  if (latestGeneral) return latestGeneral.sessionId;
+
+  return sessions[0]?.sessionId ?? null;
+}
+
 export function resolveGeneralChatSessionId(
   sessions: ConversationSessionSummary[],
   selectedSessionId: string | null | undefined,

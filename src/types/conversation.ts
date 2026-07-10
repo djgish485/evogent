@@ -1,4 +1,4 @@
-export type ConversationSessionType = 'curator' | null;
+export type ConversationSessionType = 'curator' | 'main' | null;
 
 export interface ConversationSessionPreviewMessage {
   id: string;

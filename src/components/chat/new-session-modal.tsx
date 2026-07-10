@@ -32,7 +32,6 @@ interface NewSessionModalProps {
   selectedColor: string | null;
   sessionType: 'curator' | 'normal';
   title: string;
-  workingDirectory: string;
   onClose: () => void;
   onAskAgent: () => void;
   onSubmit: () => void;
@@ -43,7 +42,6 @@ interface NewSessionModalProps {
   onProviderChange: (value: string) => void;
   onSessionTypeChange: (value: 'curator' | 'normal') => void;
   onTitleChange: (value: string) => void;
-  onWorkingDirectoryChange: (value: string) => void;
 }
 
 export function lockDocumentScrollForModal() {
@@ -91,7 +89,6 @@ export function NewSessionModal({
   selectedColor,
   sessionType,
   title,
-  workingDirectory,
   onClose,
   onAskAgent,
   onSubmit,
@@ -102,7 +99,6 @@ export function NewSessionModal({
   onProviderChange,
   onSessionTypeChange,
   onTitleChange,
-  onWorkingDirectoryChange,
 }: NewSessionModalProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { backdropProps } = useOverlayDismiss({
@@ -315,18 +311,6 @@ export function NewSessionModal({
             })}
           </div>
         </div>
-        <label className="mt-4 block">
-          <span className="mb-2 block text-sm font-medium text-zinc-200">Working directory</span>
-          <input
-            type="text"
-            value={workingDirectory}
-            onChange={(event) => onWorkingDirectoryChange(event.target.value)}
-            placeholder="/root/my-project"
-            disabled={isSubmitting}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-          />
-          <p className="mt-2 text-xs text-zinc-500">Optional. Leave blank to use the evogent working directory.</p>
-        </label>
         {error && (
           <p className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}

@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { buildChatInstruction, buildCuratorChatInstruction } from '@/lib/chat-instruction';
 import { getDb } from '@/lib/db/client';
 import { insertChatMessage, updateChatMessageStatus } from '@/lib/db/chat';
-import { ensureChatSession } from '@/lib/db/chat-sessions';
+import { ensureChatSession, maybeResetIdleMainSession } from '@/lib/db/chat-sessions';
 import { enqueueOrchestratorMessage } from '@/lib/orchestrator';
 import { checkProviderAvailability } from '@/lib/setup-readiness';
 import type { ChatAttachment, ChatMessage } from '@/types/chat';
 
-export type ChatContextKind = 'global' | 'post';
+export type ChatContextKind = 'global' | 'post' | 'screen';
 export type ChatOriginView = 'feed' | 'post_detail' | 'feed/setup_card' | 'feed/source_health_button';
 
 export interface SubmitChatMessageInput {
@@ -74,7 +74,9 @@ export async function resolveExistingAttachments(payload: unknown): Promise<Chat
 }
 
 export async function submitChatMessage(input: SubmitChatMessageInput): Promise<SubmitChatMessageResult> {
-  const session = ensureChatSession(input.sessionId);
+  // Idle main sessions get a fresh provider context (same thread in the UI) before this
+  // turn is queued, so a morning quick question doesn't resume yesterday's conversation.
+  const session = maybeResetIdleMainSession(ensureChatSession(input.sessionId));
   const userMessageId = `msg-${randomUUID()}`;
   const timestamp = new Date().toISOString();
   const attachments = input.attachments ?? [];
@@ -164,6 +166,9 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         claudeReasoningEffort: session.claudeReasoningEffort,
         codexReasoningEffort: session.codexReasoningEffort,
         codexFastMode: session.codexFastMode,
+        // The main session is the interactive "do something on my phone now" surface —
+        // latency beats depth there, so it runs the fast model tier.
+        ...(session.sessionType === 'main' ? { claudeModel: 'haiku' } : {}),
         providerSessionId: session.providerSessionId,
         claudeSessionId: session.claudeSessionId,
         workingDirectory: taskWorkingDirectory,

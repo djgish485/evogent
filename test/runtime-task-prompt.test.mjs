@@ -6,12 +6,11 @@ import test from 'node:test';
 
 import { buildRuntimeTaskPrompt, isChatCommandSupported } from '../lib/runtime-tasks.js';
 
-test('Codex runtime support excludes retired curation commands', () => {
-  assert.strictEqual(isChatCommandSupported('codex', 'curate-latest'), false);
-  assert.strictEqual(isChatCommandSupported('codex', 'curate'), false);
+test('Codex runtime support includes native curation commands', () => {
+  assert.strictEqual(isChatCommandSupported('codex', 'curate-latest'), true);
+  assert.strictEqual(isChatCommandSupported('codex', 'curate'), true);
   assert.strictEqual(isChatCommandSupported('codex', 'source-status'), true);
   assert.strictEqual(isChatCommandSupported('codex', 'develop'), false);
-  assert.strictEqual(isChatCommandSupported('claude', 'develop'), true);
 });
 
 test('curate instructions treat front-page leads as rare override signals', async () => {

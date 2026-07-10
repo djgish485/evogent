@@ -35,13 +35,13 @@ test('listUserFacingCommands prefers project commands and filters hidden/interna
     'Global research command.\n\nUsage: /research <topic>\n',
     'utf8',
   );
-  const linkedStatusPath = path.join(linkedCommandSource, 'status.md');
+  const linkedReflectPath = path.join(linkedCommandSource, 'reflect.md');
   await fs.promises.writeFile(
-    linkedStatusPath,
-    'Check running work.\n\nSteps:\n1. Do the thing.\n',
+    linkedReflectPath,
+    'Review recent behavior.\n\nSteps:\n1. Do the thing.\n',
     'utf8',
   );
-  await fs.promises.symlink(linkedStatusPath, path.join(homeDir, '.claude', 'commands', 'status.md'));
+  await fs.promises.symlink(linkedReflectPath, path.join(homeDir, '.claude', 'commands', 'reflect.md'));
   await fs.promises.writeFile(
     path.join(cwd, '.claude', 'commands', 'intake-enrich.md'),
     'Internal maintenance command.\n',
@@ -65,14 +65,14 @@ test('listUserFacingCommands prefers project commands and filters hidden/interna
 
   assert.deepStrictEqual(commands, [
     {
+      name: 'reflect',
+      description: 'Review recent behavior.',
+      source: 'global',
+    },
+    {
       name: 'research',
       description: 'Project research command.',
       source: 'project',
-    },
-    {
-      name: 'status',
-      description: 'Check running work.',
-      source: 'global',
     },
   ]);
 });

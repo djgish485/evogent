@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import { NextResponse } from 'next/server';
 import {
-  createChatSession,
   getChatSession,
-  getMostRecentChatSessionForProvider,
+  getOrCreateMainChatSession,
 } from '@/lib/db/chat-sessions';
 import { submitChatMessage } from '@/lib/chat-submission';
 import { getChatAttachmentsDir, parseChatAttachments } from '@/lib/chat-attachments';
@@ -13,7 +12,7 @@ import type { ChatAttachment } from '@/types/chat';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type ChatContextKind = 'global' | 'post';
+type ChatContextKind = 'global' | 'post' | 'screen';
 type ChatOriginView = 'feed' | 'post_detail' | 'feed/setup_card' | 'feed/source_health_button';
 
 function sanitizeOptionalText(value: unknown): string | null {
@@ -40,7 +39,9 @@ function sanitizeOptionalMetadata(value: unknown): Record<string, unknown> | nul
 }
 
 function normalizeContextKind(value: unknown): ChatContextKind {
-  return value === 'post' ? 'post' : 'global';
+  if (value === 'post') return 'post';
+  if (value === 'screen') return 'screen';
+  return 'global';
 }
 
 function normalizeOriginView(value: unknown): ChatOriginView {
@@ -49,6 +50,9 @@ function normalizeOriginView(value: unknown): ChatOriginView {
   return value === 'post_detail' ? 'post_detail' : 'feed';
 }
 
+// A send without an explicit session targets the durable main session — never
+// "whichever session was updated last" (that fall-through routed quick questions
+// into the Curator thread on installs where it was the only session).
 async function resolveTargetSessionId(
   selectedSessionId: string | null,
   provider: 'claude' | 'codex',
@@ -61,12 +65,7 @@ async function resolveTargetSessionId(
     }
   }
 
-  const latest = getMostRecentChatSessionForProvider(provider);
-  if (latest) {
-    return latest.id;
-  }
-
-  return createChatSession({ provider }).id;
+  return getOrCreateMainChatSession({ provider }).id;
 }
 
 async function resolveExistingAttachments(payload: unknown): Promise<ChatAttachment[]> {

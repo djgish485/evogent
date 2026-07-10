@@ -24,24 +24,17 @@ const CODEX_USER_FACING_COMMANDS = new Set([
   'curate-latest',
 ]);
 
+// Dev-workflow commands (develop*, spawn-session, compare, review, postmortem, watch,
+// status) were removed from the user-facing set: software development happens through
+// the user's own coding tools now, not through Evogent chat.
 const USER_FACING_COMMAND_NAMES = new Set([
-  'compare',
   'curate',
   'curate-latest',
-  'develop',
-  'develop-claude',
-  'develop-gemini',
-  'develop-xhigh',
-  'postmortem',
   'reflect',
   'research',
   'research-claude',
   'research-gemini',
-  'review',
-  'spawn-session',
   'setup-wizard',
-  'status',
-  'watch',
 ]);
 
 interface FrontmatterObject {
