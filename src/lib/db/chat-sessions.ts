@@ -274,11 +274,15 @@ function buildSessionPreview(messages: ConversationSessionPreviewMessage[]): {
 
 function rowToChatSession(row: ChatSessionRow): ChatSessionRecord {
   const provider = normalizeBrainProvider(row.provider);
+  // Codex thread ids are SERVER-assigned rollout ids: when none is stored, the record must
+  // say so (empty string) rather than coalescing to the claude id or the row id — a
+  // fabricated id makes `codex exec resume` fail with "no rollout found". Claude accepts
+  // client-chosen ids, so its historical fallback chain stays.
   const providerSessionId = isUuid(row.provider_session_id?.trim())
     ? row.provider_session_id!.trim()
-    : isUuid(row.claude_session_id?.trim())
-      ? row.claude_session_id.trim()
-      : row.id;
+    : provider === 'claude'
+      ? (isUuid(row.claude_session_id?.trim()) ? row.claude_session_id.trim() : row.id)
+      : '';
 
   return {
     id: row.id,
@@ -367,11 +371,16 @@ export function createChatSession(input?: {
 }): ChatSessionRecord {
   const id = isUuid(input?.id?.trim()) ? input?.id?.trim() : randomUUID();
   const provider = normalizeBrainProvider(input?.provider ?? getDefaultBrainProvider());
-  const providerSessionId = isUuid(input?.providerSessionId?.trim())
+  // Codex thread ids are SERVER-assigned (thread.started); a codex session must start with
+  // NO provider_session_id so the first turn opens a real rollout. Only fall back to a
+  // client-chosen id (the row id) for claude, which accepts --session-id.
+  const explicitProviderSessionId = isUuid(input?.providerSessionId?.trim())
     ? input?.providerSessionId?.trim()
     : isUuid(input?.claudeSessionId?.trim())
       ? input?.claudeSessionId?.trim()
-      : id;
+      : null;
+  const providerSessionId = explicitProviderSessionId
+    ?? (provider === 'claude' ? id : '');
   const claudeSessionId = provider === 'claude'
     ? providerSessionId
     : '';
@@ -660,10 +669,18 @@ export function rotateChatSessionClaudeSessionId(
   const trimmedSessionId = sessionId.trim();
   if (!trimmedSessionId || !isUuid(nextClaudeSessionId)) return null;
 
+  // Fresh provider context, same thread in the UI. Claude accepts a client-chosen
+  // --session-id, so rotate to a fresh UUID. Codex thread ids are server-assigned
+  // rollout ids — a fabricated one fails `codex exec resume` with "no rollout found" —
+  // so CLEAR the stored id instead; the orchestrator starts a new rollout and persists
+  // the real id from codex's thread.started event.
   const result = getDb().prepare(`
     UPDATE chat_sessions
     SET
-      provider_session_id = ?,
+      provider_session_id = CASE
+        WHEN COALESCE(NULLIF(TRIM(provider), ''), 'claude') = 'claude' THEN ?
+        ELSE ''
+      END,
       claude_session_id = CASE
         WHEN COALESCE(NULLIF(TRIM(provider), ''), 'claude') = 'claude' THEN ?
         ELSE claude_session_id
@@ -699,7 +716,10 @@ export function resetChatSessionMessages(sessionId: string): ChatSessionRecord |
     db.prepare(`
       UPDATE chat_sessions
       SET
-        provider_session_id = ?,
+        provider_session_id = CASE
+          WHEN COALESCE(NULLIF(TRIM(provider), ''), 'claude') = 'claude' THEN ?
+          ELSE ''
+        END,
         claude_session_id = CASE
           WHEN COALESCE(NULLIF(TRIM(provider), ''), 'claude') = 'claude' THEN ?
           ELSE claude_session_id

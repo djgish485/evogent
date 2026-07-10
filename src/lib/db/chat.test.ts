@@ -20,6 +20,7 @@ import {
   getConversationSessionSummary,
   getConversationSessions,
   resetChatSessionMessages,
+  rotateChatSessionClaudeSessionId,
   updateChatSession,
   updateChatSessionBrainSettings,
   updateChatSessionContextMetrics,
@@ -695,6 +696,27 @@ describe('chat sessions', () => {
     assert.strictEqual(reset?.codexFastMode, false);
     assert.strictEqual(getChatSession(session.id)?.codexReasoningEffort, 'xhigh');
     assert.strictEqual(getChatSession(session.id)?.codexFastMode, false);
+  });
+
+  test('codex sessions never expose a fabricated provider thread id', () => {
+    // Codex resume targets a server-assigned rollout id. A record with no stored
+    // provider_session_id must report '' (not the row id or claude id) so the orchestrator
+    // starts a fresh rollout instead of resuming a non-existent one ("no rollout found").
+    const session = createChatSession({ provider: 'codex', title: 'Codex Thread' });
+    assert.strictEqual(session.providerSessionId, '');
+    assert.strictEqual(getChatSession(session.id)?.providerSessionId, '');
+
+    // Idle reset / message reset must CLEAR the codex id, never mint a client UUID for it.
+    const rotated = rotateChatSessionClaudeSessionId(session.id);
+    assert.strictEqual(rotated?.providerSessionId, '');
+    const cleared = resetChatSessionMessages(session.id);
+    assert.strictEqual(cleared?.providerSessionId, '');
+
+    // Claude, by contrast, accepts a client-chosen --session-id, so it keeps one.
+    const claude = createChatSession({ provider: 'claude', title: 'Claude Thread' });
+    assert.ok(claude.providerSessionId && claude.providerSessionId.length > 0);
+    const claudeRotated = rotateChatSessionClaudeSessionId(claude.id);
+    assert.ok(claudeRotated?.providerSessionId && claudeRotated.providerSessionId !== claude.providerSessionId);
   });
 
   test('chat session Claude reasoning persists across summaries and resets', () => {

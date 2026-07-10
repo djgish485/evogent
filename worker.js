@@ -1002,6 +1002,31 @@ function updateChatSessionProviderSessionId(sessionId, providerName, providerSes
   }
 }
 
+// Clear a session's stored provider thread id (codex reset): the next turn starts a genuine
+// new rollout and persists the real server-assigned id from thread.started.
+function clearChatSessionProviderSessionId(sessionId, providerName) {
+  if (!isUuid(sessionId) || typeof providerName !== 'string' || !providerName.trim()) {
+    return false;
+  }
+  try {
+    const db = getChatStatusDb();
+    const result = db.prepare(`
+      UPDATE chat_sessions
+      SET
+        provider = ?,
+        provider_session_id = '',
+        claude_session_id = CASE WHEN ? = 'claude' THEN claude_session_id ELSE '' END,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(providerName, providerName, sessionId);
+    return result.changes > 0;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[worker] failed to clear chat session ID (${sessionId}): ${message}`);
+    return false;
+  }
+}
+
 function updateChatSessionContextMetrics(sessionIdOrInput, metricsInput = {}) {
   const sessionId = typeof sessionIdOrInput === 'object' && sessionIdOrInput !== null
     ? sessionIdOrInput.sessionId
@@ -1406,6 +1431,7 @@ const BrainOrchestrator = createBrainOrchestrator({
   truncateText,
   updateChatSessionContextMetrics,
   updateChatSessionProviderSessionId,
+  clearChatSessionProviderSessionId,
   writeCurationStatus,
   writeReflectionStatus,
   writeStoredChatProviderSessionId,
