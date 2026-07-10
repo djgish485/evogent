@@ -61,12 +61,22 @@ export function getProviderDisplayName(provider: BrainProviderName): string {
   return provider === 'codex' ? 'Codex' : 'Claude Code';
 }
 
-export function getProviderModelDisplayName(provider: BrainProviderName): string {
+export function getProviderModelDisplayName(
+  provider: BrainProviderName,
+  sessionType?: string | null,
+): string {
+  // The main session pins the fast model tier for low-latency phone actions
+  // (see chat-submission.ts); reflect that honestly in the header instead of
+  // the provider's default flagship label.
+  if (provider === 'claude' && sessionType === 'main') return 'Haiku 4.5';
   return provider === 'codex' ? 'GPT-5.5' : 'Opus 4.7';
 }
 
-export function getChatSessionHeaderProviderLabel(provider: BrainProviderName): string {
-  return `${getProviderDisplayName(provider)} · ${getProviderModelDisplayName(provider)}`;
+export function getChatSessionHeaderProviderLabel(
+  provider: BrainProviderName,
+  sessionType?: string | null,
+): string {
+  return `${getProviderDisplayName(provider)} · ${getProviderModelDisplayName(provider, sessionType)}`;
 }
 
 export function getCodexBrowserToolsStatus(
