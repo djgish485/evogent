@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import {
+  insertAnticipationEvent,
+  sanitizeAnticipationTier,
+  sanitizeTopics,
+} from '@/lib/anticipation';
 import { appendChatAuditMessage, notifyChatUpdate } from '@/lib/chat-output';
 import { getMostRecentActivity } from '@/lib/db/activity';
 import {
@@ -58,6 +63,32 @@ function resolveSubmitSessionId(input: ChatMessageInsertInput, rawBody: unknown)
   const originSessionId = readTrimmedString(raw, 'originSessionId')
     ?? readTrimmedString(metadata, 'originSessionId');
   return chatSessionExists(db, originSessionId) ? originSessionId : null;
+}
+
+// The demand event rides ON the chat reply the agent reliably submits, rather than being a
+// separate POST the model tends to skip after it's already answered (the self-report
+// unreliability we saw in testing). If the reply body carries `anticipation: {tier, topics,
+// ...}`, record it here — one event per reply, tied to the answered ask.
+function recordAnticipationFromSubmit(rawBody: unknown, sessionId: string, messageId: string | null): void {
+  try {
+    const raw = asRecord(rawBody);
+    const anticipation = asRecord(raw?.anticipation) ?? asRecord(asRecord(raw?.metadata)?.anticipation);
+    if (!anticipation) return;
+    const tier = sanitizeAnticipationTier(anticipation.tier);
+    if (!tier) return;
+    const waitedRaw = Number(anticipation.waitedMs);
+    insertAnticipationEvent({
+      tier,
+      topics: sanitizeTopics(anticipation.topics),
+      sourceHint: typeof anticipation.sourceHint === 'string' ? anticipation.sourceHint : null,
+      sessionId,
+      messageId,
+      waitedMs: Number.isFinite(waitedRaw) ? waitedRaw : null,
+      note: typeof anticipation.note === 'string' ? anticipation.note : null,
+    });
+  } catch (error) {
+    console.warn('[chat-submit] failed to record anticipation event', error);
+  }
 }
 
 function queueChatReplyPushNotification(message: ChatMessage): void {
@@ -138,6 +169,7 @@ export async function POST(request: Request) {
 
     if (persisted.message.role === 'agent' && persisted.message.type === 'chat') {
       queueChatReplyPushNotification(persisted.message);
+      recordAnticipationFromSubmit(body, sessionId, persisted.message.inReplyTo);
     }
   }
 

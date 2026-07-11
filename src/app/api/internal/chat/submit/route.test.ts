@@ -270,4 +270,76 @@ describe('internal chat submit route', { concurrency: false }, () => {
       ['chat-submit-route-first'],
     );
   });
+
+  test('records a demand event when the agent reply carries an anticipation field', async () => {
+    assert.ok(routeModule);
+
+    const session = createChatSession({ id: randomUUID(), title: 'Anticipation Submit' });
+    const userMessage = insertChatMessage({
+      id: 'msg-anticipation-submit',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Any RL videos?',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    const response = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-anticipation-submit',
+        inReplyTo: userMessage.id,
+        taskId: 'task-anticipation-submit',
+        text: 'Here are two from your feed.',
+        anticipation: { tier: 'feed_hit', topics: ['Reinforcement Learning'], sourceHint: 'youtube', waitedMs: 1200 },
+      }),
+    }));
+    assert.strictEqual(response.status, 200);
+
+    const eventRow = getDb().prepare(`
+      SELECT tier, topics, source_hint, session_id, message_id, waited_ms
+      FROM anticipation_events
+      ORDER BY id DESC
+      LIMIT 1
+    `).get() as { tier: string; topics: string; source_hint: string | null; session_id: string | null; message_id: string | null; waited_ms: number | null } | undefined;
+
+    assert.ok(eventRow);
+    assert.strictEqual(eventRow.tier, 'feed_hit');
+    assert.deepStrictEqual(JSON.parse(eventRow.topics), ['reinforcement learning']);
+    assert.strictEqual(eventRow.source_hint, 'youtube');
+    assert.strictEqual(eventRow.session_id, session.id);
+    assert.strictEqual(eventRow.message_id, userMessage.id);
+    assert.strictEqual(eventRow.waited_ms, 1200);
+  });
+
+  test('does not record a demand event for a plain reply with no anticipation field', async () => {
+    assert.ok(routeModule);
+
+    const session = createChatSession({ id: randomUUID(), title: 'No Anticipation' });
+    const userMessage = insertChatMessage({
+      id: 'msg-no-anticipation',
+      role: 'user',
+      sessionId: session.id,
+      text: 'hello',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-no-anticipation',
+        inReplyTo: userMessage.id,
+        taskId: 'task-no-anticipation',
+        text: 'Hi there.',
+      }),
+    }));
+
+    const count = (getDb().prepare('SELECT COUNT(*) AS c FROM anticipation_events').get() as { c: number }).c;
+    assert.strictEqual(count, 0);
+  });
 });

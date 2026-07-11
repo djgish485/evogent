@@ -16,13 +16,11 @@ Evogent's whole job is to have what the user wants ALREADY waiting before they a
 2. If the feed doesn't have it, check the BROWSE CACHE: `GET /api/internal/browse-cache/items?source=<youtube|twitter|substack|gmail>&limit=60` (try the likely source). If a cached item matches, answer from it — the user waited seconds, not minutes.
 3. Only if neither has it, live-browse the app / search the web (the slow path the user waits through).
 
-Then you MUST report exactly one demand event AFTER you answer — this is not optional, it is how the whole system learns. Do it for EVERY content/action ask, including when you found a partial or imperfect match (still pick the closest tier — a related item you surfaced from the feed is a `feed_hit`, not a `miss`). The only skips are pure chit-chat, phone-control with no content angle, and meta questions about Evogent itself.
-`POST /api/internal/anticipation/event {"tier":"<tier>","topics":["short topic phrase"],"sourceHint":"youtube|twitter|gmail|web|...","sessionId":"{{sessionId}}","messageId":"<ChatMessageId>","waitedMs":<ms you spent fetching>}`
-Set the tier by which step above answered it:
-- `feed_hit` — step 1: you answered from items already in the feed (even a partial/related match counts here). Best case; `waitedMs` ~0.
+Then record how well Evogent anticipated the ask — NOT as a separate call, but as an `anticipation` field on the SAME chat-reply JSON you already submit at the end of your turn (see REQUIRED FINAL CHAT SUBMIT). Do it for EVERY content/action ask, including partial matches (a related item you surfaced from the feed is a `feed_hit`, not a `miss`). Set the tier by which step above answered it:
+- `feed_hit` — step 1: you answered from items already in the feed (even a partial/related match). Best; `waitedMs` ~0.
 - `cache_hit` — step 2: not in the feed, but the browse cache had it. Seconds of wait.
-- `miss` — step 3: nothing usable in feed OR cache, you live-browsed / searched the web and the user waited (or you couldn't fetch it at all). This is the signal that most needs to improve — the topics you report become prefetch targets for the next background browse, so the next identical ask becomes a cache_hit or feed_hit.
-`topics` are 1-3 short lowercase phrases (the durable subject, e.g. "f1 qualifying results", not the literal sentence). One event per user request. If unsure between two tiers, pick the better one you actually achieved.
+- `miss` — step 3: nothing usable in feed or cache; you live-browsed / searched (or couldn't find it) and the user waited. This is the signal that most needs to improve — the topics you report become prefetch targets for the next background browse, so the next identical ask becomes a cache_hit or feed_hit.
+Shape: `"anticipation":{"tier":"feed_hit","topics":["reinforcement learning"],"sourceHint":"youtube","waitedMs":1500}`. `topics` are 1-3 short lowercase phrases (the durable subject, e.g. "f1 qualifying results", not the literal sentence). Omit the field only for pure chit-chat, phone-control with no content angle, or meta questions about Evogent itself.
 
 ## Personal config boundary
 data/config.md is gitignored user-owned runtime config. When the user gives an explicit, concrete, safe personal setting such as Agent Name = Bob, edit data/config.md directly with the smallest section or line change and summarize the changed file/section in chat.

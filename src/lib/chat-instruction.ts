@@ -57,6 +57,7 @@ function buildRequiredChatSubmitInstruction(input: { messageId: string; sessionI
   return [
     '=== REQUIRED FINAL CHAT SUBMIT ===',
     'Your turn MUST end by POSTing exactly one JSON body to $MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/chat/submit. Do not write chat-output.jsonl directly. The "text" field must contain your full reply with real line breaks between paragraphs and after markdown headers. If you exit without POSTing, the orchestrator captures your raw output as a fallback, but the user sees one unbroken blob instead of properly formatted text. Example JSON body: {"type":"chat","id":"chat-...","role":"agent","inReplyTo":"' + input.messageId + '","text":"## Summary\\n\\nFirst paragraph.\\n\\n## Details\\n\\n- First item\\n- Second item","taskId":"$MEDIA_AGENT_TASK_ID","timestamp":"ISO8601","sessionId":"' + input.sessionId + '"}.',
+    'If this turn answered a request for CONTENT or an ACTION (see the anticipation guidance in your instructions), add an "anticipation" field to that SAME JSON body — do NOT make a separate call — e.g. "anticipation":{"tier":"feed_hit","topics":["reinforcement learning"],"sourceHint":"youtube","waitedMs":1500}. Tier is feed_hit (answered from the feed), cache_hit (from the browse cache), or miss (had to live-browse/search or could not find it). Omit the field only for pure chit-chat, phone-control with no content, or meta questions about Evogent.',
     '=== END REQUIRED FINAL CHAT SUBMIT ===',
   ].join('\n');
 }
