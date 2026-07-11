@@ -9,7 +9,7 @@ import {
   setFeedItemLiked,
   setFeedItemSuggestionStatus,
 } from '@/lib/db/feed';
-import { getFeedSuggestionType } from '@/lib/feed-suggestions';
+import { getFeedSuggestionType, parseSuggestionActions } from '@/lib/feed-suggestions';
 import { dispatchLifeActionExecution } from '@/lib/life-execution';
 import { deletePreferenceByFeedItem, insertPreference, updatePreferenceReasonByFeedItem } from '@/lib/db/preferences';
 import { insertThreadFeedback, type ThreadFeedbackVote } from '@/lib/db/thread-feedback';
@@ -163,14 +163,35 @@ export async function POST(request: Request) {
     // wrapper (data/life-execute-prompt*.md); dispatch failure degrades to a
     // plain accept so approval is never lost.
     if (action === 'accept_suggestion' && getFeedSuggestionType(item) === 'life_admin') {
+      // Dynamic approval buttons: the tap names ONE of the card's agent-authored actions.
+      // Only the label crosses the API — the instruction is read back from the card's own
+      // metadata, so this endpoint cannot be used to inject arbitrary execution text.
+      const chosenLabelRaw = payload.chosenAction && typeof payload.chosenAction === 'object' && !Array.isArray(payload.chosenAction)
+        ? (payload.chosenAction as Record<string, unknown>).label
+        : null;
+      const chosenLabel = typeof chosenLabelRaw === 'string' ? chosenLabelRaw.trim() : '';
+      const cardActions = parseSuggestionActions(item.metadata?.actions);
+      const chosenAction = chosenLabel
+        ? cardActions.find((entry) => entry.label === chosenLabel) ?? null
+        : null;
+      if (chosenLabel && !chosenAction) {
+        return NextResponse.json({
+          error: `Action "${chosenLabel}" is not offered by this suggestion.`,
+        }, { status: 400 });
+      }
       const executionSpec = typeof item.metadata?.executionSpec === 'string'
         ? item.metadata.executionSpec.trim()
         : '';
-      if (executionSpec) {
+      const instruction = chosenAction
+        ? chosenAction.kind === 'execute' && chosenAction.instruction
+          ? `The user approved this specific action: "${chosenAction.label}".\n\n${chosenAction.instruction}`
+          : '' // acknowledge-kind action: plain accept, nothing to execute
+        : executionSpec;
+      if (instruction) {
         const dispatch = await dispatchLifeActionExecution({
           feedItemId,
           title: item.title ?? '',
-          executionSpec,
+          executionSpec: instruction,
         });
         if (dispatch.ok) {
           setFeedItemSuggestionStatus(feedItemId, 'dispatched');
