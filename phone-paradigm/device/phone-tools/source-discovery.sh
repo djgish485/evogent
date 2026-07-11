@@ -54,6 +54,9 @@ PROMPT=$(sed -e "s|__PKG__|$PKG|g" -e "s|__NAME__|$NAME|g" -e "s|__SRC__|$SRC|g"
 BRAIN=$(awk '/^## Brain Provider/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' \
         "$EVO/data/config.md" 2>/dev/null | grep -qi codex && echo codex || echo claude)
 
+# Self-heal the a11y service: a disabled service reads as "app did not land on any display".
+bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 || say "a11y-heal: service unresponsive — discovery will likely fail"
+
 say "discovery starting (brain=$BRAIN, budget 900s) — $NAME ($PKG) -> $SRC"
 if [ "$BRAIN" = "codex" ]; then
   # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
