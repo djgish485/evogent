@@ -166,9 +166,12 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         claudeReasoningEffort: session.claudeReasoningEffort,
         codexReasoningEffort: session.codexReasoningEffort,
         codexFastMode: session.codexFastMode,
-        // The main session is the interactive "do something on my phone now" surface —
-        // latency beats depth there, so it runs the fast model tier.
-        ...(session.sessionType === 'main' ? { claudeModel: 'haiku' } : {}),
+        // Interactive "do something on my phone now" surfaces run the fast model tier —
+        // latency beats depth. That's the durable main session and every overlay session
+        // (the anywhere bubble's "ask about this screen" threads).
+        ...((session.sessionType === 'main' || (input.metadata as { overlay?: unknown } | null)?.overlay === true)
+          ? { claudeModel: 'haiku' }
+          : {}),
         providerSessionId: session.providerSessionId,
         claudeSessionId: session.claudeSessionId,
         workingDirectory: taskWorkingDirectory,
