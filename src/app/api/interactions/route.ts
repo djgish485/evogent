@@ -11,6 +11,7 @@ import {
 } from '@/lib/db/feed';
 import { getFeedSuggestionType, parseSuggestionActions } from '@/lib/feed-suggestions';
 import { dispatchLifeActionExecution } from '@/lib/life-execution';
+import { cancelSourceSetup } from '@/lib/source-setup';
 import { deletePreferenceByFeedItem, insertPreference, updatePreferenceReasonByFeedItem } from '@/lib/db/preferences';
 import { insertThreadFeedback, type ThreadFeedbackVote } from '@/lib/db/thread-feedback';
 import { regeneratePreferenceContext } from '@/lib/preferences-context';
@@ -141,6 +142,15 @@ export async function POST(request: Request) {
         ? 'dismissed'
         : 'pending';
 
+    // Auto-added sources are act-show-undo: dismissing the announcement card IS the undo.
+    // Clean up the recipe/queue and opt the source out so the scout never re-adds it.
+    if (action === 'dismiss_suggestion' && getFeedSuggestionType(item) === 'source_setup') {
+      const cancellation = cancelSourceSetup(item);
+      if (!cancellation.cancelled && cancellation.source) {
+        console.warn(`[interactions] source_setup dismiss: cleanup failed for ${cancellation.source}`);
+      }
+    }
+
     if (action === 'dismiss_suggestion' && getFeedSuggestionType(item) === 'code_fix') {
       try {
         await cancelCodeFixSuggestionWork({
@@ -162,7 +172,8 @@ export async function POST(request: Request) {
     // action dispatches to the curator life-actions agent under the guardrail
     // wrapper (data/life-execute-prompt*.md); dispatch failure degrades to a
     // plain accept so approval is never lost.
-    if (action === 'accept_suggestion' && getFeedSuggestionType(item) === 'life_admin') {
+    const dispatchableSuggestionTypes = new Set(['life_admin', 'source_setup']);
+    if (action === 'accept_suggestion' && dispatchableSuggestionTypes.has(getFeedSuggestionType(item))) {
       // Dynamic approval buttons: the tap names ONE of the card's agent-authored actions.
       // Only the label crosses the API — the instruction is read back from the card's own
       // metadata, so this endpoint cannot be used to inject arbitrary execution text.
