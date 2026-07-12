@@ -64,6 +64,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Real-time content signal: read allowlisted content-app notifications (Gmail
+             sender/subject/snippet etc.) into the browse cache so the feed can react without
+             a full browse. BIND_NOTIFICATION_LISTENER_SERVICE is system-enforced; access is
+             granted out-of-band via `cmd notification allow_listener` over the Shizuku shell. -->
+        <service
+            android:name=".EvogentNotificationListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".BrowseService"
             android:exported="true" />
