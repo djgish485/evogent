@@ -40,6 +40,10 @@ public class BootReceiver extends BroadcastReceiver {
             run.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
             run.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
             run.setData(Uri.parse("evogent-boot"));
+            // After a reboot Termux is in the "stopped" state (nothing has launched it yet);
+            // an intent won't reach a stopped package without this flag — the whole boot chain
+            // silently fails without it. This is what makes RUN_COMMAND work FROM boot.
+            run.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(run);
             } else {

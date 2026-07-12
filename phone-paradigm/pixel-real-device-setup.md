@@ -86,6 +86,25 @@ this up, then verify with one real reboot.**
   reaps the Node server + tmux) survives reboot. `device_config` values may not — the boot
   script re-applies them.
 
+**The unavoidable OS constraint — first unlock after reboot (File-Based Encryption):**
+After a reboot Android sits in `RUNNING_LOCKED` (direct-boot): the user's credential-encrypted
+storage — which holds **all of Termux's home, the Node server, node_modules, and the DB** — stays
+**encrypted until the user enters their PIN** for the first time. Until that first unlock:
+- Termux cannot run (its files are unavailable — `am start` returns "Error type 3").
+- The server cannot start; `BOOT_COMPLETED` has not fired (only `LOCKED_BOOT_COMPLETED` has,
+  which can touch device-encrypted storage only).
+So Evogent **cannot** come up on the lock screen — no boot script can bypass FBE. The sequence
+is: reboot → **user unlocks with PIN** → CE storage unlocks + `BOOT_COMPLETED` fires → Evogent's
+`BootReceiver` runs the bringup → server + scheduler up within ~a minute. This is normal (every
+Android phone needs a PIN after reboot; you unlock to use it anyway) and acceptable. Fingerprint
+does NOT count for the first post-reboot unlock — the PIN/password is required.
+- *Install-agent note:* verify boot-start by rebooting AND then unlocking with the PIN; do not
+  expect anything on-device to start while the phone is still on the post-reboot lock screen.
+- *Gotcha:* the `BootReceiver` only fires if the app is NOT in the "stopped" state at unlock.
+  A fresh `install -r` leaves it stopped; because Evogent is the **home launcher** it gets
+  launched on unlock, clearing that — but after a manual reinstall, launch the app once before
+  rebooting or the first post-reinstall boot won't auto-fire.
+
 **Does NOT survive — and how it's handled:**
 - **Server + periodic scheduler** → started by the **Evogent APK's `BootReceiver`**, which
   fires a **Termux `RUN_COMMAND` intent** running `~/phone-tools/evogent-boot.sh` (starts the
