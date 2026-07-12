@@ -33,6 +33,18 @@ export async function POST(request: Request) {
   const timestamp = new Date().toISOString();
   const activityId = insertUserActivity(event, metadata, timestamp);
   const nowMs = Date.now();
+
+  // Instant freshness on arrival: an app open promotes the curator's benched near-misses and
+  // re-arranges — sub-second, no brain — so the user never stares at hours-old top-of-feed
+  // while the (minutes-long) heartbeat curation catches up. Self-debounced server-side.
+  if (event === 'app_open' || event === 'foreground') {
+    const origin = new URL(request.url).origin;
+    void fetch(`${origin}/api/internal/feed/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minIntervalSeconds: 300, limit: 6 }),
+    }).catch(() => { /* freshness is best-effort; activity logging must never fail on it */ });
+  }
   const recentlyEvaluated = nowMs - lastInlineHeartbeatEvaluationAt < INLINE_HEARTBEAT_DEBOUNCE_MS;
 
   if ((inlineHeartbeatEvaluationInFlight || recentlyEvaluated) && !hasPendingCurationCycle()) {
