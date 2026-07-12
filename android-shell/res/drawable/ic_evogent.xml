@@ -1,12 +1,12 @@
 <!-- The Evogent mark: a four-point spark (the AI) curating two feed lines below it.
-     Reused across the launcher return pill and (spark alone) the anywhere-compose FAB. -->
+     White-on-purple, matching the unified fixed-button family. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="22dp" android:height="22dp"
     android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#C4B5FD"
+    <path android:fillColor="#FFFFFF"
         android:pathData="M12,1.6 L14.1,5.9 L18.4,8 L14.1,10.1 L12,14.4 L9.9,10.1 L5.6,8 L9.9,5.9 Z" />
-    <path android:fillColor="#E4E4E7"
+    <path android:fillColor="#FFFFFF"
         android:pathData="M5.4,16 H18.6 A1.3,1.3 0 0 1 18.6,18.6 H5.4 A1.3,1.3 0 0 1 5.4,16 Z" />
-    <path android:fillColor="#A1A1AA"
+    <path android:fillColor="#B3FFFFFF"
         android:pathData="M5.4,20.4 H13.4 A1.15,1.15 0 0 1 13.4,22.7 H5.4 A1.15,1.15 0 0 1 5.4,20.4 Z" />
 </vector>
