@@ -71,6 +71,56 @@ flashed system image — see "Flashed image removes all friction" below.
   rendered in-app. Tweet-heavy config (see `emulator-curation-profile.md`, adapted: X is LIVE on
   a real device, so tweets are the heartbeat — no suspension).
 
+## Boot-start: surviving a reboot (sideload/Termux path)
+
+Evogent must come back on its own after the phone reboots. On the sideload/Termux path the
+stack spans several components with different reboot behavior. **Install agents: set all of
+this up, then verify with one real reboot.**
+
+**Survives a reboot automatically (no action needed):**
+- Accessibility + notification-listener **grants** — Android keeps the grant; the services
+  re-bind on boot. (`a11y-heal.sh`, run by the boot script, re-asserts them to be safe.)
+- Termux on the **battery-optimization whitelist** (`dumpsys deviceidle whitelist +com.termux`).
+- **Persistent global settings** once set: `settings put global
+  settings_enable_monitor_phantom_procs false` (the phantom-process killer that otherwise
+  reaps the Node server + tmux) survives reboot. `device_config` values may not — the boot
+  script re-applies them.
+
+**Does NOT survive — and how it's handled:**
+- **Server + periodic scheduler** → started by the **Evogent APK's `BootReceiver`**, which
+  fires a **Termux `RUN_COMMAND` intent** running `~/phone-tools/evogent-boot.sh` (starts the
+  Node server in tmux `evo`, then the scheduler in tmux `evo-sched`, then re-applies keep-alive
+  settings via Shizuku). **No Termux:Boot addon is required** — Evogent bootstraps Termux
+  itself. Requires `allow-external-apps=true` in `~/.termux/termux.properties` (set) and the
+  `com.termux.permission.RUN_COMMAND` permission in the APK (declared). `evogent-boot.sh` is
+  idempotent, so re-running it is harmless.
+  - *Optional belt-and-suspenders:* install the **Termux:Boot addon**; `~/.termux/boot/
+    10-evogent.sh` (deployed) defers to the same `evogent-boot.sh`.
+- **Shizuku privileged server** (the shell-uid broker `rish`/hidden-display browse depend on)
+  → the Shizuku **app** may auto-start, but the **`shizuku_server` process does NOT survive a
+  reboot on a non-rooted device**. The durable fix is Shizuku's own **"Start on boot"** feature:
+  in the Shizuku app, enable **Wireless debugging** pairing + **Start on boot**. Without it,
+  the feed still works after reboot (server + scheduler + cached content), but **background
+  source-browsing is down until `shizuku_server` is restarted** (dev: re-run `restore-device.sh`
+  from the Mac; standalone: Shizuku start-on-boot). Known fragility: after a server restart the
+  first `rish` calls can time out and Termux may need re-authorizing in the Shizuku app UI.
+- **adb port-forward (`8023→8022`) + sshd** → **dev/Mac-access only**, NOT part of standalone
+  operation. A user's phone runs the server, app, and browse fully on-device; it needs no Mac
+  and no SSH. `evogent-boot.sh` starts `sshd` only when `~/.evogent-dev-ssh` exists (a dev opt-in).
+
+**Install-agent boot-start checklist:**
+1. Deploy `phone-tools/evogent-boot.sh` (+ `~/.termux/boot/10-evogent.sh` if using the addon).
+2. Confirm the APK holds `com.termux.permission.RUN_COMMAND` and Termux has
+   `allow-external-apps=true`.
+3. `dumpsys deviceidle whitelist +com.termux` and `+moe.shizuku.privileged.api`.
+4. Enable **Shizuku "Start on boot"** (needed for source-browsing to survive reboot).
+5. Set the persistent phantom-process-killer + stayon settings once (the boot script re-applies).
+6. **Reboot and verify:** feed loads (server 200), `tmux ls` shows `evo` + `evo-sched`, and — if
+   Shizuku start-on-boot is on — `rish id` returns `uid=2000` so source-browsing works.
+
+The flashed-image path below removes the Shizuku half of this entirely (system app = native
+display privilege), leaving only the server/scheduler bringup, which the OS init handles.
+
 ## Flashed image removes ALL of this friction (for non-tech users)
 
 Every friction above is a property of the **sideload/Termux** path. A flashed AOSP image with

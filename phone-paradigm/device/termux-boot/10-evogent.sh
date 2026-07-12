@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Auto-start the Evogent server on device boot (requires the Termux:Boot addon app).
-# Shizuku + a11y still need the one host-side `restore-device.sh` on a non-rooted image.
-termux-wake-lock 2>/dev/null || true
+# Termux:Boot fallback path. The PRIMARY boot bringup is the Evogent APK's BootReceiver firing
+# a RUN_COMMAND intent (no addon required). This script only runs if the optional Termux:Boot
+# addon is installed; it defers to the same idempotent bringup so both paths are identical.
 sleep 8
-sshd 2>/dev/null || true
-bash "$HOME/restart-evo.sh" 2>/dev/null || true
+bash "$HOME/phone-tools/evogent-boot.sh"

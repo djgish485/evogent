@@ -10,6 +10,10 @@
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Bootstrap the on-device Termux stack (server + scheduler) at boot via a RUN_COMMAND
+         intent, so no separate Termux:Boot addon is required. Termux honors this because its
+         config sets allow-external-apps=true. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
     <!-- A launcher needs to see every app that has a launcher entry, and resolve YouTube. -->
     <queries>
