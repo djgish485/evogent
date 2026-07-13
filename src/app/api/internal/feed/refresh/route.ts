@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { POST as submitPost } from '@/app/api/internal/curate/submit/route';
 import { POST as rearrangePost } from '@/app/api/internal/feed/rearrange/route';
 import { takeBenchItems, unconsumedBenchCount } from '@/lib/db/curation-bench';
+import { harvestFreshToBench } from '@/lib/freshness-harvest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,24 @@ export async function POST(request: Request) {
     });
   }
   lastRefreshAtMs = nowMs;
+
+  // Deterministic freshness floor: before promoting, score fresh unseen shippable cache rows
+  // (tweets etc.) and bench the best. This is what keeps the feed self-fresh when the curator
+  // ships nothing — the bench no longer depends on the curator to be populated. On by default;
+  // pass harvest:false to promote only pre-existing bench items.
+  let harvest: { scanned: number; benched: number; bySource: Record<string, number> } | null = null;
+  if (body.harvest !== false) {
+    try {
+      // enrich (fetch og:description for link-post articles) only when the caller opts in — the
+      // cycle does (latency-tolerant); on-open/pull leaves it false to stay instant.
+      harvest = await harvestFreshToBench(
+        typeof body.harvestLimit === 'number' ? body.harvestLimit : 12,
+        { enrich: body.enrich === true },
+      );
+    } catch (error) {
+      console.warn(`[feed-refresh] harvest failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   const rawLimit = typeof body.limit === 'number' ? body.limit : defaultPromoteLimit;
   const limit = Math.max(1, Math.min(12, Math.round(rawLimit)));
@@ -77,6 +96,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    harvested: harvest,
     promoted,
     duplicates,
     benchTaken: taken.length,

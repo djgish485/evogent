@@ -142,12 +142,21 @@ export async function POST(request: Request) {
         ? 'dismissed'
         : 'pending';
 
-    // Auto-added sources are act-show-undo: dismissing the announcement card IS the undo.
-    // Clean up the recipe/queue and opt the source out so the scout never re-adds it.
+    // Auto-added sources are act-show-undo: a USER dismissing the announcement card IS the
+    // undo (delete the recipe/queue + opt the source out). But an AGENT dismissing it — the
+    // curator doing routine suggestion-dedup housekeeping (CLAUDE.md tells it to dismiss
+    // overlapping cards) — must NEVER cancel a working source. It silently killed Instagram
+    // this way. So cancellation requires an explicit userInitiated flag that only the feed UI
+    // sends; a programmatic dismiss just marks the card dismissed and leaves the source intact.
+    const userInitiated = payload.userInitiated === true;
     if (action === 'dismiss_suggestion' && getFeedSuggestionType(item) === 'source_setup') {
-      const cancellation = cancelSourceSetup(item);
-      if (!cancellation.cancelled && cancellation.source) {
-        console.warn(`[interactions] source_setup dismiss: cleanup failed for ${cancellation.source}`);
+      if (userInitiated) {
+        const cancellation = cancelSourceSetup(item);
+        if (!cancellation.cancelled && cancellation.source) {
+          console.warn(`[interactions] source_setup dismiss: cleanup failed for ${cancellation.source}`);
+        }
+      } else {
+        console.warn(`[interactions] source_setup dismissed WITHOUT userInitiated (agent/dedup) — hiding card, keeping source ${typeof item.metadata?.sourceName === 'string' ? item.metadata.sourceName : ''}`);
       }
     }
 
