@@ -53,6 +53,7 @@ PROMPT=$(sed -e "s|__PKG__|$PKG|g" -e "s|__NAME__|$NAME|g" -e "s|__SRC__|$SRC|g"
 # Brain provider from data/config.md, same convention as evogent-cycle.sh.
 BRAIN=$(awk '/^## Brain Provider/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' \
         "$EVO/data/config.md" 2>/dev/null | grep -qi codex && echo codex || echo claude)
+CODEX_MODEL="${EVOGENT_CODEX_MODEL:-$(awk '/^## Codex Model/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' "$EVO/data/config.md" 2>/dev/null)}"; CODEX_MODEL="${CODEX_MODEL:-gpt-5.5}"
 
 # Self-heal the a11y service: a disabled service reads as "app did not land on any display".
 bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 || say "a11y-heal: service unresponsive — discovery will likely fail"
@@ -60,7 +61,7 @@ bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 || say "a11y-heal: service unresponsive
 say "discovery starting (brain=$BRAIN, budget 900s) — $NAME ($PKG) -> $SRC"
 if [ "$BRAIN" = "codex" ]; then
   # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
-  ( cd "$EVO" && timeout 900 codex exec --model gpt-5.5 -c model_reasoning_effort=medium \
+  ( cd "$EVO" && timeout 900 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort=medium \
       --dangerously-bypass-approvals-and-sandbox -- "$PROMPT" >>"$LOG" 2>&1 )
 else
   ( cd "$EVO" && export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.evogent-oauth-token" 2>/dev/null)"; unset ANTHROPIC_API_KEY
