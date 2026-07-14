@@ -736,7 +736,9 @@ function twitterQuotedTweet(value: unknown, context: ConverterContext): Record<s
 function hackerNewsMetadata(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) return null;
   const score = numberOrNull(value.score);
-  const commentCount = numberOrNull(value.descendants);
+  // The HN API calls it `descendants`; the on-device hn-fetch cache stores it as
+  // `commentCount`. Reading only the former made every phone card claim "0 comments".
+  const commentCount = numberOrNull(value.descendants) ?? numberOrNull(value.commentCount);
   const hnUrl = trimUnknownToNull(value.hnUrl)
     ?? (trimUnknownToNull(value.id) ? `https://news.ycombinator.com/item?id=${trimUnknownToNull(value.id)}` : null);
   return {
@@ -751,10 +753,15 @@ function hackerNewsMetadata(value: unknown): Record<string, unknown> | null {
 function hackerNewsExcerpt(value: unknown): string | null {
   if (!isRecord(value)) return null;
   const score = numberOrNull(value.score);
-  const comments = numberOrNull(value.descendants);
+  const comments = numberOrNull(value.descendants) ?? numberOrNull(value.commentCount);
   if (score === null && comments === null) return null;
   const scoreLabel = `${score ?? 0} ${score === 1 ? 'point' : 'points'}`;
-  const commentLabel = `${comments ?? 0} ${comments === 1 ? 'comment' : 'comments'}`;
+  // Omit the comment clause entirely when the payload never carried a count — printing
+  // "0 comments" under a 400-point story is visibly wrong.
+  if (comments === null) {
+    return `Hacker News discussion: ${scoreLabel}.`;
+  }
+  const commentLabel = `${comments} ${comments === 1 ? 'comment' : 'comments'}`;
   return `Hacker News discussion: ${scoreLabel}, ${commentLabel}.`;
 }
 
