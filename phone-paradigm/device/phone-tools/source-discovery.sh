@@ -61,7 +61,7 @@ bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 || say "a11y-heal: service unresponsive
 say "discovery starting (brain=$BRAIN, budget 900s) — $NAME ($PKG) -> $SRC"
 if [ "$BRAIN" = "codex" ]; then
   # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
-  ( cd "$EVO" && timeout 900 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort=medium \
+  ( cd "$EVO" && timeout -k 30 900 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort=medium \
       --dangerously-bypass-approvals-and-sandbox -- "$PROMPT" >>"$LOG" 2>&1 )
 else
   ( cd "$EVO" && export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.evogent-oauth-token" 2>/dev/null)"; unset ANTHROPIC_API_KEY
