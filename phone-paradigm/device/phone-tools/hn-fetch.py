@@ -23,15 +23,17 @@ def og_desc(url):
     except Exception:
         return ""
 
+# Volume matters: the curator picks from the pool, so cache broadly and let taste filter.
+# top+best+new gives ~150 distinct candidates per run (the score gate below still applies).
 ids = []
-for lst in ("beststories", "topstories"):
+for lst in ("beststories", "topstories", "newstories"):
     try:
-        ids += json.loads(get(f"{HN}/{lst}.json"))[:40]
+        ids += json.loads(get(f"{HN}/{lst}.json"))[:80]
     except Exception as e:
         print("list err", lst, e)
 seen, items = set(), []
 for hid in ids:
-    if hid in seen or len(items) >= 45:
+    if hid in seen or len(items) >= 150:
         continue
     seen.add(hid)
     try:
@@ -46,7 +48,10 @@ for hid in ids:
     title = it.get("title", "").strip()
     url = it.get("url") or f"https://news.ycombinator.com/item?id={hid}"
     discussion = f"https://news.ycombinator.com/item?id={hid}"
-    syn = og_desc(it["url"]) if it.get("url") else ""
+    # og:description fetches cost 1-5s each; cap them so 150 stories don't take 10 minutes.
+    # Rows beyond the cap still cache (title/score/URL) — the curator can use them; only the
+    # deterministic floor requires a synopsis, and it feeds on the freshest (earliest) rows.
+    syn = og_desc(it["url"]) if (it.get("url") and len(items) < 60) else ""
     payload = {"type": "hackernews", "title": title, "url": url, "canonicalUrl": url,
                "discussionUrl": discussion, "score": score, "by": it.get("by"),
                "commentCount": it.get("descendants", 0),
