@@ -12,6 +12,9 @@ body {
   min-height: 100%;
   background: var(--background);
   color: var(--foreground);
+  /* The feed has its own pull-to-refresh indicator; native overscroll glow/bounce firing
+     alongside it reads as jank. */
+  overscroll-behavior-y: none;
 }
 
 body {

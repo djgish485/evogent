@@ -10,9 +10,12 @@ async function fetchBuildId() {
   return payload.deployment?.running?.buildId ?? null;
 }
 
+const CHECK_THROTTLE_MS = 60_000;
+
 export function AppUpdatedBanner() {
   const initialBuildIdRef = useRef<string | null | undefined>(undefined);
   const updatePendingRef = useRef(false);
+  const lastCheckAtRef = useRef(0);
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
@@ -21,6 +24,11 @@ export function AppUpdatedBanner() {
       initialBuildIdRef.current = await fetchBuildId().catch(() => null);
     };
     const checkForUpdate = async () => {
+      // One check per minute is plenty: all four websockets reconnect together after a server
+      // restart, and every app foreground also lands here.
+      const now = Date.now();
+      if (now - lastCheckAtRef.current < CHECK_THROTTLE_MS) return;
+      lastCheckAtRef.current = now;
       const nextBuildId = await fetchBuildId().catch(() => null);
       if (!active || initialBuildIdRef.current === undefined || !initialBuildIdRef.current || !nextBuildId) return;
       if (initialBuildIdRef.current !== nextBuildId) {
@@ -29,15 +37,18 @@ export function AppUpdatedBanner() {
       }
     };
 
-    // Auto-reload the moment the page is backgrounded (screen off, app switch, home). The shell
-    // is force-dynamic so a reload pulls the new build; doing it while hidden means the user (and
-    // the on-glass verification loop) never sees a stale feed and never has to tap the banner —
-    // Evogent is simply fresh the next time it's looked at. The manual button stays as a fallback
-    // for anyone who wants it now.
+    // Update lifecycle: detect a new build on websocket reconnect (a deploy restarts the
+    // server, dropping every socket) AND on each foreground (throttled), then apply it by
+    // reloading the moment the page is next hidden — never while the user is looking at it.
+    // The feed's resume state (saved on hide/pagehide, restored on boot) puts them back at
+    // the exact card they were reading, so the reload is invisible. The banner stays as a
+    // manual reload-now affordance for a user who wants the update while staying in the app.
     const onVisibility = () => {
-      if (updatePendingRef.current && document.visibilityState === 'hidden') {
-        window.location.reload();
+      if (document.visibilityState === 'hidden') {
+        if (updatePendingRef.current) window.location.reload();
+        return;
       }
+      void checkForUpdate();
     };
 
     void loadInitialBuildId();
