@@ -12,6 +12,7 @@ async function fetchBuildId() {
 
 export function AppUpdatedBanner() {
   const initialBuildIdRef = useRef<string | null | undefined>(undefined);
+  const updatePendingRef = useRef(false);
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
@@ -22,14 +23,30 @@ export function AppUpdatedBanner() {
     const checkForUpdate = async () => {
       const nextBuildId = await fetchBuildId().catch(() => null);
       if (!active || initialBuildIdRef.current === undefined || !initialBuildIdRef.current || !nextBuildId) return;
-      if (initialBuildIdRef.current !== nextBuildId) setShowBanner(true);
+      if (initialBuildIdRef.current !== nextBuildId) {
+        updatePendingRef.current = true;
+        setShowBanner(true);
+      }
+    };
+
+    // Auto-reload the moment the page is backgrounded (screen off, app switch, home). The shell
+    // is force-dynamic so a reload pulls the new build; doing it while hidden means the user (and
+    // the on-glass verification loop) never sees a stale feed and never has to tap the banner —
+    // Evogent is simply fresh the next time it's looked at. The manual button stays as a fallback
+    // for anyone who wants it now.
+    const onVisibility = () => {
+      if (updatePendingRef.current && document.visibilityState === 'hidden') {
+        window.location.reload();
+      }
     };
 
     void loadInitialBuildId();
     window.addEventListener(RECONNECTING_WS_RECONNECTED_EVENT, checkForUpdate);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       active = false;
       window.removeEventListener(RECONNECTING_WS_RECONNECTED_EVENT, checkForUpdate);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
