@@ -23,14 +23,18 @@ pulls those sources every run and the curator/floor surface what's timely.
    `x.com/<handle>`) and your knowledge. Favor pages that list dated happenings over generic home
    pages. If you genuinely cannot resolve a source, record the entity with a `note` saying what's
    missing rather than guessing wildly — and ask the user for the handle/URL in your reply.
-   Source types: `website`, `events`, `calendar` (all fetched by browse-interests), `instagram`,
-   `x` (browsed via the app source when the account is followed; otherwise note it).
+   Source types: `website`, `events`, `calendar` (anonymous web fetch), `instagram` (`handle` —
+   the entity's PROFILE is opened in the phone's logged-in Instagram app on a hidden display and
+   screenshotted; the extraction model reads flyers/captions/dates from the images, so the account
+   does NOT need to be followed), `facebook` (`url` of the page — opened in the Facebook app when
+   installed, else a best-effort anonymous web fetch, which Facebook usually serves empty), `x`
+   (`handle` — covered by the timeline scraper when followed; otherwise note it).
 
 3. **Write the record** to `data/interests.jsonl` (append one JSON object per line; if an interest
    with the same `id` already exists, rewrite that line instead of duplicating). Shape:
    ```json
    {"id":"<short-kebab-slug>","createdAt":<epoch_ms>,"query":"<user's verbatim words>",
-    "status":"active","focus":"<what to surface, e.g. events/openings/drops near Bozeman>",
+    "status":"active","focus":"<what to surface, e.g. events/openings/drops near <the user's city>>",
     "cadenceHours":24,
     "entities":[{"name":"<Entity>","sources":[{"type":"events","url":"https://…"},
                                               {"type":"instagram","handle":"…"}]}]}
