@@ -17,7 +17,7 @@ feed_fixed = cache_fixed = 0
 # Feed rows: structured quote goes into metadata.quotedTweet; main text trimmed to own words.
 for r in db.execute("""
         SELECT id, text, metadata FROM feed
-        WHERE type='tweet' AND text LIKE '%Quoting @%'
+        WHERE type='tweet' AND (text LIKE '%Quoting @%' OR text LIKE '%Quoted @%' OR text LIKE '%Quoted. %')
           AND (metadata IS NULL OR metadata NOT LIKE '%quotedTweet%')""").fetchall():
     own, quoted = extract_quote(r['text'] or '')
     if not quoted:
@@ -35,7 +35,8 @@ for r in db.execute("""
 # Cache payloads: so a re-promote carries the structured quote too.
 for r in db.execute("""
         SELECT source_id, payload_json FROM browse_cache_items
-        WHERE source='twitter' AND payload_json LIKE '%Quoting @%'
+        WHERE source='twitter'
+          AND (payload_json LIKE '%Quoting @%' OR payload_json LIKE '%Quoted @%' OR payload_json LIKE '%Quoted. %')
           AND payload_json NOT LIKE '%quotedTweet%'""").fetchall():
     try:
         p = json.loads(r['payload_json'] or '{}')
