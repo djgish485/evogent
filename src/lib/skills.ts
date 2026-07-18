@@ -44,26 +44,6 @@ const registry = {
     description: 'Direct-browse Hacker News source guidance for curation using public HN surfaces',
     sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/hackernews-cache/SKILL.md',
   },
-  'github-pr-watch': {
-    description: 'Watch GitHub pull requests that may need review or follow-up',
-    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/github-pr-watch/SKILL.md',
-  },
-  'email-triage': {
-    description: 'Triage important inbox updates surfaced as feed cards',
-    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/email-triage/SKILL.md',
-  },
-  'competitor-watch': {
-    description: 'Track competitor and market updates that deserve follow-up',
-    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/competitor-watch/SKILL.md',
-  },
-  'daily-brief': {
-    description: 'Turn daily brief cards into focused follow-up work',
-    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/daily-brief/SKILL.md',
-  },
-  'research-clipping': {
-    description: 'Capture and organize research clippings from feed cards',
-    sourceUrl: 'https://raw.githubusercontent.com/djgish485/evogent/main/skills-library/research-clipping/SKILL.md',
-  },
 } as const;
 
 const skillNamePattern = /^[a-z0-9-]{1,64}$/;

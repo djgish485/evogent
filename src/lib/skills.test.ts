@@ -217,12 +217,12 @@ body
     }
   });
 
-  test('getSkillsRegistry returns 15 entries', () => {
+  test('getSkillsRegistry returns 10 entries', () => {
     const registry = getSkillsRegistry();
     const names = registry.map((entry) => entry.name).sort();
 
-    assert.strictEqual(registry.length, 15);
-    assert.deepStrictEqual(names, ['account-mirror', 'archive-import', 'competitor-watch', 'current-event-tracker', 'daily-brief', 'email-triage', 'full-text', 'github-pr-watch', 'hackernews-cache', 'research-clipping', 'setup-wizard', 'substack-cache', 'tweet-cache', 'tweet-cache-bird', 'youtube-cache']);
+    assert.strictEqual(registry.length, 10);
+    assert.deepStrictEqual(names, ['account-mirror', 'archive-import', 'current-event-tracker', 'full-text', 'hackernews-cache', 'setup-wizard', 'substack-cache', 'tweet-cache', 'tweet-cache-bird', 'youtube-cache']);
     assert.ok(registry.every((entry) => typeof entry.installed === 'boolean'));
   });
 
