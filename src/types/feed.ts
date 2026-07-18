@@ -217,6 +217,9 @@ export interface FeedMetadata {
   };
   currentInterestReason?: string;
   bridge?: string;
+  /** Set by the deterministic freshness floor. Marks a row as machine-ranked bookkeeping so the
+   *  display can suppress its provenance reason structurally (not by string-matching the text). */
+  freshnessFloor?: boolean;
   /** Curator's interestingness judgment: score/durability drive ranking; reason says WHY the
    *  score — the "why this is here" the card surfaces when no bridge text exists. */
   interest?: { score?: number; durability?: string; reason?: string };
