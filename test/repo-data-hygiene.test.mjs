@@ -12,6 +12,7 @@ const {
 } = require('../lib/git-credential-env.js');
 
 const allowedDataFiles = new Set([
+  'data/ad-handles.txt.default',
   'data/agent-logs/.gitkeep',
   'data/curation-prompt.default.md',
   'data/interestingness-rubric.default.md',
