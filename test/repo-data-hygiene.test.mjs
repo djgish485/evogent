@@ -15,6 +15,7 @@ const allowedDataFiles = new Set([
   'data/agent-logs/.gitkeep',
   'data/curation-prompt.default.md',
   'data/interestingness-rubric.default.md',
+  'data/life-execute-prompt.default.md',
   'data/hackernews-cache-policy.json',
   'data/substack-cache-policy.json',
   'data/tmp/.gitkeep',
