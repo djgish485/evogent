@@ -217,6 +217,9 @@ export interface FeedMetadata {
   };
   currentInterestReason?: string;
   bridge?: string;
+  /** Curator's interestingness judgment: score/durability drive ranking; reason says WHY the
+   *  score — the "why this is here" the card surfaces when no bridge text exists. */
+  interest?: { score?: number; durability?: string; reason?: string };
   prominence?: FeedProminence;
   feedbackProbe?: FeedbackProbeMetadata;
   replyCapture?: ReplyCaptureMetadata;
