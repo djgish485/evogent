@@ -4,6 +4,28 @@ Written 2026-07-18 for the Pixel 10a → Pixel Pro exchange; applies to any arm6
 device. The runtime is portable: everything lives in Termux home + one tiny shell APK, so
 migration = restore tar + rewire grants.
 
+## TL;DR — the scripted path (do this)
+
+Two scripts in this directory automate the whole thing; the prose below is the reference for
+when a step needs hand-holding.
+
+1. **On the OLD phone, before wiping:** `./backup-phone.sh <serial> <out-dir>` — clean DB copy,
+   full Termux runtime tar, shell APK, manifest, all verified. Also grab `termux.apk` (F-Droid)
+   and `shizuku.apk` (GitHub) into `<out-dir>` for the new phone.
+2. **Human does the manual bits on the NEW phone** (see "owner's interactive steps"): sign into
+   Google + the content apps, enable USB debugging + accept the dialog, install Termux+Shizuku
+   (or let step 3 push them), and — once Termux is open — leave it foregrounded.
+3. **From the Mac:** `./setup-new-phone.sh <serial> <backup-dir>` — installs APKs, starts
+   Shizuku, bootstraps sshd, restores the runtime+DB, reinstalls packages, wires grants + the
+   HOME role + control token, and starts the stack. Idempotent; pass a phase name to re-run one.
+
+⚠️ **KNOWN OPEN ITEM — the phone comes up as a fully interactive restored feed, but the
+autonomous browse/curate cycle stays PAUSED**: the codex brain (glibc) can't reach the network
+on Android 16 (bionic works; glibc sockets get no route; not fixable via LD_PRELOAD because
+codex uses raw syscalls). Full diagnosis + the two fix paths (bionic-native brain, or a ptrace
+shim) are in [`research/README-brain-networking.md`](research/README-brain-networking.md).
+Everything else — feed, app tap-through, thumbs-down, data — works.
+
 ## What the backup contains
 
 `/Users/<private-value>/code-git/evogent-app/phone-backups/<device>-<date>/`:
