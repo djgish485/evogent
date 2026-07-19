@@ -73,3 +73,8 @@ migration = restore tar + rewire grants.
 - A Pro as the DAILY phone raises the bar: the feed is now the real home screen. Watch the
   first days' verify-intents and morning audits closely; real usage will surface taste gaps
   the PoC never saw (that's the point).
+- **Magic Cue is ENABLED on the Pro** (owner's choice, 2026-07-18 — partly as competitive
+  research for the anticipation engine). It injects suggestion chips into Gmail/Messages/
+  Phone UIs → extra a11y nodes and occasional layout shifts in browsed apps, plus Gemini
+  Nano memory pressure. If browse yield or extraction quality degrades on the Pro, Magic
+  Cue is a first-class suspect: toggle it off for one cycle before deeper debugging.
