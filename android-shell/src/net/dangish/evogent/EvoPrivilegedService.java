@@ -4,7 +4,10 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.media.Image;
 import android.media.ImageReader;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 
 /**
@@ -37,6 +40,7 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     private final Context context;
     private ImageReader reader;
     private VirtualDisplay virtualDisplay;
+    private HandlerThread readerThread;
 
     // Shizuku instantiates with a Context (preferred) — keep a no-arg fallback too.
     public EvoPrivilegedService(Context context) { this.context = context; }
@@ -65,8 +69,35 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
             // "evo-hidden" display every time. Bounds the device to a single hidden display.
             if (virtualDisplay != null) { try { virtualDisplay.release(); } catch (Throwable ignored) {} virtualDisplay = null; }
             if (reader != null) { try { reader.close(); } catch (Throwable ignored) {} reader = null; }
-            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
-            int flags = FLAG_PUBLIC | FLAG_PRESENTATION | FLAG_OWN_CONTENT_ONLY
+            if (readerThread != null) { try { readerThread.quitSafely(); } catch (Throwable ignored) {} readerThread = null; }
+            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
+            // Drain the surface. Handing the display an ImageReader surface that nobody consumes
+            // works on userdebug builds but NOT on a stock user build (e.g. the Pixel 10 Pro):
+            // once the buffer queue fills, the compositor treats the display as having no active
+            // consumer and WindowManager parks every activity on it as visibleRequested=false, so
+            // the app is placed on the display but never draws (blank screencap + null a11y root).
+            // Acquiring and immediately closing each frame keeps the queue flowing, so the display
+            // stays a live output and its activities resume and render. This is what lets the
+            // on-device browse read/screenshot the hidden display on a non-flashed phone.
+            readerThread = new HandlerThread("evo-reader");
+            readerThread.start();
+            reader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+                @Override public void onImageAvailable(ImageReader r) {
+                    Image img = null;
+                    try { img = r.acquireLatestImage(); }
+                    catch (Throwable ignored) {}
+                    finally { if (img != null) { try { img.close(); } catch (Throwable ignored) {} } }
+                }
+            }, new Handler(readerThread.getLooper()));
+            // NB: FLAG_PRESENTATION is deliberately OMITTED. A "presentation" display is for the
+            // Presentation API (a secondary screen showing supplementary content) and the window
+            // manager will not host a normal activity task stack on it — on a stock user build
+            // (Pixel 10 Pro) that left createVirtualDisplay's display with canHostTasks=false, so
+            // launched apps were parked (visibleRequested=false) and never drew: blank screencap,
+            // null a11y root. Dropping PRESENTATION (scrcpy's --new-display does the same) lets the
+            // trusted display host and resume the app. FLAG_TRUSTED + SYSTEM_DECORATIONS +
+            // OWN_DISPLAY_GROUP + ALWAYS_UNLOCKED remain the load-bearing set.
+            int flags = FLAG_PUBLIC | FLAG_OWN_CONTENT_ONLY
                       | FLAG_ROTATES_WITH_CONTENT | FLAG_DESTROY_CONTENT_ON_REMOVAL
                       | FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS | FLAG_TRUSTED
                       | FLAG_OWN_DISPLAY_GROUP | FLAG_ALWAYS_UNLOCKED
@@ -74,11 +105,42 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
             virtualDisplay = dm.createVirtualDisplay("evo-hidden", width, height, dpi,
                     reader.getSurface(), flags);
             int id = virtualDisplay.getDisplay().getDisplayId();
+            // Explicitly tell WindowManager this display hosts the system decor / task stack.
+            // The FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS creation flag is NOT honored for a
+            // shell-created virtual display on a stock user build (Pixel 10 Pro: canHostTasks
+            // stayed false, launched apps parked and never drew). The explicit @hide WM call —
+            // the same one scrcpy uses for --new-display — is what actually flips task hosting.
+            // We run as uid 2000 (shell), which holds the permission on a normal build.
+            enableSystemDecorations(id);
             Log.i(TAG, "createDisplay id=" + id + " (uid=" + android.os.Process.myUid() + ")");
             return id;
         } catch (Throwable t) {
             Log.e(TAG, "createDisplay failed", t);
             return -1;
+        }
+    }
+
+    /** Flip the display to a task-hosting, system-decor display via the @hide IWindowManager
+     *  API (reflection — the method is not in the SDK). Best-effort: logs and continues if a
+     *  particular call is unavailable on this build. */
+    private void enableSystemDecorations(int displayId) {
+        try {
+            android.os.IBinder b = (android.os.IBinder) Class.forName("android.os.ServiceManager")
+                    .getMethod("getService", String.class).invoke(null, "window");
+            Object wm = Class.forName("android.view.IWindowManager$Stub")
+                    .getMethod("asInterface", android.os.IBinder.class).invoke(null, b);
+            try {
+                wm.getClass().getMethod("setShouldShowSystemDecors", int.class, boolean.class)
+                        .invoke(wm, displayId, true);
+                Log.i(TAG, "setShouldShowSystemDecors(" + displayId + ", true) ok");
+            } catch (Throwable t) { Log.w(TAG, "setShouldShowSystemDecors failed", t); }
+            try {
+                // 0 = SHOW_IME_WITH_HARD_KEYBOARD-style local policy; keeps IME on this display.
+                wm.getClass().getMethod("setDisplayImePolicy", int.class, int.class)
+                        .invoke(wm, displayId, 0);
+            } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            Log.w(TAG, "enableSystemDecorations failed", t);
         }
     }
 
