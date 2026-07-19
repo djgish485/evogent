@@ -1,21 +1,20 @@
 package net.dangish.evogent;
 
 import android.content.Context;
-import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.os.Handler;
-import android.os.HandlerThread;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
 import android.util.Log;
+import android.view.Surface;
 
 /**
  * Shizuku UserService: instantiated by Shizuku in a process running as the
  * shell user (uid 2000). Because it runs as shell it can create a TRUSTED
  * virtual display (which a normal app cannot — an app-owned untrusted display
  * refuses to host another app's activity) and launch an arbitrary app onto it.
- * The display is kept alive by holding its ImageReader/VirtualDisplay here.
+ * The display is kept alive (and powered) by a MediaCodec encoder consuming its surface.
  */
 public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     private static final String TAG = "EvoPriv";
@@ -38,9 +37,11 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     private static final int FLAG_OWN_FOCUS = 1 << 14;
 
     private final Context context;
-    private ImageReader reader;
     private VirtualDisplay virtualDisplay;
-    private HandlerThread readerThread;
+    private MediaCodec displayCodec;
+    private Surface codecSurface;
+    private Thread codecDrain;
+    private volatile boolean codecRunning;
 
     // Shizuku instantiates with a Context (preferred) — keep a no-arg fallback too.
     public EvoPrivilegedService(Context context) { this.context = context; }
@@ -67,28 +68,18 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
             // display stayed alive until reboot); repeated op=launch — e.g. MainActivity registering
             // its receiver more than once so one broadcast fires several launches — leaked a new
             // "evo-hidden" display every time. Bounds the device to a single hidden display.
-            if (virtualDisplay != null) { try { virtualDisplay.release(); } catch (Throwable ignored) {} virtualDisplay = null; }
-            if (reader != null) { try { reader.close(); } catch (Throwable ignored) {} reader = null; }
-            if (readerThread != null) { try { readerThread.quitSafely(); } catch (Throwable ignored) {} readerThread = null; }
-            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
-            // Drain the surface. Handing the display an ImageReader surface that nobody consumes
-            // works on userdebug builds but NOT on a stock user build (e.g. the Pixel 10 Pro):
-            // once the buffer queue fills, the compositor treats the display as having no active
-            // consumer and WindowManager parks every activity on it as visibleRequested=false, so
-            // the app is placed on the display but never draws (blank screencap + null a11y root).
-            // Acquiring and immediately closing each frame keeps the queue flowing, so the display
-            // stays a live output and its activities resume and render. This is what lets the
-            // on-device browse read/screenshot the hidden display on a non-flashed phone.
-            readerThread = new HandlerThread("evo-reader");
-            readerThread.start();
-            reader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
-                @Override public void onImageAvailable(ImageReader r) {
-                    Image img = null;
-                    try { img = r.acquireLatestImage(); }
-                    catch (Throwable ignored) {}
-                    finally { if (img != null) { try { img.close(); } catch (Throwable ignored) {} } }
-                }
-            }, new Handler(readerThread.getLooper()));
+            releaseSurface();
+            // The display's surface must be an ACTIVE output, not a passive buffer sink. A bare
+            // ImageReader works on a userdebug/flashed build but NOT on a stock user build (Pixel
+            // 10 Pro): with no consumer driving the composition/vsync loop, DisplayPowerController
+            // never commits the display to ON (dumpsys: state ON but committedState UNKNOWN), so
+            // WindowManager parks every task on it (visibleRequested=false) — even the system home
+            // task — and nothing ever draws (blank screencap, null a11y root). A MediaCodec video
+            // encoder fed by the display (scrcpy's --new-display technique) is a live output: once
+            // started it pulls the display's frames, the state commits ON, and WM resumes+draws the
+            // activity. We discard the encoded output — the codec exists only to keep the display
+            // powered so screencap and the a11y tree see real content.
+            codecSurface = createActiveDisplaySurface(width, height);
             // NB: FLAG_PRESENTATION is deliberately OMITTED. A "presentation" display is for the
             // Presentation API (a secondary screen showing supplementary content) and the window
             // manager will not host a normal activity task stack on it — on a stock user build
@@ -103,7 +94,7 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
                       | FLAG_OWN_DISPLAY_GROUP | FLAG_ALWAYS_UNLOCKED
                       | FLAG_TOUCH_FEEDBACK_DISABLED | FLAG_OWN_FOCUS;
             virtualDisplay = dm.createVirtualDisplay("evo-hidden", width, height, dpi,
-                    reader.getSurface(), flags);
+                    codecSurface, flags);
             int id = virtualDisplay.getDisplay().getDisplayId();
             // Explicitly tell WindowManager this display hosts the system decor / task stack.
             // The FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS creation flag is NOT honored for a
@@ -118,6 +109,55 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
             Log.e(TAG, "createDisplay failed", t);
             return -1;
         }
+    }
+
+    /** Build an ACTIVE display output: a MediaCodec H.264 encoder whose input surface backs the
+     *  virtual display. Starting the codec and continuously draining its output keeps the display's
+     *  composition loop alive so its power state commits ON and WindowManager will draw activities
+     *  on it. The encoded bytes are thrown away. Returns the input surface to hand to the display. */
+    private Surface createActiveDisplaySurface(int width, int height) throws Exception {
+        MediaFormat fmt = MediaFormat.createVideoFormat("video/avc", width, height);
+        fmt.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+        fmt.setInteger(MediaFormat.KEY_BIT_RATE, 2_000_000);
+        fmt.setInteger(MediaFormat.KEY_FRAME_RATE, 15);
+        fmt.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 5f);
+        // Let the encoder repeat the last frame so a static screen keeps producing output (and thus
+        // keeps the display powered) even when the app isn't animating.
+        try { fmt.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000L); } catch (Throwable ignored) {}
+        displayCodec = MediaCodec.createEncoderByType("video/avc");
+        displayCodec.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        Surface s = displayCodec.createInputSurface();
+        displayCodec.start();
+        codecRunning = true;
+        codecDrain = new Thread(new Runnable() {
+            @Override public void run() {
+                MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+                while (codecRunning) {
+                    try {
+                        int i = displayCodec.dequeueOutputBuffer(info, 100_000L);
+                        if (i >= 0) displayCodec.releaseOutputBuffer(i, false);
+                    } catch (IllegalStateException stop) {
+                        return; // codec stopped/released under us
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }, "evo-display-drain");
+        codecDrain.setDaemon(true);
+        codecDrain.start();
+        Log.i(TAG, "active display surface (MediaCodec) started " + width + "x" + height);
+        return s;
+    }
+
+    private void releaseSurface() {
+        codecRunning = false;
+        if (displayCodec != null) {
+            try { displayCodec.stop(); } catch (Throwable ignored) {}
+            try { displayCodec.release(); } catch (Throwable ignored) {}
+            displayCodec = null;
+        }
+        if (codecSurface != null) { try { codecSurface.release(); } catch (Throwable ignored) {} codecSurface = null; }
+        if (codecDrain != null) { try { codecDrain.interrupt(); } catch (Throwable ignored) {} codecDrain = null; }
     }
 
     /** Flip the display to a task-hosting, system-decor display via the @hide IWindowManager
@@ -190,7 +230,7 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
         // (avoids virtual displays accumulating until reboot; next cycle re-creates one).
         try {
             if (virtualDisplay != null) { virtualDisplay.release(); virtualDisplay = null; }
-            if (reader != null) { reader.close(); reader = null; }
+            releaseSurface();
             Log.i(TAG, "releaseDisplay done");
         } catch (Throwable ignored) {}
     }
@@ -199,7 +239,7 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     public void destroy() {
         try {
             if (virtualDisplay != null) { virtualDisplay.release(); virtualDisplay = null; }
-            if (reader != null) { reader.close(); reader = null; }
+            releaseSurface();
             Log.i(TAG, "destroy done");
         } catch (Throwable ignored) {}
         // Shizuku expects the process to exit on destroy for non-daemon services.
