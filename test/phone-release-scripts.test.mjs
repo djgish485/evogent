@@ -1071,6 +1071,9 @@ test('release builder strips host identity and excludes historical personal evid
   assert.match(builder, /payload\["appDir"\] = "\."/);
   assert.match(builder, /config\["outputFileTracingRoot"\] = "\."/);
   assert.match(builder, /turbopack\["root"\] = "\."/);
+  assert.match(builder, /export COPYFILE_DISABLE=1/);
+  assert.match(builder, /pure\.parts\[0\] != "release"/);
+  assert.match(builder, /phone release: unsafe archive member/);
   assert.match(builder, /EVOGENT_RELEASE_PRIVATE_MARKERS_FILE/);
   assert.match(builder, /\.intent\/contracts\.jsonl/);
   assert.match(builder, /\.intent\/failure-modes\.jsonl/);

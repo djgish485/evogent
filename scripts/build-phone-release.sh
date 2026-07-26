@@ -5,6 +5,9 @@
 # source tree dirty. The bundle is accepted by device/install-release.sh.
 set -euo pipefail
 umask 077
+# macOS otherwise synthesizes AppleDouble `._*` entries for extended metadata.
+# Those entries are outside the release root and must never enter the archive.
+export COPYFILE_DISABLE=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"
@@ -564,6 +567,42 @@ mkdir -p "$OUTPUT_DIR"
 ARCHIVE="$OUTPUT_DIR/evogent-phone-${RELEASE_ID}.tar.gz"
 tar -czf "$ARCHIVE" -C "$WORK_DIR" release
 chmod 600 "$ARCHIVE"
+python3 - "$ARCHIVE" <<'PY'
+import pathlib
+import posixpath
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "r:gz") as bundle:
+    for member in bundle.getmembers():
+        name = member.name
+        pure = pathlib.PurePosixPath(name)
+        if (
+            pure.is_absolute()
+            or ".." in pure.parts
+            or not pure.parts
+            or pure.parts[0] != "release"
+        ):
+            raise SystemExit(f"phone release: unsafe archive member: {name!r}")
+        if (
+            member.isdev()
+            or member.isfifo()
+            or member.ischr()
+            or member.isblk()
+            or member.islnk()
+        ):
+            raise SystemExit(
+                f"phone release: unsupported archive member type: {name!r}",
+            )
+        if member.issym():
+            resolved = posixpath.normpath(
+                posixpath.join(posixpath.dirname(name), member.linkname),
+            )
+            if not resolved.startswith("release/"):
+                raise SystemExit(
+                    f"phone release: symlink escapes release: {name!r}",
+                )
+PY
 [ "$(stat -f '%Lp' "$ARCHIVE")" = 600 ] || {
   echo "phone release: archive containing TLS key is not mode 0600" >&2
   exit 66
