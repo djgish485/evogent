@@ -1,0 +1,17 @@
+On-device Substack source browse via Gmail (no APIs; computer use only). Substack newsletters arrive as email, and Gmail browsing is proven on-device. Steps:
+0. Read `~/evogent/data/curation-prompt.md` and
+   `~/evogent/data/preference-insights.md`. They are private local context: use them as the
+   selection lens, but never copy their contents into logs or public artifacts.
+1. ~/phone-tools/phone.sh launch com.google.android.gm ; wait 5s ; ~/phone-tools/phone.sh see
+2. If a "Newsletters" or "Updates" tab/category chip is visible, tap it once and see again; otherwise scan the inbox as-is. Do NOT try to type a search (no text-input primitive).
+3. Read up to ~20 rows. Keep a row ONLY if it is a real newsletter/publication send whose
+   subject matches the private selection lens and promises substantive material. Do not use a
+   public hard-coded sender or topic list as a substitute for judgment. SKIP
+   transactional/notification mail ("new comment", "new subscriber", "Re:", receipts,
+   security alerts, social notifications), obvious promotion, spam, and anything outside the
+   private lens.
+4. Keep at most 2 per sender, up to 5 total, favoring the most substantive/long-form.
+5. Do NOT open emails or tap into apps. Metadata only.
+For each kept item build sourceId "gmail-substack:<slug-of-sender>-<slug-of-subject>" (lowercase, hyphens, alnum only). Compute NOW=$(( $(date +%s)*1000 )). POST once:
+~/phone-tools/evo-curl -s -X POST http://127.0.0.1:${PORT:-3001}/api/internal/browse-cache/submit -H 'content-type: application/json' -d '{"source":"substack","triggeredBy":"phone-scheduler","startedAtMs":NOW,"completedAtMs":NOW,"status":"completed","itemsAdded":<n>,"items":[{"sourceId":"gmail-substack:<slug>","title":"<subject>","authorUsername":"<slug-of-sender>","authorDisplayName":"<sender>","fetchedAtMs":NOW,"expiresAtMs":<NOW+1209600000>,"payload":{"type":"substack","title":"<subject>","excerpt":"<preview snippet>","publicationName":"<sender>","captureMethod":"phone-background-browse-gmail-metadata"}}]}'
+If zero real newsletters found, POST status "failed", items [], error starting "no_posts:". Then reply exactly: BROWSE_DONE <count>.

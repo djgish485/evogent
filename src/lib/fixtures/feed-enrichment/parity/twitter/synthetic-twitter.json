@@ -1,0 +1,117 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2000-01-01T00:00:00.000Z",
+  "source": "twitter",
+  "sourceId": "1000000000000000001",
+  "cacheItem": {
+    "source": "twitter",
+    "sourceId": "1000000000000000001",
+    "url": "https://x.com/example_author/status/1000000000000000001",
+    "title": "Synthetic source post with enough text to exercise cache enrichment.",
+    "authorUsername": "example_author",
+    "authorDisplayName": "Example Author",
+    "publishedAtMs": 946684800000,
+    "payload": {
+      "id": "1000000000000000001",
+      "sourceId": "1000000000000000001",
+      "url": "https://x.com/example_author/status/1000000000000000001",
+      "text": "Synthetic source post with enough text to exercise cache enrichment.",
+      "full_text": "Synthetic source post with enough text to exercise cache enrichment.",
+      "authorUsername": "example_author",
+      "authorDisplayName": "Example Author",
+      "authorAvatarUrl": "https://images.example.com/example-author.png",
+      "publishedAt": "2000-01-01T00:00:00.000Z",
+      "publishedAtMs": 946684800000,
+      "media": [],
+      "mediaUrls": [],
+      "quotedTweet": null,
+      "inReplyTo": null,
+      "linkCard": null,
+      "linkPreviews": [],
+      "urlEntities": []
+    },
+    "fetchedAtMs": 946684860000,
+    "expiresAtMs": 946771200000,
+    "seenByCurationAtMs": 946684900000
+  },
+  "preEngineFeedRow": {
+    "id": "parity-twitter-synthetic",
+    "type": "tweet",
+    "source": "twitter",
+    "sourceId": "1000000000000000001",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2000-01-01T00:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Synthetic source post with enough text to exercise cache enrichment.",
+    "url": "https://x.com/example_author/status/1000000000000000001",
+    "excerpt": null,
+    "text": "Synthetic source post with enough text to exercise cache enrichment.",
+    "authorUsername": "example_author",
+    "authorDisplayName": "Example Author",
+    "authorAvatarUrl": "https://images.example.com/example-author.png",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Synthetic source post with enough text to exercise cache enrichment.",
+    "url": "https://x.com/example_author/status/1000000000000000001",
+    "excerpt": null,
+    "text": "Synthetic source post with enough text to exercise cache enrichment.",
+    "authorUsername": "example_author",
+    "authorDisplayName": "Example Author",
+    "authorAvatarUrl": "https://images.example.com/example-author.png",
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": []
+}

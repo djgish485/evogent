@@ -1,0 +1,125 @@
+{
+  "_comment": "Content-app catalog for the source scout: ONLY apps listed here are ever set up as sources (allowlist - banking/private-comms apps are structurally excluded by omission). 'source' is the browse-cache source name. 'autoAdd': true = set up automatically with a visible announcement card the user can dismiss to cancel ('evogent should just work'); false = ask first (messaging-hybrid apps where public/private surfaces blur). 'discoveryNotes' feed the one-time discovery session.",
+  "apps": {
+    "com.instagram.android": {
+      "name": "Instagram",
+      "source": "instagram",
+      "discoveryNotes": "Home feed and Explore; posts usually expose author + caption via a11y descs. NEVER open Direct/DM surfaces — private messages are off-limits.",
+      "autoAdd": true
+    },
+    "com.reddit.frontpage": {
+      "name": "Reddit",
+      "source": "reddit",
+      "discoveryNotes": "Home/Popular feeds; post titles + subreddit in the tree. Skip chat.",
+      "autoAdd": true
+    },
+    "com.zhiliaoapp.musically": {
+      "name": "TikTok",
+      "source": "tiktok",
+      "discoveryNotes": "For You captions/authors; video content itself is not readable — capture text metadata only. Skip inbox/DMs.",
+      "autoAdd": true
+    },
+    "com.linkedin.android": {
+      "name": "LinkedIn",
+      "source": "linkedin",
+      "discoveryNotes": "Main feed posts; skip messaging and My Network notifications.",
+      "autoAdd": true
+    },
+    "com.instagram.barcelona": {
+      "name": "Threads",
+      "source": "threads",
+      "discoveryNotes": "Text-first feed, likely rich a11y descs like X.",
+      "autoAdd": true
+    },
+    "xyz.blueskyweb.app": {
+      "name": "Bluesky",
+      "source": "bluesky",
+      "discoveryNotes": "Following feed; text-first.",
+      "autoAdd": true
+    },
+    "org.joinmastodon.android": {
+      "name": "Mastodon",
+      "source": "mastodon",
+      "discoveryNotes": "Home timeline; text-first.",
+      "autoAdd": true
+    },
+    "com.facebook.katana": {
+      "name": "Facebook",
+      "source": "facebook",
+      "discoveryNotes": "News feed only; skip Messenger, groups DMs, marketplace.",
+      "autoAdd": false
+    },
+    "com.google.android.apps.magazines": {
+      "name": "Google News",
+      "source": "googlenews",
+      "discoveryNotes": "For You / Headlines; article titles + publishers in the tree.",
+      "autoAdd": true
+    },
+    "com.google.android.apps.youtube.music": {
+      "name": "YouTube Music",
+      "source": "youtubemusic",
+      "discoveryNotes": "Home recommendations; use private runtime taste and feedback to decide which media belongs in-feed.",
+      "autoAdd": true
+    },
+    "com.substack.app": {
+      "name": "Substack",
+      "source": "substack-app",
+      "discoveryNotes": "Inbox + Notes; note Substack posts also arrive via Gmail — prefer whichever is richer.",
+      "autoAdd": true
+    },
+    "com.medium.reader": {
+      "name": "Medium",
+      "source": "medium",
+      "discoveryNotes": "For You titles + authors.",
+      "autoAdd": true
+    },
+    "com.ideashower.readitlater.pro": {
+      "name": "Pocket",
+      "source": "pocket",
+      "discoveryNotes": "Saves list — the user's own reading queue.",
+      "autoAdd": true
+    },
+    "com.spotify.music": {
+      "name": "Spotify",
+      "source": "spotify",
+      "discoveryNotes": "Followed shows and recommendations; use private runtime taste to choose useful item types.",
+      "autoAdd": true
+    },
+    "org.telegram.messenger": {
+      "name": "Telegram",
+      "source": "telegram",
+      "discoveryNotes": "PUBLIC channels the user follows ONLY. Never open private chats or groups — treat anything with a person's name as private.",
+      "autoAdd": false
+    },
+    "com.discord": {
+      "name": "Discord",
+      "source": "discord",
+      "discoveryNotes": "Public server announcement channels only; never DMs.",
+      "autoAdd": false
+    },
+    "flipboard.app": {
+      "name": "Flipboard",
+      "source": "flipboard",
+      "discoveryNotes": "For You article cards.",
+      "autoAdd": true
+    },
+    "com.devhd.feedly": {
+      "name": "Feedly",
+      "source": "feedly",
+      "discoveryNotes": "Today feed; titles + sources.",
+      "autoAdd": true
+    },
+    "com.nytimes.android": {
+      "name": "NYTimes",
+      "source": "nytimes",
+      "discoveryNotes": "Today tab headlines.",
+      "autoAdd": true
+    },
+    "com.goodreads": {
+      "name": "Goodreads",
+      "source": "goodreads",
+      "discoveryNotes": "Updates feed; low cadence.",
+      "autoAdd": true
+    }
+  }
+}

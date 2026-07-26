@@ -1,0 +1,124 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2000-01-01T00:00:00.000Z",
+  "source": "substack",
+  "sourceId": "example-publication.example.com/p/reliable-systems",
+  "cacheItem": {
+    "source": "substack",
+    "sourceId": "example-publication.example.com/p/reliable-systems",
+    "url": "https://example-publication.example.com/p/reliable-systems",
+    "title": "Synthetic essay on reliable systems",
+    "authorUsername": "example_writer",
+    "authorDisplayName": "Example Writer",
+    "publishedAtMs": 946684800000,
+    "payload": {
+      "url": "https://example-publication.example.com/p/reliable-systems",
+      "host": "example-publication.example.com",
+      "slug": "reliable-systems",
+      "title": "Synthetic essay on reliable systems",
+      "publicationName": "Example Publication",
+      "author": "Example Writer",
+      "authorDisplayName": "Example Writer",
+      "authorUsername": "example_writer",
+      "summary": "A synthetic summary with enough detail to exercise article cache reconciliation.",
+      "timestampLabel": "JAN 1",
+      "publishedAtMs": 946684800000,
+      "discoverySurface": "inbox"
+    },
+    "fetchedAtMs": 946684860000,
+    "expiresAtMs": 946771200000,
+    "seenByCurationAtMs": 946684900000
+  },
+  "preEngineFeedRow": {
+    "id": "parity-substack-synthetic",
+    "type": "article",
+    "source": "substack",
+    "sourceId": "example-publication.example.com/p/reliable-systems",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2000-01-01T00:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Synthetic essay on reliable systems",
+    "url": "https://example-publication.example.com/p/reliable-systems",
+    "excerpt": "A synthetic summary with enough detail to exercise article cache reconciliation.",
+    "text": "Synthetic essay on reliable systems\n\nA synthetic summary with enough detail to exercise article cache reconciliation.",
+    "authorUsername": "example_writer",
+    "authorDisplayName": "Example Publication",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://images.example.com/publication-avatar.png"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "substack",
+        "publicationName": "Example Publication",
+        "author": "Example Writer",
+        "imageUrl": "https://images.example.com/publication-avatar.png"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Synthetic essay on reliable systems",
+    "url": "https://example-publication.example.com/p/reliable-systems",
+    "excerpt": "A synthetic summary with enough detail to exercise article cache reconciliation.",
+    "text": "A synthetic summary with enough detail to exercise article cache reconciliation.",
+    "authorUsername": "example_writer",
+    "authorDisplayName": "Example Writer",
+    "authorAvatarUrl": null,
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "text",
+    "authorDisplayName",
+    "mediaUrls",
+    "metadata.article"
+  ]
+}

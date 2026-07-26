@@ -1,0 +1,151 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2000-01-01T00:00:00.000Z",
+  "source": "youtube",
+  "sourceId": "a1B2c3D4e5F",
+  "cacheItem": {
+    "source": "youtube",
+    "sourceId": "a1B2c3D4e5F",
+    "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+    "title": "Synthetic lecture on dependable software",
+    "authorUsername": "@example_learning",
+    "authorDisplayName": "Example Learning",
+    "publishedAtMs": 946684800000,
+    "payload": {
+      "videoId": "a1B2c3D4e5F",
+      "canonicalUrl": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+      "title": "Synthetic lecture on dependable software",
+      "channelName": "Example Learning",
+      "channelUrl": "https://www.youtube.com/@example_learning",
+      "channelHandle": "@example_learning",
+      "channel": {
+        "name": "Example Learning",
+        "url": "https://www.youtube.com/@example_learning",
+        "handle": "@example_learning"
+      },
+      "publishLabel": "1 day ago",
+      "publishDateText": "1 day ago",
+      "thumbnailUrl": "https://img.youtube.com/vi/a1B2c3D4e5F/hqdefault.jpg",
+      "duration": "12:34",
+      "sourceKind": "home",
+      "firstSeenPass": 0,
+      "seenIn": [
+        "home"
+      ],
+      "captureNotes": [],
+      "source": "youtube",
+      "fetchedAtMs": 946684860000,
+      "expiresAtMs": 946771200000
+    },
+    "fetchedAtMs": 946684860000,
+    "expiresAtMs": 946771200000,
+    "seenByCurationAtMs": 946684900000
+  },
+  "preEngineFeedRow": {
+    "id": "parity-youtube-synthetic",
+    "type": "article",
+    "source": "youtube",
+    "sourceId": "a1B2c3D4e5F",
+    "parentId": null,
+    "relationship": null,
+    "title": null,
+    "text": "",
+    "url": null,
+    "excerpt": null,
+    "authorUsername": null,
+    "authorDisplayName": null,
+    "authorAvatarUrl": null,
+    "reason": null,
+    "tags": [],
+    "mediaUrls": [],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0
+    },
+    "metadata": null,
+    "publishedAt": "2000-01-01T00:00:00.000Z"
+  },
+  "historicalFeedRow": {
+    "title": "Synthetic lecture on dependable software",
+    "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+    "excerpt": "Synthetic lecture on dependable software",
+    "text": "Synthetic lecture on dependable software",
+    "authorUsername": "Example Learning",
+    "authorDisplayName": "Example Learning",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://img.youtube.com/vi/a1B2c3D4e5F/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": {
+        "type": "video",
+        "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+        "title": "Synthetic lecture on dependable software",
+        "domain": "youtube.com",
+        "imageUrl": "https://img.youtube.com/vi/a1B2c3D4e5F/hqdefault.jpg",
+        "videoId": "a1B2c3D4e5F"
+      },
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": {
+        "platform": "youtube",
+        "kind": "video",
+        "videoId": "a1B2c3D4e5F",
+        "canonicalUrl": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+        "title": "Synthetic lecture on dependable software",
+        "channelName": "Example Learning",
+        "channelHandle": "example_learning",
+        "thumbnailUrl": "https://img.youtube.com/vi/a1B2c3D4e5F/hqdefault.jpg",
+        "publishDateText": "1 day ago",
+        "duration": "12:34",
+        "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F"
+      },
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "expectedFeedRow": {
+    "title": "Synthetic lecture on dependable software",
+    "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+    "excerpt": "Synthetic lecture on dependable software",
+    "text": "Synthetic lecture on dependable software",
+    "authorUsername": "@example_learning",
+    "authorDisplayName": "Example Learning",
+    "authorAvatarUrl": null,
+    "mediaUrls": [
+      "https://img.youtube.com/vi/a1B2c3D4e5F/hqdefault.jpg"
+    ],
+    "metrics": {
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "views": null
+    },
+    "metadata": {
+      "quotedTweet": null,
+      "linkCard": null,
+      "communityNote": null,
+      "linkPreviews": null,
+      "urlEntities": null,
+      "article": null,
+      "hnUrl": null
+    },
+    "parentId": null,
+    "relationship": null
+  },
+  "intentionalImprovements": [
+    "authorUsername",
+    "metadata.linkCard",
+    "metadata.article"
+  ]
+}

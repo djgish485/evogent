@@ -1,0 +1,4 @@
+# Optional deployment-specific X handles to drop (one per line).
+#
+# Keep the public template empty. Runtime/reflection may add accounts to the private live
+# `data/ad-handles.txt` from observed promotion or spam signals.

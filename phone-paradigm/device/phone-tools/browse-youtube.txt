@@ -1,0 +1,22 @@
+On-device YouTube source browse (no APIs; computer use only; hidden display). Goal: cache up to 5 REAL long-form videos that fit the deployment's private taste model, with canonical URLs captured through the Evogent share target.
+Steps:
+0. Read `~/evogent/data/curation-prompt.md` and
+   `~/evogent/data/preference-insights.md`. Treat them as private local context, never copy
+   their contents into logs or public artifacts. Use their current interests and exclusions
+   as the selection lens below.
+1. ~/phone-tools/phone.sh launch com.google.android.youtube ; wait 6s.
+2. ~/phone-tools/phone.sh tap "Subscriptions" (bottom nav) to open Subscriptions; wait 3s; ~/phone-tools/phone.sh see. If no Subscriptions tab, stay on Home but scroll PAST any Shorts shelf.
+3. Identify substantive long-form videos (interviews, talks, podcasts, briefings, or
+   explainers) that match that private lens. Prefer material with a concrete mechanism,
+   argument, primary evidence, or useful practitioner detail. SKIP Shorts, thin
+   reaction/highlight clips, obvious promotion, and anything excluded by the private lens.
+4. For each of up to 5 good videos, share it to Evogent to capture the real URL:
+   a. tap its "Action menu" (three-dot; node desc like "Action menu for <title>")
+   b. ~/phone-tools/phone.sh see ; tap "Share"
+   c. ~/phone-tools/phone.sh see ; tap "Evogent" (registered share target; it ingests the canonical watch URL automatically)
+   d. ~/phone-tools/phone.sh see to confirm you're back on the list, then continue to the next video.
+   Do NOT POST any JSON yourself for these — the Evogent share receiver caches them.
+5. If Subscriptions is thin, tap the Search icon and search one concise topic or creator
+   derived from the private lens. Never put a hard-coded person's taste into this recipe.
+   Open results and share up to 3 strong long-form videos the same way.
+Report which videos you shared. Then reply exactly: BROWSE_DONE <count>.
