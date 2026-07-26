@@ -24,6 +24,7 @@ import {
 import {
   forbiddenRuleMatchesPath,
   forbiddenRulePathspec,
+  verifyCanonicalPaths,
 } from "../scripts/verify-public-history-rewrite.mjs";
 
 test("reserved examples and intentional identifiers remain public-safe", () => {
@@ -679,4 +680,57 @@ test("history rewrite runbook publishes with exact leases and verifies service r
   assert.match(runbook, /npm run build/);
   assert.match(runbook, /old object remains\s+retrievable/);
   assert.match(runbook, /hosting provider's support team/);
+});
+
+test("canonical history verifier allows evolution after one shared privacy epoch", () => {
+  const root = mkdtempSync(join(tmpdir(), "evogent-canonical-epoch-test-"));
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Evogent Contributor"], {
+    cwd: root,
+  });
+  execFileSync(
+    "git",
+    ["config", "user.email", "contributors@example.invalid"],
+    { cwd: root },
+  );
+
+  writeFileSync(join(root, "base.txt"), "base\n");
+  execFileSync("git", ["add", "base.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "Sanitized base"], { cwd: root });
+
+  writeFileSync(join(root, "canonical-a.txt"), "epoch a\n");
+  writeFileSync(join(root, "canonical-b.txt"), "epoch b\n");
+  execFileSync("git", ["add", "canonical-a.txt", "canonical-b.txt"], {
+    cwd: root,
+  });
+  execFileSync(
+    "git",
+    ["commit", "-qm", "Create sanitized public privacy epoch"],
+    { cwd: root },
+  );
+
+  writeFileSync(join(root, "canonical-a.txt"), "safe later revision\n");
+  execFileSync("git", ["add", "canonical-a.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "Evolve canonical documentation"], {
+    cwd: root,
+  });
+
+  assert.doesNotThrow(() =>
+    verifyCanonicalPaths(root, ["canonical-a.txt", "canonical-b.txt"]),
+  );
+
+  execFileSync("git", ["rm", "-q", "canonical-a.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "Remove canonical documentation"], {
+    cwd: root,
+  });
+  writeFileSync(join(root, "canonical-a.txt"), "unsafe second introduction\n");
+  execFileSync("git", ["add", "canonical-a.txt"], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "Reintroduce canonical documentation"], {
+    cwd: root,
+  });
+
+  assert.throws(
+    () => verifyCanonicalPaths(root, ["canonical-a.txt", "canonical-b.txt"]),
+    /canonical-a\.txt has 2 reachable introduction commit\(s\)/,
+  );
 });

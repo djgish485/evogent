@@ -108,7 +108,7 @@ function printHelp() {
       "  --root <path>                   Rewritten fresh clone (default: current directory)",
       "  --expected-name <name>          Rewritten Git identity",
       "  --expected-email <email>        Rewritten Git email",
-      "  --canonical-paths-file <path>   Paths allowed one sanitized blob across all refs",
+      "  --canonical-paths-file <path>   Paths first restored by one privacy epoch",
       "  --forbidden-paths-file <path>   Literal/glob paths absent from every ref",
       "",
       "This command is read-only and never prints matched private values.",
@@ -245,8 +245,16 @@ function blobAt(root, commit, path) {
   return fields[1] === "blob" ? fields[2] : null;
 }
 
-function verifyCanonicalPaths(root, canonicalPaths) {
+function commitParents(root, commit) {
+  return runGit(root, ["rev-list", "--parents", "-n", "1", commit])
+    .split(/\s+/)
+    .slice(1)
+    .filter(Boolean);
+}
+
+export function verifyCanonicalPaths(root, canonicalPaths) {
   const problems = [];
+  const introductionCommits = new Set();
   for (const path of canonicalPaths) {
     const tipBlob = blobAt(root, "HEAD", path);
     if (!tipBlob) {
@@ -263,13 +271,35 @@ function verifyCanonicalPaths(root, canonicalPaths) {
     ])
       .split(/\r?\n/)
       .filter(Boolean);
-    const blobs = new Set();
+    const introductions = [];
     for (const commit of changeCommits) {
       const blob = blobAt(root, commit, path);
-      if (blob) blobs.add(blob);
+      if (!blob) continue;
+      const parents = commitParents(root, commit);
+      if (parents.every((parent) => !blobAt(root, parent, path))) {
+        introductions.push(commit);
+      }
     }
-    if (blobs.size !== 1 || !blobs.has(tipBlob)) {
-      problems.push(`${path} has ${blobs.size} reachable historical blob version(s)`);
+    if (introductions.length !== 1) {
+      problems.push(
+        `${path} has ${introductions.length} reachable introduction commit(s)`,
+      );
+      continue;
+    }
+    introductionCommits.add(introductions[0]);
+  }
+  if (introductionCommits.size !== 1) {
+    problems.push(
+      `canonical paths were restored by ${introductionCommits.size} privacy epoch commit(s)`,
+    );
+  } else {
+    const [epochCommit] = introductionCommits;
+    const subject = runGit(
+      root,
+      ["show", "-s", "--format=%s", epochCommit],
+    ).trim();
+    if (subject !== "Create sanitized public privacy epoch") {
+      problems.push("canonical paths were not restored by the named privacy epoch");
     }
   }
   if (problems.length > 0) {

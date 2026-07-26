@@ -16,7 +16,10 @@ hard-coded preference mechanics. Paths listed in
 `scripts/history-privacy-canonical-paths.txt` therefore lose their old public
 blob history and return once, with their sanitized tip content, in the privacy
 epoch commit. Paths in `scripts/history-privacy-forbidden-paths.txt` remain
-absent.
+absent. Later public-safe commits may evolve a canonical file normally; the
+verifier requires that every canonical path's first reachable introduction is
+the single named privacy epoch and scans every later blob as ordinary public
+history.
 
 Canonical entries are literal paths because each must be restored from the
 sanitized tip. Forbidden entries may be literal paths or narrow `glob:` rules;
@@ -259,8 +262,9 @@ That verifier requires all of the following:
 - one generic author and committer identity across every reachable commit and
   annotated tag;
 - no reachable obsolete prompt-snapshot path;
-- exactly one reachable blob version, equal to `HEAD`, for every canonical
-  privacy-epoch path;
+- exactly one shared introduction commit for every canonical privacy-epoch
+  path, with every parent free of those paths; later revisions are allowed and
+  remain subject to the all-ref privacy scan;
 - zero current or all-ref privacy findings, including exact blob markers and
   message-only markers in commit and annotated-tag messages.
 
