@@ -38,15 +38,7 @@ export interface PostEnrichmentJobData extends BackgroundJobBase {
 }
 
 export interface ConfigApplyJobData extends BackgroundJobBase {
-  task: {
-    taskId: string;
-    suggestionId: string;
-    target: 'config' | 'curation-prompt';
-    relativePath: 'data/config.md' | 'data/curation-prompt.md';
-    sectionName: string;
-    proposedValue: string;
-    diff?: string;
-  };
+  taskId: string;
 }
 
 export interface BackgroundJobDataMap {

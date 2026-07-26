@@ -8,6 +8,7 @@ import {
   updateChatSession,
 } from '@/lib/db/chat-sessions';
 import { getInternalBaseUrl } from '@/lib/internal-api';
+import { fetchInternal } from '@/lib/internal-request-auth';
 import {
   normalizeClaudeReasoningEffort,
   normalizeCodexReasoningEffort,
@@ -124,7 +125,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Failed to update session' }, { status: 500 });
   }
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',
@@ -170,7 +171,7 @@ export async function DELETE(
 
   const sessions = getConversationSessions();
   const nextSessionId = sessions[0]?.sessionId ?? null;
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',

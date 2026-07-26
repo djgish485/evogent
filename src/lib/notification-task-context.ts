@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { extractTranscriptTextFromAgentLogEvent } from '@/lib/agent-log-events';
 import { getDataPath } from '@/lib/data-dir';
+import { fetchInternal } from '@/lib/internal-request-auth';
 import type { FeedItem, NotificationTaskContext } from '@/types/feed';
 
 const MAX_SUMMARY_LENGTH = 220;
@@ -140,7 +141,7 @@ function getInternalBaseUrl(): string {
 
 async function loadTaskHistoryEntry(taskId: string): Promise<TaskHistoryEntry | null> {
   try {
-    const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/history/${encodeURIComponent(taskId)}`, {
+    const response = await fetchInternal(`${getInternalBaseUrl()}/api/orchestrator/history/${encodeURIComponent(taskId)}`, {
       cache: 'no-store',
     });
     if (!response.ok) {

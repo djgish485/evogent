@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { POST as submitPost } from '@/app/api/internal/curate/submit/route';
 import { POST as rearrangePost } from '@/app/api/internal/feed/rearrange/route';
-import { takeBenchItems, unconsumedBenchCount } from '@/lib/db/curation-bench';
+import {
+  ackBenchItems,
+  peekBenchItems,
+  quarantineBenchItems,
+  unconsumedBenchCount,
+} from '@/lib/db/curation-bench';
+import { getFeedItemBySourceId } from '@/lib/db/feed';
 import { harvestFreshToBench } from '@/lib/freshness-harvest';
+import { withFeedMutationLock } from '@/lib/feed-mutation-lock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,13 +18,12 @@ const defaultPromoteLimit = 6;
 let lastRefreshAtMs = 0;
 
 /**
- * INSTANT feed refresh — the cheap real-time path (pull-to-refresh, app-open): promote the
- * curator's best benched near-misses into the feed through the real submit machinery
- * (validation, dedup, broadcast), then re-run the deterministic arrange. No brain calls;
- * sub-second. The expensive browse+curate cycle stays the background quality pass that
- * refills the bench. `minIntervalSeconds` lets automatic callers debounce themselves.
+ * INSTANT feed refresh — the cheap real-time path (pull-to-refresh, app-open): promote
+ * previously agent-judged bench items through the real submit machinery (validation, dedup,
+ * broadcast), then re-run deterministic arrangement. It never performs fresh editorial
+ * judgment in the request path. `minIntervalSeconds` lets automatic callers debounce.
  */
-export async function POST(request: Request) {
+async function postUnlocked(request: Request) {
   let body: Record<string, unknown> = {};
   try {
     body = await request.json() as Record<string, unknown>;
@@ -35,13 +41,16 @@ export async function POST(request: Request) {
       secondsSinceLastRefresh: Math.round((nowMs - lastRefreshAtMs) / 1000),
     });
   }
-  lastRefreshAtMs = nowMs;
-
-  // Deterministic freshness floor: before promoting, score fresh unseen shippable cache rows
-  // (tweets etc.) and bench the best. This is what keeps the feed self-fresh when the curator
-  // ships nothing — the bench no longer depends on the curator to be populated. On by default;
-  // pass harvest:false to promote only pre-existing bench items.
-  let harvest: { scanned: number; benched: number; bySource: Record<string, number> } | null = null;
+  // Agent-judged freshness floor: before promoting, rank only cache rows already stamped by
+  // the on-phone taste agent. Unjudged rows remain private cache evidence for the full curator.
+  // Pass harvest:false to promote only pre-existing bench items.
+  let harvest: {
+    scanned: number;
+    awaitingJudgment: number;
+    withheldBelowThreshold: number;
+    benched: number;
+    bySource: Record<string, number>;
+  } | null = null;
   if (body.harvest !== false) {
     try {
       // enrich (fetch og:description for link-post articles) only when the caller opts in — the
@@ -58,10 +67,11 @@ export async function POST(request: Request) {
   const rawLimit = typeof body.limit === 'number' ? body.limit : defaultPromoteLimit;
   const limit = Math.max(1, Math.min(12, Math.round(rawLimit)));
 
-  const taken = takeBenchItems(limit);
+  const taken = peekBenchItems(limit);
   let promoted = 0;
   let duplicates = 0;
   const submitErrors: unknown[] = [];
+  const permanentSubmitErrorBySourceId = new Map<string, string>();
   if (taken.length > 0) {
     const items = taken.map((entry) => ({
       ...entry.item,
@@ -83,8 +93,31 @@ export async function POST(request: Request) {
     duplicates = typeof submitPayload.duplicates === 'number' ? submitPayload.duplicates : 0;
     if (Array.isArray(submitPayload.errors) && submitPayload.errors.length > 0) {
       submitErrors.push(...submitPayload.errors.slice(0, 3));
+      for (const error of submitPayload.errors) {
+        if (!error || typeof error !== 'object' || Array.isArray(error)) continue;
+        const record = error as Record<string, unknown>;
+        const sourceId = typeof record.sourceId === 'string' ? record.sourceId.trim() : '';
+        const message = typeof record.error === 'string' ? record.error.trim() : '';
+        if (sourceId && message) permanentSubmitErrorBySourceId.set(sourceId, message);
+      }
     }
   }
+
+  // Submit is source-id idempotent. Acknowledge only rows whose durable feed
+  // record can now be read, whether this attempt inserted it or found a prior
+  // duplicate. Failed/unproven rows remain on the bench for retry.
+  const durableSourceIds = new Set(taken
+    .filter((entry) => Boolean(getFeedItemBySourceId(entry.sourceId)))
+    .map((entry) => entry.sourceId));
+  const durableBenchIds = taken
+    .filter((entry) => durableSourceIds.has(entry.sourceId))
+    .map((entry) => entry.id);
+  const benchAcknowledged = ackBenchItems(durableBenchIds);
+  const benchQuarantined = quarantineBenchItems(taken.flatMap((entry) => {
+    if (durableSourceIds.has(entry.sourceId)) return [];
+    const error = permanentSubmitErrorBySourceId.get(entry.sourceId);
+    return error ? [{ id: entry.id, error }] : [];
+  }));
 
   const rearrangeRequest = new Request(new URL(request.url).origin + '/api/internal/feed/rearrange', {
     method: 'POST',
@@ -93,16 +126,28 @@ export async function POST(request: Request) {
   });
   const rearrangeResult = await rearrangePost(rearrangeRequest);
   const rearrangePayload = await rearrangeResult.json() as Record<string, unknown>;
+  const handledBenchItems = benchAcknowledged + benchQuarantined;
+  const ok = handledBenchItems === taken.length
+    && rearrangeResult.ok;
+  if (ok) lastRefreshAtMs = nowMs;
 
   return NextResponse.json({
-    ok: true,
+    ok,
     harvested: harvest,
     promoted,
     duplicates,
     benchTaken: taken.length,
+    benchAcknowledged,
+    benchQuarantined,
+    benchRetained: Math.max(0, taken.length - handledBenchItems),
     benchRemaining: unconsumedBenchCount(),
     submitErrors,
     rearranged: rearrangeResult.ok,
     arrangementRunId: rearrangePayload.arrangementRunId ?? null,
-  });
+    ...(!ok ? { error: 'Feed refresh did not complete durably; unacknowledged bench items were retained for retry' } : {}),
+  }, { status: ok ? 200 : 502 });
+}
+
+export async function POST(request: Request) {
+  return withFeedMutationLock(() => postUnlocked(request));
 }

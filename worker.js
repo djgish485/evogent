@@ -1647,7 +1647,7 @@ function createBackgroundWorker() {
 
     if (job.name === BACKGROUND_JOB_NAMES.CONFIG_APPLY) {
       return postInternal('/api/internal/config-apply-tasks/execute', {
-        task: job.data?.task,
+        taskId: job.data?.taskId,
       });
     }
 

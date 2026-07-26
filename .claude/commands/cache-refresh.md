@@ -5,6 +5,8 @@ Usage: `/cache-refresh <source>`
 ## Execution Model
 
 - Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"`.
+- Resolve `API_CURL="${EVOGENT_API_CURL:-curl}"` and use it for every
+  request to `API_BASE`.
 - Refresh only the requested source for this run.
 - If `MEDIA_AGENT_CACHE_REFRESH_SOURCE` is set, it is the requested source and must match the invocation source.
 - Resolve `SKILL_SLUG="${MEDIA_AGENT_CACHE_REFRESH_SKILL_SLUG:-<source>-cache}"`, where `<source>` is the source argument or `MEDIA_AGENT_CACHE_REFRESH_SOURCE`.

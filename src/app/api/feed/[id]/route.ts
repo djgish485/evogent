@@ -11,6 +11,7 @@ import {
 } from '@/lib/db/feed';
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
 import type { FeedItem } from '@/types/feed';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -166,7 +167,7 @@ async function notifyFeedUpdate(item: FeedItem) {
   const notifyUrl = process.env.INTERNAL_FEED_NOTIFY_URL || defaultFeedNotifyUrl;
   const [hydratedItem] = hydrateFeedItemsForList([item]);
   try {
-    await fetch(notifyUrl, {
+    await fetchInternal(notifyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: hydratedItem ? [hydratedItem] : [item], count: 1 }),

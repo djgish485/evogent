@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getOrchestratorStatus } from '@/lib/orchestrator';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ function getInternalBaseUrl(): string {
 }
 
 async function getDeploymentStatus(): Promise<DeploymentStatusResponse | null> {
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/deployment-status`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/deployment-status`, {
     method: 'GET',
     cache: 'no-store',
   });

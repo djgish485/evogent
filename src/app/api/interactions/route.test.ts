@@ -176,4 +176,78 @@ describe('/api/interactions thread feedback', () => {
       { action: 'view', count: 1 },
     ]);
   });
+
+  test('records validated detail engagement sessions separately from explicit interactions', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO feed (id, type, source, title, text, published_at)
+      VALUES ('detail-item-1', 'article', 'unit-test', 'Detail title', 'Detail body', ?)
+    `).run('2026-04-26T12:00:00.000Z');
+
+    for (const engagement of [
+      {
+        sessionId: 'detail:item:session-1',
+        phase: 'open',
+        activeDwellMs: 0,
+        scrollDepthPercent: 0,
+        surface: 'detail_overlay',
+      },
+      {
+        sessionId: 'detail:item:session-1',
+        phase: 'close',
+        activeDwellMs: 18_500,
+        scrollDepthPercent: 72,
+        userScrolled: true,
+        surface: 'detail_overlay',
+      },
+    ]) {
+      const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedItemId: 'detail-item-1',
+          action: 'engagement',
+          engagement,
+        }),
+      }));
+      assert.strictEqual(response.status, 200);
+    }
+
+    const row = db.prepare(`
+      SELECT active_dwell_ms, max_scroll_depth_pct, user_scrolled, closed_at, item_snapshot
+      FROM feed_engagement_sessions
+      WHERE session_id = 'detail:item:session-1'
+    `).get() as {
+      active_dwell_ms: number;
+      max_scroll_depth_pct: number;
+      user_scrolled: number;
+      closed_at: string | null;
+      item_snapshot: string;
+    };
+
+    assert.strictEqual(row.active_dwell_ms, 18_500);
+    assert.strictEqual(row.max_scroll_depth_pct, 72);
+    assert.strictEqual(row.user_scrolled, 1);
+    assert.ok(row.closed_at);
+    assert.strictEqual(JSON.parse(row.item_snapshot).title, 'Detail title');
+    assert.deepStrictEqual(
+      db.prepare(`SELECT COUNT(*) AS count FROM interactions`).get() as { count: number },
+      { count: 0 },
+    );
+
+    const invalidResponse = await POST(new Request('http://127.0.0.1/api/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedItemId: 'detail-item-1',
+        action: 'engagement',
+        engagement: {
+          sessionId: 'short',
+          phase: 'close',
+        },
+      }),
+    }));
+    assert.strictEqual(invalidResponse.status, 400);
+  });
 });

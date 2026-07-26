@@ -1,5 +1,10 @@
 # Browser Setup Guide
 
+> **Local/legacy-VM profile only.** The canonical Android profile acquires
+> authenticated sources from installed native apps and does not use this
+> shared-Chrome/cookie-transfer architecture. See
+> [`docs/phone-production.md`](../phone-production.md).
+
 Browser-backed sources such as Twitter browse mode and YouTube only work reliably when Evogent uses a real Chrome profile with persistent cookies. The setup is different on a Linux VM than it is on a local Mac or Windows machine, but the core rule is the same: the runtime must reuse the same Chrome profile after login.
 
 The default shared-browser CDP endpoint is `http://127.0.0.1:9222`. Runtime probes and the Codex Playwright MCP launcher now resolve that endpoint from the same shared configuration and environment override path (`MEDIA_AGENT_SHARED_BROWSER_CDP_URL`, then `SHARED_BROWSER_CDP_URL`).

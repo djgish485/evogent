@@ -1,11 +1,64 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 const codingAgentOnly = process.argv.includes('--coding-agent-only');
 const port = Number.parseInt(process.env.PORT || '3001', 10);
 const apiBase = `http://127.0.0.1:${Number.isFinite(port) ? port : 3001}`;
+const installedPhoneCurl = path.join(os.homedir(), 'phone-tools', 'evo-curl');
+const authenticatedCurl = process.env.EVOGENT_API_CURL?.trim()
+  || (fs.existsSync(installedPhoneCurl) ? installedPhoneCurl : '');
+
+function requestViaAuthenticatedCurl(path, init) {
+  return new Promise((resolve, reject) => {
+    const method = init?.method || 'GET';
+    const args = [
+      '--fail-with-body',
+      '--silent',
+      '--show-error',
+      '--max-time',
+      '15',
+      '--request',
+      method,
+      '--header',
+      'Content-Type: application/json',
+    ];
+    if (init?.body !== undefined) args.push('--data-binary', '@-');
+    args.push(`${apiBase}${path}`);
+    const child = spawn(authenticatedCurl, args, {
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on('data', (chunk) => stdout.push(chunk));
+    child.stderr.on('data', (chunk) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      const text = Buffer.concat(stdout).toString('utf8');
+      if (code !== 0) {
+        const detail = Buffer.concat(stderr).toString('utf8').trim();
+        reject(new Error(`${method} ${path} failed: ${detail || `client exit ${code}`}`));
+        return;
+      }
+      try {
+        resolve(text ? JSON.parse(text) : null);
+      } catch (error) {
+        reject(error);
+      }
+    });
+    child.stdin.end(init?.body);
+  });
+}
 
 async function requestJson(path, init = {}) {
   let lastError;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
+      if (authenticatedCurl) {
+        return await requestViaAuthenticatedCurl(path, init);
+      }
       const response = await fetch(`${apiBase}${path}`, {
         ...init,
         headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },

@@ -39,14 +39,18 @@ Audit the main external-content pipeline bottom-up from its persisted cache/stor
 
 Procedure:
 
-Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"` before calling any internal Evogent endpoint. When `MEDIA_AGENT_INTERNAL_BASE_URL` is present, never replace it with `localhost:3001`, `127.0.0.1:3001`, or another guessed port from old examples.
+Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"` and
+`API_CURL="${EVOGENT_API_CURL:-curl}"` before calling any internal Evogent
+endpoint. Use `"$API_CURL"` for those calls. When
+`MEDIA_AGENT_INTERNAL_BASE_URL` is present, never replace it with
+`localhost:3001`, `127.0.0.1:3001`, or another guessed port from old examples.
 
 **Step 0 — Check deployment state**
 
 Before triaging prior fixes, fetch deployment status:
 
 ```bash
-curl -s "$API_BASE/api/status" | jq '.deployment'
+"$API_CURL" -s "$API_BASE/api/status" | jq '.deployment'
 ```
 
 Interpret it this way:
@@ -61,10 +65,10 @@ Before investigating anything, find and triage ALL previous audit-originated ite
 a. Fetch ALL suggestions and notifications, then filter for audit-related items by checking sourceId and text/title for audit keywords:
    ```bash
    # Fetch suggestions — filter broadly for any audit-originated item
-   curl -s "$API_BASE/api/feed?type=suggestion&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
+   "$API_CURL" -s "$API_BASE/api/feed?type=suggestion&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
 
    # Fetch notifications — same broad filter
-   curl -s "$API_BASE/api/feed?type=notification&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
+   "$API_CURL" -s "$API_BASE/api/feed?type=notification&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
    ```
 
 b. Check which suggestions have already been acted on — look at metadata.codeFixOrchestratorStatus (values: dispatched, merged, failed) and metadata.suggestionStatus (values: accepted, dismissed). A merged fix is not yet live evidence if step 0 shows the app is still running an older commit.
@@ -73,8 +77,8 @@ c. Check git log for recent merges that may have addressed previous findings:
    git log --oneline --since='48 hours ago' | grep -i 'fix\|audit\|cache\|enrich\|pref'
 
 d. Dismiss stale items. For each existing audit notification or suggestion that has been addressed (code is live on the running commit and the finding no longer reproduces) or is now obsolete, dismiss it:
-   - Notifications: curl -s -X POST "$API_BASE/api/internal/notifications/resolve" -H 'Content-Type: application/json' -d '{"feedItemId": "<id>"}'
-   - Suggestions: curl -s -X POST "$API_BASE/api/internal/code-fix-suggestions/sync" -H 'Content-Type: application/json' -d '{"suggestions": [{"id": "<id>", "suggestionStatus": "dismissed"}]}'
+   - Notifications: `"$API_CURL"` -s -X POST "$API_BASE/api/internal/notifications/resolve" -H 'Content-Type: application/json' -d '{"feedItemId": "<id>"}'
+   - Suggestions: `"$API_CURL"` -s -X POST "$API_BASE/api/internal/code-fix-suggestions/sync" -H 'Content-Type: application/json' -d '{"suggestions": [{"id": "<id>", "suggestionStatus": "dismissed"}]}'
 
 e. Note which findings are still valid and unaddressed — do NOT recreate them. Only create new items for genuinely new findings.
 

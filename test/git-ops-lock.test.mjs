@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import test from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -12,14 +11,13 @@ const {
 
 test('execGitCommandWithLock surfaces lock timeouts from another process', { concurrency: false }, async () => {
   const lockPath = getGitOpsLockPath(process.cwd());
-  const holder = spawn('flock', ['-w', '0', lockPath, 'sleep', '1'], {
-    cwd: process.cwd(),
-    stdio: 'ignore',
-  });
+  fs.mkdirSync(lockPath);
+  fs.writeFileSync(
+    `${lockPath}/owner.json`,
+    JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() }),
+  );
 
   try {
-    await delay(50);
-
     assert.throws(
       () => execGitCommandWithLock(['status', '--short'], {
         cwd: process.cwd(),
@@ -29,9 +27,6 @@ test('execGitCommandWithLock surfaces lock timeouts from another process', { con
       (error) => error?.code === 'GIT_OPS_LOCK_TIMEOUT',
     );
   } finally {
-    holder.kill('SIGTERM');
-    await new Promise((resolve) => {
-      holder.once('exit', () => resolve());
-    });
+    fs.rmSync(lockPath, { recursive: true, force: true });
   }
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON payload' }, { status: 400 });
   }
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

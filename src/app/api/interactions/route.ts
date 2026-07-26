@@ -12,6 +12,10 @@ import {
 import { getFeedSuggestionType, parseSuggestionActions } from '@/lib/feed-suggestions';
 import { dispatchLifeActionExecution } from '@/lib/life-execution';
 import { cancelSourceSetup } from '@/lib/source-setup';
+import {
+  recordFeedEngagementSession,
+  type FeedEngagementPhase,
+} from '@/lib/db/feed-engagement';
 import { deletePreferenceByFeedItem, insertPreference, updatePreferenceReasonByFeedItem } from '@/lib/db/preferences';
 import { insertThreadFeedback, type ThreadFeedbackVote } from '@/lib/db/thread-feedback';
 import { regeneratePreferenceContext } from '@/lib/preferences-context';
@@ -109,6 +113,7 @@ export async function POST(request: Request) {
     'thread_feedback',
     'view',
     'expand',
+    'engagement',
   ]);
 
   if (!feedItemId || !action || !supportedActions.has(action)) {
@@ -118,6 +123,61 @@ export async function POST(request: Request) {
   const item = getFeedItemById(feedItemId);
   if (!item) {
     return NextResponse.json({ error: 'Feed item not found' }, { status: 404 });
+  }
+
+  if (action === 'engagement') {
+    const rawEngagement = payload.engagement;
+    if (!rawEngagement || typeof rawEngagement !== 'object' || Array.isArray(rawEngagement)) {
+      return NextResponse.json({ error: 'engagement is required' }, { status: 400 });
+    }
+
+    const engagement = rawEngagement as Record<string, unknown>;
+    const sessionId = trimPayloadString(engagement.sessionId);
+    const rawPhase = trimPayloadString(engagement.phase)?.toLowerCase() ?? '';
+    const phase: FeedEngagementPhase | null = rawPhase === 'open'
+      || rawPhase === 'checkpoint'
+      || rawPhase === 'close'
+      ? rawPhase
+      : null;
+
+    if (!sessionId || !phase) {
+      return NextResponse.json({ error: 'engagement.sessionId and engagement.phase are required' }, { status: 400 });
+    }
+
+    try {
+      const session = recordFeedEngagementSession({
+        sessionId,
+        feedItemId,
+        phase,
+        activeDwellMs: typeof engagement.activeDwellMs === 'number'
+          ? engagement.activeDwellMs
+          : undefined,
+        scrollDepthPercent: typeof engagement.scrollDepthPercent === 'number'
+          ? engagement.scrollDepthPercent
+          : undefined,
+        userScrolled: engagement.userScrolled === true,
+        surface: trimPayloadString(engagement.surface) ?? undefined,
+        itemSnapshot: {
+          type: item.type,
+          source: item.source,
+          sourceId: item.sourceId,
+          authorUsername: item.authorUsername,
+          title: item.title,
+          text: item.text,
+        },
+      });
+
+      // Open/checkpoint writes stay cheap. A completed detail visit rebuilds the bounded current
+      // profile so the next agent receives the new attention evidence without reading this ledger.
+      if (phase === 'close') {
+        await tryRegeneratePreferenceContext();
+      }
+
+      return NextResponse.json({ ok: true, engagement: session });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to record engagement';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
   if (action === 'view' || action === 'expand') {

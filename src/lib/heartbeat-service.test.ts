@@ -29,6 +29,9 @@ describe('heartbeat service', () => {
   let originalSkillsDir: string | undefined;
   let originalEvogentRoot: string | undefined;
   let originalInternalBaseUrl: string | undefined;
+  let originalRuntimeProfile: string | undefined;
+  let originalHeartbeatMode: string | undefined;
+  let originalPhoneCycleRequestPath: string | undefined;
   let originalPath: string | undefined;
   let originalFetch: typeof fetch;
   let tempDir = '';
@@ -41,6 +44,9 @@ describe('heartbeat service', () => {
     originalSkillsDir = process.env.MEDIA_AGENT_SKILLS_DIR;
     originalEvogentRoot = process.env.MEDIA_AGENT_ROOT;
     originalInternalBaseUrl = process.env.MEDIA_AGENT_INTERNAL_BASE_URL;
+    originalRuntimeProfile = process.env.EVOGENT_RUNTIME_PROFILE;
+    originalHeartbeatMode = process.env.EVOGENT_ADAPTIVE_HEARTBEAT_MODE;
+    originalPhoneCycleRequestPath = process.env.EVOGENT_PHONE_CYCLE_REQUEST_PATH;
     originalPath = process.env.PATH;
     originalFetch = globalThis.fetch;
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-heartbeat-test-'));
@@ -84,6 +90,9 @@ Off
 - Maximum interval: 1 minute
 `, 'utf8');
     process.env.MEDIA_AGENT_INTERNAL_BASE_URL = 'http://evogent.test';
+    delete process.env.EVOGENT_RUNTIME_PROFILE;
+    delete process.env.EVOGENT_ADAPTIVE_HEARTBEAT_MODE;
+    process.env.EVOGENT_PHONE_CYCLE_REQUEST_PATH = path.join(tempDir, 'phone-cycle-request.json');
     process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ''}`;
     enqueuePayload = null;
     enqueueUrl = null;
@@ -158,6 +167,24 @@ Off
       process.env.MEDIA_AGENT_INTERNAL_BASE_URL = originalInternalBaseUrl;
     }
 
+    if (originalRuntimeProfile === undefined) {
+      delete process.env.EVOGENT_RUNTIME_PROFILE;
+    } else {
+      process.env.EVOGENT_RUNTIME_PROFILE = originalRuntimeProfile;
+    }
+
+    if (originalHeartbeatMode === undefined) {
+      delete process.env.EVOGENT_ADAPTIVE_HEARTBEAT_MODE;
+    } else {
+      process.env.EVOGENT_ADAPTIVE_HEARTBEAT_MODE = originalHeartbeatMode;
+    }
+
+    if (originalPhoneCycleRequestPath === undefined) {
+      delete process.env.EVOGENT_PHONE_CYCLE_REQUEST_PATH;
+    } else {
+      process.env.EVOGENT_PHONE_CYCLE_REQUEST_PATH = originalPhoneCycleRequestPath;
+    }
+
     if (originalPath === undefined) {
       delete process.env.PATH;
     } else {
@@ -195,6 +222,37 @@ Off
     assert.strictEqual(curationLogEntry?.requestId, result.requestId);
     assert.strictEqual(curationLogEntry?.completedAt, null);
     assert.strictEqual(curationLogEntry?.triggeredBy, 'adaptive_heartbeat:unit-test:pull_refresh_immediate');
+  });
+
+  test('phone profile signals the single phone scheduler instead of dispatching /curate', async () => {
+    process.env.EVOGENT_RUNTIME_PROFILE = 'phone';
+    const first = await evaluateAdaptiveHeartbeat({
+      triggeredBy: 'activity:pull_refresh',
+      latestActivity: {
+        event: 'pull_refresh',
+        timestamp: new Date().toISOString(),
+      },
+    });
+    const second = await evaluateAdaptiveHeartbeat({
+      triggeredBy: 'timer',
+      latestActivity: {
+        event: 'pull_refresh',
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    assert.strictEqual(first.triggered, true);
+    assert.strictEqual(first.triggerReason, 'pull_refresh_immediate');
+    assert.strictEqual(second.triggered, false);
+    assert.strictEqual(second.triggerReason, 'phone_cycle_already_requested');
+    assert.strictEqual(enqueuePayload, null);
+    const requestPath = process.env.EVOGENT_PHONE_CYCLE_REQUEST_PATH;
+    assert.ok(requestPath);
+    const request = JSON.parse(
+      await fs.promises.readFile(requestPath, 'utf8'),
+    ) as { id: string; reason: string };
+    assert.strictEqual(request.id, first.requestId);
+    assert.strictEqual(request.reason, 'pull_refresh_immediate');
   });
 
   test('evaluateAdaptiveHeartbeat deduplicates rapid app-open auto-curate requests', async () => {

@@ -43,8 +43,8 @@ console.log(JSON.stringify({
 }, null, 2));
 NODE
 
-curl -s "$API_BASE/api/skills" || true
-curl -s "$API_BASE/api/preferences" || true
+"${EVOGENT_API_CURL:-curl}" -s "$API_BASE/api/skills" || true
+"${EVOGENT_API_CURL:-curl}" -s "$API_BASE/api/preferences" || true
 ls .claude/skills/ 2>/dev/null || true
 grep -R "feed-source" .claude/skills/*/SKILL.md 2>/dev/null || true
 ```

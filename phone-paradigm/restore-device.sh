@@ -9,7 +9,18 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 # ssh helper lives in the session scratchpad; fall back to a direct ssh if that path is gone.
 TSH="$DIR/scratchpad/termux/tsh"
 [ -x "$TSH" ] || TSH=""
-run_termux() { if [ -n "$TSH" ] && [ -x "$TSH" ]; then "$TSH" "$1"; else ssh -p 8022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null u0_a211@127.0.0.1 "$1"; fi; }
+run_termux() {
+  if [ -n "$TSH" ] && [ -x "$TSH" ]; then
+    "$TSH" "$1"
+    return
+  fi
+  [ -n "${TERMUX_SSH_USER:-}" ] || {
+    echo "Set TERMUX_SSH_USER or provide the private helper path in TSH." >&2
+    return 2
+  }
+  ssh -p 8022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "${TERMUX_SSH_USER}@127.0.0.1" "$1"
+}
 
 echo "== wait for device =="
 adb wait-for-device
@@ -56,7 +67,7 @@ run_termux 'bash ~/restart-evo.sh' 2>&1 | grep -v "Permanently added" | tail -1
 echo "== wait for the server to actually serve the home page (not just boot) =="
 code=000
 for i in $(seq 1 30); do
-  code=$(run_termux 'curl -s -m5 -o /dev/null -w %{http_code} http://127.0.0.1:3001/' 2>/dev/null | grep -v Permanently | tail -1)
+  code=$(run_termux '~/phone-tools/evo-health >/dev/null 2>&1 && echo 200 || echo 000' 2>/dev/null | grep -v Permanently | tail -1)
   [ "$code" = "200" ] && break
   sleep 2
 done
@@ -82,7 +93,7 @@ for attempt in 1 2 3 4 5; do
   adb shell "settings put secure enabled_accessibility_services $SVC" >/dev/null 2>&1
   adb shell "settings put secure accessibility_enabled 1" >/dev/null 2>&1
   adb shell "am start -n net.dangish.evogent/.MainActivity" >/dev/null 2>&1; sleep 6
-  home=$(run_termux 'curl -s -m8 -o /dev/null -w %{http_code} http://127.0.0.1:3001/' 2>/dev/null | grep -v Permanently | tail -1)
+  home=$(run_termux '~/phone-tools/evo-health >/dev/null 2>&1 && echo 200 || echo 000' 2>/dev/null | grep -v Permanently | tail -1)
   a11y_bytes=$(run_termux 'bash ~/phone-tools/a11y-check.sh' 2>/dev/null | grep -v Permanently | tr -dc '0-9')
   echo "  attempt $attempt: home=$home a11y_bytes=${a11y_bytes:-0}"
   [ "$home" = "200" ] && [ "${a11y_bytes:-0}" -gt 0 ] 2>/dev/null && break

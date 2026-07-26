@@ -335,39 +335,18 @@ export function getCurationLogByRequestId(requestId: string): CurationLogRecord 
   };
 }
 
-// A curate turn that is genuinely alive replies well inside this window; anything older is a
-// crashed run whose incomplete row must not block new curations. The old 3-hour window turned
-// one crashed turn into a 3-hour feed outage during active use (2026-07-11: a codex turn died
-// under memory pressure at 18:03 and every app-open trigger until ~21:03 was silently ignored).
-const pendingCurationStaleMs = 25 * 60 * 1000;
-
 export function hasPendingCurationCycle(): boolean {
   const db = getDb();
   const curationLogRow = db.prepare(`
-    SELECT id, started_at
+    SELECT id
     FROM curation_log
     WHERE completed_at IS NULL
     ORDER BY started_at DESC
     LIMIT 1
-  `).get() as { id: number; started_at: string } | undefined;
+  `).get() as { id: number } | undefined;
 
   if (curationLogRow) {
-    const startedAt = new Date(curationLogRow.started_at);
-    const ageMs = Number.isNaN(startedAt.getTime())
-      ? Number.POSITIVE_INFINITY
-      : Date.now() - startedAt.getTime();
-    if (ageMs <= pendingCurationStaleMs) {
-      return true;
-    }
-    // Self-heal: the run is dead (crashed without completing its row). Close it out so it
-    // stops matching this query instead of lingering as NULL forever.
-    db.prepare(`
-      UPDATE curation_log
-      SET completed_at = datetime('now'),
-          completion_status = 'aborted',
-          completion_reason = 'auto-closed: run exceeded the pending window without completing (crashed turn)'
-      WHERE completed_at IS NULL
-    `).run();
+    return true;
   }
 
   const queuedChatRow = db.prepare(`
@@ -380,7 +359,6 @@ export function hasPendingCurationCycle(): boolean {
       AND m.role = 'user'
       AND lower(trim(m.text)) IN ('/curate', '/curate-latest')
       AND COALESCE(m.status, '') IN ('pending', 'queued', 'processing', 'running')
-      AND datetime(m.timestamp) >= datetime('now', '-25 minutes')
     ORDER BY datetime(m.timestamp) DESC, datetime(m.created_at) DESC
     LIMIT 1
   `).get() as { timestamp: string } | undefined;

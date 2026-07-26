@@ -25,6 +25,7 @@ Resolve the repo root and API base:
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-${ORCHESTRATOR_INTERNAL_URL:-http://127.0.0.1:${PORT:-3001}}}"
+API_CURL="${EVOGENT_API_CURL:-curl}"
 ```
 
 Inspect:

@@ -4,6 +4,7 @@ import { buildChatInstruction } from '@/lib/chat-instruction';
 import { getDb } from '@/lib/db/client';
 import { getFeedItemById, updateFeedItemFields } from '@/lib/db/feed';
 import { getChatSession } from '@/lib/db/chat-sessions';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ function getInternalBaseUrl(): string {
 
 async function broadcastEvent(payload: Record<string, unknown>) {
   try {
-    await fetch(`${getInternalBaseUrl()}/api/internal/agent-progress`, {
+    await fetchInternal(`${getInternalBaseUrl()}/api/internal/agent-progress`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event: payload, trigger: 'code_fix_self_report' }),
@@ -71,7 +72,7 @@ function buildFailureChatMessage(args: { taskId: string; suggestionId: string; t
 
 async function postInternalJson(path: string, body: Record<string, unknown>, label: string) {
   try {
-    const response = await fetch(`${getInternalBaseUrl()}${path}`, {
+    const response = await fetchInternal(`${getInternalBaseUrl()}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',

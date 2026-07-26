@@ -22,8 +22,8 @@ import { getSourceReadiness } from '@/lib/setup-readiness';
 import { submitChatMessage } from '@/lib/chat-submission';
 import { getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
 import { resolveRuntimeWorkingDirectory } from '@/lib/runtime-working-directory';
-
-const adaptiveHeartbeatDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
+import { requestPhoneCycle } from '@/lib/phone-cycle-signal';
+import { getAdaptiveHeartbeatMode } from '@/lib/runtime-profile';
 
 export interface EvaluateAdaptiveHeartbeatInput {
   triggeredBy: string;
@@ -111,7 +111,8 @@ export async function evaluateAdaptiveHeartbeat(
     };
   }
 
-  if (adaptiveHeartbeatDisabled) {
+  const heartbeatMode = getAdaptiveHeartbeatMode();
+  if (heartbeatMode === 'off') {
     return {
       triggered: false,
       triggerReason: 'adaptive_heartbeat_disabled',
@@ -139,6 +140,20 @@ export async function evaluateAdaptiveHeartbeat(
       decision,
       requestId: null,
       queueDepth: 0,
+    };
+  }
+
+  if (heartbeatMode === 'signal') {
+    const signal = requestPhoneCycle({
+      reason: decision.reason,
+      triggeredBy: input.triggeredBy,
+    });
+    return {
+      triggered: !signal.duplicate,
+      triggerReason: signal.duplicate ? 'phone_cycle_already_requested' : decision.reason,
+      decision,
+      requestId: signal.request.id,
+      queueDepth: 1,
     };
   }
 

@@ -57,7 +57,7 @@ The queued user turn should include:
 3. Read the originating suggestion.
    - If `suggestionId` is present, fetch:
      ```bash
-     curl -fsS "$MEDIA_AGENT_INTERNAL_BASE_URL/api/feed/<suggestion-id>"
+     "${EVOGENT_API_CURL:-curl}" -fsS "$MEDIA_AGENT_INTERNAL_BASE_URL/api/feed/<suggestion-id>"
      ```
    - Read the suggestion `title` and `proposedValue`.
    - If the fetch fails, continue with the receipt and diff only.
@@ -85,7 +85,7 @@ The queued user turn should include:
      ```
    - Prefer the supported cleanup endpoint when exact identifiers are available:
      ```bash
-     curl -fsS "$MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/validation/cleanup" \
+     "${EVOGENT_API_CURL:-curl}" -fsS "$MEDIA_AGENT_INTERNAL_BASE_URL/api/internal/validation/cleanup" \
        -H 'Content-Type: application/json' \
        -d '{"ids":["<exact-feed-id>"],"sourceIds":["<exact-source-id>"],"originSessionIds":["<exact-origin-session-id>"]}'
      ```

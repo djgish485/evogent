@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { toCodeFixSuggestionDescriptor } from '@/lib/feed-suggestions';
 import type { CodeFixSuggestionDescriptor } from '@/lib/feed-suggestions';
 import { getFeedItemById } from '@/lib/db/feed';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,7 +49,7 @@ function getInternalBaseUrl(): string {
 }
 
 async function enqueueCodeFixSuggestions(payload: Record<string, unknown>): Promise<BatchCodeFixResponse> {
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/code-fix-orchestrator/enqueue`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/code-fix-orchestrator/enqueue`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

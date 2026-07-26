@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getChatSession } from '@/lib/db/chat-sessions';
 import { getInternalBaseUrl } from '@/lib/internal-api';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function POST(
     return NextResponse.json({ ok: false, error: 'Manual compact is only available for Claude sessions right now' }, { status: 409 });
   }
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/chat-session-compact`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/chat-session-compact`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',

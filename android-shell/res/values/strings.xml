@@ -2,4 +2,10 @@
 <resources>
     <string name="app_name">Evogent</string>
     <string name="a11y_desc">Lets Evogent read feeds in your apps and act on your behalf. Personal use on your own device only.</string>
+    <string name="home_recovery_starting_title">Starting Evogent</string>
+    <string name="home_recovery_starting_message">The on-phone runtime is getting ready.</string>
+    <string name="home_recovery_error_title">Evogent is unavailable</string>
+    <string name="home_recovery_error_message">The on-phone service or its secure connection is not ready. Retry, or open your apps.</string>
+    <string name="home_recovery_retry">Retry</string>
+    <string name="home_recovery_apps">Open apps</string>
 </resources>

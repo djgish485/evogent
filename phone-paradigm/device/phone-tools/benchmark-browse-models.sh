@@ -8,15 +8,40 @@
 # Usage: benchmark-browse-models.sh [model1 model2 model3]
 #        defaults to gpt-5.5 gpt-5.6-sol gpt-5.6-luna
 set -u
-EVO="$HOME/evogent"; TOOLS="$HOME/phone-tools"; BASE="http://127.0.0.1:3001"
+EVO="$HOME/evogent"; TOOLS="$HOME/phone-tools"; BASE="http://127.0.0.1:${PORT:-3001}"
+EVO_CURL="$TOOLS/evo-curl"
+export EVOGENT_API_CURL="$EVO_CURL"
 MODELS=("${@:-}")
 [ -z "${MODELS[*]}" ] && MODELS=(gpt-5.5 gpt-5.6-sol gpt-5.6-luna)
 PROMPT_FILE="$TOOLS/browse-youtube.txt"
 RESULTS="$TOOLS/browse-benchmark-results.txt"
 : > "$RESULTS"
 say(){ echo "[browse-bench] $*" | tee -a "$RESULTS" >&2; }
+. "$TOOLS/control-plane.sh"
+control_init_owner browse-benchmark
+BENCH_LOCK="$TOOLS/.cycle.lock"
+BENCH_LOCK_HELD=0
+bench_cleanup() {
+  local rc=$?
+  trap - EXIT INT TERM HUP
+  control_kill_tagged "$CONTROL_OWNER_ID"
+  [ "$BENCH_LOCK_HELD" = 1 ] && control_cleanup_tracked_packages || true
+  [ "$BENCH_LOCK_HELD" = 1 ] && control_close_hidden_displays || true
+  control_wake_release
+  [ "$BENCH_LOCK_HELD" = 1 ] && control_lock_release "$BENCH_LOCK" || true
+  control_finish_owner
+  exit "$rc"
+}
+trap bench_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+control_lock_acquire "$BENCH_LOCK" browse-benchmark ||
+  { say "another live task owns the hidden display"; exit 1; }
+BENCH_LOCK_HELD=1
+control_wake_acquire
 
-src_count(){ curl -s -m8 "$BASE/api/internal/browse-cache/items?source=youtube&limit=400" \
+src_count(){ "$EVO_CURL" -s -m8 "$BASE/api/internal/browse-cache/items?source=youtube&limit=400" \
   | python3 -c 'import sys,json;print(len((json.load(sys.stdin).get("items") or [])))' 2>/dev/null || echo 0; }
 
 # Completeness of the freshest N youtube rows: fraction carrying a canonical watch URL + title.
@@ -34,10 +59,10 @@ completeness(){ ( cd "$EVO" && node -e '
 for MODEL in "${MODELS[@]}"; do
   say "=== $MODEL ==="
   # Reap the app so each model starts from a cold launch (fair timing).
-  ~/rish-bin/rish -c "am force-stop com.google.android.youtube" >/dev/null 2>&1; sleep 2
+  control_rish_bounded "am force-stop com.google.android.youtube" >/dev/null 2>&1; sleep 2
   before=$(src_count)
   T0=$(date +%s)
-  ( cd "$EVO" && EVOGENT_CODEX_MODEL="$MODEL" timeout -k 30 420 codex exec --model "$MODEL" \
+  ( cd "$EVO" && run_owned_timeout 420 30 env EVOGENT_CODEX_MODEL="$MODEL" codex exec --model "$MODEL" \
       -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox \
       "$(cat "$PROMPT_FILE")" >>"$TOOLS/scheduler.log" 2>&1 )
   RC=$?

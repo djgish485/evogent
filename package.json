@@ -9,6 +9,9 @@
     "lint": "eslint",
     "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx' 'test/**/*.test.ts' 'test/**/*.test.mjs' 'scripts/**/*.test.ts'",
     "test:pages": "tsx --test 'src/app/**/*.test.tsx' 'src/components/**/*.test.tsx'",
+    "privacy:check": "node scripts/check-public-privacy.mjs",
+    "privacy:check:history": "node scripts/check-public-privacy.mjs --history",
+    "privacy:verify-history-rewrite": "node scripts/verify-public-history-rewrite.mjs",
     "setup:agent": "tsx scripts/setup-agent.ts",
     "seed": "tsx scripts/seed-test-data.ts"
   },

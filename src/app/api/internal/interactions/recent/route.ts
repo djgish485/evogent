@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/client';
+import { getRecentFeedEngagementSessions } from '@/lib/db/feed-engagement';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,10 +78,13 @@ export async function GET(request: Request) {
       text: truncateText(row.feed_text),
     },
   }));
+  const engagementSessions = getRecentFeedEngagementSessions(limit);
 
   return NextResponse.json({
     ok: true,
     count: interactions.length,
     interactions,
+    engagementSessionCount: engagementSessions.length,
+    engagementSessions,
   });
 }

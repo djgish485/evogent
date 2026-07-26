@@ -1,61 +1,86 @@
-# Phone paradigm — on-device operational scripts
+# Evogent on Android
 
-Evogent running **fully on an Android device** (proven on the `evogent` AVD, Android 15 arm64):
-the Next.js server, DB, and Claude Code CLI all run on the phone under Termux, and the chat
-agent drives the user's real logged-in apps (Gmail, YouTube, …) **in the background** on a hidden
-virtual display, so the user's feed on display 0 is never disturbed.
+Android is Evogent's canonical production paradigm. Evogent is the phone's home
+screen, and the complete personal runtime stays on the phone:
 
-These are the runtime/recovery scripts. None of them contain secrets — tokens live only in
-device-local files (`~/.evogent-oauth-token`, `data/control-token.txt`) that are never committed.
+- the shell APK supplies the launcher, WebView, native-app routing, overlay, and
+  accessibility mechanics;
+- Termux runs the local Next.js server, SQLite database, brain CLI, source
+  mechanics, one scheduler, and its independent watchdog;
+- hidden-display browsing reads the user's real logged-in apps without replacing
+  display 0; and
+- the curated feed and personal model remain local to the device.
 
-## Auth — runs off the user's Claude SUBSCRIPTION, not a pay-per-use API key
+A Mac or other host is needed to develop and release Evogent, not to operate it.
+The original VM path remains available for the public demo and legacy
+self-hosting, but it is no longer the reference architecture.
 
-Claude Code resolves credentials as: `ANTHROPIC_AUTH_TOKEN` > `ANTHROPIC_API_KEY` > `apiKeyHelper`
-> `CLAUDE_CODE_OAUTH_TOKEN` > subscription OAuth. In `-p` (non-interactive) mode the **API key
-always wins when present** — so a stray `ANTHROPIC_API_KEY` silently overrides the subscription,
-and if that key is out of credits every agent call fails `"Credit balance is too low"`.
+Read [`docs/phone-production.md`](../docs/phone-production.md) first. It defines
+the layer boundaries, single-owner control plane, privacy boundary, release
+contract, and verification standard.
 
-Therefore `device/start-prod.sh` **unsets `ANTHROPIC_API_KEY`** and exports
-`CLAUDE_CODE_OAUTH_TOKEN` from `~/.evogent-oauth-token`. Generate that token once:
+## Current technical-user stack
 
-```bash
-claude setup-token        # one-time browser approval; prints an sk-ant-oat01-... token
-printf '%s' '<token>' > ~/.evogent-oauth-token && chmod 600 ~/.evogent-oauth-token
-```
+The proven stock-device path uses:
 
-Do **not** run `claude` with `--bare` (it ignores `CLAUDE_CODE_OAUTH_TOKEN`).
+- an arm64 Android phone;
+- the Evogent shell APK as the selected HOME app;
+- Termux for Node, SQLite, the selected subscription-backed brain CLI, and the
+  runtime scripts;
+- Shizuku for the shell-uid capabilities needed by hidden displays; and
+- the Evogent accessibility service, protected by a per-install control token.
 
-## The scripts
+This is an engineering preview, not yet a consumer installer. A system-image
+distribution could remove Termux/Shizuku setup friction later without changing
+the product's on-device ownership model.
 
-| File | Runs on | What it does |
-|---|---|---|
-| `restore-device.sh` | Mac (adb + ssh) | **One-command recovery after any (re)boot.** Non-rooted images kill Shizuku/sshd/server on boot; this restarts them, re-asserts settings (phantom-killer off, BAL appop, default home), starts `shizuku_server`, restarts the server, and **loops until the home page serves AND the accessibility service actually responds** before declaring done. |
-| `device/start-prod.sh` | Termux | Launches the server in production mode on the subscription token (see Auth). |
-| `device/restart-evo.sh` | Termux | Kills node (by exact name — never `pkill -f "node server.js"`, which self-matches) and restarts the server in a detached `tmux` session so it survives ssh logout. |
-| `device/phone-tools/phone.sh` | Termux | The on-device computer-use toolkit: `launch <pkg>` (Shizuku hidden display), `see` (dump that display's node tree over the 127.0.0.1:8790 loopback), `tap`/`scroll`/`swipe`. Display 0 stays on Evogent. |
-| `device/phone-tools/a11y-check.sh` | Termux | Health probe: prints the byte count the a11y service pushes for an `op=nodes` — `>0` means it's actually connected (not just that the setting string is set). Frees a leaked 8790 listener first. |
-| `device/termux-boot/10-evogent.sh` | Termux | Auto-starts the server on boot — **requires the Termux:Boot addon** to fire. |
-| `device/skills/phone-browse/SKILL.md` | agent | The chat-agent skill for background app browsing, fully on-device (no adb) via `phone.sh`. |
+## Runtime components
 
-## Why a reboot needs `restore-device.sh` (not an Evogent bug)
+| Component | Responsibility |
+|---|---|
+| `android-shell/` | HOME activity, local WebView, overlay/composer, app routing, accessibility mechanics, boot signal |
+| `device/start-prod.sh` | Canonical phone-profile server environment: loopback, no Redis/background worker |
+| `device/phone-tools/phone.sh` | Deterministic hidden-display launch, capture, tap, and scroll primitives |
+| `device/phone-tools/evogent-scheduler.sh` | Sole scheduling authority; coalesces open, heartbeat, notification, and recovery signals |
+| `device/phone-tools/evogent-cycle.sh` | One leased browse/cache/score/curate/arrange cycle with structured outcomes |
+| `device/phone-tools/evogent-watchdog.sh` | Independent liveness guard; wakes the owner instead of running a competing cycle |
+| `device/skills/phone-browse/` | General instructions for on-phone agent judgment |
 
-The AVD is a **production ("user") Google Play image** — deliberately, so real apps behave like a
-real phone — which means it is **non-rooted**. `shizuku_server` (the shell-uid broker that creates
-the hidden trusted display) can only be (re)started via an ADB command each boot; Termux's server
-and the a11y service don't auto-start either. So a reboot resets them, and `restore-device.sh`
-brings the whole stack back. The durable, zero-touch end state is a **system/platform-signed
-Evogent** on a flashed image (no Shizuku, everything auto-starts) — the phase-2 product tier.
+The deleted APK browse service and its periodic alarm are legacy architecture.
+Android may start the Termux control plane, but it must not become another
+scheduler.
 
-## Alternative brain provider: Codex CLI (subscription-powered)
+## Brain provider
 
-Evogent's brain provider is switchable (`## Brain Provider` in `data/config.md`: `Claude Code` or
-`Codex CLI`). Codex runs on the device off the user's **ChatGPT subscription**:
+The brain provider is deployment-configurable. On constrained phones, use the
+lighter provider that passes the real workload and leaves the Node server
+responsive. Authentication belongs in private device files and is never copied
+into the repo or a release bundle.
 
-- The Codex CLI ships a **static-musl aarch64** binary that runs directly on Android (no grun).
-- Being static it bypasses Android/bionic, so it needs a `resolv.conf` (DNS, via a `proot`
-  bind-mount) and an explicit CA bundle (`SSL_CERT_FILE`) — both handled by `device/bin/codex`.
-- Auth: copy `~/.codex/auth.json` from a machine where `codex login` (ChatGPT) succeeded.
-- Codex reads `AGENTS.md` (not `.claude/skills`), so the phone-browse capability is added there —
-  see `device/AGENTS.phone-browse.md` (appended to `~/evogent/AGENTS.md`).
-- See `device/setup-codex.sh`. Verified live: the "Spark" codex session browsed Gmail on a hidden
-  display and returned the latest email with the feed undisturbed.
+Provider wrappers may need Android-specific DNS, certificates, or binary
+compatibility support. `device/start-prod.sh` is the canonical environment
+boundary; do not add a second ad-hoc server start path with different variables.
+
+## What belongs where
+
+- General product behavior belongs in committed code, templates, and `.intent/`.
+- Personal taste, accounts, source cadence, and learned context belong in private
+  `data/` state on the phone.
+- Agents decide what content means and what would help.
+- Scripts perform measurable mechanics and report outcomes honestly.
+- Source-code fixes are queued for host review; the phone does not run its own
+  software-development agents.
+
+## Setup and operations
+
+- [`device/MIGRATE-TO-NEW-PHONE.md`](device/MIGRATE-TO-NEW-PHONE.md) — provision
+  or migrate a private deployment
+- [`pixel-real-device-setup.md`](pixel-real-device-setup.md) — current
+  stock-device setup details and Android constraints
+- [`device/DEV-LOOP.md`](device/DEV-LOOP.md) — host development and release loop
+- [`device/AGENTS.phone-browse.md`](device/AGENTS.phone-browse.md) — runtime
+  browsing capability supplied to an on-device brain
+
+All examples use placeholders. Put serials, ports, SSH users, account facts, and
+other deployment-specific notes in an uncommitted host-side file outside the
+checkout.

@@ -78,6 +78,16 @@ describe('/api/internal/interactions/recent', { concurrency: false }, () => {
         ('feed-old', 'thumbsup', '2026-05-01 10:30:00'),
         ('feed-new', 'thumbsdown', '2026-05-01 11:30:00')
     `).run();
+    db.prepare(`
+      INSERT INTO feed_engagement_sessions (
+        session_id, feed_item_id, opened_at, last_seen_at, closed_at,
+        active_dwell_ms, max_scroll_depth_pct, is_return, surface, item_snapshot
+      ) VALUES (
+        'detail:feed-new:session', 'feed-new', '2026-05-01 11:35:00',
+        '2026-05-01 11:36:00', '2026-05-01 11:36:00',
+        61000, 84, 1, 'detail_overlay', '{"title":"Newer title"}'
+      )
+    `).run();
 
     const { GET } = await importRoute();
     const response = await GET(new Request('http://127.0.0.1/api/internal/interactions/recent?limit=1'));
@@ -95,6 +105,13 @@ describe('/api/internal/interactions/recent', { concurrency: false }, () => {
           authorUsername: string | null;
         };
       }>;
+      engagementSessionCount: number;
+      engagementSessions: Array<{
+        feedItemId: string;
+        activeDwellMs: number;
+        maxScrollDepthPercent: number;
+        isReturn: boolean;
+      }>;
     };
 
     assert.strictEqual(body.ok, true);
@@ -104,5 +121,10 @@ describe('/api/internal/interactions/recent', { concurrency: false }, () => {
     assert.strictEqual(body.interactions[0]?.feedItem.title, 'Newer title');
     assert.strictEqual(body.interactions[0]?.feedItem.sourceId, 'source-new');
     assert.strictEqual(body.interactions[0]?.feedItem.authorUsername, 'new_author');
+    assert.strictEqual(body.engagementSessionCount, 1);
+    assert.strictEqual(body.engagementSessions[0]?.feedItemId, 'feed-new');
+    assert.strictEqual(body.engagementSessions[0]?.activeDwellMs, 61000);
+    assert.strictEqual(body.engagementSessions[0]?.maxScrollDepthPercent, 84);
+    assert.strictEqual(body.engagementSessions[0]?.isReturn, true);
   });
 });

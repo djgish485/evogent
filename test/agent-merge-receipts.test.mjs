@@ -326,6 +326,10 @@ printf 'enqueue-post-merge-review %s|%s\\n' "$1" "$2" >> "${logFile}"
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
+  assert.ok(
+    fs.existsSync(logFile),
+    `expected merge harness commands; stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+  );
   const commandLog = fs.readFileSync(logFile, 'utf8');
   assert.match(commandLog, new RegExp(`check-push-size ${repoDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\|origin/${mergeTarget}\\|${taskId}`));
   assert.match(commandLog, new RegExp(`notify Task Complete\\|Task ${taskId} merged and pushed to ${mergeTarget}\\.`));

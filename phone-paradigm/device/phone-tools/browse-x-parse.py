@@ -1,4 +1,5 @@
-import subprocess, re, json, time, os, urllib.request
+import subprocess, re, json, time, os
+from evogent_api import ORIGIN as BASE, post_json
 HOME=os.path.expanduser("~")
 PH=HOME+"/phone-tools/phone.sh"
 def see():
@@ -41,8 +42,7 @@ for t in list(tweets.values())[:12]:
       "url":f"https://x.com/{h}","fetchedAtMs":NOW,"expiresAtMs":NOW+1209600000,
       "payload":{"type":"tweet","text":txt,"authorUsername":h,"authorDisplayName":t['name'],"url":f"https://x.com/{h}","captureMethod":"phone-background-browse-script"}})
 body={"source":"twitter","triggeredBy":"phone-browse-x-script","startedAtMs":NOW,"completedAtMs":NOW,"status":"completed","itemsAdded":len(items),"items":items}
-req=urllib.request.Request("http://127.0.0.1:3001/api/internal/browse-cache/submit",data=json.dumps(body).encode(),headers={"content-type":"application/json"})
 try:
-    r=urllib.request.urlopen(req,timeout=15); print("CACHED",len(items),"tweets; resp",r.status)
+    r=post_json(f"{BASE}/api/internal/browse-cache/submit",json.dumps(body).encode(),timeout=15); print("CACHED",len(items),"tweets; resp",r.status)
 except Exception as e: print("SUBMIT_ERR",e,"items",len(items))
 for t in list(tweets.values())[:12]: print("  @%s: %s"%(t['handle'],t['text'][:70]))

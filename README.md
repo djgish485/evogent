@@ -1,10 +1,33 @@
-# Evogent - Curation & Cloud Coding Agent
+# Evogent — an AI-first Android home feed
 
 <p align="center">
   <img src="docs/images/hero-feed.jpeg" alt="Evogent curated feed thread with the rationale visible" width="320">
 </p>
 
-Evogent is an AI curation agent that browses your social media for you and shows you what *you* want to see, not what the algorithm wants you to see.
+Evogent is a personal AI that browses the apps and information sources you
+already use, builds one nutritious feed around what you are trying to understand,
+and helps complete the work behind useful actions.
+
+Android is the canonical production environment. Evogent runs as the phone's
+home screen; its server, SQLite data, source mechanics, and brain CLI stay on the
+device. A development host builds and releases it but is not required for normal
+operation. The original VM path remains available for the public demo and legacy
+self-hosting.
+
+## Run on an Android phone
+
+The current stock-device path is an engineering preview for technical users. It
+uses the Evogent shell APK, Termux, and Shizuku on an arm64 Android phone.
+
+Start with:
+
+- [Phone production architecture](docs/phone-production.md)
+- [Android runtime overview](phone-paradigm/README.md)
+- [Provision or migrate a phone](phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md)
+- [Host development loop](phone-paradigm/device/DEV-LOOP.md)
+
+These guides use placeholders. Device connection details, accounts, auth, private
+data, and backups stay outside the checkout.
 
 ## Live demo
 
@@ -14,8 +37,10 @@ Evogent is an AI curation agent that browses your social media for you and shows
 
 Evo runs through the Claude Code or Codex CLI, so your Claude Pro or ChatGPT Plus subscription powers everything. API keys also work if you prefer.
 
-## Install With A Coding Agent
+## Local or VM install with a coding agent
 
+The generic setup guide below runs the local/legacy-VM profile. It is useful for
+development or self-hosting, but it is not the Android production architecture.
 Paste this into your favorite coding agent:
 
 ```text
@@ -30,9 +55,9 @@ Respect platform boundaries: `scripts/setup.sh` is Linux/systemd-only; macOS and
 When finished, report the final app URL. If setup is not complete, report the remaining REQUIRED lines from `npm run setup:agent`.
 ```
 
-## Install on a Cloud VM
+## Legacy cloud VM
 
-If you want a public URL gated by login that you can hit from any browser, including mobile, paste this into a coding agent:
+If you want the original public-URL deployment, paste this into a coding agent:
 
 ```text
 Install Evogent on a small Hetzner VM behind Cloudflare Access. I want to reach the URL from any device, but only my email should pass the auth gate.
@@ -46,7 +71,7 @@ Before configuring browser-backed sources, install the required desktop layer on
 On the VM, install Evogent from https://github.com/djgish485/evogent following docs/setup-for-coding-agents.md end to end. Report the final hostname and any remaining setup items when done.
 ```
 
-## Cloud Coding Agent
+## Legacy cloud coding-agent mode
 
 Claude Code remote control not stable? SSH apps feeling janky? Evo works beautifully as a cloud coding agent. It's like Twitter for your repo.
 
@@ -76,7 +101,7 @@ Phase 3: teach each skill to emit output.mcpapp.html for sandboxed-iframe agent 
 Report which skills are wired and verify a test card lands in the Evogent feed when done.
 ```
 
-## Manual Install
+## Manual local/VM install
 
 ```bash
 git clone https://github.com/djgish485/evogent.git evogent
@@ -110,6 +135,8 @@ Direct access to Evo's agents is disabled for remote users by default. To use th
 
 ## Links
 
+- [Phone production architecture](docs/phone-production.md)
+- [Phone runtime](phone-paradigm/README.md)
 - [Setup for coding agents](docs/setup-for-coding-agents.md)
 - [Public-feed demo VM setup](docs/demo-vm-setup.md)
 - [Config reference](docs/config-reference.md)

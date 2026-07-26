@@ -23,6 +23,7 @@ import {
   type EnrichmentPromptMode,
 } from '@/lib/feed-enrichment-prompt';
 import { enqueueOrchestratorMessage, getOrchestratorStatus } from '@/lib/orchestrator';
+import { areBackgroundJobsDisabled } from '@/lib/runtime-profile';
 import { readUsageLevelConfig } from '@/lib/usage-level';
 import {
   buildYouTubeFeedMetadata,
@@ -30,7 +31,7 @@ import {
 } from '@/lib/youtube-feed';
 import type { FeedItem, FeedItemType, FeedRelationship } from '@/types/feed';
 
-const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
+const backgroundJobsDisabled = areBackgroundJobsDisabled();
 
 interface EnrichmentJobState {
   agentId: string;

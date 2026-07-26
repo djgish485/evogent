@@ -26,7 +26,11 @@ function isUuid(value) {
 // each (appSession, provider) pair has persisted, and what the single global
 // "current chat" pointer currently holds. The stub provider records the
 // sessionMode it was handed so we can assert resume-vs-new directly.
-function buildOrchestrator({ perSession = {}, globalPointer = null } = {}) {
+function buildOrchestrator({
+  perSession = {},
+  globalPointer = null,
+  claudeSessionExists = () => true,
+} = {}) {
   const tmpDir = makeTempDir();
   let storedGlobal = globalPointer;
 
@@ -40,6 +44,7 @@ function buildOrchestrator({ perSession = {}, globalPointer = null } = {}) {
     getTaskChatMessageId: (task) => task?.metadata?.chatMessageId ?? null,
     getTaskSessionId: (task) => task?.metadata?.sessionId ?? null,
     getTaskProviderSessionId: (task) => task?.metadata?.providerSessionId ?? null,
+    claudeSessionExists,
     getProviderSessionIdForChatSession: (sessionId, providerName) =>
       perSession[`${sessionId}:${providerName}`] ?? null,
     // The global pointer is provider-tagged in production; model "not a claude
@@ -151,5 +156,19 @@ describe('chat session resume-vs-new decision', () => {
 
     assert.equal(mode.mode, 'new');
     assert.equal(mode.sessionId, freshlyMinted);
+  });
+
+  test('starts fresh with the persisted id when the provider session file is missing', () => {
+    const appSession = randomUUID();
+    const danglingProviderSession = randomUUID();
+    const orchestrator = buildOrchestrator({
+      perSession: { [`${appSession}:claude`]: danglingProviderSession },
+      claudeSessionExists: () => false,
+    });
+
+    const mode = modeFor(orchestrator, chatTask({ sessionId: appSession }));
+
+    assert.equal(mode.mode, 'new');
+    assert.equal(mode.sessionId, danglingProviderSession);
   });
 });

@@ -5,7 +5,9 @@
 # itself). Idempotent: appends to enabled_notification_listeners only if absent.
 set -u
 COMP="net.dangish.evogent/net.dangish.evogent.EvogentNotificationListenerService"
-rish(){ RISH_APPLICATION_ID=com.termux "$HOME/rish-bin/rish" -c "$1" 2>/dev/null; }
+TOOLS="$HOME/phone-tools"
+. "$TOOLS/control-plane.sh"
+rish(){ control_rish_bounded "$1" 2>/dev/null; }
 
 CUR="$(rish 'settings get secure enabled_notification_listeners')"
 if echo "$CUR" | grep -q "net.dangish.evogent/.*NotificationListenerService"; then

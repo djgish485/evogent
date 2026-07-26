@@ -16,6 +16,11 @@ mkdir -p "$STATE_DIR/logs"
 source "$SCRIPTS_DIR/config"
 [ -f "$STATE_DIR/env" ] && source "$STATE_DIR/env"
 source "$SCRIPTS_DIR/receipt-helpers.sh"
+DEFAULT_API_CURL=curl
+[ -x "$HOME/phone-tools/evo-curl" ] && DEFAULT_API_CURL="$HOME/phone-tools/evo-curl"
+API_CURL="${EVOGENT_API_CURL:-$DEFAULT_API_CURL}"
+export EVOGENT_API_CURL="$API_CURL"
+INTERNAL_BASE_URL="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"
 
 TASKS_FILE="$STATE_DIR/active-tasks.json"
 LOG_DIR="$STATE_DIR/logs/agent/${TASK_ID}"
@@ -242,7 +247,7 @@ case "$AGENT_TYPE" in
   codex)
     codex exec --model "$CODEX_MODEL" \
       -c "model_reasoning_effort=${CODEX_REASONING}" \
-      "${CODEX_FAST_ARGS[@]}" \
+      ${CODEX_FAST_ARGS[@]+"${CODEX_FAST_ARGS[@]}"} \
       -s danger-full-access \
       "$FULL_PROMPT" 2>&1 &
     AGENT_PID=$!
@@ -378,20 +383,27 @@ case "$PIPELINE" in
     else
       echo "=== Auto-merge pipeline (fallback) ==="
       # Acquire merge lock to prevent concurrent merges from corrupting git state
-      MERGE_LOCK="/tmp/.merge-lock-$(echo "$REPO_DIR" | md5sum | cut -c1-8)"
-      LOCK_WAIT=0
-      while [ -f "$MERGE_LOCK" ]; do
-        LOCK_HOLDER=$(cat "$MERGE_LOCK" 2>/dev/null || echo "unknown")
-        if [ "$LOCK_WAIT" -ge 300 ]; then
-          echo "WARNING: Merge lock held by ${LOCK_HOLDER} for 5+ minutes — breaking stale lock"
-          rm -f "$MERGE_LOCK"
-          break
+      GIT_COMMON_DIR="$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-common-dir)"
+      MERGE_LOCK="$GIT_COMMON_DIR/evogent-agent-merge.lockdir"
+      LOCK_WAIT_STARTED="$(date +%s)"
+      while ! mkdir "$MERGE_LOCK" 2>/dev/null; do
+        LOCK_HOLDER=$(sed -n 's/^pid=//p' "$MERGE_LOCK/owner" 2>/dev/null | head -1)
+        if [ -n "$LOCK_HOLDER" ] && [[ "$LOCK_HOLDER" =~ ^[0-9]+$ ]] && ! kill -0 "$LOCK_HOLDER" 2>/dev/null; then
+          if mv "$MERGE_LOCK" "$MERGE_LOCK.stale.$$" 2>/dev/null; then
+            rm -rf -- "$MERGE_LOCK.stale.$$"
+            continue
+          fi
         fi
-        echo "Waiting for merge lock (held by ${LOCK_HOLDER})..."
-        sleep 10
-        LOCK_WAIT=$((LOCK_WAIT + 10))
+        LOCK_WAIT=$(( $(date +%s) - LOCK_WAIT_STARTED ))
+        if [ "$LOCK_WAIT" -ge 300 ]; then
+          echo "ERROR: Merge lock is still held by live process ${LOCK_HOLDER:-unknown} after 5 minutes"
+          update_status "failed"
+          exit 1
+        fi
+        echo "Waiting for merge lock (held by ${LOCK_HOLDER:-initializing})..."
+        sleep 1
       done
-      echo "$TASK_ID" > "$MERGE_LOCK"
+      printf 'pid=%s\ntask=%s\n' "$$" "$TASK_ID" > "$MERGE_LOCK/owner"
       MERGE_STASH_CREATED=0
       restore_merge_stash() {
         if [ "$MERGE_STASH_CREATED" -eq 1 ]; then
@@ -406,7 +418,8 @@ case "$PIPELINE" in
       }
       cleanup_merge_pipeline() {
         restore_merge_stash || true
-        rm -f "$MERGE_LOCK"
+        rm -f "$MERGE_LOCK/owner"
+        rmdir "$MERGE_LOCK" 2>/dev/null || true
       }
       trap 'cleanup_merge_pipeline; cleanup_log_monitor' EXIT
 
@@ -434,7 +447,7 @@ case "$PIPELINE" in
       git checkout "$MERGE_TARGET"
       [ "$ADDON_MODE" = "suggestion-remote" ] && git reset --hard "$MERGE_REMOTE_REF"
       # Restore preserved runtime data
-      for _f in "${_preserved_files[@]}"; do
+      for _f in ${_preserved_files[@]+"${_preserved_files[@]}"}; do
         _tmp="/tmp/_merge_preserve_$(basename $_f)"
         if [ -f "$_tmp" ]; then
           cp "$_tmp" "$_f"
@@ -484,7 +497,7 @@ case "$PIPELINE" in
         update_status "done"
         echo "Merged ${TASK_ID} to ${MERGE_TARGET}."
         # Update feed suggestion status via lifecycle endpoint (non-fatal)
-        curl -s -X POST http://127.0.0.1:3001/api/internal/code-fix-orchestrator/lifecycle \
+        "$API_CURL" -s -X POST "$INTERNAL_BASE_URL/api/internal/code-fix-orchestrator/lifecycle" \
           -H "Content-Type: application/json" \
           -d "{"taskId":"${TASK_ID}","status":"merged"}" >/dev/null 2>&1 || true
         COMPLETE_TEXT="Task ${TASK_ID} merged and pushed to ${MERGE_TARGET}."
@@ -496,7 +509,7 @@ case "$PIPELINE" in
         update_status "failed"
         echo "MERGE FAILED for ${TASK_ID}"
         # Update feed suggestion status via lifecycle endpoint (non-fatal)
-        curl -s -X POST http://127.0.0.1:3001/api/internal/code-fix-orchestrator/lifecycle \
+        "$API_CURL" -s -X POST "$INTERNAL_BASE_URL/api/internal/code-fix-orchestrator/lifecycle" \
           -H "Content-Type: application/json" \
           -d "{"taskId":"${TASK_ID}","status":"failed"}" >/dev/null 2>&1 || true
         "$SCRIPTS_DIR/notify.sh" "Task Failed" "Task ${TASK_ID} merge failed — resolve conflicts manually."

@@ -36,6 +36,7 @@ test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" && echo M
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"
+API_CURL="${EVOGENT_API_CURL:-curl}"
 CDP_URL="${MEDIA_AGENT_SHARED_BROWSER_CDP_URL:-${SHARED_BROWSER_CDP_URL:-http://127.0.0.1:9222}}"
 PROFILE_DIR="${CHROME_BROWSE_PROFILE_DIR:-${X_BROWSER_PROFILE_DIR:-${DATA_DIR:-$REPO_ROOT/data}/chrome-browse-profile}}"
 ```
@@ -237,11 +238,11 @@ Extra checks:
 
 - For X/Twitter:
   - browser-backed setup is complete only after the packaged setup-smoke `/cache-refresh twitter` path stores rows
-  - install `tweet-cache` if missing with `curl -s -X POST "$API_BASE/api/skills/install" -H 'Content-Type: application/json' -d '{"registry":"tweet-cache"}'`
+  - install `tweet-cache` if missing with `"$API_CURL" -s -X POST "$API_BASE/api/skills/install" -H 'Content-Type: application/json' -d '{"registry":"tweet-cache"}'`
   - enqueue the normal refresh with `POST "$API_BASE/api/internal/orchestrator/enqueue"`, source `setup-source`, metadata `{"cacheSource":"twitter","triggerSource":"setup-source","setupSourceSmoke":true}`, and message `/cache-refresh twitter`
   - verify rows through `GET "$API_BASE/api/internal/browse-cache/items?source=twitter&limit=5"` and, for validation, SQLite `browse_cache_refresh_runs` plus `browse_cache_items`
   - keep background source browsing off until this one setup-smoke run has finished, so no scheduled refresh competes for the same shared browser session
-  - only if the user explicitly chose `tweet-cache-bird`, install it with `curl -s -X POST "$API_BASE/api/skills/install" -H 'Content-Type: application/json' -d '{"registry":"tweet-cache-bird","confirmExplicit":true}'`, then run:
+  - only if the user explicitly chose `tweet-cache-bird`, install it with `"$API_CURL" -s -X POST "$API_BASE/api/skills/install" -H 'Content-Type: application/json' -d '{"registry":"tweet-cache-bird","confirmExplicit":true}'`, then run:
     ```bash
     source .env.local
     node node_modules/@steipete/bird/dist/cli.js whoami

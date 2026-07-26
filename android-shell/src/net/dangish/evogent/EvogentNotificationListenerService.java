@@ -9,9 +9,6 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -27,11 +24,11 @@ import java.util.Set;
  * this service must itself (1) drop every package not on the content-app allowlist, and
  * (2) drop anything that looks person-to-person (messaging category, MessagingStyle,
  * conversation notifications). Nothing from private-comms apps is ever read or stored. This
- * is metadata-in-transit only — nothing is persisted here beyond the POST to localhost.
+ * is metadata-in-transit only — nothing is persisted here beyond the POST to loopback.
  */
 public class EvogentNotificationListenerService extends NotificationListenerService {
     private static final String TAG = "EvogentNotif";
-    private static final String SUBMIT_URL = "http://localhost:3001/api/internal/browse-cache/submit";
+    private static final String SUBMIT_URL = EvogentSecurityPolicy.BROWSE_CACHE_SUBMIT_URL;
 
     // Allowlist: package -> browse-cache source name. Kept in lockstep with the source scout's
     // catalog (phone-tools/source-catalog.json) plus the always-on built-in sources. Only these
@@ -161,18 +158,13 @@ public class EvogentNotificationListenerService extends NotificationListenerServ
     private void post(final JSONObject body, final String label) {
         new Thread(new Runnable() { public void run() {
             try {
-                HttpURLConnection c = (HttpURLConnection) new URL(SUBMIT_URL).openConnection();
-                c.setRequestMethod("POST");
-                c.setDoOutput(true);
-                c.setConnectTimeout(6000);
-                c.setReadTimeout(6000);
-                c.setRequestProperty("Content-Type", "application/json");
-                OutputStream os = c.getOutputStream();
-                os.write(body.toString().getBytes("UTF-8"));
-                os.close();
-                int code = c.getResponseCode();
+                int code = EvogentLoopbackAuth.postJsonDirect(
+                        EvogentNotificationListenerService.this,
+                        SUBMIT_URL,
+                        body.toString(),
+                        6000,
+                        6000);
                 Log.i(TAG, "signal " + label + " -> HTTP " + code);
-                c.disconnect();
             } catch (Throwable t) {
                 Log.e(TAG, "post signal failed", t);
             }

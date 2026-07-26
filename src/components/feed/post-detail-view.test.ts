@@ -5,6 +5,7 @@ import {
   buildConversationPosts,
   didEnrichmentAddChildren,
   resolveDetailBottomPadding,
+  shouldTrackPostDetailAttention,
   shouldRenderConversationConnector,
   shouldShowThreadAncestors,
   shouldShowPostDetailEnrichButton,
@@ -12,6 +13,8 @@ import {
 import type { FeedItem } from '@/types/feed';
 
 const postDetailViewSource = readFileSync(new URL('./post-detail-view.tsx', import.meta.url), 'utf8');
+const homePageSource = readFileSync(new URL('../../app/page.tsx', import.meta.url), 'utf8');
+const standalonePostPageSource = readFileSync(new URL('../../app/post/[id]/page.tsx', import.meta.url), 'utf8');
 
 function createFeedItem({
   id = 'tweet-1',
@@ -127,6 +130,39 @@ describe('full enrichment detail state', () => {
     assert.equal(shouldShowPostDetailEnrichButton({ item, isChatMode: false, isLoading: true }), false);
     assert.equal(shouldShowPostDetailEnrichButton({ item, isChatMode: true, isLoading: false }), false);
     assert.equal(shouldShowPostDetailEnrichButton({ item: null, isChatMode: false, isLoading: false }), false);
+  });
+});
+
+describe('detail attention ownership', () => {
+  test('tracks only a loaded, visible, non-chat post detail', () => {
+    assert.equal(shouldTrackPostDetailAttention({
+      attentionActive: true,
+      isChatMode: false,
+      isLoading: false,
+      currentItemId: 'post-1',
+    }), true);
+    assert.equal(shouldTrackPostDetailAttention({
+      attentionActive: false,
+      isChatMode: false,
+      isLoading: false,
+      currentItemId: 'post-1',
+    }), false);
+    assert.equal(shouldTrackPostDetailAttention({
+      attentionActive: true,
+      isChatMode: true,
+      isLoading: false,
+      currentItemId: 'post-1',
+    }), false);
+  });
+
+  test('marks stacked home overlays active only when their entry is topmost', () => {
+    const topEntryContract = /attentionActive=\{topDetailEntry\?\.key === entry\.key\}/g;
+    assert.equal(homePageSource.match(topEntryContract)?.length, 2);
+  });
+
+  test('keeps standalone post pages attention-active by default', () => {
+    assert.match(postDetailViewSource, /attentionActive = true/);
+    assert.doesNotMatch(standalonePostPageSource, /attentionActive=/);
   });
 });
 

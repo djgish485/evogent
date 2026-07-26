@@ -8,9 +8,6 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,20 +21,45 @@ import java.util.regex.Pattern;
  */
 public class ShareReceiverActivity extends Activity {
     private static final String TAG = "EvogentShare";
-    private static final Pattern VID = Pattern.compile(
-            "(?:v=|/shorts/|youtu\\.be/|/embed/|/live/)([A-Za-z0-9_-]{11})");
+    private static final int MAX_ITEM_TEXT_CHARS = 4000;
+    private static final Pattern VIDEO_URL = Pattern.compile(
+            "https?://(?:(?:www\\.|m\\.|music\\.)?youtube\\.com/"
+            + "(?:watch\\?(?:[^\\s#&]*&)*v=|shorts/|embed/|live/)|youtu\\.be/)"
+            + "([A-Za-z0-9_-]{11})",
+            Pattern.CASE_INSENSITIVE);
     // A tweet permalink: (x|twitter|mobile.twitter).com/<handle>/status/<id>. The X app's
     // "Share -> Evogent" sends exactly this, which the accessibility scrape can NEVER read
     // (the status id isn't in X's a11y tree) — so this is the only way to capture the real tweet.
     private static final Pattern TWEET = Pattern.compile(
-            "https?://(?:mobile\\.)?(?:x|twitter)\\.com/([A-Za-z0-9_]{1,15})/status/(\\d+)");
+            "https?://(?:mobile\\.)?(?:x|twitter)\\.com/([A-Za-z0-9_]{1,15})/status/(\\d+)",
+            Pattern.CASE_INSENSITIVE);
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         final Intent intent = getIntent();
-        final String text = intent != null ? intent.getStringExtra(Intent.EXTRA_TEXT) : null;
-        final String subject = intent != null ? intent.getStringExtra(Intent.EXTRA_SUBJECT) : null;
-        Log.i(TAG, "share received text=" + text + " subject=" + subject);
+        final String text;
+        final String subject;
+        try {
+            CharSequence rawText = intent != null
+                    ? intent.getCharSequenceExtra(Intent.EXTRA_TEXT) : null;
+            CharSequence rawSubject = intent != null
+                    ? intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT) : null;
+            text = rawText == null ? null : rawText.toString();
+            subject = rawSubject == null ? null : rawSubject.toString();
+        } catch (Throwable malformedExtra) {
+            Log.w(TAG, "rejected share with malformed extras");
+            finish();
+            return;
+        }
+        if (intent == null || !EvogentSecurityPolicy.isValidTextShare(
+                intent.getAction(), intent.getType(), text, subject)) {
+            Log.w(TAG, "rejected invalid or oversized text share");
+            finish();
+            return;
+        }
+        // Shared text can contain private notification/content data; log only bounded metadata.
+        Log.i(TAG, "accepted text share chars=" + text.length()
+                + " subjectChars=" + (subject == null ? 0 : subject.length()));
         new Thread(new Runnable() {
             @Override public void run() {
                 if (text != null && TWEET.matcher(text).find()) ingestTweet(text, subject);
@@ -51,7 +73,7 @@ public class ShareReceiverActivity extends Activity {
     private void ingestTweet(String text, String subject) {
         try {
             Matcher m = TWEET.matcher(text);
-            if (!m.find()) { Log.e(TAG, "no tweet permalink in: " + text); return; }
+            if (!m.find()) { Log.e(TAG, "no supported tweet permalink"); return; }
             String handle = m.group(1);
             String statusId = m.group(2);
             String url = "https://x.com/" + handle + "/status/" + statusId;
@@ -60,6 +82,7 @@ public class ShareReceiverActivity extends Activity {
             String body = subject != null && subject.trim().length() > 0
                     ? subject.trim()
                     : text.replaceAll("https?://\\S+", "").trim();
+            body = bounded(body, MAX_ITEM_TEXT_CHARS);
             long now = System.currentTimeMillis();
 
             JSONObject payload = new JSONObject();
@@ -91,39 +114,34 @@ public class ShareReceiverActivity extends Activity {
             reqBody.put("itemsAdded", 1);
             reqBody.put("items", new JSONArray().put(item));
 
-            postCache(reqBody, "tweet " + statusId + " @" + handle);
+            postCache(reqBody, "tweet");
         } catch (Throwable t) {
             Log.e(TAG, "tweet cache submit failed", t);
         }
     }
 
     private void postCache(JSONObject body, String label) throws Exception {
-        HttpURLConnection c = (HttpURLConnection)
-                new URL("http://localhost:3001/api/internal/browse-cache/submit").openConnection();
-        c.setRequestMethod("POST");
-        c.setDoOutput(true);
-        c.setConnectTimeout(8000);
-        c.setReadTimeout(8000);
-        c.setRequestProperty("Content-Type", "application/json");
-        OutputStream os = c.getOutputStream();
-        os.write(body.toString().getBytes("UTF-8"));
-        os.close();
-        int code = c.getResponseCode();
+        int code = EvogentLoopbackAuth.postJsonDirect(
+                this,
+                EvogentSecurityPolicy.BROWSE_CACHE_SUBMIT_URL,
+                body.toString(),
+                8000,
+                8000);
         Log.i(TAG, "cache " + label + " -> HTTP " + code);
-        c.disconnect();
     }
 
     private void ingest(String text, String subject) {
         try {
-            if (text == null) { Log.e(TAG, "no EXTRA_TEXT"); return; }
-            Matcher m = VID.matcher(text);
-            if (!m.find()) { Log.e(TAG, "no videoId in: " + text); return; }
+            if (text == null) { Log.e(TAG, "no share text"); return; }
+            Matcher m = VIDEO_URL.matcher(text);
+            if (!m.find()) { Log.e(TAG, "no supported YouTube URL"); return; }
             String id = m.group(1);
             // Title: prefer the subject; else the text with the URL stripped; else the id.
             String title = subject != null && subject.trim().length() > 0
                     ? subject.trim()
                     : text.replaceAll("https?://\\S+", "").trim();
             if (title.isEmpty()) title = "YouTube video " + id;
+            title = bounded(title, 500);
             String url = "https://www.youtube.com/watch?v=" + id;
             String thumb = "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
 
@@ -161,21 +179,14 @@ public class ShareReceiverActivity extends Activity {
             body.put("itemsAdded", 1);
             body.put("items", new JSONArray().put(item));
 
-            HttpURLConnection c = (HttpURLConnection)
-                    new URL("http://localhost:3001/api/internal/browse-cache/submit").openConnection();
-            c.setRequestMethod("POST");
-            c.setDoOutput(true);
-            c.setConnectTimeout(8000);
-            c.setReadTimeout(8000);
-            c.setRequestProperty("Content-Type", "application/json");
-            OutputStream os = c.getOutputStream();
-            os.write(body.toString().getBytes("UTF-8"));
-            os.close();
-            int code = c.getResponseCode();
-            Log.i(TAG, "cache id=" + id + " title=\"" + title + "\" -> HTTP " + code);
-            c.disconnect();
+            postCache(body, "youtube");
         } catch (Throwable t) {
             Log.e(TAG, "cache submit failed", t);
         }
+    }
+
+    private static String bounded(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) return value;
+        return value.substring(0, maxChars);
     }
 }

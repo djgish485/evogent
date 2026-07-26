@@ -1,5 +1,10 @@
 # Twitter / X Access
 
+> The shared-Chrome setup below is for local/legacy-VM installs. The canonical
+> Android profile browses the logged-in X app through phone source mechanics,
+> records structured yield, and submits under the base `twitter` source name.
+> See [`docs/reference/phone-paradigm-setup.md`](../reference/phone-paradigm-setup.md).
+
 Browser-first X access uses the shared Chrome browse profile and `tweet-cache`. That path does not require `AUTH_TOKEN` or `CT0`.
 
 Setup is complete only after the packaged `/cache-refresh twitter` setup-smoke worker path persists browse-cache rows and a `setup-source-twitter-*` refresh run. Ad hoc CDP extraction is diagnostic only.

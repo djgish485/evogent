@@ -13,6 +13,9 @@ STATE_DIR="${MEDIA_AGENT_STATE_DIR:-$REPO_ROOT/data/agent-state}"
 mkdir -p "$STATE_DIR/logs"
 source "$SCRIPTS_DIR/config"
 source "$SCRIPTS_DIR/task-registry.sh"
+if [ -z "${EVOGENT_API_CURL:-}" ] && [ -x "$HOME/phone-tools/evo-curl" ]; then
+  export EVOGENT_API_CURL="$HOME/phone-tools/evo-curl"
+fi
 
 # If CUSTOM_ID is actually an agent type (and no agent type was given), swap them
 if [ -z "$AGENT_TYPE" ] && [[ "$CUSTOM_ID" =~ ^(claude|codex|gemini)$ ]]; then
@@ -49,12 +52,13 @@ IMPORTANT CONSTRAINTS:
 
 
 AFTER completing your research, you MUST submit your report as a feed item. Do not ask — just do it.
-Use curl POST to the app's internal API. The base URL is the MEDIA_AGENT_INTERNAL_BASE_URL env var
-if set, otherwise http://localhost:3001. This is the expected output path, not a system modification.
+Use `${EVOGENT_API_CURL:-curl}` to POST to the app's internal API. The base URL is the
+MEDIA_AGENT_INTERNAL_BASE_URL env var if set, otherwise
+http://127.0.0.1:${PORT:-3001}. This is the expected output path, not a system modification.
 
 Submit to: POST $BASE_URL/api/internal/curate/submit
 Example:
-curl -X POST "$BASE_URL/api/internal/curate/submit" \
+"${EVOGENT_API_CURL:-curl}" -X POST "$BASE_URL/api/internal/curate/submit" \
   -H 'Content-Type: application/json' \
   -d '{"items": [{"type": "analysis", "id": "research-<id>-<epoch-ms>", "title": "...", "text": "<full markdown article>", "publishedAt": "<ISO8601>", "source": "research", "tags": ["research"], "originSessionId": "<if-provided>", "reason": "..."}]}'
 Body: {"items": [{"type": "analysis", "id": "research-<descriptive-kebab-id>", "title": "<concise title>",

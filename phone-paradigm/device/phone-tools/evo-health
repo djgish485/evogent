@@ -1,0 +1,31 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Prove that the authenticated Evogent process is serving this exact release.
+# Produces no body or credential output; success is represented only by exit 0.
+set -euo pipefail
+
+TOOLS="$HOME/phone-tools"
+BASE="http://127.0.0.1:${PORT:-3001}"
+EVO_CURL="${EVOGENT_EVO_CURL:-$TOOLS/evo-curl}"
+IDENTITY="${EVOGENT_RELEASE_IDENTITY:-$HOME/evogent/.evogent-release.json}"
+
+[ -r "$IDENTITY" ] || exit 1
+payload="$("$EVO_CURL" --fail --silent --show-error --max-time 8 \
+  "$BASE/api/internal/deployment-status" 2>/dev/null)" || exit 1
+
+printf '%s' "$payload" | python3 -c '
+import json
+import sys
+
+identity_path = sys.argv[1]
+try:
+    response = json.load(sys.stdin)
+    identity = json.load(open(identity_path, encoding="utf-8"))
+    running = response["running"]
+    assert isinstance(running, dict)
+    assert running["releaseFormat"] == identity["releaseFormat"]
+    assert running["releaseId"] == identity["releaseId"]
+    assert running["buildId"] == identity["buildId"]
+    assert running["commitFull"] == identity["sourceCommit"]
+except Exception:
+    raise SystemExit(1)
+' "$IDENTITY" >/dev/null 2>&1

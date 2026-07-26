@@ -3,8 +3,8 @@
 # a light og:description fetch. Mirrors the VM's hackernews-cache skill. Fills browse_cache
 # source=hackernews so the curator can include HN like any other source.
 import json, time, urllib.request, urllib.error, re, html
+from evogent_api import ORIGIN as BASE, post_json
 
-BASE = "http://127.0.0.1:3001"
 HN = "https://hacker-news.firebaseio.com/v0"
 NOW = int(time.time() * 1000)
 TTL = 14 * 24 * 60 * 60 * 1000
@@ -26,9 +26,11 @@ def og_desc(url):
 # Volume matters: the curator picks from the pool, so cache broadly and let taste filter.
 # top+best+new gives ~150 distinct candidates per run (the score gate below still applies).
 ids = []
+list_successes = 0
 for lst in ("beststories", "topstories", "newstories"):
     try:
         ids += json.loads(get(f"{HN}/{lst}.json"))[:80]
+        list_successes += 1
     except Exception as e:
         print("list err", lst, e)
 seen, items = set(), []
@@ -60,13 +62,26 @@ for hid in ids:
                   "publishedAtMs": (it.get("time", 0) * 1000) or NOW,
                   "payload": payload, "fetchedAtMs": NOW, "expiresAtMs": NOW + TTL})
 
+status = "completed" if list_successes > 0 else "failed"
+error = None if list_successes > 0 else "all Hacker News list requests failed"
+metadata = None
+if list_successes > 0 and not items:
+    metadata = {
+        "outcomeEvidence": {
+            "provenEmpty": True,
+            "evidence": f"{list_successes} HN lists fetched successfully; no score>=10 stories",
+        },
+    }
 body = {"source": "hackernews", "triggeredBy": "phone-hn-api", "startedAtMs": NOW,
-        "completedAtMs": int(time.time()*1000), "status": "completed",
+        "completedAtMs": int(time.time()*1000), "status": status, "error": error,
         "itemsAdded": len(items), "items": items}
-req = urllib.request.Request(f"{BASE}/api/internal/browse-cache/submit",
-        data=json.dumps(body).encode(), headers={"content-type": "application/json"})
+if metadata:
+    body["metadata"] = metadata
 try:
-    r = urllib.request.urlopen(req, timeout=20)
+    r = post_json(f"{BASE}/api/internal/browse-cache/submit", json.dumps(body).encode(), timeout=20)
     print(f"CACHED {len(items)} HN stories; resp {r.status}")
 except Exception as e:
     print("SUBMIT_ERR", e, "items", len(items))
+    raise SystemExit(1)
+if status != "completed":
+    raise SystemExit(1)

@@ -39,6 +39,7 @@ When a user asks you to import their Twitter archive:
 0. Resolve the active app base first:
 ```bash
 API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"
+API_CURL="${EVOGENT_API_CURL:-curl}"
 ```
 
 1. Resolve the archive path from the user message or uploaded attachment metadata. Chat setup may provide an uploaded zip path directly.
@@ -54,7 +55,7 @@ unzip -o "$ARCHIVE_PATH" -d "$EXTRACT_DIR/"
 
 4. Call the import API:
 ```bash
-curl -s -X POST "$API_BASE/api/import-archive" \
+"$API_CURL" -s -X POST "$API_BASE/api/import-archive" \
   -H 'Content-Type: application/json' \
   -d "{\"archivePath\": \"$EXTRACT_DIR\"}"
 ```
@@ -68,7 +69,7 @@ npx tsx scripts/vectorize-preferences.ts
 
 7. After a successful import, mark the setup step complete:
 ```bash
-curl -s -X PATCH "$API_BASE/api/setup/import_archive" \
+"$API_CURL" -s -X PATCH "$API_BASE/api/setup/import_archive" \
   -H 'Content-Type: application/json' \
   -d '{"status":"complete"}'
 ```

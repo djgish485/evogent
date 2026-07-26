@@ -1,5 +1,10 @@
 # Public-Feed Demo VM Setup
 
+> **Legacy/demo profile.** Android is the canonical production environment.
+> This document remains for public-demo and VM self-hosting only. Do not use it
+> to infer phone scheduler, networking, Redis, privacy, or release ownership.
+> See [`docs/phone-production.md`](phone-production.md).
+
 For a public demo where anyone can browse the Evogent feed but only the owner can chat or write, paste the prompt below into Claude Code, Codex, or another coding agent on a machine that can SSH to your demo VM. Chat is tool use against the host: if chat sending is public, a stranger can ask the agent to read secrets, run shell commands, or exfiltrate browser-source cookies. Keep all writes and internal endpoints behind Cloudflare Access even when reads are public.
 
 ```text

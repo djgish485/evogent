@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 import { NextResponse } from 'next/server';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     `Read ${skill.skillPath}, especially its "Feed action handlers" section, before acting.`,
     `After the action, PATCH ${baseUrl}/api/feed/${encodeURIComponent(itemId)} to update metadata.mcpAppHtml to a done or error state.`,
   ].join('\n');
-  const response = await fetch(`${baseUrl}/api/orchestrator/enqueue`, {
+  const response = await fetchInternal(`${baseUrl}/api/orchestrator/enqueue`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',

@@ -12,15 +12,42 @@ cd "$REPO_DIR"
 git_ops_lock_file() {
   local git_common_dir
   git_common_dir=$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-common-dir)
-  printf '%s/evogent-git-ops.lock\n' "$git_common_dir"
+  printf '%s/evogent-git-ops.lockdir\n' "$git_common_dir"
 }
 
 run_git_with_lock() {
   local timeout_seconds="${MEDIA_AGENT_GIT_OPS_LOCK_TIMEOUT_SEC:-300}"
-  local lock_file
-  lock_file=$(git_ops_lock_file)
-  mkdir -p "$(dirname "$lock_file")"
-  flock -E 75 -w "$timeout_seconds" "$lock_file" git -C "$REPO_DIR" "$@"
+  local lock_dir owner_file owner_pid started_at now rc
+  lock_dir=$(git_ops_lock_file)
+  owner_file="$lock_dir/owner"
+  mkdir -p "$(dirname "$lock_dir")"
+  started_at=$(date +%s)
+
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    owner_pid=$(sed -n 's/^pid=//p' "$owner_file" 2>/dev/null | head -1)
+    if [ -n "$owner_pid" ] && [[ "$owner_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$owner_pid" 2>/dev/null; then
+      if mv "$lock_dir" "$lock_dir.stale.$$" 2>/dev/null; then
+        rm -rf -- "$lock_dir.stale.$$"
+        continue
+      fi
+    fi
+    now=$(date +%s)
+    if [ $((now - started_at)) -ge "$timeout_seconds" ]; then
+      echo "post-merge: timed out waiting for git operations lock" >&2
+      return 75
+    fi
+    sleep 0.1
+  done
+
+  printf 'pid=%s\n' "$$" > "$owner_file"
+  if git -C "$REPO_DIR" "$@"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  rm -f "$owner_file"
+  rmdir "$lock_dir" 2>/dev/null || true
+  return "$rc"
 }
 
 json_file_commit_matches() {

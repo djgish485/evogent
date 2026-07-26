@@ -8,6 +8,9 @@ REPO_DIR="${MEDIA_AGENT_REPO_DIR:-$PWD}"
 STATE_DIR="${MEDIA_AGENT_STATE_DIR:-$REPO_DIR/data/agent-state}"
 LEDGER_FILE="$REPO_DIR/data/agent-receipts.jsonl"
 INTERNAL_BASE_URL="${MEDIA_AGENT_INTERNAL_BASE_URL:-${ORCHESTRATOR_INTERNAL_URL:-http://127.0.0.1:${PORT:-3001}}}"
+DEFAULT_API_CURL=curl
+[ -x "$HOME/phone-tools/evo-curl" ] && DEFAULT_API_CURL="$HOME/phone-tools/evo-curl"
+API_CURL="${EVOGENT_API_CURL:-$DEFAULT_API_CURL}"
 SKILL_PATH=".claude/skills/review-landed-merge/SKILL.md"
 
 source "$SCRIPTS_DIR/receipt-helpers.sh"
@@ -71,7 +74,7 @@ resolve_code_fix_from_task_id() {
   local encoded_task_id
   encoded_task_id="$(jq -rn --arg value "$TASK_ID" '$value|@uri')"
   local resolved_json
-  resolved_json="$(curl -fsS "${INTERNAL_BASE_URL}/api/internal/code-fix-orchestrator/resolve?taskId=${encoded_task_id}" 2>/dev/null || true)"
+  resolved_json="$("$API_CURL" -fsS "${INTERNAL_BASE_URL}/api/internal/code-fix-orchestrator/resolve?taskId=${encoded_task_id}" 2>/dev/null || true)"
   if [ -n "$resolved_json" ] && jq -e '.ok == true' >/dev/null 2>&1 <<<"$resolved_json"; then
     printf '%s\n' "$resolved_json"
     return 0
@@ -84,7 +87,7 @@ post_merge_review_already_enqueued() {
   local encoded_session_id
   encoded_session_id="$(jq -rn --arg value "$origin_session_id" '$value|@uri')"
   local chat_json
-  chat_json="$(curl -fsS "${INTERNAL_BASE_URL}/api/chat?sessionId=${encoded_session_id}&limit=100" 2>/dev/null || true)"
+  chat_json="$("$API_CURL" -fsS "${INTERNAL_BASE_URL}/api/chat?sessionId=${encoded_session_id}&limit=100" 2>/dev/null || true)"
   if [ -z "$chat_json" ]; then
     return 1
   fi
@@ -112,7 +115,7 @@ if [ -z "$origin_session_id" ] && [ -z "$suggestion_id" ] && [ -n "$TASK_ID" ]; 
 fi
 
 if [ -z "$origin_session_id" ] && [ -n "$suggestion_id" ]; then
-  suggestion_json="$(curl -fsS "${INTERNAL_BASE_URL}/api/feed/${suggestion_id}" 2>/dev/null || true)"
+  suggestion_json="$("$API_CURL" -fsS "${INTERNAL_BASE_URL}/api/feed/${suggestion_id}" 2>/dev/null || true)"
   if [ -n "$suggestion_json" ]; then
     origin_session_id="$(jq -r '.item.originSessionId // .item.metadata.originSessionId // ""' <<<"$suggestion_json")"
   fi
@@ -126,7 +129,7 @@ if [ -z "$origin_session_id" ]; then
   exit 0
 fi
 
-session_json="$(curl -fsS "${INTERNAL_BASE_URL}/api/chat/sessions?sessionId=${origin_session_id}" 2>/dev/null || true)"
+session_json="$("$API_CURL" -fsS "${INTERNAL_BASE_URL}/api/chat/sessions?sessionId=${origin_session_id}" 2>/dev/null || true)"
 if [ -z "$session_json" ] || [ "$(jq -r '.session == null' <<<"$session_json")" = "true" ]; then
   exit 0
 fi
@@ -165,7 +168,7 @@ chat_payload="$(jq -nc \
     }
   }')"
 
-curl -fsS \
+"$API_CURL" -fsS \
   -X POST "${INTERNAL_BASE_URL}/api/chat" \
   -H "Content-Type: application/json" \
   -d "$chat_payload" >/dev/null

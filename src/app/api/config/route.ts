@@ -9,6 +9,7 @@ import {
 } from '@/lib/config-storage';
 import { getDataPath } from '@/lib/data-dir';
 import { enqueueOrchestratorMessage } from '@/lib/orchestrator';
+import { areBackgroundJobsDisabled } from '@/lib/runtime-profile';
 import { readBrainConfig } from '../../../../lib/brain-config.js';
 import { parseConfigTimeZone } from '../../../../lib/time-zone.js';
 
@@ -139,7 +140,7 @@ const TARGETS_BY_KEY: Record<ConfigTargetKey, ConfigTarget> = {
 };
 
 const INVALID_TARGET_ERROR = 'Invalid target. Use config, curation-prompt, reflect-command, enrichment-instructions, chat-instructions, runtime-instructions, preference-insights, preferences, cache-hints, or skills.';
-const backgroundJobsDisabled = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS === '1';
+const backgroundJobsDisabled = areBackgroundJobsDisabled();
 const ENRICHMENT_INSTRUCTIONS_HEADER = `# Enrichment Instructions
 
 ## Intake Enrichment (deterministic)`;

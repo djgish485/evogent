@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
@@ -6,6 +5,8 @@ const Database = require('better-sqlite3');
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
 const defaultDbPath = path.join(dataDir, 'media-agent.db');
 const outputPath = path.join(dataDir, 'preferences-context.md');
+const MAX_CONTEXT_BYTES = 16 * 1024;
+const CONTEXT_COMPACTION_NOTE = 'Raw preference and engagement evidence remains in the private SQLite database; this file is a bounded current profile.';
 
 function getDbPath() {
   return process.env.MEDIA_AGENT_DB_PATH || defaultDbPath;
@@ -26,9 +27,9 @@ function formatAgentReason(reason) {
 function formatPreferenceLine(row) {
   const author = row.author_username ? `@${row.author_username}: ` : '';
   const reason = row.reason && String(row.reason).trim()
-    ? ` (user said: "${truncateText(row.reason, 120)}")`
+    ? ` (user said: "${truncateText(row.reason, 90)}")`
     : '';
-  return `- ${author}"${truncateText(row.text)}"${reason}`;
+  return `- ${author}"${truncateText(row.text, 180)}"${reason}`;
 }
 
 function formatAuthorHandle(username) {
@@ -45,6 +46,11 @@ function tableExists(db, tableName) {
   `).get(tableName);
 
   return !!row;
+}
+
+function tableHasColumn(db, tableName, columnName) {
+  return db.prepare(`PRAGMA table_info("${tableName}")`).all()
+    .some((row) => row.name === columnName);
 }
 
 function parseJsonStringArray(value) {
@@ -81,7 +87,7 @@ function readRecentThreadFeedback(db) {
       created_at
     FROM thread_feedback
     ORDER BY datetime(created_at) DESC, id DESC
-    LIMIT 12
+    LIMIT 6
   `).all().map((row) => ({
     ...row,
     source_item_ids: parseJsonStringArray(row.source_item_ids),
@@ -106,6 +112,68 @@ function getDecayWeight(createdAt) {
   return 0.1;
 }
 
+function readBehavioralAttention(db) {
+  if (!tableExists(db, 'feed_engagement_sessions')) {
+    return [];
+  }
+
+  const userScrolledSql = tableHasColumn(db, 'feed_engagement_sessions', 'user_scrolled')
+    ? 'sessions.user_scrolled'
+    : '0';
+
+  return db.prepare(`
+    SELECT
+      sessions.feed_item_id,
+      COALESCE(feed.type, json_extract(
+        CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+        '$.type'
+      )) AS item_type,
+      COALESCE(feed.source, json_extract(
+        CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+        '$.source'
+      )) AS item_source,
+      COALESCE(feed.author_username, json_extract(
+        CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+        '$.authorUsername'
+      )) AS author_username,
+      COALESCE(feed.title, json_extract(
+        CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+        '$.title'
+      )) AS title,
+      COALESCE(feed.text, json_extract(
+        CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+        '$.text'
+      )) AS text,
+      COUNT(*) AS visit_count,
+      SUM(sessions.is_return) AS return_count,
+      SUM(sessions.active_dwell_ms) AS total_dwell_ms,
+      MAX(sessions.max_scroll_depth_pct) AS max_scroll_depth_pct,
+      MAX(${userScrolledSql}) AS user_scrolled,
+      MAX(sessions.opened_at) AS last_opened_at
+    FROM feed_engagement_sessions AS sessions
+    LEFT JOIN feed ON feed.id = sessions.feed_item_id
+    WHERE sessions.opened_at >= datetime('now', '-30 days')
+    GROUP BY sessions.feed_item_id
+    HAVING
+      MAX(sessions.active_dwell_ms) >= 15000
+      OR MAX(
+        CASE
+          WHEN sessions.active_dwell_ms >= 5000
+            AND ${userScrolledSql} = 1
+            AND sessions.max_scroll_depth_pct >= 25
+          THEN 1
+          ELSE 0
+        END
+      ) = 1
+      OR (
+        SUM(sessions.is_return) > 0
+        AND SUM(sessions.active_dwell_ms) >= 10000
+      )
+    ORDER BY datetime(last_opened_at) DESC, sessions.feed_item_id ASC
+    LIMIT 6
+  `).all();
+}
+
 function readPreferenceRows(db) {
   if (!tableExists(db, 'preferences')) {
     return {
@@ -118,10 +186,12 @@ function readPreferenceRows(db) {
       topAccountReplySamples: new Map(),
       recentEngagement: [],
       recentThreadFeedback: readRecentThreadFeedback(db),
+      behavioralAttention: readBehavioralAttention(db),
     };
   }
 
   const recentThreadFeedback = readRecentThreadFeedback(db);
+  const behavioralAttention = readBehavioralAttention(db);
 
   const likedAccountRows = db.prepare(`
     SELECT
@@ -151,6 +221,8 @@ function readPreferenceRows(db) {
     WHERE source = 'twitter_archive_tweet'
       AND text IS NOT NULL
       AND text != ''
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT 5000
   `).all();
 
   const mentionRegex = /@([A-Za-z0-9_]+)/g;
@@ -254,7 +326,7 @@ function readPreferenceRows(db) {
       if (b.likeCount !== a.likeCount) return b.likeCount - a.likeCount;
       return String(a.author_username || '').localeCompare(String(b.author_username || ''));
     })
-    .slice(0, 20);
+    .slice(0, 10);
 
   const likedTopAccountKeys = topAccounts
     .filter((row) => row.likeCount > 0)
@@ -302,8 +374,8 @@ function readPreferenceRows(db) {
         AND text IS NOT NULL
         AND text != ''
         AND LOWER(text) LIKE LOWER(?)
-      ORDER BY RANDOM()
-      LIMIT 3
+      ORDER BY datetime(created_at) DESC, id ASC
+      LIMIT 1
     `).all(`@${handle}%`);
 
     const uniqueSamples = [];
@@ -339,7 +411,7 @@ function readPreferenceRows(db) {
     )
       AND (preferences.author_username IS NULL OR preferences.author_username NOT LIKE 'e2e_%')
     ORDER BY preferences.created_at DESC
-    LIMIT 10
+    LIMIT 6
   `).all();
 
   const totalRow = db.prepare(`SELECT COUNT(*) AS count FROM preferences`).get();
@@ -370,6 +442,7 @@ function readPreferenceRows(db) {
       topAccountReplySamples,
       recentEngagement,
       recentThreadFeedback,
+      behavioralAttention,
     };
   }
 
@@ -386,8 +459,8 @@ function readPreferenceRows(db) {
     SELECT id, signal_type, text, reason, author_username, weight, created_at
     FROM preferences
     WHERE signal_type = 'explicit' AND source = 'twitter_archive_interest'
-    ORDER BY RANDOM()
-    LIMIT 8
+    ORDER BY weight DESC, datetime(created_at) DESC, id ASC
+    LIMIT 4
   `).all();
 
   const likedTweets = db.prepare(`
@@ -395,8 +468,8 @@ function readPreferenceRows(db) {
     FROM preferences
     WHERE signal_type = 'liked' AND source = 'twitter_archive_like'
       AND LENGTH(text) > 40
-    ORDER BY RANDOM()
-    LIMIT 10
+    ORDER BY weight DESC, datetime(created_at) DESC, id ASC
+    LIMIT 4
   `).all();
 
   const ownTweets = db.prepare(`
@@ -404,8 +477,8 @@ function readPreferenceRows(db) {
     FROM preferences
     WHERE signal_type = 'explicit' AND source = 'twitter_archive_tweet'
       AND LENGTH(text) > 30
-    ORDER BY RANDOM()
-    LIMIT 5
+    ORDER BY weight DESC, datetime(created_at) DESC, id ASC
+    LIMIT 3
   `).all();
 
   const positives = [...appLikes, ...interests, ...likedTweets, ...ownTweets];
@@ -415,7 +488,7 @@ function readPreferenceRows(db) {
     FROM preferences
     WHERE signal_type IN ('disliked', 'hidden') AND source IN ('app_dislike', 'app_hide', 'app_thumbsdown', 'app_thread_feedback_probe')
     ORDER BY weight DESC, created_at DESC
-    LIMIT 8
+    LIMIT 5
   `).all();
 
   const blockCount = db.prepare(`
@@ -436,7 +509,31 @@ function readPreferenceRows(db) {
     topAccountReplySamples,
     recentEngagement,
     recentThreadFeedback,
+    behavioralAttention,
   };
+}
+
+function formatDwellTime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.round((Number(milliseconds) || 0) / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function enforceContextByteLimit(markdown) {
+  if (Buffer.byteLength(markdown, 'utf8') <= MAX_CONTEXT_BYTES) {
+    return markdown;
+  }
+
+  const marker = `\n\n_[Profile compacted to ${MAX_CONTEXT_BYTES} bytes. ${CONTEXT_COMPACTION_NOTE}]_\n`;
+  const accepted = [];
+  for (const line of markdown.split('\n')) {
+    const nextLines = [...accepted, line].join('\n');
+    if (Buffer.byteLength(`${nextLines}${marker}`, 'utf8') > MAX_CONTEXT_BYTES) break;
+    accepted.push(line);
+  }
+  return `${accepted.join('\n')}${marker}`;
 }
 
 function buildContextMarkdown(data) {
@@ -446,34 +543,59 @@ function buildContextMarkdown(data) {
   const hidden = data.statsByType.hidden ?? 0;
 
   const lines = [
-    '# User Preference Signals',
+    '# Current User Preference Profile',
     '',
-    'Use these to guide content selection: favor content similar to liked items, avoid content similar to disliked items. User-provided reasons are the strongest signals.',
+    'Explicit votes and user-written reasons are preference evidence. Behavioral attention below is descriptive curiosity, not approval; use repeated or long attention only as weak supporting evidence.',
     '',
     `Stats: ${data.total} total (${liked} liked, ${disliked} disliked, ${explicit} explicit, ${hidden} hidden)`,
     '',
-    '## Recent Engagement (newest first):',
+    '## Recent Explicit Engagement (newest first):',
   ];
 
   if ((data.recentEngagement || []).length === 0) {
     lines.push('- No recent likes/votes captured yet.');
   } else {
-    for (const row of data.recentEngagement) {
+    for (const row of data.recentEngagement.slice(0, 6)) {
       const author = formatAuthorHandle(row.author_username);
       const authorPrefix = author ? `${author}: ` : '';
       const createdAt = row.created_at ? ` (${row.created_at})` : '';
       const agentReason = formatAgentReason(row.agent_reason);
-      const reason = row.signal_type === 'disliked' && row.reason && String(row.reason).trim()
-        ? ` (user said: "${truncateText(row.reason, 120)}")`
+      const reason = row.reason && String(row.reason).trim()
+        ? ` (user said: "${truncateText(row.reason, 90)}")`
         : '';
       const engagementLabel = row.signal_type === 'disliked'
         ? '[DISLIKED] '
         : row.signal_type === 'liked'
           ? '[LIKED] '
-        : row.signal_type === 'explicit'
+          : row.signal_type === 'explicit'
             ? '[EXPLICIT] '
             : '';
       lines.push(`- ${engagementLabel}${authorPrefix}"${truncateText(row.text, 180)}"${agentReason}${reason}${createdAt}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('## Behavioral Attention (last 30 days; weak evidence):');
+
+  if ((data.behavioralAttention || []).length === 0) {
+    lines.push('- No meaningful detail-view sessions captured yet.');
+  } else {
+    for (const row of data.behavioralAttention.slice(0, 6)) {
+      const visits = Math.max(1, Number(row.visit_count) || 1);
+      const returns = Math.max(0, Number(row.return_count) || 0);
+      const author = formatAuthorHandle(row.author_username);
+      const source = truncateText(row.item_source || row.item_type || '', 50);
+      const attribution = [source, author].filter(Boolean).join('/');
+      const content = row.title || row.text || row.feed_item_id;
+      const evidence = [
+        `${visits} ${visits === 1 ? 'open' : 'opens'}`,
+        returns > 0 ? `${returns} ${returns === 1 ? 'return' : 'returns'}` : null,
+        `${formatDwellTime(row.total_dwell_ms)} active dwell`,
+        `${Math.max(0, Number(row.max_scroll_depth_pct) || 0)}% max depth`,
+      ].filter(Boolean).join(', ');
+      const prefix = attribution ? `${attribution}: ` : '';
+      const lastOpened = row.last_opened_at ? ` (${row.last_opened_at})` : '';
+      lines.push(`- [ATTENTION] ${prefix}"${truncateText(content, 150)}" — ${evidence}${lastOpened}`);
     }
   }
 
@@ -483,74 +605,66 @@ function buildContextMarkdown(data) {
   if ((data.recentThreadFeedback || []).length === 0) {
     lines.push('- No feedback-probe thread votes captured yet.');
   } else {
-    for (const row of data.recentThreadFeedback) {
+    for (const row of data.recentThreadFeedback.slice(0, 4)) {
       const vote = row.vote === 'more' ? '[MORE]' : '[LESS]';
       const title = row.thread_title || row.thread_id;
       const reason = row.reason && String(row.reason).trim()
-        ? ` (user said: "${truncateText(row.reason, 120)}")`
+        ? ` (user said: "${truncateText(row.reason, 90)}")`
         : '';
       const category = row.category ? ` category=${truncateText(row.category, 60)}` : '';
-      const uncertainty = row.probe_uncertainty ? ` uncertainty="${truncateText(row.probe_uncertainty, 100)}"` : '';
-      const probeReason = row.probe_reason ? ` probe="${truncateText(row.probe_reason, 120)}"` : '';
+      const uncertainty = row.probe_uncertainty ? ` uncertainty="${truncateText(row.probe_uncertainty, 80)}"` : '';
+      const probeReason = row.probe_reason ? ` probe="${truncateText(row.probe_reason, 90)}"` : '';
       const sourceItems = Array.isArray(row.source_item_ids) && row.source_item_ids.length > 0
-        ? ` sourceItems=${row.source_item_ids.slice(0, 8).join(',')}`
+        ? ` sourceItems=${row.source_item_ids.slice(0, 4).join(',')}`
         : '';
       const createdAt = row.created_at ? ` (${row.created_at})` : '';
-      lines.push(`- ${vote} "${truncateText(title, 160)}" threadId=${row.thread_id}${category}${uncertainty}${probeReason}${sourceItems}${reason}${createdAt}`);
+      lines.push(`- ${vote} "${truncateText(title, 120)}" threadId=${row.thread_id}${category}${uncertainty}${probeReason}${sourceItems}${reason}${createdAt}`);
     }
   }
 
   lines.push('');
-  lines.push('## Most Engaged Accounts (seek out their content):');
+  lines.push('## Top Engaged Accounts:');
 
   if ((data.topAccounts || []).length === 0) {
     lines.push('- No engaged accounts captured yet.');
   } else {
     const topAccountSamples = data.topAccountSamples instanceof Map ? data.topAccountSamples : new Map();
     const topAccountReplySamples = data.topAccountReplySamples instanceof Map ? data.topAccountReplySamples : new Map();
-    for (const row of data.topAccounts) {
+    for (const row of data.topAccounts.slice(0, 8)) {
       const author = formatAuthorHandle(row.author_username) || '@unknown';
       const likes = Number(row.likeCount || row.cnt || 0);
       const replies = Number(row.mentionCount || 0);
       const countParts = [];
-
-      if (replies > 0) {
-        countParts.push(`${replies} ${replies === 1 ? 'reply' : 'replies'}`);
-      }
-      if (likes > 0) {
-        countParts.push(`${likes} ${likes === 1 ? 'liked item' : 'liked items'}`);
-      }
-
+      if (replies > 0) countParts.push(`${replies} ${replies === 1 ? 'reply' : 'replies'}`);
+      if (likes > 0) countParts.push(`${likes} ${likes === 1 ? 'liked item' : 'liked items'}`);
       lines.push(`- ${author} (${countParts.join(', ')}):`);
 
       const authorKey = String(row.author_key || row.author_username || '').trim().toLowerCase();
       const likedSamples = topAccountSamples.get(authorKey) || [];
       const replySamples = topAccountReplySamples.get(authorKey) || [];
-      const samples = likedSamples.length > 0 ? likedSamples.slice(0, 3) : replySamples.slice(0, 3);
+      const samples = likedSamples.length > 0 ? likedSamples.slice(0, 1) : replySamples.slice(0, 1);
       for (const sample of samples) {
-        lines.push(`  - "${truncateText(sample, 150)}"`);
+        lines.push(`  - "${truncateText(sample, 130)}"`);
       }
     }
   }
 
   lines.push('');
   lines.push('## Content the user LIKES (select similar):');
-
   if (data.positives.length === 0) {
     lines.push('- No positive preference signals captured yet.');
   } else {
-    for (const row of data.positives) {
+    for (const row of data.positives.slice(0, 6)) {
       lines.push(formatPreferenceLine(row));
     }
   }
 
   lines.push('');
   lines.push('## Content the user DISLIKES (avoid similar):');
-
   if (data.negatives.length === 0) {
     lines.push('- No negative preference signals captured yet.');
   } else {
-    for (const row of data.negatives) {
+    for (const row of data.negatives.slice(0, 5)) {
       lines.push(formatPreferenceLine(row));
     }
   }
@@ -560,7 +674,31 @@ function buildContextMarkdown(data) {
     lines.push(`Note: ${data.blockCount} blocked/muted accounts from Twitter archive are also tracked but omitted here.`);
   }
 
-  return `${lines.join('\n')}\n`;
+  lines.push('');
+  lines.push(`_${CONTEXT_COMPACTION_NOTE}_`);
+  return enforceContextByteLimit(`${lines.join('\n')}\n`);
+}
+
+async function writePrivateFileAtomically(filePath, content) {
+  const directory = path.dirname(filePath);
+  const temporaryPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  let handle = null;
+
+  await fs.promises.mkdir(directory, { recursive: true });
+  try {
+    handle = await fs.promises.open(temporaryPath, 'wx', 0o600);
+    await handle.writeFile(content, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await fs.promises.rename(temporaryPath, filePath);
+    await fs.promises.chmod(filePath, 0o600);
+  } finally {
+    if (handle) {
+      await handle.close().catch(() => {});
+    }
+    await fs.promises.unlink(temporaryPath).catch(() => {});
+  }
 }
 
 async function regeneratePreferenceContext() {
@@ -571,10 +709,7 @@ async function regeneratePreferenceContext() {
   try {
     const data = readPreferenceRows(db);
     const markdown = buildContextMarkdown(data);
-
-    await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
-    await fs.promises.writeFile(outputPath, markdown, 'utf8');
-
+    await writePrivateFileAtomically(outputPath, markdown);
     return outputPath;
   } finally {
     db.close();

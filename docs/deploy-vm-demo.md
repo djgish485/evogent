@@ -1,5 +1,9 @@
 # Demo VM Deploy Runbook
 
+> **Legacy/demo profile.** Android is the canonical production environment.
+> This VM runbook is not the reference architecture. See
+> [`docs/phone-production.md`](phone-production.md).
+
 Use this when the user asks for an Evogent demo VM behind Cloudflare Access, especially the public-feed pattern:
 
 - Visitors can browse the feed without signing in.

@@ -57,7 +57,7 @@ git checkout "$MERGE_TARGET"
 [ "$ADDON_MODE" = "suggestion-remote" ] && git reset --hard "$MERGE_REMOTE_REF"
 
 # Restore preserved runtime data
-for _f in "${_preserved_files[@]}"; do
+for _f in ${_preserved_files[@]+"${_preserved_files[@]}"}; do
   _tmp="/tmp/_merge_preserve_$(basename $_f)"
   if [ -f "$_tmp" ]; then
     cp "$_tmp" "$_f"

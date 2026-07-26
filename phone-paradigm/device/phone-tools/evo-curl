@@ -1,0 +1,6 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Mutually authenticated curl for the on-phone Evogent server.
+set -euo pipefail
+
+TOOLS="${EVOGENT_PHONE_TOOLS:-$HOME/phone-tools}"
+exec python3 "$TOOLS/evo_curl_transport.py" "$@"

@@ -1,4 +1,5 @@
 import { getInternalBaseUrl } from '@/lib/internal-api';
+import { fetchInternal } from '@/lib/internal-request-auth';
 import type { SuggestionStatus } from '@/types/feed';
 
 interface CancelCodeFixWorkInput {
@@ -27,7 +28,7 @@ export async function cancelCodeFixSuggestionWork(input: CancelCodeFixWorkInput)
     return { ok: true, cancelled: false, taskIds: [], suggestionIds: [] };
   }
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/code-fix-orchestrator/cancel`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/code-fix-orchestrator/cancel`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

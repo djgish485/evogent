@@ -13,20 +13,18 @@ test('Codex runtime support includes native curation commands', () => {
   assert.strictEqual(isChatCommandSupported('codex', 'develop'), false);
 });
 
-test('curate instructions treat front-page leads as rare override signals', async () => {
+test('curate instructions keep configured front pages weak and source-neutral', async () => {
   const rootDir = process.cwd();
   const defaultPrompt = await fs.readFile(path.join(rootDir, 'data', 'curation-prompt.default.md'), 'utf8');
 
   for (const content of [defaultPrompt]) {
-    assert.match(content, /rare override signal, not a routine requirement/);
-    assert.match(content, /live public event, policy shock, market shock, war\/diplomacy turn, or major elite-institution story/);
-    assert.match(content, /prefer a fresh top-level thread\/update unless there is a clear quality reason to drop it/);
-    assert.match(content, /record the headline in `frontPageSignalAudit` and continue normally/);
-    assert.match(content, /direct story wording/);
-    assert.match(content, /metadata\.thread\.prominence\.level = "lead"/);
-    assert.match(content, /one plain sentence (?:rationale about|about) what happened/);
-    assert.match(content, /\{\s*headline,\s*prominence,\s*action,\s*reason\s*\}/);
-    assert.match(content, /concrete quality reason/);
+    assert.match(content, /privately configure front pages as weak signals/);
+    assert.match(content, /not an automatic inclusion rule/);
+    assert.match(content, /accessible source-owned evidence/);
+    assert.match(content, /must pass the quality\s+gate/);
+    assert.match(content, /private scratch data/);
+    assert.match(content, /Visible copy should describe the event itself/);
+    assert.doesNotMatch(content, /war\/diplomacy|metadata\.thread\.prominence\.level/);
   }
 });
 

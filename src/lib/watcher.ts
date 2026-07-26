@@ -16,6 +16,7 @@ import {
   queueFeedItemEnrichment,
 } from '@/lib/feed-enrichment';
 import type { FeedItem } from '@/types/feed';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 const feedOutputPath = getDataPath('feed-output.jsonl');
 const defaultFeedNotifyUrl = `http://127.0.0.1:${process.env.PORT || '3001'}/api/internal/feed-notify`;
@@ -73,7 +74,7 @@ async function notifyFeedUpdate(items: FeedItem[]) {
   const hydratedItems = hydrateFeedItemsForList(items);
 
   try {
-    const resp = await fetch(notifyUrl, {
+    const resp = await fetchInternal(notifyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: hydratedItems, count: hydratedItems.length }),

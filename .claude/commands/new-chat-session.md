@@ -18,4 +18,6 @@ Usage: `/new-chat-session provider=claude title="..." color=amber [optional free
 - Parse provider phrases as `Claude Code session` -> `claude` and `Codex session` -> `codex`; include `provider` in the same `POST /api/chat/sessions` body when set.
 - Valid colors are `blue`, `purple`, `teal`, `amber`, `rose`, `green`, `indigo`, and `pink`. Omit `color` when no valid color is requested.
 - Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-${ORCHESTRATOR_INTERNAL_URL:-http://127.0.0.1:${PORT:-3001}}}"` before calling internal endpoints.
+- Resolve `API_CURL="${EVOGENT_API_CURL:-curl}"` and use it for every
+  request to `API_BASE`.
 - Do not edit the database directly; call the HTTP endpoints.

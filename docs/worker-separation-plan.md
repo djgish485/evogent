@@ -1,5 +1,10 @@
 # Plan: Separate Agent Worker from Web Server
 
+> **Historical VM plan.** This Redis/BullMQ topology is not used by the
+> canonical phone profile. Phone production uses one loopback server, SQLite,
+> one Termux scheduler, and no Redis/background worker. See
+> [`docs/phone-production.md`](phone-production.md).
+
 ## Context
 
 The evogent web server (server.js) currently does everything: serves the UI, runs WebSocket connections, AND spawns/manages all AI agents (chat, curation, enrichment, code-fix, reflection). When agents merge code and the post-merge hook restarts the server, it causes restart storms, port conflicts, killed agents mid-run, and CSS staleness. Multiple concurrent agents finishing simultaneously can crash-loop the app.

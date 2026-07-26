@@ -10,6 +10,7 @@ import {
   type SubAgentType,
 } from '@/lib/sub-agent';
 import { getDb } from '@/lib/db/client';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export type AgentProgressEventType =
   | 'status'
@@ -868,7 +869,7 @@ class AgentManager {
     const notifyUrl = process.env.INTERNAL_AGENT_PROGRESS_NOTIFY_URL || defaultNotifyUrl;
 
     try {
-      await fetch(notifyUrl, {
+      await fetchInternal(notifyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

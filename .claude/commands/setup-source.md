@@ -20,6 +20,7 @@ Rules:
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"
+API_CURL="${EVOGENT_API_CURL:-curl}"
 CDP_URL="${MEDIA_AGENT_SHARED_BROWSER_CDP_URL:-${SHARED_BROWSER_CDP_URL:-http://127.0.0.1:9222}}"
 PROFILE_DIR="${CHROME_BROWSE_PROFILE_DIR:-${X_BROWSER_PROFILE_DIR:-${DATA_DIR:-$REPO_ROOT/data}/chrome-browse-profile}}"
 uname -s
@@ -188,7 +189,7 @@ node -e 'require("./lib/codex-browser-prerequisites").checkCodexBrowserPrerequis
 For `x.com`, `twitter.com`, or `twitter`:
 
 ```bash
-curl -s -X POST "$API_BASE/api/skills/install" \
+"$API_CURL" -s -X POST "$API_BASE/api/skills/install" \
   -H 'Content-Type: application/json' \
   -d "{\"registry\":\"$SKILL\"}"
 ```
@@ -202,7 +203,7 @@ Enqueue the normal cache-refresh worker path in bounded setup-smoke mode:
 ```bash
 REQUEST_ID="setup-source-$SOURCE-$(date +%Y%m%d%H%M%S)"
 EXPECTED_RUN_ID="setup-source-$SOURCE-$REQUEST_ID"
-curl -s -X POST "$API_BASE/api/internal/orchestrator/enqueue" \
+"$API_CURL" -s -X POST "$API_BASE/api/internal/orchestrator/enqueue" \
   -H 'Content-Type: application/json' \
   -d "{\"requestId\":\"$REQUEST_ID\",\"message\":\"/cache-refresh $SOURCE\",\"priority\":\"cache_refresh\",\"source\":\"setup-source\",\"metadata\":{\"cacheSource\":\"$SOURCE\",\"triggerSource\":\"setup-source\",\"setupSourceSmoke\":true}}"
 ```
@@ -210,7 +211,7 @@ curl -s -X POST "$API_BASE/api/internal/orchestrator/enqueue" \
 The packaged task must submit a refresh run with `runId=$EXPECTED_RUN_ID`, `triggeredBy=setup-source-smoke`, and at least one item. Poll browse-cache rows through the app API as a quick visibility check:
 
 ```bash
-curl -fsS "$API_BASE/api/internal/browse-cache/items?source=$SOURCE&limit=5" | node -e '
+"$API_CURL" -fsS "$API_BASE/api/internal/browse-cache/items?source=$SOURCE&limit=5" | node -e '
 const body = JSON.parse(require("fs").readFileSync(0, "utf8"));
 if (!body.ok || !body.count) {
   console.log("PENDING cache_refresh: no browse-cache rows yet");

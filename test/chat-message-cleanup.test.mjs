@@ -25,7 +25,7 @@ function createDb() {
             ));
             const shouldFail = row.role === 'user'
               && row.type === 'chat'
-              && ['pending', 'queued', 'processing'].includes(row.status)
+              && ['pending', 'queued', 'processing', 'running'].includes(row.status)
               && !hasReply;
             if (shouldFail) {
               row.status = 'failed';
@@ -84,4 +84,22 @@ test('failStaleQueuedChatMessages preserves queued messages that already have a 
 
   assert.equal(changes, 0);
   assert.equal(row?.status, 'queued');
+});
+
+test('failStaleQueuedChatMessages fails ownerless running messages after a restart', () => {
+  const db = createDb();
+  db.rows.push({
+    id: 'msg-running',
+    type: 'chat',
+    role: 'user',
+    in_reply_to: null,
+    text: '/curate',
+    timestamp: '2026-03-26T06:46:09.624Z',
+    status: 'running',
+  });
+
+  const changes = failStaleQueuedChatMessages(db);
+
+  assert.equal(changes, 1);
+  assert.equal(db.rows[0]?.status, 'failed');
 });

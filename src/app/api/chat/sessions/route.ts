@@ -7,6 +7,7 @@ import {
 } from '@/lib/db/chat-sessions';
 import { getDb } from '@/lib/db/client';
 import { getInternalBaseUrl } from '@/lib/internal-api';
+import { fetchInternal } from '@/lib/internal-request-auth';
 import type { ConversationSessionType } from '@/types/conversation';
 import {
   normalizeBrainProvider,
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
   });
 
   try {
-    const response = await fetch(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
+    const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',

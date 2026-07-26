@@ -37,6 +37,9 @@ It runs inline during every curation cycle and every reflection cycle. The `pipe
 - Do the work inline in the current invocation. Do not spawn nested orchestration just to audit.
 - Do not add product-code heuristics to compensate for instruction drift. Fix the instructions and diagnostics instead.
 - Use `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"` for internal endpoints.
+- Resolve `API_CURL="${EVOGENT_API_CURL:-curl}"` and use `"$API_CURL"`
+  for every request to `API_BASE`. The phone profile sets it to the
+  authenticated, exact-origin `~/phone-tools/evo-curl` client.
 - When `MEDIA_AGENT_INTERNAL_BASE_URL` is present, never replace it with another guessed port.
 - Treat rendered-page evidence as stronger than pessimistic status heuristics.
 

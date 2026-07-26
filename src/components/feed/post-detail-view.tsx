@@ -8,7 +8,14 @@ import {
   resolveHackerNewsPoints,
 } from '@/components/feed/content-card';
 import { buildAnalysisRenderableEntries } from '@/lib/analysis-presentation';
+import { isAgentBrowsing } from '@/lib/agent-traffic';
 import { AUTH_REQUIRED_MESSAGE, isAuthFailure } from '@/lib/auth-failure';
+import {
+  createActiveDwellTracker,
+  createFeedEngagementSessionId,
+  createScrollDepthTracker,
+  createUserScrollEvidenceTracker,
+} from '@/lib/feed-engagement-signals';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
 import { createReconnectingWs } from '@/lib/reconnecting-ws';
 import {
@@ -37,10 +44,23 @@ interface PostEnrichmentResponse {
   requestId?: string;
 }
 
+export function shouldTrackPostDetailAttention(input: {
+  attentionActive: boolean;
+  isChatMode: boolean;
+  isLoading: boolean;
+  currentItemId: string | null;
+}): boolean {
+  return input.attentionActive
+    && !input.isChatMode
+    && !input.isLoading
+    && Boolean(input.currentItemId);
+}
+
 interface PostDetailViewProps {
   routeId?: string | null;
   mode?: 'page' | 'overlay';
   contentMode?: 'post' | 'chat';
+  attentionActive?: boolean;
   closeOnEscape?: boolean;
   composerReservedHeight?: number;
   agentName?: string;
@@ -296,6 +316,7 @@ export function PostDetailView({
   routeId,
   mode = 'page',
   contentMode = 'post',
+  attentionActive = true,
   closeOnEscape = true,
   composerReservedHeight,
   agentName: agentNameProp,
@@ -698,6 +719,155 @@ export function PostDetailView({
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [mode]);
+
+  useEffect(() => {
+    const feedItemId = currentItemId;
+    if (
+      !shouldTrackPostDetailAttention({
+        attentionActive,
+        isChatMode,
+        isLoading,
+        currentItemId: feedItemId,
+      })
+      || !feedItemId
+      || typeof window === 'undefined'
+      || isAgentBrowsing()
+    ) {
+      return;
+    }
+
+    const detailRoot = detailRootRef.current;
+    if (!detailRoot) return;
+
+    const sessionId = createFeedEngagementSessionId(feedItemId);
+    const surface = mode === 'overlay' ? 'detail_overlay' : 'detail_page';
+    const dwell = createActiveDwellTracker(() => performance.now());
+    const depth = createScrollDepthTracker();
+    const userScroll = createUserScrollEvidenceTracker();
+    let started = false;
+    let disposed = false;
+    let scrollFrame: number | null = null;
+
+    const readGeometry = () => {
+      if (mode === 'overlay') {
+        return {
+          scrollTop: detailRoot.scrollTop,
+          viewportHeight: detailRoot.clientHeight,
+          scrollHeight: detailRoot.scrollHeight,
+        };
+      }
+
+      const scrollingElement = document.scrollingElement ?? document.documentElement;
+      return {
+        scrollTop: window.scrollY || scrollingElement.scrollTop,
+        viewportHeight: window.innerHeight,
+        scrollHeight: scrollingElement.scrollHeight,
+      };
+    };
+
+    const observeDepth = () => depth.observe(readGeometry());
+    const observeUserScroll = () => userScroll.observe(readGeometry().scrollTop);
+    const send = (phase: 'open' | 'checkpoint' | 'close', activeDwellMs: number) => {
+      const body = JSON.stringify({
+        feedItemId,
+        action: 'engagement',
+        engagement: {
+          sessionId,
+          phase,
+          activeDwellMs,
+          scrollDepthPercent: phase === 'open' ? 0 : observeDepth(),
+          userScrolled: phase === 'open' ? false : observeUserScroll(),
+          surface,
+        },
+      });
+
+      void fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: body.length < 60_000,
+      }).catch(() => {});
+    };
+
+    const pauseAndCheckpoint = () => {
+      if (!started || disposed) return;
+      send('checkpoint', dwell.pause());
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        dwell.resume();
+        return;
+      }
+      pauseAndCheckpoint();
+    };
+
+    const handleScroll = () => {
+      if (scrollFrame !== null) return;
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = null;
+        observeDepth();
+        observeUserScroll();
+      });
+    };
+
+    const noteScrollIntent = () => {
+      userScroll.noteIntent(readGeometry().scrollTop);
+    };
+
+    const handleScrollKey = (event: KeyboardEvent) => {
+      if (
+        event.key === 'ArrowDown'
+        || event.key === 'ArrowUp'
+        || event.key === 'PageDown'
+        || event.key === 'PageUp'
+        || event.key === 'Home'
+        || event.key === 'End'
+        || event.key === ' '
+      ) {
+        noteScrollIntent();
+      }
+    };
+
+    // Delaying one frame avoids development Strict Mode's intentional mount/cleanup probe from
+    // becoming a pair of fake visits. A real view survives the probe and starts normally.
+    const startFrame = window.requestAnimationFrame(() => {
+      if (disposed) return;
+      started = true;
+      observeDepth();
+      if (document.visibilityState === 'visible') {
+        dwell.resume();
+      }
+      send('open', 0);
+    });
+
+    const scrollTarget: Window | HTMLElement = mode === 'overlay' ? detailRoot : window;
+    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+    scrollTarget.addEventListener('touchstart', noteScrollIntent, { passive: true });
+    scrollTarget.addEventListener('touchcancel', userScroll.clearIntent, { passive: true });
+    scrollTarget.addEventListener('wheel', noteScrollIntent, { passive: true });
+    window.addEventListener('keydown', handleScrollKey);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', pauseAndCheckpoint);
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(startFrame);
+      if (scrollFrame !== null) {
+        window.cancelAnimationFrame(scrollFrame);
+      }
+      scrollTarget.removeEventListener('scroll', handleScroll);
+      scrollTarget.removeEventListener('touchstart', noteScrollIntent);
+      scrollTarget.removeEventListener('touchcancel', userScroll.clearIntent);
+      scrollTarget.removeEventListener('wheel', noteScrollIntent);
+      window.removeEventListener('keydown', handleScrollKey);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', pauseAndCheckpoint);
+      if (started) {
+        send('close', dwell.pause());
+      }
+    };
+  }, [attentionActive, currentItemId, isChatMode, isLoading, mode]);
 
   useEffect(() => {
     if (isChatMode || isLoading || !normalizedSearchQuery || !hasDetailSearchMatch) {

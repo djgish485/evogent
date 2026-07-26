@@ -1,3 +1,5 @@
+import { fetchInternal } from '@/lib/internal-request-auth';
+
 export type OrchestratorPriority = 'user_chat' | 'user_ping' | 'feed_action' | 'post_enrichment' | 'cache_refresh' | 'reflection';
 
 export interface EnqueueOrchestratorRequest {
@@ -109,7 +111,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 export async function enqueueOrchestratorMessage(
   payload: EnqueueOrchestratorRequest,
 ): Promise<EnqueueOrchestratorResponse> {
-  const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/orchestrator/enqueue`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -132,7 +134,7 @@ export async function enqueueOrchestratorMessage(
 }
 
 export async function getOrchestratorStatus(): Promise<OrchestratorStatusResponse> {
-  const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/status`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/orchestrator/status`, {
     method: 'GET',
     cache: 'no-store',
   });
@@ -152,7 +154,7 @@ export async function cancelCurrentOrchestratorTask(taskId?: string | null): Pro
   chatMessageId?: string | null;
   sessionId?: string | null;
 }> {
-  const response = await fetch(`${getInternalBaseUrl()}/api/orchestrator/cancel`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/orchestrator/cancel`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

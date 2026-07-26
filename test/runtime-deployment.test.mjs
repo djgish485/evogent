@@ -23,6 +23,9 @@ test('readDeploymentIdentity captures commit and build metadata from the running
       throw new Error(`unexpected command: ${command} ${args.join(' ')}`);
     },
     readFileSync(filePath) {
+      if (filePath === '/tmp/evogent/.evogent-release.json') {
+        throw new Error('not a phone release');
+      }
       assert.equal(filePath, '/tmp/evogent/.next/BUILD_ID');
       return 'build-live-42\n';
     },
@@ -39,6 +42,8 @@ test('readDeploymentIdentity captures commit and build metadata from the running
     buildId: 'build-live-42',
     commit: 'abc123',
     commitFull: 'abc123def456',
+    releaseId: null,
+    releaseFormat: null,
   });
 });
 
@@ -59,4 +64,33 @@ test('readDeploymentIdentity tolerates missing git metadata and build output', (
   assert.equal(deployment.commit, null);
   assert.equal(deployment.commitFull, null);
   assert.equal(deployment.nodeEnv, null);
+  assert.equal(deployment.releaseId, null);
+  assert.equal(deployment.releaseFormat, null);
+});
+
+test('readDeploymentIdentity prefers immutable phone release metadata without a Git checkout', () => {
+  const deployment = readDeploymentIdentity({
+    cwd: '/phone/release/runtime',
+    startedAt: '2026-07-25T12:00:00.000Z',
+    env: { NODE_ENV: 'production' },
+    execFileSync() {
+      throw new Error('git must not be needed');
+    },
+    readFileSync(filePath) {
+      assert.equal(filePath, '/phone/release/runtime/.evogent-release.json');
+      return JSON.stringify({
+        releaseFormat: 1,
+        releaseId: 'abc123-build-apk2',
+        sourceCommit: 'abcdef1234567890',
+        sourceCommitShort: 'abcdef123456',
+        buildId: 'next-build-id',
+      });
+    },
+  });
+
+  assert.equal(deployment.releaseId, 'abc123-build-apk2');
+  assert.equal(deployment.releaseFormat, 1);
+  assert.equal(deployment.commit, 'abcdef123456');
+  assert.equal(deployment.commitFull, 'abcdef1234567890');
+  assert.equal(deployment.buildId, 'next-build-id');
 });

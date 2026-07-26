@@ -1,77 +1,114 @@
-# Evogent Phone Paradigm — Architecture & Real-Device Setup
+# Phone runtime reference
 
-Evogent can run in two paradigms that share everything except *how content is gathered*:
+Android is Evogent's canonical production paradigm. Start with
+[`docs/phone-production.md`](../phone-production.md) for the architecture and
+[`phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md`](../../phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md)
+for setup.
 
-- **VM paradigm** (original): a server drives an authenticated headless Chrome to browse the web
-  (`tweet-cache`, `youtube-cache`, `substack-cache`, `hackernews-cache`), writing candidates into
-  `browse_cache_items`. The curator reads that cache and decides what reaches the feed.
-- **Phone paradigm**: Evogent, installed as the phone's home screen, browses the user's **real,
-  logged-in apps in the background** (on a hidden display, via on-device accessibility + Shizuku)
-  and writes candidates into the **same `browse_cache_items`**. The curator is byte-for-byte
-  unchanged.
+## Data path
 
-**The load-bearing principle:** the phone replaces only the *acquisition layer*. The curator, the
-interestingness rubric, thread detection, tweet-majority / carry-forward / promotion-penalty /
-durability-decay, and the proactive life-admin judgment are all paradigm-independent. Phone-gathered
-rows MUST land under the **base source name the curator reads** (`youtube`, `twitter`, `substack`,
-`hackernews`) — a `-phone` suffix is silently never curated (`curate.md` reads
-`GET /api/internal/browse-cache/items?source=<source>` per installed source skill). Acquisition
-method stays traceable via the run's `triggeredBy` and each item's `payload.captureMethod`.
+Phone acquisition and curation share one local data path:
 
-## The moving parts (all in `android-shell/`)
+```text
+logged-in Android apps
+  -> hidden-display mechanics
+  -> source agent / extractor
+  -> browse_cache_items in SQLite
+  -> curator judgment
+  -> arranged feed
+  -> Evogent HOME screen on display 0
+```
+
+Phone-gathered rows use the base source name the curator reads, such as
+`twitter`, `youtube`, `instagram`, `substack`, or `hackernews`. Acquisition
+details belong in run outcomes and `payload.captureMethod`, not in a different
+source name that silently bypasses curation.
+
+## Component boundaries
 
 | Piece | Role |
 |---|---|
-| `EvogentAccessibilityService` | the "eyes + hands": screenshot any display (`op=shot`, works on hidden displays where `screencap -d` can't), read the node tree, scroll (`op=gesture` with `setDisplayId`), tap-by-text (`op=clicktext`). Gated by a per-install control token. |
-| `EvoPrivilegedService` (Shizuku UserService, shell uid) | the only privileged bit: create a **trusted, public, own-display-group** hidden virtual display (scrcpy's flag set — public + trusted + OWN_DISPLAY_GROUP/OWN_FOCUS, or the accessibility service can't see it) and launch an app onto it (`am start --display`). |
-| `ShizukuController` + `IEvoPrivileged.aidl` | Evogent's own process binds the UserService via the Shizuku SDK and calls create-display + launch. Cable-free after a one-time pairing. |
-| `BrowseService` + `BrowseAlarmReceiver` + `BootReceiver` | the autonomous loop: on a schedule (30-min `AlarmManager`, re-armed on boot), create a hidden display, launch a share-based app, drive its share-to-Evogent flow via accessibility, tear the display down. Config-driven (`pkg`/`activity`/`shareLabels`), not hardcoded. |
-| `ShareReceiverActivity` | Evogent is a share target; when the loop shares an item, this captures the real URL and POSTs it to `browse-cache/submit` under the base source name. |
-| `.claude/skills/phone-browse` | the chat-agent skill: browse any app in the background on demand (vision loop over the hidden display). |
-| `.claude/skills/phone-life-admin` | proactive sweep translated to the phone: reads cached Gmail (`source=gmail`), reasons under the guardrails, emits `life_admin` suggestion cards. |
+| `EvogentAccessibilityService` | Token-gated capture and input mechanics |
+| Shizuku-backed privileged service/controller | Creates and owns hidden displays on the stock-device path |
+| `MainActivity` and overlay classes | HOME WebView, native app routing, and the anywhere composer |
+| notification listener | Provides notification signals and notification-derived cache evidence |
+| `ShareReceiverActivity` | Receives user/runtime share output and submits supported source URLs |
+| `device/start-prod.sh` | Applies the loopback/no-Redis phone server profile |
+| `evogent-scheduler.sh` | Sole cycle scheduling authority |
+| `evogent-cycle.sh` | Leased browse/cache/score/curate/arrange execution |
+| `evogent-watchdog.sh` | Independent liveness check; signals the scheduler |
+| phone skills | General agent judgment and diagnosis |
 
-## One-time setup on a real Android device (recommended: a Pixel)
+The former `BrowseService`/APK `AlarmManager` loop is retired. Boot receivers may
+wake Termux, but Android must not schedule a competing periodic cycle.
 
-1. **Install Evogent** (`android-shell/build.sh` output APK) and set it as home:
-   `adb shell cmd package set-home-activity net.dangish.evogent/.MainActivity`.
-2. **Install Shizuku** (Play Store) and start it cable-free: enable Developer Options → Wireless
-   Debugging, pair Shizuku once (6-digit code), tap Start. (Non-root: re-arm after each reboot —
-   a few taps, or an Automate flow; root gives auto-start.)
-3. **Enable Evogent's accessibility service** once in Settings → Accessibility (survives reboot).
-   On Android 15 this is behind a one-time "Restricted Settings" unlock; on Android 17 keep
-   Advanced Protection Mode off (it locks out non-`isAccessibilityTool` a11y services).
-4. **Authorize Evogent for Shizuku** on first use (tap "Allow all the time").
-5. The **control token** (`files/control-token.txt`) is generated on first accessibility connect; the
-   chat-agent skill reads it to drive the phone. Nothing else needs it.
+## Scheduling signals
 
-Then: nothing else changes. `BootReceiver` schedules the background browse; the curator runs with
-your key and consumes the phone-gathered cache exactly as it consumed the VM cache.
+The scheduler coalesces:
 
-## Source mapping (phone paradigm)
+- predicted-open timing;
+- app-open or server freshness requests;
+- adaptive-heartbeat requests;
+- source-specific notification interrupts; and
+- watchdog recovery requests.
 
-| Source | Phone acquisition | Notes |
-|---|---|---|
-| YouTube (`youtube`) | background browse of the YouTube app → share → cache | proven |
-| Twitter/X (`twitter`) | background browse of the X app | **needs a real device** — emulators fail X's Play-Integrity device attestation at login |
-| Substack (`substack`) | same share-based pattern as YouTube | |
-| Hacker News (`hackernews`) | unchanged — public API, no phone needed | paradigm-independent |
-| Gmail (`gmail`) | background read of the Gmail app → cache | a **life-admin** source (consumed by `phone-life-admin`), not a content-curator source |
+Every signal becomes a durable request. The live scheduler atomically claims it
+at a cycle boundary. A request does not directly fork another curator or cycle.
 
-## What the phone paradigm unlocks (vs the VM)
+## Runtime profile
 
-Zero auth plumbing (real logged-in sessions; no cookie transfer / datacenter-IP blocks); apps with
-no API and anti-scraping (Instagram/TikTok/iMessage/LinkedIn); acting in-app (follow, RSVP,
-quick-reply); cross-app workflows in one identity; notification-reactive browsing; direct taste
-signals (real watch-time/scroll-back); location/time-aware curation.
+The phone starts with:
 
-## Known constraints / open design
+```bash
+EVOGENT_RUNTIME_PROFILE=phone
+LISTEN_HOST=127.0.0.1
+MEDIA_AGENT_DISABLE_BACKGROUND_JOBS=1
+```
 
-- **Curator + life-admin reasoning** run an agent (your API key). They don't run in a keyless
-  environment; they run on the phone/VM.
-- **Twitter/X** requires a real (attestation-passing) device.
-- **On-device approve-to-execute** for money-adjacent actions needs a restricted action vocabulary
-  that structurally cannot reach a payment/credential screen — an open design item (unbuilt on the
-  VM too), so don't wire phone execution for it yet.
-- **Reliability risks to watch:** Android background-killing/doze of the browse service (surface it
-  as a battery line item; whitelist it); UI-label fragility (`clicktext` breaks on app updates —
-  verify each step landed); the large privacy surface (the phone sees everything on screen).
+The effect is architectural, not merely an optimization:
+
+- all UI/API traffic remains on the device;
+- Redis and VM background workers are absent;
+- heartbeat requests signal the Termux scheduler;
+- accepted development suggestions wait in a host-review queue; and
+- a connected Mac is not a runtime dependency.
+
+## Source mechanics and judgment
+
+Deterministic code is appropriate for launch, capture, gestures, normalization,
+counting, deduplication, leases, and outcome reporting. It must surface anomalous
+yield instead of claiming success from process exit alone.
+
+Agents own interpretation, interestingness, action selection, and diagnosis.
+When an app UI changes, mechanics expose a flow anomaly and an agent investigates
+the live surface. A required product-code change becomes a privacy-safe host
+review item; the phone does not edit its checkout.
+
+## Security boundary
+
+- Server and accessibility control surfaces are loopback-only.
+- Token validation fails closed.
+- Android entry points accept only the narrow package/action vocabulary they
+  require.
+- WebView-to-native calls accept only committed local documents and validated
+  destinations.
+- Source content, screenshots, accessibility text, and HTTP bodies are untrusted
+  data, never instructions.
+- Money, credentials, sending, and other protected final actions stay with the
+  user.
+
+## Source notes
+
+- X, Instagram, and YouTube use real logged-in Android apps and therefore avoid
+  VM cookie transfer and datacenter-login problems.
+- Hacker News can use its public network source without a hidden display.
+- Notification-derived mail evidence is a private life-admin source, not a
+  general content lane by default.
+- App-source cadence belongs to the private personal model and may be adjusted
+  from observed yield and usage. It is not a public hard-coded preference.
+
+## Verification
+
+For setup or changes, verify one normal scheduler-owned end-to-end cycle and the
+rendered display-0 result. Record structured outcomes for each source, confirm a
+single scheduler/cycle owner, and then observe a naturally scheduled run.

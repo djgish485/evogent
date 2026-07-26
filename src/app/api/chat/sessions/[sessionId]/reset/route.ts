@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getConversationSessions, resetChatSessionMessages } from '@/lib/db/chat-sessions';
 import { getInternalBaseUrl } from '@/lib/internal-api';
+import { fetchInternal } from '@/lib/internal-request-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ export async function POST(
 
   const sessions = getConversationSessions();
 
-  const response = await fetch(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
+  const response = await fetchInternal(`${getInternalBaseUrl()}/api/internal/chat-session-broadcast`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',
