@@ -280,16 +280,38 @@ cmp "$EVOGENT_REWRITE_ROOT/remote-refs.before" \
 ```
 
 After review, re-add the remote to the rewritten mirror and force-update only
-public branches and tags. Do not use an unrestricted `--mirror` push against a
-hosting service that exposes read-only or service-owned refs.
+the exact frozen public branches and tags. Build one explicit lease and one
+explicit refspec per frozen writable ref, then publish them in a single atomic
+transaction. Do not use `--force`, `--prune`, a wildcard refspec, or an
+unrestricted `--mirror` push against a hosting service that exposes read-only
+or service-owned refs.
 
 ```bash
 git -C "$EVOGENT_REWRITE_ROOT/rewritten.git" \
   remote add origin "$EVOGENT_REMOTE_URL"
-git -C "$EVOGENT_REWRITE_ROOT/rewritten.git" push \
-  --force --prune origin 'refs/heads/*:refs/heads/*'
-git -C "$EVOGENT_REWRITE_ROOT/rewritten.git" push \
-  --force --prune origin 'refs/tags/*:refs/tags/*'
+
+EVOGENT_PUSH_LEASES=()
+EVOGENT_PUSH_REFSPECS=()
+while IFS=$'\t' read -r EVOGENT_OLD_OID EVOGENT_REF; do
+  case "$EVOGENT_REF" in
+    refs/heads/*|refs/tags/*)
+      EVOGENT_NEW_OID="$(
+        git -C "$EVOGENT_REWRITE_ROOT/rewritten.git" \
+          rev-parse --verify "$EVOGENT_REF"
+      )"
+      EVOGENT_PUSH_LEASES+=(
+        "--force-with-lease=$EVOGENT_REF:$EVOGENT_OLD_OID"
+      )
+      EVOGENT_PUSH_REFSPECS+=("$EVOGENT_NEW_OID:$EVOGENT_REF")
+      ;;
+  esac
+done < "$EVOGENT_REWRITE_ROOT/remote-refs.before"
+
+test "${#EVOGENT_PUSH_REFSPECS[@]}" -gt 0
+git -C "$EVOGENT_REWRITE_ROOT/rewritten.git" push --atomic \
+  "${EVOGENT_PUSH_LEASES[@]}" \
+  origin \
+  "${EVOGENT_PUSH_REFSPECS[@]}"
 ```
 
 Branch protection may require a temporary, deliberate administrative change.
@@ -298,27 +320,56 @@ immediately.
 
 ## Verify what the public can clone
 
-Never accept the rewritten mirror as proof of the remote. Make a fresh clone
-from the public remote, fetch every public branch and tag, and rerun the full
-read-only verifier and build:
+Never accept the rewritten mirror or a normal clone as proof of the remote. A
+normal clone commonly omits hosting-service pull-request refs. Make a fresh
+mirror clone so every advertised ref is present, compare its ref inventory with
+the live advertisement, attach a detached worktree at the rewritten primary
+branch, and rerun the full read-only verifier and build:
 
 ```bash
-git clone "$EVOGENT_REMOTE_URL" \
-  "$EVOGENT_REWRITE_ROOT/public-verification"
-git -C "$EVOGENT_REWRITE_ROOT/public-verification" \
-  fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' \
-  '+refs/tags/*:refs/tags/*'
+git clone --mirror "$EVOGENT_REMOTE_URL" \
+  "$EVOGENT_REWRITE_ROOT/public-verification.git"
+git --git-dir="$EVOGENT_REWRITE_ROOT/public-verification.git" \
+  worktree add --detach \
+  "$EVOGENT_REWRITE_ROOT/public-verification" \
+  "refs/heads/$EVOGENT_PRIMARY_BRANCH"
+
+git ls-remote --refs "$EVOGENT_REMOTE_URL" \
+  | LC_ALL=C sort > "$EVOGENT_REWRITE_ROOT/remote-refs.after"
+git --git-dir="$EVOGENT_REWRITE_ROOT/public-verification.git" \
+  for-each-ref --format='%(objectname)%09%(refname)' \
+  | LC_ALL=C sort > "$EVOGENT_REWRITE_ROOT/cloned-refs.after"
+cmp "$EVOGENT_REWRITE_ROOT/remote-refs.after" \
+  "$EVOGENT_REWRITE_ROOT/cloned-refs.after"
+
 node "$EVOGENT_REWRITE_ROOT/public-verification/scripts/verify-public-history-rewrite.mjs" \
   --root "$EVOGENT_REWRITE_ROOT/public-verification" \
   --private-markers-file "$EVOGENT_PRIVATE_MARKERS" \
   --private-message-markers-file "$EVOGENT_PRIVATE_MESSAGE_MARKERS"
+
+(
+  cd "$EVOGENT_REWRITE_ROOT/public-verification"
+  npm ci
+  npm run lint
+  npm test
+  npm run build
+)
 ```
 
-Then notify collaborators to delete old clones or reclone. Open pull-request
-refs, forks, caches, releases, CI artifacts, package registries, and search
-indexes can retain old objects even after branches and tags are rewritten.
-Delete controllable artifacts and contact the hosting provider for cache or
-pull-request-ref removal when necessary.
+An all-ref verifier proves that advertised history is clean. It does not prove
+that the host stopped serving an old object by its frozen object ID. Privately
+probe the old head, tag, and pull-request object IDs from
+`remote-refs.before` through the host's unauthenticated object pages and API.
+Never paste those IDs into public logs or issues. If any old object remains
+retrievable, treat erasure as incomplete and give the private ID inventory to
+the hosting provider's support team for pull-request-reference, cached-view,
+and unreachable-object removal.
+
+Then notify collaborators to delete old clones or reclone. Forks, caches,
+releases, CI artifacts, package registries, and search indexes can also retain
+old objects. Delete controllable artifacts and use the hosting provider's
+sensitive-data removal process for everything outside Git's writable ref
+namespace.
 
 Keep the private bundle only in an encrypted private backup. Remove disposable
 rewrite directories through a narrowly scoped, recoverable cleanup process

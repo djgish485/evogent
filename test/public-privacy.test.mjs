@@ -663,3 +663,20 @@ test("forbidden history manifest guards the retired checkout keystore path", () 
     true,
   );
 });
+
+test("history rewrite runbook publishes with exact leases and verifies service refs", () => {
+  const runbook = readFileSync(
+    join(process.cwd(), "docs", "privacy-history-rewrite.md"),
+    "utf8",
+  );
+
+  assert.match(runbook, /push --atomic/);
+  assert.match(runbook, /--force-with-lease=\$EVOGENT_REF:\$EVOGENT_OLD_OID/);
+  assert.doesNotMatch(runbook, /--force --prune/);
+  assert.doesNotMatch(runbook, /refs\/heads\/\*:refs\/heads\/\*/);
+  assert.match(runbook, /clone --mirror/);
+  assert.match(runbook, /pull-request refs/);
+  assert.match(runbook, /npm run build/);
+  assert.match(runbook, /old object remains\s+retrievable/);
+  assert.match(runbook, /hosting provider's support team/);
+});
