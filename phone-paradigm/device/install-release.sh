@@ -252,6 +252,7 @@ APK_BACKUP=""
 APK_BACKUP_READY=0
 APK_CHANGED=0
 APK_INSTALL_ATTEMPTED=0
+PACKAGE_OPERATION=""
 PREVIOUS_APK_CODE=""
 PREVIOUS_APK_SIGNER=""
 ROLLBACK_FAILED=0
@@ -376,24 +377,129 @@ rish_command() {
 }
 
 allocate_shell_staging_file() {
-  local purpose="$1" path
+  local purpose="$1" operation="" path="" nonce="" attempt probe
   case "$purpose" in
-    candidate-apk|control-token|installed-apk|rollback-dump) ;;
+    control-token|installed-apk|package-version|rollback-dump) ;;
     *) return 1 ;;
   esac
-  path="$(rish_command \
-    "mktemp '/data/local/tmp/evogent-${purpose}.XXXXXX'" 2>/dev/null \
-    | tr -d '\r' | tail -1)"
-  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|control-token|installed-apk|rollback-dump)\.[A-Za-z0-9]+$ ]] \
-    || return 1
-  printf '%s\n' "$path"
+  for attempt in $(seq 1 3); do
+    nonce="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    [[ "$nonce" =~ ^[0-9a-f]{32}$ ]] || return 1
+    operation="/data/local/tmp/evogent-${purpose}.${nonce}"
+    path="$operation/payload"
+    rish_command \
+      "mkdir -m 0700 '$operation' && : > '$path' && chmod 0600 '$path' && chmod 0711 '$operation'" \
+      >/dev/null 2>&1 || true
+    for probe in $(seq 1 100); do
+      if [ -d "$operation" ] && [ ! -L "$operation" ] \
+          && [ -f "$path" ] && [ ! -L "$path" ] \
+          && [ "$(stat -c '%a' "$operation" 2>/dev/null || true)" = 711 ] \
+          && [ "$(stat -c '%a' "$path" 2>/dev/null || true)" = 600 ]; then
+        printf '%s\n' "$path"
+        return 0
+      fi
+      sleep 0.1
+    done
+    rish_command "rm -rf '$operation'" >/dev/null 2>&1 || true
+  done
+  return 1
 }
 
 remove_shell_staging_file() {
-  local path="$1"
-  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|control-token|installed-apk|rollback-dump)\.[A-Za-z0-9]+$ ]] \
+  local path="$1" operation
+  [[ "$path" =~ ^/data/local/tmp/evogent-(control-token|installed-apk|package-version|rollback-dump)\.[0-9a-f]{32}/payload$ ]] \
     || return 1
-  rish_command "rm -f '$path'" >/dev/null 2>&1
+  operation="${path%/payload}"
+  rish_command "rm -rf '$operation'" >/dev/null 2>&1
+}
+
+copy_published_shell_file() {
+  local source="$1" destination="$2" attempts="${3:-100}" probe
+  local partial="${destination}.bridge.$$"
+  [[ "$attempts" =~ ^[0-9]+$ ]] && [ "$attempts" -gt 0 ] || return 1
+  [ ! -L "$destination" ] || return 1
+  rm -f -- "$partial"
+  for probe in $(seq 1 "$attempts"); do
+    if [ -f "$source" ] && [ ! -L "$source" ] \
+        && [ "$(stat -c '%a' "$source" 2>/dev/null || true)" = 644 ] \
+        && cp "$source" "$partial"; then
+      chmod 600 "$partial"
+      mv -f -- "$partial" "$destination"
+      return 0
+    fi
+    rm -f -- "$partial"
+    sleep 0.1
+  done
+  return 1
+}
+
+allocate_shell_package_operation() {
+  local path="" nonce="" attempt probe
+  for attempt in $(seq 1 3); do
+    nonce="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    [[ "$nonce" =~ ^[0-9a-f]{32}$ ]] || return 1
+    path="/data/local/tmp/evogent-package-op.${nonce}"
+    rish_command \
+      "mkdir -m 0700 '$path' && : > '$path/candidate.apk' && chmod 0666 '$path/candidate.apk' && chmod 0711 '$path'" \
+      >/dev/null 2>&1 || true
+    for probe in $(seq 1 100); do
+      if [ -d "$path" ] && [ ! -L "$path" ] \
+          && [ -f "$path/candidate.apk" ] && [ ! -L "$path/candidate.apk" ] \
+          && [ "$(stat -c '%a' "$path" 2>/dev/null || true)" = 711 ] \
+          && [ "$(stat -c '%a' "$path/candidate.apk" 2>/dev/null || true)" = 666 ]; then
+        printf '%s\n' "$path"
+        return 0
+      fi
+      sleep 0.1
+    done
+    rish_command "rm -rf '$path'" >/dev/null 2>&1 || true
+  done
+  return 1
+}
+
+remove_shell_package_operation() {
+  local path="$1" probe
+  [[ "$path" =~ ^/data/local/tmp/evogent-package-op\.[0-9a-f]{32}$ ]] \
+    || return 1
+  rish_command "rm -rf '$path'" >/dev/null 2>&1 || true
+  for probe in $(seq 1 100); do
+    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+read_package_result_status() {
+  python3 - "$1" <<'PY'
+import os
+import re
+import stat
+import sys
+
+path = sys.argv[1]
+descriptor = os.open(
+    path,
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0),
+)
+try:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 64:
+        raise SystemExit(1)
+    payload = os.read(descriptor, 65)
+finally:
+    os.close(descriptor)
+match = re.fullmatch(rb"EVOGENT_PACKAGE_RESULT_V1\n(0|[1-9][0-9]{0,2})\n", payload)
+if match is None:
+    raise SystemExit(1)
+status = int(match.group(1))
+if status > 255:
+    raise SystemExit(1)
+print(status)
+PY
 }
 
 package_manager_supports_apk_rollback() {
@@ -414,48 +520,127 @@ package_manager_supports_apk_rollback() {
     >/dev/null 2>&1
 }
 
-stage_apk_for_shell() {
-  local source_apk="$1" shell_path
-  shell_path="$(allocate_shell_staging_file candidate-apk)" || return 1
-  if ! rish_command "chmod 0666 '$shell_path'" >/dev/null 2>&1 \
-      || ! cp "$source_apk" "$shell_path" \
-      || [ "$(sha256_file "$source_apk")" != "$(sha256_file "$shell_path")" ] \
-      || ! rish_command "chmod 0644 '$shell_path'" >/dev/null 2>&1; then
-    remove_shell_staging_file "$shell_path" || true
+install_apk() {
+  local apk="$1" mode="${2:-upgrade}" operation="" candidate=""
+  local expected_apk_sha256="" install_command="" completed=0 operation_removed=0
+  local private_output="$STAGE/package-manager-output.txt"
+  local private_status="$STAGE/package-manager-status.txt"
+  local retained_result="${LOG%.log}-package-manager.log"
+  local package_status="" rish_status=0
+  case "$mode" in
+    upgrade)
+      install_command="cmd package install -r --enable-rollback"
+      ;;
+    fallback)
+      # Last-resort fallback only. Android native rollback is the supported
+      # path; `-d` may reject non-debuggable downgrades and cannot be trusted.
+      install_command="cmd package install -r -d"
+      ;;
+    *) return 1 ;;
+  esac
+  expected_apk_sha256="$(sha256_file "$apk")"
+  [[ "$expected_apk_sha256" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [ "$mode" = fallback ] && [ -n "$PACKAGE_OPERATION" ]; then
+    remove_shell_package_operation "$PACKAGE_OPERATION" || return 1
+    PACKAGE_OPERATION=""
+  fi
+  if [ -n "$PACKAGE_OPERATION" ]; then
+    [[ "$PACKAGE_OPERATION" =~ ^/data/local/tmp/evogent-package-op\.[0-9a-f]{32}$ ]] \
+      || return 1
+    operation="$PACKAGE_OPERATION"
+    [ -d "$operation" ] && [ ! -L "$operation" ] \
+      && [ -f "$operation/candidate.apk" ] \
+      && [ ! -L "$operation/candidate.apk" ] || return 1
+  else
+    operation="$(allocate_shell_package_operation)" || return 1
+    PACKAGE_OPERATION="$operation"
+    if [ "${TRANSACTION_JOURNAL_WRITTEN:-0}" = 1 ]; then
+      write_transaction_journal "${TRANSACTION_PHASE:-apk_install_pending}"
+    fi
+  fi
+  candidate="$operation/candidate.apk"
+  if ! cp "$apk" "$candidate" \
+      || [ "$(sha256_file "$candidate")" != "$expected_apk_sha256" ]; then
+    if remove_shell_package_operation "$operation"; then
+      [ "$operation" != "$PACKAGE_OPERATION" ] || PACKAGE_OPERATION=""
+    fi
     return 1
   fi
-  printf '%s\n' "$shell_path"
+
+  # Some rish transports return before a large stdout stream or package
+  # operation is complete. The shell privately rechecks immutable candidate
+  # bytes, captures diagnostics, and publishes a versioned status marker last.
+  # Its directory becomes traversable only after that complete marker exists.
+  rish_command \
+    "package_rc=125; : > '$operation/details.tmp'; if chmod 0700 '$operation' && [ -f '$candidate' ] && [ ! -L '$candidate' ] && chmod 0400 '$candidate'; then actual_sha256=\$(sha256sum '$candidate' 2>/dev/null | awk '{print \$1}'); if [ \"\$actual_sha256\" = '$expected_apk_sha256' ]; then $install_command '$candidate' > '$operation/details.tmp' 2>&1; package_rc=\$?; if [ \"\$package_rc\" -eq 0 ]; then cmd package wait-for-handler --timeout 120000 >> '$operation/details.tmp' 2>&1 && cmd package wait-for-background-handler --timeout 120000 >> '$operation/details.tmp' 2>&1 || package_rc=\$?; fi; else printf '%s\\n' 'candidate APK identity check failed' > '$operation/details.tmp'; fi; else printf '%s\\n' 'candidate APK staging check failed' > '$operation/details.tmp'; fi; rm -f '$candidate'; printf 'EVOGENT_PACKAGE_RESULT_V1\\n%s\\n' \"\$package_rc\" > '$operation/status.tmp'; chmod 0444 '$operation/details.tmp' '$operation/status.tmp' && mv '$operation/details.tmp' '$operation/details' && mv '$operation/status.tmp' '$operation/status' && chmod 0755 '$operation'; exit 0" \
+    >/dev/null 2>&1 || rish_status=$?
+  for _ in $(seq 1 120); do
+    if [ -d "$operation" ] && [ ! -L "$operation" ] \
+        && [ -f "$operation/status" ] && [ ! -L "$operation/status" ] \
+        && cp "$operation/status" "$private_status" 2>/dev/null; then
+      chmod 600 "$private_status"
+      if package_status="$(read_package_result_status "$private_status" 2>/dev/null)"; then
+        completed=1
+        break
+      fi
+    fi
+    package_status=""
+    sleep 1
+  done
+  if [ "$completed" = 1 ] \
+      && [ -f "$operation/details" ] && [ ! -L "$operation/details" ]; then
+    cp "$operation/details" "$private_output" 2>/dev/null || : > "$private_output"
+  else
+    : > "$private_output"
+  fi
+  chmod 600 "$private_output"
+  if [ "$completed" = 1 ]; then
+    if remove_shell_package_operation "$operation"; then
+      operation_removed=1
+      [ "$operation" != "$PACKAGE_OPERATION" ] || PACKAGE_OPERATION=""
+    fi
+  fi
+
+  if [ "$completed" = 0 ] || [ "$package_status" -ne 0 ] \
+      || [ "$operation_removed" = 0 ]; then
+    [ ! -e "$retained_result" ] && [ ! -L "$retained_result" ] || return 1
+    {
+      printf 'rishStatus=%s\n' "$rish_status"
+      printf 'completionPublished=%s\n' "$completed"
+      printf 'packageStatus=%s\n' "${package_status:-unavailable}"
+      printf '%s\n' '--- private package-manager output ---'
+      cat "$private_output"
+    } > "$retained_result"
+    chmod 600 "$retained_result"
+    fsync_regular_file_and_parent "$retained_result"
+    say "Android package installation failed; private package-manager details were retained"
+    return 1
+  fi
+  rm -f -- "$retained_result"
 }
 
-install_apk() {
-  local apk="$1" mode="${2:-upgrade}" shell_path
-  shell_path="$(stage_apk_for_shell "$apk")" || return 1
-  if [ "$mode" = upgrade ]; then
-    rish_command "cmd package install -r --enable-rollback '$shell_path'; rc=\$?; rm -f '$shell_path'; exit \$rc"
-  else
-    # Last-resort fallback only. Android native rollback is the supported path;
-    # `-d` may reject non-debuggable downgrades and therefore cannot be trusted.
-    rish_command "cmd package install -r -d '$shell_path'; rc=\$?; rm -f '$shell_path'; exit \$rc"
-  fi
+wait_for_package_manager_idle() {
+  rish_command \
+    "cmd package wait-for-handler --timeout 120000 && cmd package wait-for-background-handler --timeout 120000" \
+    >/dev/null 2>&1
 }
 
 backup_installed_apk() {
-  local output="$1" installed_path attempt partial="${1}.partial-$$" shell_path
+  local output="$1" attempt partial="${1}.partial-$$" shell_path
   rm -f -- "$partial"
   for attempt in 1 2 3; do
-    installed_path="$(rish_command "pm path '$PACKAGE_NAME'" 2>/dev/null \
-      | sed -n 's/^package://p' | head -1 | tr -d '\r')"
     shell_path="$(allocate_shell_staging_file installed-apk 2>/dev/null || true)"
-    if [ -n "$installed_path" ] && [ -n "$shell_path" ] \
-        && rish_command \
-          "cp '$installed_path' '$shell_path' && chmod 0644 '$shell_path'" \
-          >/dev/null 2>&1 \
-        && cp "$shell_path" "$partial" \
-        && [ -s "$partial" ] \
-        && unzip -tqq "$partial" >/dev/null 2>&1; then
-      remove_shell_staging_file "$shell_path" || true
-      mv -f -- "$partial" "$output"
-      return 0
+    if [ -n "$shell_path" ]; then
+      rish_command \
+        "installed_path=\$(pm path '$PACKAGE_NAME' | sed -n 's/^package://p' | head -1); [ -n \"\$installed_path\" ] && [ -f \"\$installed_path\" ] && [ ! -L \"\$installed_path\" ] && cp \"\$installed_path\" '$shell_path' && chmod 0644 '$shell_path'" \
+        >/dev/null 2>&1 || true
+      if copy_published_shell_file "$shell_path" "$partial" 100 \
+          && [ -s "$partial" ] \
+          && unzip -tqq "$partial" >/dev/null 2>&1; then
+        remove_shell_staging_file "$shell_path" || true
+        mv -f -- "$partial" "$output"
+        return 0
+      fi
     fi
     [ -z "$shell_path" ] || remove_shell_staging_file "$shell_path" || true
     rm -f -- "$partial"
@@ -484,8 +669,19 @@ apk_signer_sha256() {
 }
 
 installed_apk_version_code() {
-  rish_command "dumpsys package '$PACKAGE_NAME' | sed -n 's/.*versionCode=\\([0-9]*\\).*/\\1/p' | head -1" \
-    2>/dev/null | tr -dc '0-9'
+  local shell_path="" private_result="$STAGE/installed-version-code.txt" code=""
+  shell_path="$(allocate_shell_staging_file package-version 2>/dev/null || true)"
+  [ -n "$shell_path" ] || return 1
+  rish_command \
+    "dumpsys package '$PACKAGE_NAME' | sed -n 's/.*versionCode=\\([0-9]*\\).*/\\1/p' | head -1 > '$shell_path' && chmod 0644 '$shell_path'" \
+    >/dev/null 2>&1 || true
+  if copy_published_shell_file "$shell_path" "$private_result" 100; then
+    code="$(tr -d '\r\n' < "$private_result")"
+    [[ "$code" =~ ^[0-9]{1,18}$ ]] || code=""
+  fi
+  remove_shell_staging_file "$shell_path" || true
+  [ -n "$code" ] || return 1
+  printf '%s\n' "$code"
 }
 
 installed_apk_matches_backup() {
@@ -520,10 +716,17 @@ rollback_apk_native() {
     return 1
   }
 
-  # An interrupted rish/package-manager command can still commit after its
-  # parent installer dies.  Never accept one early observation of the old APK:
-  # serialize a native rollback (or exact-byte fallback reinstall) behind any
-  # pending package operation, then require three stable identity observations.
+  # An interrupted rish/package-manager command can finish after its parent
+  # installer dies. First cross the package-manager handler barrier and accept
+  # an already-restored APK only after three stable exact-identity observations.
+  # This avoids mutating a phone that had already rolled itself back.
+  if wait_for_package_manager_idle \
+      && wait_for_apk_backup_identity "$probe"; then
+    return 0
+  fi
+
+  # Otherwise serialize a native rollback (or exact-byte fallback reinstall)
+  # behind any pending package operation and prove its exact identity.
   if rish_command "cmd package rollback-app '$PACKAGE_NAME'" >/dev/null 2>&1 \
       && wait_for_apk_backup_identity "$probe"; then
     return 0
@@ -545,13 +748,14 @@ wait_for_apk_rollback_availability() {
   [ -f "$ROLLBACK_STATE_HELPER" ] && [ ! -L "$ROLLBACK_STATE_HELPER" ] || return 1
   for _ in $(seq 1 30); do
     shell_path="$(allocate_shell_staging_file rollback-dump 2>/dev/null || true)"
-    if [ -n "$shell_path" ] \
-        && rish_command \
-          "dumpsys rollback > '$shell_path' && chmod 0644 '$shell_path'" \
-          >/dev/null 2>&1 \
-        && cp "$shell_path" "$dump"; then
-      remove_shell_staging_file "$shell_path" || true
-      shell_path=""
+    if [ -n "$shell_path" ]; then
+      rish_command \
+        "dumpsys rollback > '$shell_path' && chmod 0644 '$shell_path'" \
+        >/dev/null 2>&1 || true
+      if copy_published_shell_file "$shell_path" "$dump" 30; then
+        remove_shell_staging_file "$shell_path" || true
+        shell_path=""
+      fi
     fi
     if [ -s "$dump" ] \
         && python3 "$ROLLBACK_STATE_HELPER" check \
@@ -659,6 +863,27 @@ finally:
 PY
 }
 
+is_real_release_target() {
+  python3 - "$1" "$RELEASES" <<'PY' >/dev/null 2>&1
+import os
+import pathlib
+import re
+import stat
+import sys
+
+target = pathlib.Path(sys.argv[1])
+releases = pathlib.Path(sys.argv[2])
+if re.fullmatch(r"[A-Za-z0-9._-]{1,120}", target.name) is None:
+    raise SystemExit(1)
+target_stat = os.lstat(target)
+releases_stat = os.lstat(releases)
+if not stat.S_ISDIR(target_stat.st_mode) or not stat.S_ISDIR(releases_stat.st_mode):
+    raise SystemExit(1)
+if not os.path.samefile(target.parent, releases):
+    raise SystemExit(1)
+PY
+}
+
 backup_control_token() {
   local source="$1"
   CONTROL_TOKEN_BACKUP="$BACKUP_DIR/control-token.txt"
@@ -730,19 +955,20 @@ sync_control_token_from_apk() {
   # app entry path to create the per-install token if this is a fresh install.
   # Rish can return before a large stdout stream has reached a detached caller.
   # Use the same permission-gated filesystem bridge as APK rollback capture;
-  # copy immediately into the private stage, remove the shell-visible inode,
-  # and only then let the atomic writer validate and persist the token.
-  rish_command "am start -n '$PACKAGE_NAME/.MainActivity' >/dev/null" >/dev/null
+  # wait for its read-only publication into the private stage, remove the
+  # shell-visible inode, and only then validate and persist the token.
+  rish_command "am start -n '$PACKAGE_NAME/.MainActivity' >/dev/null" \
+    >/dev/null 2>&1 || true
   for _ in $(seq 1 30); do
     shell_path="$(allocate_shell_staging_file control-token 2>/dev/null || true)"
-    if [ -n "$shell_path" ] \
-        && rish_command \
-          "cp '$APP_CONTROL_TOKEN_PATH' '$shell_path' && chmod 0644 '$shell_path'" \
-          >/dev/null 2>&1 \
-        && cp "$shell_path" "$staged_token"; then
-      remove_shell_staging_file "$shell_path" || true
-      shell_path=""
-      chmod 600 "$staged_token"
+    if [ -n "$shell_path" ]; then
+      rish_command \
+        "cp '$APP_CONTROL_TOKEN_PATH' '$shell_path' && chmod 0644 '$shell_path'" \
+        >/dev/null 2>&1 || true
+      if copy_published_shell_file "$shell_path" "$staged_token" 30; then
+        remove_shell_staging_file "$shell_path" || true
+        shell_path=""
+      fi
     fi
     if [ -s "$staged_token" ] \
         && python3 "$writer" "$CONTROL_TOKEN" < "$staged_token"; then
@@ -776,7 +1002,8 @@ write_transaction_journal() {
     "$ROOT" "$phase" "$RELEASE_ID" "$NEW_RELEASE" "$PREVIOUS_TARGET" \
     "$BACKUP_DIR" "$DB_BACKUP" "$DB_BACKUP_READY" \
     "$APK_BACKUP" "$APK_BACKUP_READY" "$APK_CHANGED" \
-    "$APK_INSTALL_ATTEMPTED" "$PREVIOUS_APK_CODE" "$PREVIOUS_APK_SIGNER" \
+    "$APK_INSTALL_ATTEMPTED" "$PACKAGE_OPERATION" \
+    "$PREVIOUS_APK_CODE" "$PREVIOUS_APK_SIGNER" \
     "$INITIAL_MIGRATION" "$MIGRATION_STARTED" "$SWITCH_STARTED" \
     "$MIGRATION_DIR" "$CYCLE_GATE" "$CONTROL_TOKEN" "$CONTROL_TOKEN_BACKUP" \
     "$CONTROL_TOKEN_EXISTED" "$CONTROL_TOKEN_BACKUP_READY" <<'PY'
@@ -800,6 +1027,7 @@ import sys
     apk_backup_ready,
     apk_changed,
     apk_install_attempted,
+    package_operation,
     previous_apk_code,
     previous_apk_signer,
     initial_migration,
@@ -826,6 +1054,7 @@ payload = {
     "apkBackupReady": int(apk_backup_ready),
     "apkChanged": int(apk_changed),
     "apkInstallAttempted": int(apk_install_attempted),
+    "packageOperation": package_operation,
     "previousApkCode": previous_apk_code,
     "previousApkSigner": previous_apk_signer,
     "initialMigration": int(initial_migration),
@@ -928,6 +1157,16 @@ exact_child(data.get("dbBackup", ""), backups)
 exact_child(data.get("apkBackup", ""), backups)
 exact_child(data.get("migrationDir", ""), migrations)
 exact_child(data.get("controlTokenBackup", ""), backups, optional=True)
+package_operation = data.get("packageOperation", "")
+if not isinstance(package_operation, str) or (
+    package_operation
+    and re.fullmatch(
+        r"/data/local/tmp/evogent-package-op\.[0-9a-f]{32}",
+        package_operation,
+    )
+    is None
+):
+    raise SystemExit("transaction package operation is invalid")
 if data.get("controlToken") != token:
     raise SystemExit("transaction control-token destination changed")
 if data.get("cycleGate") not in {home_gate, state_gate}:
@@ -953,6 +1192,15 @@ journal_field() {
 import json
 import sys
 value = json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]]
+print(value)
+PY
+}
+
+journal_optional_field() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import sys
+value = json.load(open(sys.argv[1], encoding="utf-8")).get(sys.argv[2], "")
 print(value)
 PY
 }
@@ -1033,6 +1281,118 @@ rollback_phone_dispatch_changes() {
   [ -d "$PHONE_STATE" ] && fsync_directory "$PHONE_STATE"
 }
 
+normalize_dangling_legacy_predecessor() {
+  [ "$INITIAL_MIGRATION" = 0 ] || return 0
+  [ "$SWITCH_STARTED" = 0 ] || return 0
+  [ "$MIGRATION_STARTED" = 0 ] || return 0
+  [ -n "$PREVIOUS_TARGET" ] || return 0
+  local normalized
+  if ! normalized="$(python3 - "$CURRENT" "$PREVIOUS_TARGET" "$RELEASES" \
+      "$HOME/evogent" "$HOME/phone-tools" <<'PY'
+import os
+import pathlib
+import re
+import stat
+import sys
+
+current, previous, releases, legacy_runtime, legacy_tools = sys.argv[1:]
+
+def is_real_directory(path):
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except FileNotFoundError:
+        return False
+
+previous_path = pathlib.Path(previous)
+if re.fullmatch(r"[A-Za-z0-9._-]{1,120}", previous_path.name) is None:
+    raise SystemExit("journal predecessor has an invalid release identity")
+try:
+    if not os.path.samefile(previous_path.parent, releases):
+        raise SystemExit("journal predecessor is not a direct release child")
+except FileNotFoundError:
+    raise SystemExit("release directory is unavailable during recovery")
+try:
+    previous_stat = os.lstat(previous)
+except FileNotFoundError:
+    pass
+else:
+    if stat.S_ISDIR(previous_stat.st_mode):
+        print("versioned")
+        raise SystemExit(0)
+    raise SystemExit("prior release target is not a real directory")
+if not is_real_directory(legacy_runtime) or not is_real_directory(legacy_tools):
+    raise SystemExit("missing prior release has no intact legacy runtime")
+try:
+    current_stat = os.lstat(current)
+except FileNotFoundError:
+    # Crash-reentrant second half: a prior recovery may already have unlinked
+    # the exact dangling pointer before it could update the in-memory flags.
+    directory = os.open(
+        os.path.dirname(current),
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+    )
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    print("normalized")
+    raise SystemExit(0)
+if not stat.S_ISLNK(current_stat.st_mode):
+    raise SystemExit("missing prior release has an unexpected current entry")
+raw_target = os.readlink(current)
+lexical_target = raw_target
+if not os.path.isabs(lexical_target):
+    lexical_target = os.path.join(os.path.dirname(current), lexical_target)
+if os.path.normpath(os.path.abspath(lexical_target)) != os.path.normpath(
+    os.path.abspath(previous)
+):
+    raise SystemExit("dangling current pointer does not name the journal predecessor")
+
+# Recheck the same inode and raw target immediately before unlinking. The
+# release install lock excludes cooperating writers; this closes accidental
+# replacement races without following the dangling link.
+latest = os.lstat(current)
+if (
+    latest.st_dev != current_stat.st_dev
+    or latest.st_ino != current_stat.st_ino
+    or os.readlink(current) != raw_target
+):
+    raise SystemExit("legacy predecessor pointer changed during recovery")
+os.unlink(current)
+directory = os.open(
+    os.path.dirname(current),
+    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+print("normalized")
+PY
+  )"; then
+    return 1
+  fi
+  case "$normalized" in
+    versioned) return 0 ;;
+    normalized)
+      PREVIOUS_TARGET=""
+      INITIAL_MIGRATION=1
+      say "normalized a pre-switch dangling release pointer to the intact legacy runtime"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+reap_recorded_package_operation() {
+  [ -n "$PACKAGE_OPERATION" ] || return 0
+  if remove_shell_package_operation "$PACKAGE_OPERATION"; then
+    PACKAGE_OPERATION=""
+    return 0
+  fi
+  say "CRITICAL: recorded Android package operation could not be reaped"
+  return 1
+}
+
 rollback_release() {
   say "install failed; rolling back the complete release"
   ROLLBACK_ATTEMPTED=1
@@ -1059,10 +1419,25 @@ rollback_release() {
     return 1
   fi
   QUIESCED=1
+  if ! normalize_dangling_legacy_predecessor; then
+    ROLLBACK_FAILED=1
+    say "CRITICAL: rollback could not safely normalize the prior runtime topology"
+    set -e
+    return 1
+  fi
   if [ "$SWITCH_STARTED" = 1 ] || [ "$MIGRATION_STARTED" = 1 ]; then
     rollback_phone_dispatch_changes || ROLLBACK_FAILED=1
   fi
-  if [ -n "$PREVIOUS_TARGET" ]; then
+  if [ -n "$PREVIOUS_TARGET" ] && ! is_real_release_target "$PREVIOUS_TARGET"; then
+    say "CRITICAL: prior release target is unavailable or unsafe"
+    ROLLBACK_FAILED=1
+    if [ "$APK_CHANGED" = 1 ] && ! rollback_apk_native; then
+      ROLLBACK_FAILED=1
+    fi
+    if ! restore_control_token; then
+      ROLLBACK_FAILED=1
+    fi
+  elif [ -n "$PREVIOUS_TARGET" ]; then
     atomic_link "$PREVIOUS_TARGET" "$CURRENT" || ROLLBACK_FAILED=1
     restore_database || ROLLBACK_FAILED=1
     if [ "$APK_CHANGED" = 1 ] && ! rollback_apk_native; then
@@ -1097,8 +1472,11 @@ rollback_release() {
       fi
     fi
   fi
+  reap_recorded_package_operation || ROLLBACK_FAILED=1
   if [ -n "$PREVIOUS_TARGET" ]; then
-    [ "$(readlink -f "$CURRENT" 2>/dev/null || true)" = "$PREVIOUS_TARGET" ] \
+    is_real_release_target "$PREVIOUS_TARGET" \
+      && [ -L "$CURRENT" ] \
+      && [ "$(readlink -f "$CURRENT" 2>/dev/null || true)" = "$PREVIOUS_TARGET" ] \
       || ROLLBACK_FAILED=1
   elif [ -e "$CURRENT" ] || [ -L "$CURRENT" ]; then
     ROLLBACK_FAILED=1
@@ -1200,6 +1578,7 @@ recover_interrupted_transaction() {
   APK_BACKUP_READY="$(journal_field "$journal" apkBackupReady)"
   APK_CHANGED="$(journal_field "$journal" apkChanged)"
   APK_INSTALL_ATTEMPTED="$(journal_field "$journal" apkInstallAttempted)"
+  PACKAGE_OPERATION="$(journal_optional_field "$journal" packageOperation)"
   PREVIOUS_APK_CODE="$(journal_field "$journal" previousApkCode)"
   PREVIOUS_APK_SIGNER="$(journal_field "$journal" previousApkSigner)"
   INITIAL_MIGRATION="$(journal_field "$journal" initialMigration)"
@@ -1236,7 +1615,8 @@ recover_interrupted_transaction() {
   [ "$ROLLBACK_FAILED" = 0 ] || return 70
   if [ -n "$PREVIOUS_TARGET" ]; then
     restored_target="$(readlink -f "$CURRENT" 2>/dev/null || true)"
-    [ "$restored_target" = "$PREVIOUS_TARGET" ] || {
+    is_real_release_target "$PREVIOUS_TARGET" \
+      && [ -L "$CURRENT" ] && [ "$restored_target" = "$PREVIOUS_TARGET" ] || {
       say "CRITICAL: interrupted install did not restore the prior release pointer"
       return 70
     }
@@ -1712,6 +2092,13 @@ prepare_android_dependency_tree "$EXPECTED_PACKAGE_LOCK"
 # local server is healthy instead of trusting a symlink alone.
 CURRENT_RESOLVED="$(readlink -f "$CURRENT" 2>/dev/null || true)"
 PREVIOUS_TARGET="$CURRENT_RESOLVED"
+if [ -e "$CURRENT" ] || [ -L "$CURRENT" ]; then
+  [ -L "$CURRENT" ] && [ -n "$CURRENT_RESOLVED" ] \
+    && is_real_release_target "$CURRENT_RESOLVED" || {
+      say "current release pointer is dangling or unsafe; recover it before installing"
+      exit 69
+    }
+fi
 if [ -z "$CURRENT_RESOLVED" ] && [ -d "$HOME/evogent" ] && [ ! -L "$HOME/evogent" ] \
     && { [ -e "$STATE/data" ] || [ -e "$STATE/node_modules" ]; }; then
   say "initial migration found ambiguous pre-existing versioned state; recover it before retrying"
@@ -1854,6 +2241,10 @@ write_transaction_journal prepared
 # so even a reboot during the first versioned migration can recover without
 # depending on a temporarily moving ~/phone-tools symlink.
 if [ "$APK_CHANGED" = 1 ]; then
+  PACKAGE_OPERATION="$(allocate_shell_package_operation)" || {
+    say "could not allocate a private Android package operation"
+    exit 70
+  }
   APK_INSTALL_ATTEMPTED=1
   write_transaction_journal apk_install_pending
   install_apk "$NEW_RELEASE/apk/evogent.apk" upgrade

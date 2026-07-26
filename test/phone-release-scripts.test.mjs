@@ -314,11 +314,24 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /backup_installed_apk/);
   assert.match(
     installer,
-    /backup_installed_apk\(\)[\s\S]*for attempt in 1 2 3[\s\S]*allocate_shell_staging_file installed-apk[\s\S]*cp '\$installed_path' '\$shell_path' && chmod 0644[\s\S]*unzip -tqq "\$partial"[\s\S]*mv -f -- "\$partial" "\$output"/,
+    /backup_installed_apk\(\)[\s\S]*for attempt in 1 2 3[\s\S]*allocate_shell_staging_file installed-apk[\s\S]*installed_path=\\\$\(pm path[\s\S]*cp \\"\\\$installed_path\\" '\$shell_path' && chmod 0644[\s\S]*unzip -tqq "\$partial"[\s\S]*mv -f -- "\$partial" "\$output"/,
+  );
+  assert.doesNotMatch(installer, /installed_path="\$\(rish_command/);
+  assert.match(
+    installer,
+    /installed_apk_version_code\(\)[\s\S]*allocate_shell_staging_file package-version[\s\S]*dumpsys package[\s\S]*chmod 0644[\s\S]*\^\[0-9\]\{1,18\}\$/,
   );
   assert.match(
     installer,
-    /stage_apk_for_shell\(\)[\s\S]*allocate_shell_staging_file candidate-apk[\s\S]*chmod 0666[\s\S]*cp "\$source_apk" "\$shell_path"[\s\S]*sha256_file "\$shell_path"/,
+    /allocate_shell_package_operation\(\)[\s\S]*secrets\.token_hex\(16\)[\s\S]*mkdir -m 0700[\s\S]*candidate\.apk[\s\S]*chmod 0666[\s\S]*chmod 0711/,
+  );
+  assert.doesNotMatch(
+    shellFunction(installer, 'allocate_shell_package_operation'),
+    /path="\$\(rish_command/,
+  );
+  assert.doesNotMatch(
+    shellFunction(installer, 'allocate_shell_staging_file'),
+    /path="\$\(rish_command/,
   );
   assert.doesNotMatch(installer, /rish_command "cat > '\$shell_path'/);
   assert.match(installer, /rollback_release/);
@@ -330,6 +343,7 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /EXPECTED_APK_SIGNER/);
   assert.match(installer, /EXPECTED_APK_SHA256/);
   assert.match(installer, /APK_INSTALL_ATTEMPTED/);
+  assert.match(installer, /"packageOperation": package_operation/);
   assert.match(installer, /changed APK requires a strictly higher Android version code/);
   assert.match(installer, /wait_for_apk_rollback_availability/);
   assert.match(
@@ -377,6 +391,19 @@ test('installer contract is complete and process-scoped', () => {
     installer,
     /sync_control_token_from_apk\(\)[\s\S]*allocate_shell_staging_file control-token[\s\S]*cp '\$APP_CONTROL_TOKEN_PATH' '\$shell_path' && chmod 0644[\s\S]*python3 "\$writer" "\$CONTROL_TOKEN" < "\$staged_token"/,
   );
+  assert.match(
+    installer,
+    /install_apk\(\)[\s\S]*allocate_shell_package_operation[\s\S]*sha256sum '\$candidate'[\s\S]*cmd package wait-for-handler --timeout 120000[\s\S]*EVOGENT_PACKAGE_RESULT_V1[\s\S]*mv '\$operation\/details\.tmp' '\$operation\/details'[\s\S]*mv '\$operation\/status\.tmp' '\$operation\/status'[\s\S]*chmod 0755/,
+  );
+  assert.match(
+    installer,
+    /read_package_result_status\(\)[\s\S]*O_NOFOLLOW[\s\S]*status > 255/,
+  );
+  assert.match(
+    installer,
+    /private package-manager output[\s\S]*fsync_regular_file_and_parent "\$retained_result"/,
+  );
+  assert.doesNotMatch(installer, /cmd package install[^;\n]*\|\s*tee/);
   assert.doesNotMatch(installer, /rish_command "cat '\$APP_CONTROL_TOKEN_PATH'"/);
   assert.doesNotMatch(installer, /\bpkill\b|\bkillall\b|tmux kill-server/);
 
@@ -465,6 +492,7 @@ APK_BACKUP="$2/backups/backup-1/app.apk"
 APK_BACKUP_READY=1
 APK_CHANGED=1
 APK_INSTALL_ATTEMPTED=0
+PACKAGE_OPERATION=""
 PREVIOUS_APK_CODE=7
 PREVIOUS_APK_SIGNER=signer
 INITIAL_MIGRATION=0
@@ -487,6 +515,7 @@ write_transaction_journal quiesce_pending
   assert.equal(payload.dbBackupReady, 0);
   assert.equal(payload.apkBackupReady, 1);
   assert.equal(payload.controlTokenBackupReady, 1);
+  assert.equal(payload.packageOperation, '');
   assert.equal(payload.switchStarted, 0);
 });
 
@@ -525,6 +554,551 @@ restore_database "$4"
   );
   assert.notEqual(result.status, 0);
   assert.equal(fs.readFileSync(target, 'utf8'), 'original database bytes');
+});
+
+test('recovery normalizes only the exact pre-switch dangling legacy predecessor', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'normalize_dangling_legacy_predecessor');
+  function runScenario({
+    currentPresent = true,
+    currentTarget = null,
+    initialMigration = '0',
+    legacyTools = true,
+    migrationStarted = '0',
+    previousExists = false,
+    regularCurrent = false,
+    switchStarted = '0',
+  } = {}) {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-legacy-pointer-'));
+    const home = path.join(fixture, 'home');
+    const rootDirectory = path.join(home, '.local/share/evogent');
+    const previous = path.join(rootDirectory, 'releases/release-old');
+    fs.mkdirSync(path.join(home, 'evogent'), { recursive: true });
+    if (legacyTools) fs.mkdirSync(path.join(home, 'phone-tools'), { recursive: true });
+    fs.mkdirSync(path.dirname(previous), { recursive: true });
+    if (previousExists) fs.mkdirSync(previous);
+    const current = path.join(rootDirectory, 'current');
+    if (currentPresent) {
+      if (regularCurrent) {
+        fs.writeFileSync(current, 'unsafe current entry\n');
+      } else {
+        fs.symlinkSync(currentTarget ?? previous, current);
+      }
+    }
+    const harness = `
+set -euo pipefail
+${helper}
+say() { :; }
+HOME="$1"
+CURRENT="$2"
+PREVIOUS_TARGET="$3"
+RELEASES="$(dirname "$3")"
+INITIAL_MIGRATION="$4"
+MIGRATION_STARTED="$5"
+SWITCH_STARTED="$6"
+normalize_dangling_legacy_predecessor
+printf 'previous=%s\\ninitial=%s\\n' "$PREVIOUS_TARGET" "$INITIAL_MIGRATION"
+`;
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        harness,
+        'harness',
+        home,
+        current,
+        previous,
+        initialMigration,
+        migrationStarted,
+        switchStarted,
+      ],
+      { encoding: 'utf8' },
+    );
+    return { current, previous, result };
+  }
+
+  const normalized = runScenario();
+  assert.equal(normalized.result.status, 0, normalized.result.stderr);
+  assert.throws(
+    () => fs.lstatSync(normalized.current),
+    (error) => error?.code === 'ENOENT',
+  );
+  assert.equal(fs.lstatSync(path.dirname(normalized.current)).isDirectory(), true);
+  assert.match(normalized.result.stdout, /previous=\ninitial=1/);
+
+  const resumed = runScenario({ currentPresent: false });
+  assert.equal(resumed.result.status, 0, resumed.result.stderr);
+  assert.match(resumed.result.stdout, /previous=\ninitial=1/);
+
+  const switched = runScenario({ switchStarted: '1' });
+  assert.equal(switched.result.status, 0, switched.result.stderr);
+  assert.equal(fs.lstatSync(switched.current).isSymbolicLink(), true);
+  assert.match(switched.result.stdout, /initial=0/);
+
+  const wrongTarget = runScenario({ currentTarget: '/missing/unrelated-release' });
+  assert.notEqual(wrongTarget.result.status, 0);
+  assert.equal(fs.lstatSync(wrongTarget.current).isSymbolicLink(), true);
+
+  const regularCurrent = runScenario({ regularCurrent: true });
+  assert.notEqual(regularCurrent.result.status, 0);
+  assert.equal(fs.lstatSync(regularCurrent.current).isFile(), true);
+
+  const missingLegacy = runScenario({ legacyTools: false });
+  assert.notEqual(missingLegacy.result.status, 0);
+  assert.equal(fs.lstatSync(missingLegacy.current).isSymbolicLink(), true);
+
+  const existing = runScenario({ previousExists: true });
+  assert.equal(existing.result.status, 0, existing.result.stderr);
+  assert.equal(fs.lstatSync(existing.current).isSymbolicLink(), true);
+  assert.match(existing.result.stdout, /initial=0/);
+});
+
+test('versioned rollback targets only a real direct release child', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'is_real_release_target');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-release-target-'));
+  const releases = path.join(fixture, 'releases');
+  const valid = path.join(releases, 'release-valid');
+  const nested = path.join(valid, 'nested-release');
+  const outside = path.join(fixture, 'outside-release');
+  const linked = path.join(releases, 'release-linked');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, linked);
+  const harness = `
+set -euo pipefail
+${helper}
+RELEASES="$1"
+is_real_release_target "$2"
+`;
+  function check(target) {
+    return spawnSync('bash', ['-c', harness, 'target', releases, target], {
+      encoding: 'utf8',
+    });
+  }
+  assert.equal(check(valid).status, 0);
+  assert.notEqual(check(nested).status, 0);
+  assert.notEqual(check(outside).status, 0);
+  assert.notEqual(check(linked).status, 0);
+  assert.notEqual(check(path.join(releases, 'release invalid')).status, 0);
+});
+
+test('package install result parser accepts only one bounded versioned status', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'read_package_result_status');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-package-result-'));
+  const status = path.join(fixture, 'status');
+  const harness = `
+set -euo pipefail
+${helper}
+read_package_result_status "$1"
+`;
+  function parse(payload) {
+    fs.rmSync(status, { force: true });
+    fs.writeFileSync(status, payload, { mode: 0o600 });
+    return spawnSync('bash', ['-c', harness, 'parser', status], {
+      encoding: 'utf8',
+    });
+  }
+
+  let result = parse('EVOGENT_PACKAGE_RESULT_V1\n0\n');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '0\n');
+  result = parse('EVOGENT_PACKAGE_RESULT_V1\n255\n');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '255\n');
+
+  for (const rejected of [
+    '',
+    'EVOGENT_PACKAGE_RESULT_V1\n',
+    'EVOGENT_PACKAGE_RESULT_V1\n00\n',
+    'EVOGENT_PACKAGE_RESULT_V1\n256\n',
+    'EVOGENT_PACKAGE_RESULT_V1\n1\nextra\n',
+    'EVOGENT_PACKAGE_RESULT_V2\n0\n',
+  ]) {
+    assert.notEqual(parse(rejected).status, 0);
+  }
+  const target = path.join(fixture, 'real-status');
+  fs.writeFileSync(target, 'EVOGENT_PACKAGE_RESULT_V1\n0\n');
+  fs.rmSync(status, { force: true });
+  fs.symlinkSync(target, status);
+  result = spawnSync('bash', ['-c', harness, 'parser', status], {
+    encoding: 'utf8',
+  });
+  assert.notEqual(result.status, 0);
+});
+
+test('filesystem bridge waits for a regular read-only shell publication', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'copy_published_shell_file');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-shell-publish-'));
+  const source = path.join(fixture, 'source');
+  const destination = path.join(fixture, 'destination');
+  fs.writeFileSync(source, '', { mode: 0o600 });
+  const delayedHarness = `
+set -euo pipefail
+${helper}
+stat() {
+  if [ "$1" = -c ] && [ "$2" = %a ]; then
+    python3 - "$3" <<'PY'
+import os, stat, sys
+print(oct(stat.S_IMODE(os.lstat(sys.argv[1]).st_mode))[2:])
+PY
+  else
+    command stat "$@"
+  fi
+}
+(
+  sleep 0.2
+  printf 'published bytes\\n' > "$1"
+  chmod 0644 "$1"
+) &
+copy_published_shell_file "$1" "$2" 20
+`;
+  let result = spawnSync(
+    'bash',
+    ['-c', delayedHarness, 'bridge', source, destination],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(destination, 'utf8'), 'published bytes\n');
+  assert.equal(fs.statSync(destination).mode & 0o777, 0o600);
+
+  const realSource = path.join(fixture, 'real-source');
+  const linkedSource = path.join(fixture, 'linked-source');
+  fs.writeFileSync(realSource, 'unsafe indirection\n', { mode: 0o644 });
+  fs.symlinkSync(realSource, linkedSource);
+  const rejectHarness = `
+set -euo pipefail
+${helper}
+stat() {
+  if [ "$1" = -c ] && [ "$2" = %a ]; then
+    python3 - "$3" <<'PY'
+import os, stat, sys
+print(oct(stat.S_IMODE(os.lstat(sys.argv[1]).st_mode))[2:])
+PY
+  else
+    command stat "$@"
+  fi
+}
+copy_published_shell_file "$1" "$2" 1
+`;
+  result = spawnSync(
+    'bash',
+    ['-c', rejectHarness, 'bridge', linkedSource, destination],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0);
+});
+
+test('rollback routes an exact dangling predecessor through intact legacy state', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const normalize = shellFunction(
+    installer,
+    'normalize_dangling_legacy_predecessor',
+  );
+  const rollback = shellFunction(installer, 'rollback_release');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-legacy-rollback-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const current = path.join(releaseRoot, 'current');
+  const previous = path.join(releaseRoot, 'releases/release-missing');
+  const trace = path.join(fixture, 'trace');
+  fs.mkdirSync(path.join(home, 'evogent'), { recursive: true });
+  fs.mkdirSync(path.join(home, 'phone-tools'), { recursive: true });
+  fs.mkdirSync(path.dirname(previous), { recursive: true });
+  fs.symlinkSync(previous, current);
+  const harness = `
+set -uo pipefail
+${normalize}
+${rollback}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+quiesce_control_plane() { return 0; }
+stop_and_prove_runtime() { return 0; }
+rollback_phone_dispatch_changes() { record dispatch; }
+atomic_link() { record pointer; }
+restore_database() { record database; }
+rollback_apk_native() { record apk; }
+restore_control_token() { record token; }
+rollback_initial_migration() { record migration; }
+reap_recorded_package_operation() { :; }
+rish_command() { record rish; }
+bash() { record boot; }
+HOME="$1"
+CURRENT="$2"
+PREVIOUS_TARGET="$3"
+TRACE="$4"
+RELEASES="$(dirname "$3")"
+STATE="$1/.local/share/evogent/state"
+PHONE_STATE="$STATE/phone-tools"
+APK_CHANGED=0
+APK_INSTALL_ATTEMPTED=1
+PACKAGE_OPERATION=""
+INITIAL_MIGRATION=0
+MIGRATION_STARTED=0
+QUIESCED=0
+REARM_PRIOR_CONTROL_PLANE=0
+ROLLBACK_ATTEMPTED=0
+ROLLBACK_FAILED=0
+SWITCH_STARTED=0
+if rollback_release; then rc=0; else rc=$?; fi
+printf 'rc=%s previous=%s initial=%s\\n' "$rc" "$PREVIOUS_TARGET" "$INITIAL_MIGRATION"
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'harness', home, current, previous, trace],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 previous= initial=1/);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'token\nmigration\ndatabase\n');
+  assert.throws(
+    () => fs.lstatSync(current),
+    (error) => error?.code === 'ENOENT',
+  );
+});
+
+test('package install trusts a complete private marker, not rish transport output', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const parser = shellFunction(installer, 'read_package_result_status');
+  const install = shellFunction(installer, 'install_apk');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-package-install-'));
+  const apk = path.join(fixture, 'candidate.apk');
+  const stage = path.join(fixture, 'stage');
+  const operation = path.join(fixture, 'shell-operation');
+  const log = path.join(fixture, 'install-fixture.log');
+  const trace = path.join(fixture, 'trace');
+  const fakeBin = path.join(fixture, 'bin');
+  fs.writeFileSync(apk, 'signed APK fixture bytes\n');
+  fs.mkdirSync(stage);
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(
+    path.join(fakeBin, 'cmd'),
+    `#!/bin/bash
+if [ "$1" != package ]; then exit 64; fi
+case "$2" in
+  install)
+    printf '%s\\n' "$PRIVATE_DETAIL"
+    exit "$PACKAGE_STATUS"
+    ;;
+  wait-for-handler|wait-for-background-handler) exit 0 ;;
+  *) exit 64 ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  const harness = `
+set -uo pipefail
+${parser}
+${install}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { printf '%s\\n' "$*"; }
+sleep() { :; }
+sha256_file() { sha256sum "$1" | awk '{print $1}'; }
+fsync_regular_file_and_parent() { :; }
+allocate_shell_package_operation() {
+  record allocate
+  mkdir -p "$OPERATION"
+  : > "$OPERATION/candidate.apk"
+  chmod 0666 "$OPERATION/candidate.apk"
+  printf '%s\\n' "$OPERATION"
+}
+remove_shell_package_operation() {
+  record cleanup
+  rm -rf -- "$1"
+}
+rish_command() {
+  record rish
+  if [ "$PUBLISH_RESULT" = actual ]; then
+    PATH="$FAKE_BIN:$PATH" bash -c "$1" >/dev/null 2>&1
+  elif [ "$PUBLISH_RESULT" = valid ]; then
+    rm -f -- "$OPERATION/candidate.apk"
+    printf '%s\\n' "$PRIVATE_DETAIL" > "$OPERATION/details"
+    printf 'EVOGENT_PACKAGE_RESULT_V1\\n%s\\n' "$PACKAGE_STATUS" > "$OPERATION/status"
+    chmod 0444 "$OPERATION/details" "$OPERATION/status"
+  elif [ "$PUBLISH_RESULT" = invalid ]; then
+    printf 'partial\\n' > "$OPERATION/status"
+    chmod 0444 "$OPERATION/status"
+  fi
+  return "$RISH_RESULT"
+}
+STAGE="$STAGE_DIR"
+LOG="$INSTALL_LOG"
+PACKAGE_OPERATION=""
+if install_apk "$APK_PATH" "$INSTALL_MODE"; then rc=0; else rc=$?; fi
+printf 'rc=%s\\n' "$rc"
+`;
+  function runInstall({
+    installMode = 'upgrade',
+    packageStatus = '0',
+    publishResult = 'actual',
+    rishResult = '0',
+  } = {}) {
+    fs.rmSync(operation, { recursive: true, force: true });
+    fs.rmSync(trace, { force: true });
+    fs.rmSync(`${log.slice(0, -4)}-package-manager.log`, { force: true });
+    return spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        APK_PATH: apk,
+        FAKE_BIN: fakeBin,
+        INSTALL_LOG: log,
+        INSTALL_MODE: installMode,
+        OPERATION: operation,
+        PACKAGE_STATUS: packageStatus,
+        PRIVATE_DETAIL: 'diagnostic that must stay private',
+        PUBLISH_RESULT: publishResult,
+        RISH_RESULT: rishResult,
+        STAGE_DIR: stage,
+        TRACE: trace,
+      },
+    });
+  }
+
+  let result = runInstall({ rishResult: '9' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0/);
+  assert.doesNotMatch(result.stdout + result.stderr, /diagnostic that must stay private/);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\ncleanup\n');
+  assert.equal(fs.existsSync(operation), false);
+
+  result = runInstall({ packageStatus: '7' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1/);
+  assert.doesNotMatch(result.stdout + result.stderr, /diagnostic that must stay private/);
+  const retained = `${log.slice(0, -4)}-package-manager.log`;
+  assert.match(fs.readFileSync(retained, 'utf8'), /diagnostic that must stay private/);
+  assert.equal(fs.statSync(retained).mode & 0o777, 0o600);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\ncleanup\n');
+
+  result = runInstall({ publishResult: 'none' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1/);
+  assert.equal(fs.existsSync(operation), true);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\n');
+
+  result = runInstall({ installMode: 'unknown' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1/);
+  assert.equal(fs.existsSync(trace), false);
+});
+
+test('APK rollback proves an already-restored identity before any package mutation', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'rollback_apk_native');
+  const harness = `
+set -uo pipefail
+${helper}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+wait_for_package_manager_idle() { record barrier; return "$BARRIER_RESULT"; }
+wait_for_apk_backup_identity() { record proof; return "$PROOF_RESULT"; }
+rish_command() { record native; return 0; }
+install_apk() { record fallback; return 0; }
+if rollback_apk_native; then rc=0; else rc=$?; fi
+printf 'rc=%s\\n' "$rc"
+`;
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-apk-rollback-'));
+  const trace = path.join(fixture, 'trace');
+  let result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      APK_BACKUP: path.join(fixture, 'backup.apk'),
+      APK_BACKUP_READY: '1',
+      APK_INSTALL_ATTEMPTED: '1',
+      BARRIER_RESULT: '0',
+      PACKAGE_NAME: 'com.example.evogent',
+      PROOF_RESULT: '0',
+      STAGING_ROOT: fixture,
+      TRACE: trace,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nproof\n');
+  assert.match(result.stdout, /rc=0/);
+
+  fs.rmSync(trace);
+  result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      APK_BACKUP: path.join(fixture, 'backup.apk'),
+      APK_BACKUP_READY: '1',
+      APK_INSTALL_ATTEMPTED: '1',
+      BARRIER_RESULT: '1',
+      PACKAGE_NAME: 'com.example.evogent',
+      PROOF_RESULT: '0',
+      STAGING_ROOT: fixture,
+      TRACE: trace,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nnative\nproof\n');
+  assert.match(result.stdout, /rc=0/);
+});
+
+test('rollback reaps only its exact journaled package operation', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'reap_recorded_package_operation');
+  const harness = `
+set -uo pipefail
+${helper}
+say() { :; }
+remove_shell_package_operation() {
+  printf '%s\\n' "$1" > "$TRACE"
+  return "$REMOVE_RESULT"
+}
+PACKAGE_OPERATION="/data/local/tmp/evogent-package-op.${'a'.repeat(32)}"
+if reap_recorded_package_operation; then rc=0; else rc=$?; fi
+if [ -n "$PACKAGE_OPERATION" ]; then retained=yes; else retained=no; fi
+printf 'rc=%s retained=%s\\n' "$rc" "$retained"
+`;
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-package-reap-'));
+  const trace = path.join(fixture, 'trace');
+  let result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: { ...process.env, REMOVE_RESULT: '0', TRACE: trace },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 retained=no/);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    `/data/local/tmp/evogent-package-op.${'a'.repeat(32)}\n`,
+  );
+
+  result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: { ...process.env, REMOVE_RESULT: '1', TRACE: trace },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 retained=yes/);
 });
 
 test('rollback fails closed before mutation and rearms only an untouched prior phase', () => {
