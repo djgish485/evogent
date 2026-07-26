@@ -1069,6 +1069,8 @@ test('release builder strips host identity and excludes historical personal evid
     'utf8',
   );
   assert.match(builder, /payload\["appDir"\] = "\."/);
+  assert.match(builder, /config\["outputFileTracingRoot"\] = "\."/);
+  assert.match(builder, /turbopack\["root"\] = "\."/);
   assert.match(builder, /EVOGENT_RELEASE_PRIVATE_MARKERS_FILE/);
   assert.match(builder, /\.intent\/contracts\.jsonl/);
   assert.match(builder, /\.intent\/failure-modes\.jsonl/);

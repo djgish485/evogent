@@ -323,6 +323,12 @@ json_path = pathlib.Path(sys.argv[1])
 js_path = pathlib.Path(sys.argv[2])
 payload = json.loads(json_path.read_text(encoding="utf-8"))
 payload["appDir"] = "."
+config = payload.get("config")
+if isinstance(config, dict):
+    config["outputFileTracingRoot"] = "."
+    turbopack = config.get("turbopack")
+    if isinstance(turbopack, dict):
+        turbopack["root"] = "."
 formatted = json.dumps(payload, indent=2)
 json_path.write_text(formatted + "\n", encoding="utf-8")
 js_path.write_text("self.__SERVER_FILES_MANIFEST=" + formatted, encoding="utf-8")
