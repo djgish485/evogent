@@ -307,6 +307,10 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /release-install-cycle-gate/);
   assert.match(installer, /atomic_link "releases\/\$RELEASE_ID" "\$CURRENT"/);
   assert.match(installer, /backup_database/);
+  assert.match(
+    installer,
+    /rish_command\(\)[\s\S]*setsid -f -w env RISH_APPLICATION_ID=com\.termux[\s\S]*<\/dev\/null/,
+  );
   assert.match(installer, /backup_installed_apk/);
   assert.match(
     installer,
@@ -321,13 +325,17 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /cmd package install -r --enable-rollback/);
   assert.match(installer, /cmd package rollback-app/);
   assert.match(installer, /package_manager_supports_apk_rollback/);
-  assert.match(installer, /Argument expected after "rollback-app"/);
+  assert.match(installer, /cmd package help \| grep -q/);
+  assert.match(installer, /Argument expected after \\"rollback-app\\"/);
   assert.match(installer, /EXPECTED_APK_SIGNER/);
   assert.match(installer, /EXPECTED_APK_SHA256/);
   assert.match(installer, /APK_INSTALL_ATTEMPTED/);
   assert.match(installer, /changed APK requires a strictly higher Android version code/);
   assert.match(installer, /wait_for_apk_rollback_availability/);
-  assert.match(installer, /dumpsys rollback/);
+  assert.match(
+    installer,
+    /wait_for_apk_rollback_availability\(\)[\s\S]*allocate_shell_staging_file rollback-dump[\s\S]*dumpsys rollback > '\$shell_path'[\s\S]*ROLLBACK_STATE_HELPER/,
+  );
   assert.match(installer, /Android did not make the exact APK rollback available/);
   assert.match(installer, /ROLLBACK_STATE_HELPER=.*device\/rollback-state\.py/);
   assert.match(installer, /prepare_android_dependency_tree/);
@@ -365,7 +373,11 @@ test('installer contract is complete and process-scoped', () => {
   );
   assert.match(installer, /sync_control_token_from_apk/);
   assert.match(installer, /restore_control_token/);
-  assert.match(installer, /rish_command "cat '\$APP_CONTROL_TOKEN_PATH'" 2>\/dev\/null\s+\\\n\s+\| python3 "\$writer" "\$CONTROL_TOKEN"/);
+  assert.match(
+    installer,
+    /sync_control_token_from_apk\(\)[\s\S]*allocate_shell_staging_file control-token[\s\S]*cp '\$APP_CONTROL_TOKEN_PATH' '\$shell_path' && chmod 0644[\s\S]*python3 "\$writer" "\$CONTROL_TOKEN" < "\$staged_token"/,
+  );
+  assert.doesNotMatch(installer, /rish_command "cat '\$APP_CONTROL_TOKEN_PATH'"/);
   assert.doesNotMatch(installer, /\bpkill\b|\bkillall\b|tmux kill-server/);
 
   const bootReceiver = fs.readFileSync(

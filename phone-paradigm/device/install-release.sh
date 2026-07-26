@@ -362,43 +362,56 @@ quiesce_control_plane() {
 }
 
 rish_command() {
-  env RISH_APPLICATION_ID=com.termux "$HOME/rish-bin/rish" -c "$1"
+  local command="$1" rish_bin="$HOME/rish-bin/rish"
+  [ -x "$rish_bin" ] || return 1
+  if command -v setsid >/dev/null 2>&1; then
+    # Force rish to fork away from an inherited SSH/PTY session, then wait for
+    # the actual Android-shell child. Without -f/-w a detached caller can see
+    # success before a large stream or package-manager mutation has finished.
+    setsid -f -w env RISH_APPLICATION_ID=com.termux \
+      "$rish_bin" -c "$command" </dev/null
+  else
+    env RISH_APPLICATION_ID=com.termux "$rish_bin" -c "$command" </dev/null
+  fi
 }
 
 allocate_shell_staging_file() {
   local purpose="$1" path
   case "$purpose" in
-    candidate-apk|installed-apk) ;;
+    candidate-apk|control-token|installed-apk|rollback-dump) ;;
     *) return 1 ;;
   esac
   path="$(rish_command \
     "mktemp '/data/local/tmp/evogent-${purpose}.XXXXXX'" 2>/dev/null \
     | tr -d '\r' | tail -1)"
-  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|installed-apk)\.[A-Za-z0-9]+$ ]] \
+  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|control-token|installed-apk|rollback-dump)\.[A-Za-z0-9]+$ ]] \
     || return 1
   printf '%s\n' "$path"
 }
 
 remove_shell_staging_file() {
   local path="$1"
-  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|installed-apk)\.[A-Za-z0-9]+$ ]] \
+  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|control-token|installed-apk|rollback-dump)\.[A-Za-z0-9]+$ ]] \
     || return 1
   rish_command "rm -f '$path'" >/dev/null 2>&1
 }
 
 package_manager_supports_apk_rollback() {
-  local package_help rollback_probe
-  package_help="$(rish_command "cmd package help" 2>&1 || true)"
-  grep -q -- '--enable-rollback' <<<"$package_help" || return 1
-  if grep -q -- 'rollback-app' <<<"$package_help"; then
+  rish_command \
+    "cmd package help | grep -q -- '--enable-rollback'" \
+    >/dev/null 2>&1 || return 1
+  if rish_command \
+      "cmd package help | grep -q -- 'rollback-app'" \
+      >/dev/null 2>&1; then
     return 0
   fi
 
   # Android 16's Pixel package-manager help omits this hidden command even
   # though PackageManagerShellCommand implements it. With no package argument,
   # the command cannot mutate state; reaching its arity check proves dispatch.
-  rollback_probe="$(rish_command "cmd package rollback-app" 2>&1 || true)"
-  grep -Fq 'Argument expected after "rollback-app"' <<<"$rollback_probe"
+  rish_command \
+    "cmd package rollback-app 2>&1 | grep -Fq 'Argument expected after \"rollback-app\"'" \
+    >/dev/null 2>&1
 }
 
 stage_apk_for_shell() {
@@ -527,15 +540,28 @@ rollback_apk_native() {
 }
 
 wait_for_apk_rollback_availability() {
-  local expected_installed="$1" expected_backup="$2" dump
+  local expected_installed="$1" expected_backup="$2"
+  local dump="$STAGING_ROOT/rollback-state.txt" shell_path=""
   [ -f "$ROLLBACK_STATE_HELPER" ] && [ ! -L "$ROLLBACK_STATE_HELPER" ] || return 1
   for _ in $(seq 1 30); do
-    dump="$(rish_command "dumpsys rollback" 2>/dev/null || true)"
-    if printf '%s\n' "$dump" \
-        | python3 "$ROLLBACK_STATE_HELPER" check \
-            "$PACKAGE_NAME" "$expected_installed" "$expected_backup"; then
+    shell_path="$(allocate_shell_staging_file rollback-dump 2>/dev/null || true)"
+    if [ -n "$shell_path" ] \
+        && rish_command \
+          "dumpsys rollback > '$shell_path' && chmod 0644 '$shell_path'" \
+          >/dev/null 2>&1 \
+        && cp "$shell_path" "$dump"; then
+      remove_shell_staging_file "$shell_path" || true
+      shell_path=""
+    fi
+    if [ -s "$dump" ] \
+        && python3 "$ROLLBACK_STATE_HELPER" check \
+          "$PACKAGE_NAME" "$expected_installed" "$expected_backup" < "$dump"; then
+      rm -f -- "$dump"
       return 0
     fi
+    [ -z "$shell_path" ] || remove_shell_staging_file "$shell_path" || true
+    shell_path=""
+    rm -f -- "$dump"
     sleep 1
   done
   return 1
@@ -687,6 +713,7 @@ restore_control_token() {
 
 sync_control_token_from_apk() {
   local writer="$NEW_RELEASE/device/write-control-token.py"
+  local shell_path="" staged_token="$STAGE/control-token.candidate"
   [ -f "$writer" ] && [ ! -L "$writer" ] || {
     say "phone control-token writer is unavailable"
     return 1
@@ -701,15 +728,31 @@ sync_control_token_from_apk() {
 
   # Launching clears Android's package-stopped state and causes every supported
   # app entry path to create the per-install token if this is a fresh install.
-  # The secret itself is streamed shell stdout -> Python stdin; it never enters
-  # argv, an environment variable, command substitution, or the install log.
+  # Rish can return before a large stdout stream has reached a detached caller.
+  # Use the same permission-gated filesystem bridge as APK rollback capture;
+  # copy immediately into the private stage, remove the shell-visible inode,
+  # and only then let the atomic writer validate and persist the token.
   rish_command "am start -n '$PACKAGE_NAME/.MainActivity' >/dev/null" >/dev/null
   for _ in $(seq 1 30); do
-    if rish_command "cat '$APP_CONTROL_TOKEN_PATH'" 2>/dev/null \
-        | python3 "$writer" "$CONTROL_TOKEN"; then
+    shell_path="$(allocate_shell_staging_file control-token 2>/dev/null || true)"
+    if [ -n "$shell_path" ] \
+        && rish_command \
+          "cp '$APP_CONTROL_TOKEN_PATH' '$shell_path' && chmod 0644 '$shell_path'" \
+          >/dev/null 2>&1 \
+        && cp "$shell_path" "$staged_token"; then
+      remove_shell_staging_file "$shell_path" || true
+      shell_path=""
+      chmod 600 "$staged_token"
+    fi
+    if [ -s "$staged_token" ] \
+        && python3 "$writer" "$CONTROL_TOKEN" < "$staged_token"; then
+      rm -f -- "$staged_token"
       say "phone control token synchronized from APK-scoped storage"
       return 0
     fi
+    [ -z "$shell_path" ] || remove_shell_staging_file "$shell_path" || true
+    shell_path=""
+    rm -f -- "$staged_token"
     sleep 1
   done
   say "APK-scoped phone control token was not available in time"
