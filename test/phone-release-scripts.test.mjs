@@ -345,6 +345,10 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /APK_INSTALL_ATTEMPTED/);
   assert.match(installer, /"packageOperation": package_operation/);
   assert.match(installer, /"controlTokenBridge": control_token_bridge/);
+  assert.match(
+    installer,
+    /if \[ "\$APK_INSTALL_ATTEMPTED" = 1 \] \|\| \[ -n "\$CONTROL_TOKEN_BRIDGE" \]; then/,
+  );
   assert.match(installer, /changed APK requires a strictly higher Android version code/);
   assert.match(installer, /wait_for_apk_rollback_availability/);
   assert.match(
@@ -577,17 +581,20 @@ test('recovery normalizes only the exact pre-switch dangling legacy predecessor'
     migrationStarted = '0',
     previousExists = false,
     regularCurrent = false,
+    selfPredecessor = false,
     switchStarted = '0',
   } = {}) {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-legacy-pointer-'));
     const home = path.join(fixture, 'home');
     const rootDirectory = path.join(home, '.local/share/evogent');
-    const previous = path.join(rootDirectory, 'releases/release-old');
+    const releases = path.join(rootDirectory, 'releases');
+    const releasePrevious = path.join(releases, 'release-old');
+    const current = path.join(rootDirectory, 'current');
+    const previous = selfPredecessor ? current : releasePrevious;
     fs.mkdirSync(path.join(home, 'evogent'), { recursive: true });
     if (legacyTools) fs.mkdirSync(path.join(home, 'phone-tools'), { recursive: true });
-    fs.mkdirSync(path.dirname(previous), { recursive: true });
+    fs.mkdirSync(releases, { recursive: true });
     if (previousExists) fs.mkdirSync(previous);
-    const current = path.join(rootDirectory, 'current');
     if (currentPresent) {
       if (regularCurrent) {
         fs.writeFileSync(current, 'unsafe current entry\n');
@@ -602,7 +609,7 @@ say() { :; }
 HOME="$1"
 CURRENT="$2"
 PREVIOUS_TARGET="$3"
-RELEASES="$(dirname "$3")"
+RELEASES="$7"
 INITIAL_MIGRATION="$4"
 MIGRATION_STARTED="$5"
 SWITCH_STARTED="$6"
@@ -621,6 +628,7 @@ printf 'previous=%s\\ninitial=%s\\n' "$PREVIOUS_TARGET" "$INITIAL_MIGRATION"
         initialMigration,
         migrationStarted,
         switchStarted,
+        releases,
       ],
       { encoding: 'utf8' },
     );
@@ -639,6 +647,28 @@ printf 'previous=%s\\ninitial=%s\\n' "$PREVIOUS_TARGET" "$INITIAL_MIGRATION"
   const resumed = runScenario({ currentPresent: false });
   assert.equal(resumed.result.status, 0, resumed.result.stderr);
   assert.match(resumed.result.stdout, /previous=\ninitial=1/);
+
+  const selfPredecessor = runScenario({ selfPredecessor: true });
+  assert.equal(
+    selfPredecessor.result.status,
+    0,
+    selfPredecessor.result.stderr,
+  );
+  assert.throws(
+    () => fs.lstatSync(selfPredecessor.current),
+    (error) => error?.code === 'ENOENT',
+  );
+  assert.match(selfPredecessor.result.stdout, /previous=\ninitial=1/);
+
+  const disguisedSelfPredecessor = runScenario({
+    currentTarget: 'pivot/../current',
+    selfPredecessor: true,
+  });
+  assert.notEqual(disguisedSelfPredecessor.result.status, 0);
+  assert.equal(
+    fs.lstatSync(disguisedSelfPredecessor.current).isSymbolicLink(),
+    true,
+  );
 
   const switched = runScenario({ switchStarted: '1' });
   assert.equal(switched.result.status, 0, switched.result.stderr);
@@ -694,6 +724,105 @@ is_real_release_target "$2"
   assert.notEqual(check(outside).status, 0);
   assert.notEqual(check(linked).status, 0);
   assert.notEqual(check(path.join(releases, 'release invalid')).status, 0);
+});
+
+test('journal validation admits only the pre-switch legacy self-pointer', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'validate_transaction_journal');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-self-journal-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const releases = path.join(releaseRoot, 'releases');
+  const backups = path.join(releaseRoot, 'backups');
+  const migrations = path.join(releaseRoot, 'migrations');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  const current = path.join(releaseRoot, 'current');
+  const journal = path.join(fixture, 'journal.json');
+  for (const directory of [
+    releases,
+    backups,
+    migrations,
+    phoneState,
+    path.join(releaseRoot, 'state/data'),
+    path.join(home, 'phone-tools'),
+  ]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+  fs.symlinkSync(current, current);
+  const payload = {
+    apkBackup: path.join(backups, 'backup/app.apk'),
+    apkBackupReady: 1,
+    apkChanged: 1,
+    apkInstallAttempted: 1,
+    backupDir: path.join(backups, 'backup'),
+    controlToken: path.join(releaseRoot, 'state/data/control-token.txt'),
+    controlTokenBackup: path.join(backups, 'backup/control-token.txt'),
+    controlTokenBackupReady: 1,
+    controlTokenBridge: '',
+    controlTokenExisted: 1,
+    cycleGate: path.join(home, 'phone-tools/.cycle.lock'),
+    dbBackup: path.join(backups, 'backup/database.db'),
+    dbBackupReady: 1,
+    initialMigration: 0,
+    migrationDir: path.join(migrations, 'migration'),
+    migrationStarted: 0,
+    newRelease: path.join(releases, 'release-new'),
+    packageOperation: '',
+    phase: 'apk_install_pending',
+    previousApkCode: '1',
+    previousApkSigner: 'signer',
+    previousTarget: current,
+    releaseId: 'release-new',
+    root: releaseRoot,
+    schema: 'evogent.phone.install-transaction.v1',
+    switchStarted: 0,
+  };
+  const harness = `
+set -euo pipefail
+${helper}
+HOME="$1"
+ROOT="$2"
+RELEASES="$ROOT/releases"
+BACKUPS="$ROOT/backups"
+MIGRATIONS="$ROOT/migrations"
+PHONE_STATE="$ROOT/state/phone-tools"
+CONTROL_TOKEN="$ROOT/state/data/control-token.txt"
+validate_transaction_journal "$3"
+`;
+  function validate() {
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'journal', home, releaseRoot, journal],
+      { encoding: 'utf8' },
+    );
+  }
+  fs.writeFileSync(journal, JSON.stringify(payload));
+  let result = validate();
+  assert.equal(result.status, 0, result.stderr);
+
+  payload.switchStarted = 1;
+  fs.writeFileSync(journal, JSON.stringify(payload));
+  result = validate();
+  assert.notEqual(result.status, 0);
+
+  payload.switchStarted = 0;
+  fs.unlinkSync(current);
+  const outside = path.join(fixture, 'outside');
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(releaseRoot, 'pivot'));
+  fs.symlinkSync(`${releaseRoot}/pivot/../current`, current);
+  fs.writeFileSync(journal, JSON.stringify(payload));
+  result = validate();
+  assert.notEqual(result.status, 0);
+
+  fs.unlinkSync(current);
+  fs.symlinkSync(path.join(releaseRoot, 'different'), current);
+  fs.writeFileSync(journal, JSON.stringify(payload));
+  result = validate();
+  assert.notEqual(result.status, 0);
 });
 
 test('package install result parser accepts only one bounded versioned status', () => {

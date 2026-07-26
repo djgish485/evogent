@@ -1164,6 +1164,7 @@ validate_transaction_journal() {
   python3 - "$1" "$ROOT" "$RELEASES" "$BACKUPS" "$MIGRATIONS" \
     "$CONTROL_TOKEN" "$HOME/phone-tools/.cycle.lock" "$PHONE_STATE/.cycle.lock" <<'PY'
 import json
+import os
 import pathlib
 import re
 import sys
@@ -1200,7 +1201,28 @@ def exact_child(value, parent, *, optional=False):
         raise SystemExit("transaction path does not name a private child")
 
 exact_child(data.get("newRelease", ""), releases)
-exact_child(data.get("previousTarget", ""), releases, optional=True)
+previous_target = data.get("previousTarget", "")
+current = pathlib.Path(root) / "current"
+legacy_self_predecessor = (
+    previous_target == str(current)
+    and data.get("initialMigration") == 0
+    and data.get("migrationStarted") == 0
+    and data.get("switchStarted") == 0
+)
+if legacy_self_predecessor:
+    try:
+        current_stat = os.lstat(current)
+    except FileNotFoundError:
+        # Crash-reentrant recovery may already have durably removed the link.
+        pass
+    else:
+        if not current.is_symlink():
+            raise SystemExit("legacy self predecessor is not a symlink")
+        raw_target = os.readlink(current)
+        if raw_target != str(current):
+            raise SystemExit("legacy self predecessor link changed")
+else:
+    exact_child(previous_target, releases, optional=True)
 exact_child(data.get("backupDir", ""), backups)
 exact_child(data.get("dbBackup", ""), backups)
 exact_child(data.get("apkBackup", ""), backups)
@@ -1367,22 +1389,24 @@ def is_real_directory(path):
         return False
 
 previous_path = pathlib.Path(previous)
-if re.fullmatch(r"[A-Za-z0-9._-]{1,120}", previous_path.name) is None:
-    raise SystemExit("journal predecessor has an invalid release identity")
-try:
-    if not os.path.samefile(previous_path.parent, releases):
-        raise SystemExit("journal predecessor is not a direct release child")
-except FileNotFoundError:
-    raise SystemExit("release directory is unavailable during recovery")
-try:
-    previous_stat = os.lstat(previous)
-except FileNotFoundError:
-    pass
-else:
-    if stat.S_ISDIR(previous_stat.st_mode):
-        print("versioned")
-        raise SystemExit(0)
-    raise SystemExit("prior release target is not a real directory")
+legacy_self_predecessor = previous == current
+if not legacy_self_predecessor:
+    if re.fullmatch(r"[A-Za-z0-9._-]{1,120}", previous_path.name) is None:
+        raise SystemExit("journal predecessor has an invalid release identity")
+    try:
+        if not os.path.samefile(previous_path.parent, releases):
+            raise SystemExit("journal predecessor is not a direct release child")
+    except FileNotFoundError:
+        raise SystemExit("release directory is unavailable during recovery")
+    try:
+        previous_stat = os.lstat(previous)
+    except FileNotFoundError:
+        pass
+    else:
+        if stat.S_ISDIR(previous_stat.st_mode):
+            print("versioned")
+            raise SystemExit(0)
+        raise SystemExit("prior release target is not a real directory")
 if not is_real_directory(legacy_runtime) or not is_real_directory(legacy_tools):
     raise SystemExit("missing prior release has no intact legacy runtime")
 try:
@@ -1403,12 +1427,16 @@ except FileNotFoundError:
 if not stat.S_ISLNK(current_stat.st_mode):
     raise SystemExit("missing prior release has an unexpected current entry")
 raw_target = os.readlink(current)
-lexical_target = raw_target
-if not os.path.isabs(lexical_target):
-    lexical_target = os.path.join(os.path.dirname(current), lexical_target)
-if os.path.normpath(os.path.abspath(lexical_target)) != os.path.normpath(
-    os.path.abspath(previous)
-):
+if legacy_self_predecessor:
+    target_matches_predecessor = raw_target == current
+else:
+    lexical_target = raw_target
+    if not os.path.isabs(lexical_target):
+        lexical_target = os.path.join(os.path.dirname(current), lexical_target)
+    target_matches_predecessor = os.path.normpath(
+        os.path.abspath(lexical_target)
+    ) == os.path.normpath(os.path.abspath(previous))
+if not target_matches_predecessor:
     raise SystemExit("dangling current pointer does not name the journal predecessor")
 
 # Recheck the same inode and raw target immediately before unlinking. The
@@ -1681,7 +1709,7 @@ recover_interrupted_transaction() {
   acquire_lock_dir "$CYCLE_GATE" release-install-recovery-cycle-gate
   CYCLE_GATE_HELD=1
 
-  if [ "$APK_INSTALL_ATTEMPTED" = 1 ]; then
+  if [ "$APK_INSTALL_ATTEMPTED" = 1 ] || [ -n "$CONTROL_TOKEN_BRIDGE" ]; then
     for _ in $(seq 1 12); do
       rish_command "id" 2>/dev/null | grep -q 'uid=2000' && break
       sleep 5
