@@ -15,9 +15,6 @@ import {
   hasPendingCurationCycle,
   insertCurationLogStart,
 } from '@/lib/db/activity';
-import { arrangeFeedBackstopForCycle } from '@/lib/db/feed';
-import { notifyFeedArranged } from '@/lib/curation-submit';
-import { getActiveFeedThreads } from '@/lib/db/feed';
 import { getSourceReadiness } from '@/lib/setup-readiness';
 import { submitChatMessage } from '@/lib/chat-submission';
 import { getMostRecentCuratorChatSession } from '@/lib/db/chat-sessions';
@@ -205,6 +202,7 @@ export async function evaluateAdaptiveHeartbeat(
         triggerReason: decision.reason,
         timeZone: heartbeatConfig.timeZone,
         automatedCuration: true,
+        curationCycleId: queueRequestId,
       },
     });
 
@@ -241,42 +239,20 @@ export function completeAdaptiveHeartbeat(requestId: string, input: CompleteAdap
     return false;
   }
 
-  const baseline = typeof entry.feedCountBefore === 'number' ? entry.feedCountBefore : 0;
+  const baseline = typeof entry.feedCountBefore === 'number'
+    ? Math.max(0, entry.feedCountBefore)
+    : getFeedItemCount();
   const itemsAdded = Math.max(0, getFeedItemCount() - baseline);
-  const completionStatus = input.completionStatus
-    ?? (itemsAdded > 0 ? 'success' : 'empty');
 
-  const completed = completeCurationLogByRequestId(trimmed, {
+  // Compatibility endpoint for an older worker cannot prove an agent-authored
+  // terminal receipt. It may close an orphan so the scheduler can retry, but it
+  // must never manufacture success from a feed-count delta.
+  return completeCurationLogByRequestId(trimmed, {
     completedAt: new Date().toISOString(),
     itemsAdded,
-    completionStatus,
-    completionReason: input.completionReason ?? null,
+    completionStatus: 'failed',
+    completionReason: input.completionReason?.trim()
+      ? `missing_validated_cycle_receipt: ${input.completionReason.trim()}`
+      : 'missing_validated_cycle_receipt',
   });
-
-  if (completed && itemsAdded > 0) {
-    const startedAtMs = Date.parse(entry.startedAt);
-    if (Number.isFinite(startedAtMs) && startedAtMs > 0) {
-      try {
-        const backstop = arrangeFeedBackstopForCycle(startedAtMs);
-        if (backstop.fired) {
-          console.log('[arrange-backstop] curator skipped evogent_feed_arrange; mechanical fallback applied', {
-            requestId: trimmed,
-            itemCount: backstop.itemCount,
-          });
-          void notifyFeedArranged({
-            ordering: [],
-            activeThreads: getActiveFeedThreads(),
-            updatedItemIds: [],
-            orderingCount: backstop.itemCount,
-            threadCount: 0,
-          });
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn('[arrange-backstop] backstop failed', { requestId: trimmed, error: message });
-      }
-    }
-  }
-
-  return completed;
 }

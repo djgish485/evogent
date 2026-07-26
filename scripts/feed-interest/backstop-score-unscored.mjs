@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Interest backstop scorer: stamps metadata.interest on curated items that
- * the curator shipped without one, using the committed rubric via the local
- * codex CLI. Keeps the interestingness system autonomous: bootstrap covered
- * history, the curator covers new items, and this catches anything missed.
+ * Interest metadata backfill: stamps metadata.interest on historical curated
+ * items that lack supporting judgment evidence, using private context (or the
+ * public template) through the local codex CLI. This metadata never decides
+ * shipment or display order.
  *
  * Only fills NULL interest — never overwrites curator or bootstrap scores.
  * Run via evogent-interest-backstop.timer (or manually).
@@ -52,15 +52,18 @@ const lines = rows.map((r) => JSON.stringify(r)).join('\n');
 const prompt = `${rubric}
 
 ---
-Score each feed item below for interestingness to the user described by the rubric above.
+Record one supporting content-value judgment for each feed item below using the
+private context above. This backfill does not ship, hold, promote, or reorder
+anything. Do not force a score distribution or translate account, source,
+content type, popularity, or age into a formula.
 Items (one JSON per line; fields: id, type, source, d=date, au=author, t=title, tx=body excerpt, rs=reason, br=bridge).
-Judge on the actual content in t+tx, not the container: a digest-format card whose excerpt contains a concrete mechanism, named actors, or a real delta scores on that substance; one whose excerpt is boilerplate sections, null reports, or repeats scores near zero.
+Judge the actual content in t+tx, not the container.
 
 ${lines}
 
 OUTPUT FORMAT (strict): one JSON object per line, one line per input item, nothing else:
-{"id":"<exact input id>","s":<int 0-100, judged AS IF SEEN FRESH (age-blind)>,"dur":"evergreen"|"dated"|"news"}
-Apply the hard-punish caps strictly. Do not wrap in code fences. Do not add commentary.`;
+{"id":"<exact input id>","s":<int 0-100 ordinal supporting judgment>,"dur":"evergreen"|"dated"|"news"}
+Do not wrap in code fences. Do not add commentary.`;
 
 let output;
 try {

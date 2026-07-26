@@ -36,6 +36,10 @@ It runs inline during every curation cycle and every reflection cycle. The `pipe
 
 - Do the work inline in the current invocation. Do not spawn nested orchestration just to audit.
 - Do not add product-code heuristics to compensate for instruction drift. Fix the instructions and diagnostics instead.
+- Scheduled phone curation and reflection are runtime roles, not software-development agents.
+  They do not inspect git history, host-agent memory, code diffs, or merge receipts and never
+  edit code, scripts, skills, tests, or development artifacts. A manual host audit owns that
+  work. Phone workers may surface evidence-backed product observations for host evaluation.
 - Use `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3001}}"` for internal endpoints.
 - Resolve `API_CURL="${EVOGENT_API_CURL:-curl}"` and use `"$API_CURL"`
   for every request to `API_BASE`. The phone profile sets it to the
@@ -61,7 +65,8 @@ Gather this evidence once per invocation and reuse it for decisions and output r
   - `sourceDiagnoses` for source-local notes
   - `incident` for provider-aware routing and duplicate suppression
 - For browser-backed sources, trust rendered-page evidence over stale operational guesses. If the browser shows real content, treat coverage as available and ask why curation missed it.
-- Use recent task logs, scratchpads, service logs, and relevant code/database checks as the second evidence layer.
+- Use recent task logs, scratchpads, service logs, and relevant database checks as the second
+  evidence layer. Only a manual host audit may add product-code inspection.
 
 ### 3. Feed quality and persistence
 
@@ -71,7 +76,9 @@ Gather this evidence once per invocation and reuse it for decisions and output r
 - Check whether preference context and insights were fresh enough for the cycle you are auditing.
 - Check whether `data/cache-hints.json` was rewritten for the current cycle when curation was responsible for doing so.
 - Inspect curation lifecycle logging, submit and dedup behavior, and recent operational logs when outputs suggest missing data or quality drift.
-- Ask whether the system is losing useful directly-browsed information, reacquiring discarded data later, or encoding browsing judgment in product code that belongs in skills, prompts, and the browser session.
+- Ask whether the observed system behavior is losing useful directly-browsed information or
+  reacquiring discarded data later. Scheduled phone workers describe the evidence and desired
+  boundary; they do not inspect implementation to assign a code-level cause.
 
 ### 4. Reflection-only evidence
 
@@ -98,10 +105,14 @@ This includes approved edits to `data/config.md` and `data/curation-prompt.md`.
 
 Keep `metadata.proposedValue` directional. Describe what is broken, why it matters, the desired outcome, and hard constraints. Do not pre-write the exact implementation.
 
+For scheduled phone curation/reflection, this route is a product-observation handoff only:
+describe observable runtime evidence and the desired outcome without reviewing merges,
+prescribing a diff, or claiming a code-level diagnosis. Host development owns triage and repair.
+
 For browser-backed findings, prefer fix directions such as removing infrastructure gating, moving browsing behavior into skills and prompts, or strengthening diagnostics.
 
 ## Role boundaries
 
 - Curation handles current-cycle operational state and current-cycle evidence.
 - Reflection handles cross-cycle synthesis and durable recommendations.
-- Manual audit runs the same core but must still respect the same output ownership.
+- Manual host audit runs the same core and owns software-development inspection.

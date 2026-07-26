@@ -59,7 +59,11 @@ completeness(){ ( cd "$EVO" && node -e '
 for MODEL in "${MODELS[@]}"; do
   say "=== $MODEL ==="
   # Reap the app so each model starts from a cold launch (fair timing).
-  control_rish_bounded "am force-stop com.google.android.youtube" >/dev/null 2>&1; sleep 2
+  if ! control_safe_force_stop_package com.google.android.youtube; then
+    say "$MODEL: skipped — YouTube could not be stopped without risking physical-screen use"
+    continue
+  fi
+  sleep 2
   before=$(src_count)
   T0=$(date +%s)
   ( cd "$EVO" && run_owned_timeout 420 30 env EVOGENT_CODEX_MODEL="$MODEL" codex exec --model "$MODEL" \

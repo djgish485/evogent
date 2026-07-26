@@ -6,9 +6,7 @@
       "maxChannels": 2,
       "channelVideoLimit": 3,
       "maxSearches": 2,
-      "searchVideoLimit": 3,
-      "outputAuthorCap": 2,
-      "strictAuthorCap": 1
+      "searchVideoLimit": 3
     },
     "medium": {
       "ttlHours": 240,
@@ -16,9 +14,7 @@
       "maxChannels": 3,
       "channelVideoLimit": 4,
       "maxSearches": 2,
-      "searchVideoLimit": 4,
-      "outputAuthorCap": 2,
-      "strictAuthorCap": 1
+      "searchVideoLimit": 4
     },
     "high": {
       "ttlHours": 336,
@@ -26,9 +22,7 @@
       "maxChannels": 4,
       "channelVideoLimit": 5,
       "maxSearches": 3,
-      "searchVideoLimit": 5,
-      "outputAuthorCap": 3,
-      "strictAuthorCap": 2
+      "searchVideoLimit": 5
     }
   },
   "deadlineBudget": {
@@ -42,7 +36,7 @@
       "CRITICAL — SCROLLING: Do NOT use keyboard End, Home, Page Down, or arrow keys to scroll any page. These keys can activate focused elements and navigate away from the current page. Always use window.scrollBy(0, window.innerHeight * 3) executed via browser JavaScript evaluation.",
       "CRITICAL — PAGE NAVIGATION GUARD: After each scroll pass, verify the current page URL is still the expected feed/page. If the browser navigated to a detail page, navigate back to the feed URL before continuing extraction.",
       "CRITICAL — TAB MANAGEMENT: The shared browser may have stale tabs from previous agents. At the start of each source step, verify you are on the correct tab and URL. If needed, navigate to the target URL in the current tab rather than opening new tabs. Do not close other tabs.",
-      "For home and subscriptions, the per-kind scroll instructions define the minimum scroll passes. Complete all required scroll passes before evaluating whether content is repeating.",
+      "For home and subscriptions, the per-kind pass counts are bounded collection ceilings, not minimum output targets. Stop on repeated content, blocked/failed surfaces, exhausted budget, or the ceiling.",
       "Prefer the canonical watch URL, rendered title, rendered channel identity, rendered publish label, and rendered thumbnail from the current page before opening details.",
       "CRITICAL — IN-PAGE ACCUMULATION: YouTube re-renders and removes cards while scrolling. Do NOT scroll first and only read the final visible DOM. For home and subscriptions, use a SINGLE async browser_evaluate call that creates an in-page Map keyed by videoId, extracts visible cards, scrolls, waits, re-extracts, and merges fields into that same Map across every pass before returning.",
       "CRITICAL — DEDUP KEY: Deduplicate by canonical videoId only. Derive videoId from the visible watch link (`/watch?v=...`) or equivalent YouTube URL, then canonicalize to `https://www.youtube.com/watch?v=<videoId>`. Do not deduplicate by title, channel name, or card text.",
@@ -56,7 +50,7 @@
       "CRITICAL — MINIMUM VALID RECORD: Do not count a card toward `uniqueVideos` unless it has a non-empty `videoId`, `canonicalUrl`, and `title`. Missing publish label or thumbnail should be preserved as null, but missing id/url/title means the card was not extracted successfully.",
       "CRITICAL — ORDERING: Preserve first-seen order from the scroll loop. Add a temporary `firstSeenPass` or similar internal field while collecting, then sort the final `videos` array by that order before returning.",
       "CRITICAL — INTERSTITIAL HANDLING: If YouTube shows consent, age-gate, sign-in, or other blocking/interstitial UI, record a short note in the returned `notes` array and keep extracting any still-visible watch cards. Only mark the source `ok=false` when the page is actually blocked from showing usable video cards.",
-      "CRITICAL — ZERO-GROWTH PASSES: If one scroll pass yields zero new videos, do NOT abandon the source. Finish the full mandatory scroll count, then report the low-yield behavior in `notes`.",
+      "CRITICAL — ZERO-GROWTH PASSES: If a scroll pass yields zero new videos, record that evidence in `notes`. Continue only while the surface can still advance and the run budget remains; stop after 2 consecutive zero-growth passes or at the per-kind ceiling. Low or zero yield is a valid receipt, not a reason to pad output.",
       "CRITICAL — NO DETAIL-PAGE DETOURS: Do not open individual watch pages just to compensate for a weak card extractor during home/subscriptions. The goal of these steps is feed-card extraction, not per-video deep reads.",
       "When a field is not readily visible from the rendered page, store null instead of spending extra time hunting for it.",
       "If YouTube lands on consent, age-gate, sign-in, or other blocking pages, keep going where possible and mention the blocked source briefly in the final status.",
@@ -78,8 +72,8 @@
         "MANDATORY ADAPT-WHEN-ZERO ESCAPE CLAUSE for Home: If after the first pass the in-page Map has size 0 and the page visibly rendered content (`document.body.innerText.length > 1000` and `document.querySelectorAll('ytd-rich-item-renderer').length > 20`), the extraction path is broken. Do not silently report `uniqueVideos: 0` through the rest of the scroll loop. Inspect one card's `outerHTML.slice(0, 3000)`, all aria-labels, and the innerText line layout, then adapt and record the adapted strategy in `notes`. This clause applies only when the first pass returns literally zero.",
         "MANDATORY VIRTUAL DOM + SCROLL LOOP for Home: In one async browser_evaluate call, create `const videos = new Map()` and `const notes = []`. Define helper functions for `pickText`, `absoluteUrl`, `canonicalWatchUrl`, `videoIdFromUrl`, `pickThumbnail`, and `mergeVideo(existing, fresh)`. Extract the initially visible Home cards into the Map before any scroll.",
         "MANDATORY EXTRACTION LOOP for Home: On every pass, query the visible card roots again, compute `freshVideo` objects, and immediately `videos.set(videoId, mergeVideo(videos.get(videoId), freshVideo))`. Do not build separate per-pass arrays that you deduplicate later in scratchpad text.",
-        "MANDATORY SCROLL LOOP for Home: After the initial extraction, perform at least 3 additional scroll passes using `window.scrollBy(0, window.innerHeight * 3)` with a 3-second wait after each pass. After every pass, re-run the same extractor against currently visible cards and merge them into the same in-page Map. Do not stop early just because one pass produced zero new items.",
-        "MANDATORY COUNT RULE for Home: Do not mark Home covered until you have completed the required passes and counted at least 15 unique canonical videoIds, or until the required passes finish and the page truly failed to expose enough eligible watch cards. Low yield after the mandatory passes must be explained in `notes`, not silently accepted.",
+        "BOUNDED SCROLL LOOP for Home: After the initial extraction, perform up to 3 additional scroll passes using `window.scrollBy(0, window.innerHeight * 3)` with a 3-second wait after each pass while the surface advances and the run budget remains. After every pass, re-run the same extractor against visible cards and merge them into the same in-page Map. Stop on surface failure, exhausted budget, 2 consecutive zero-growth passes, or the pass ceiling.",
+        "YIELD RECEIPT for Home: Preserve every structurally valid unique canonical videoId observed. There is no minimum video count; explain low or zero yield in `notes` so it remains diagnostic rather than padding the result.",
         "MANDATORY OUTPUT SHAPE for Home: Return an object shaped like `{ ok, sourceKind: \"home\", pageUrl, completedScrollPasses, requiredScrollPasses, uniqueVideos, notes, videos }`, where `videos` is an array produced from the Map values sorted by first-seen order. Each video object must include `publishedAtMs`, `viewCount`, and `viewCountLabel` alongside the other capture fields; these may be null when the card legitimately exposed no parseable publish timestamp or no views/watching label.",
         "MANDATORY HOME NOTES: If Home visibly mixes non-video shelves, autoplay modules, or stale repeated cards, put that in `notes` while still returning the valid watch-card videos you did capture.",
         "MANDATORY FILE OUTPUT for Home: Ensure `data/tmp` exists before saving. Use browser_evaluate's filename parameter to write the full capture object directly to `data/tmp/youtube-home-<run-id>.capture`.",
@@ -101,8 +95,8 @@
         "MANDATORY VIRTUAL DOM + SCROLL LOOP for Subscriptions: In one async browser_evaluate call, create `const videos = new Map()` and `const notes = []`. Define helpers that canonicalize URLs, derive `videoId`, trim text, pick thumbnails, and merge records without losing previously captured values. Extract the initial visible subscription cards into the Map before the first scroll.",
         "MANDATORY EXTRACTION LOOP for Subscriptions: On every pass, query the visible feed card roots again, compute `freshVideo` objects, and immediately merge them into the same `videos` Map. The browser step should accumulate state in-page; do not depend on the outer agent scratchpad to remember earlier cards.",
         "MANDATORY LIVE-CARD HANDLING for Subscriptions: Live and premiere cards still count when they expose a canonical watch URL. Preserve their rendered labels exactly, set `publishLabel` and `publishDateText` from that label, and allow `duration` to be null when the card shows `LIVE`, `Upcoming`, or a scheduled banner instead of a duration chip.",
-        "MANDATORY SCROLL LOOP for Subscriptions: After the initial extraction, perform at least 5 additional scroll passes using `window.scrollBy(0, window.innerHeight * 3)` with 3-second waits after each pass. After every pass, re-run the same extractor against the currently visible feed cards and merge them into the same in-page Map. If a pass yields zero new cards, record that in `notes` and continue until all mandatory passes are complete.",
-        "MANDATORY COUNT RULE for Subscriptions: Do not move to channel or search steps until the mandatory passes are complete and you have either captured at least 20 unique canonical videoIds or you can explicitly explain in `notes` why the rendered page exposed fewer than 20 eligible watch cards despite the completed pass budget.",
+        "BOUNDED SCROLL LOOP for Subscriptions: After the initial extraction, perform up to 5 additional scroll passes using `window.scrollBy(0, window.innerHeight * 3)` with 3-second waits after each pass while the surface advances and the run budget remains. After every pass, re-run the same extractor against the visible feed cards and merge them into the same in-page Map. Stop on surface failure, exhausted budget, 2 consecutive zero-growth passes, or the pass ceiling.",
+        "YIELD RECEIPT for Subscriptions: Preserve every structurally valid unique canonical videoId observed before moving on. There is no minimum video count; explain low or zero yield in `notes` so it remains diagnostic rather than padding the result.",
         "MANDATORY OUTPUT SHAPE for Subscriptions: Return an object shaped like `{ ok, sourceKind: \"subscriptions\", pageUrl, completedScrollPasses, requiredScrollPasses, uniqueVideos, notes, videos }`, where each video includes `videoId`, `canonicalUrl`, `title`, `channelName`, `channelUrl`, `channelHandle`, `channel`, `publishLabel`, `publishDateText`, `publishedAtMs`, `thumbnailUrl`, `duration`, `viewCount`, `viewCountLabel`, and `sourceKind: \"subscriptions\"`. `publishedAtMs`, `viewCount`, and `viewCountLabel` may be null when the card legitimately exposed no parseable publish timestamp or no views/watching label.",
         "MANDATORY SUBSCRIPTIONS NOTES: If the page shows the user is signed out, filtered to a sparse subset, or repeatedly recycling the same few feed cards, note that explicitly in `notes` while still returning any valid videos captured.",
         "MANDATORY FILE OUTPUT for Subscriptions: Ensure `data/tmp` exists before saving. Use browser_evaluate's filename parameter to write the full capture object directly to `data/tmp/youtube-subs-<run-id>.capture`.",

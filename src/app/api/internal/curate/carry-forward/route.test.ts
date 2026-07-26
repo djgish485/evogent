@@ -94,7 +94,7 @@ describe('/api/internal/curate/carry-forward', () => {
         includeAllUnviewed?: boolean;
         includeDisplayed?: boolean;
         cutoffMs?: number | null;
-        topCandidateIds?: string[];
+        candidateIds?: string[];
       };
       candidates?: Array<{ id: string }>;
     };
@@ -103,7 +103,7 @@ describe('/api/internal/curate/carry-forward', () => {
     assert.equal(body.review?.includeAllUnviewed, true);
     assert.equal(body.review?.includeDisplayed, true);
     assert.equal(body.review?.cutoffMs, null);
-    assert.ok(body.review?.topCandidateIds?.includes('old-unviewed-signal'));
+    assert.ok(body.review?.candidateIds?.includes('old-unviewed-signal'));
     assert.deepEqual(body.candidates?.map((candidate) => candidate.id), ['old-unviewed-signal']);
   });
 });

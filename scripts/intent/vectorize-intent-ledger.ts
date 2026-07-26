@@ -143,6 +143,13 @@ function candidateRows(db: Database.Database, limit: number): CandidateRow[] {
         AND instr(coalesce(s.source_id, ''), '${AUDIT_ARTIFACT_MARKER}') = 0
         AND coalesce(s.source_id, '') NOT LIKE '${AUDIT_ARTIFACT_PREFIX}%'
         AND coalesce(s.title, '') NOT LIKE '${AUDIT_ARTIFACT_PREFIX}%'
+        AND NOT (
+          s.source_table = 'docs'
+          AND (
+            s.source_id = '.intent/contracts.jsonl'
+            OR s.source_id LIKE '%/.intent/contracts.jsonl'
+          )
+        )
       ORDER BY category_rank ASC, s.timestamp DESC
       LIMIT ?
     ),

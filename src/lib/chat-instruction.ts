@@ -132,6 +132,7 @@ export function buildCuratorChatInstruction(input: {
   messageId: string;
   sessionId: string;
   sessionTitle: string | null;
+  automatedCycleId?: string | null;
   attachmentPaths?: string[];
 }): ChatInstruction {
   const splitMessage = splitPostContext(input.message);
@@ -149,6 +150,13 @@ export function buildCuratorChatInstruction(input: {
       'For data/config.md, apply explicit concrete personal settings directly, such as Agent Name = Bob. Ask first when ambiguous, broad, or destructive. Never print or edit secrets.',
       'No other direct file writes are allowed from curator chat.',
       'When the user asks for fresh source material, you may enqueue a low-priority cache refresh with POST /api/internal/orchestrator/enqueue using priority "cache_refresh" and a message like "/cache-refresh twitter".',
+      input.automatedCycleId
+        ? [
+            `AutomatedCurationCycleId: ${input.automatedCycleId}`,
+            'This automated turn is terminal only after /api/internal/curate/submit accepts one error-free cycleSummary receipt whose cycleId exactly equals AutomatedCurationCycleId.',
+            'Earlier item chunks must omit cycleSummary. The terminal receipt is required even when you select no items; a finished task without it is a failed cycle.',
+          ].join('\n')
+        : null,
       buildRequiredChatSubmitInstruction(input),
     ].filter(Boolean).join('\n'),
   };

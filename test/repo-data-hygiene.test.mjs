@@ -98,6 +98,49 @@ test('tweet cache policy and skill require visible parent capture and URL-matche
   }
 });
 
+test('source cache policies use bounded collection mechanics without account or output quotas', () => {
+  const policyPaths = [
+    'data/tweet-cache-policy.json',
+    'data/substack-cache-policy.json',
+    'data/youtube-cache-policy.json',
+    'data/hackernews-cache-policy.json',
+  ];
+  const policies = Object.fromEntries(policyPaths.map((policyPath) => [
+    policyPath,
+    JSON.parse(fs.readFileSync(policyPath, 'utf8')),
+  ]));
+  const forbiddenKeys = new Set([
+    'maxAccounts',
+    'accountTweetLimit',
+    'priorityAccountTweetLimit',
+    'outputAuthorCap',
+    'strictAuthorCap',
+    'defaultPriorityAccountWeight',
+    'priorityAccountWeightMultiplier',
+    'accountPool',
+  ]);
+  const visit = (value, location) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => visit(entry, `${location}[${index}]`));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, entry] of Object.entries(value)) {
+      assert.ok(!forbiddenKeys.has(key), `${location}.${key} is an editorial quota/weight`);
+      visit(entry, `${location}.${key}`);
+    }
+  };
+  for (const [policyPath, policy] of Object.entries(policies)) visit(policy, policyPath);
+
+  const substackPrompt = JSON.stringify(policies['data/substack-cache-policy.json']);
+  const youtubePrompt = JSON.stringify(policies['data/youtube-cache-policy.json']);
+  for (const prompt of [substackPrompt, youtubePrompt]) {
+    assert.doesNotMatch(prompt, /minimum scroll passes|perform at least [35]|at least (15|20) unique|mandatory count rule/i);
+    assert.match(prompt, /up to [35] additional scroll passes/i);
+    assert.match(prompt, /there is no minimum (?:row|video) count/i);
+  }
+});
+
 test('repository does not track live ntfy push notification config', () => {
   const tracked = gitLsFiles();
   const trackedPushConfigs = tracked.filter((file) => file === 'data/push-notifications.json');

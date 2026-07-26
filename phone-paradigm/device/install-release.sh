@@ -35,6 +35,10 @@ fi
 ROOT="${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"
 RELEASES="$ROOT/releases"
 STATE="$ROOT/state"
+DEPENDENCIES="$STATE/dependencies"
+DEPENDENCY_BUILDS="$STATE/dependency-builds"
+DEPENDENCY_QUARANTINE="$STATE/dependency-quarantine"
+RELEASE_CANDIDATES="$STATE/release-candidates"
 PHONE_STATE="$STATE/phone-tools"
 CURRENT="$ROOT/current"
 STAGING_ROOT="$ROOT/staging"
@@ -63,8 +67,9 @@ for numeric in "$INSTALL_WAIT_SECONDS" "$KEEP_RELEASES" "$KEEP_BACKUPS" "$KEEP_L
   }
 done
 
-mkdir -p "$RELEASES" "$STATE" "$STAGING_ROOT" "$BACKUPS" "$MIGRATIONS" "$LOGS" \
-  "$TRANSACTION_DIR"
+mkdir -p "$RELEASES" "$STATE" "$DEPENDENCIES" "$DEPENDENCY_BUILDS" \
+  "$DEPENDENCY_QUARANTINE" "$RELEASE_CANDIDATES" "$STAGING_ROOT" \
+  "$BACKUPS" "$MIGRATIONS" "$LOGS" "$TRANSACTION_DIR"
 chmod 700 "$TRANSACTION_DIR"
 STAMP="$(date -u '+%Y%m%dT%H%M%SZ')"
 LOG="$LOGS/install-$STAMP-$$.log"
@@ -242,14 +247,19 @@ NEW_RELEASE=""
 PREVIOUS_TARGET=""
 BACKUP_DIR=""
 DB_BACKUP=""
+DB_BACKUP_READY=0
 APK_BACKUP=""
+APK_BACKUP_READY=0
 APK_CHANGED=0
 APK_INSTALL_ATTEMPTED=0
 PREVIOUS_APK_CODE=""
 PREVIOUS_APK_SIGNER=""
 ROLLBACK_FAILED=0
+ROLLBACK_ATTEMPTED=0
+REARM_PRIOR_CONTROL_PLANE=0
 SWITCH_STARTED=0
 QUIESCED=0
+CONTROL_PLANE_MUTATION_STARTED=0
 INITIAL_MIGRATION=0
 MIGRATION_STARTED=0
 MIGRATION_DIR=""
@@ -260,6 +270,10 @@ CONTROL_TOKEN_BACKUP=""
 CONTROL_TOKEN_EXISTED=0
 CONTROL_TOKEN_BACKUP_READY=0
 TRANSACTION_PHASE=""
+TRANSACTION_JOURNAL_WRITTEN=0
+DEPENDENCY_BUILD=""
+DEPENDENCY_STATE_HELPER=""
+ROLLBACK_STATE_HELPER=""
 
 stop_tmux_session() {
   local name="$1"
@@ -270,6 +284,16 @@ stop_tmux_session() {
     tmux has-session -t "$name" 2>/dev/null || return 0
     sleep 1
   done
+  return 1
+}
+
+stop_and_prove_runtime() {
+  stop_tmux_session evo || return 1
+  for _ in $(seq 1 20); do
+    phone_ports_open || return 0
+    sleep 1
+  done
+  say "one of the server ports is still owned after the scoped evo session stopped"
   return 1
 }
 
@@ -339,6 +363,21 @@ quiesce_control_plane() {
 
 rish_command() {
   env RISH_APPLICATION_ID=com.termux "$HOME/rish-bin/rish" -c "$1"
+}
+
+package_manager_supports_apk_rollback() {
+  local package_help rollback_probe
+  package_help="$(rish_command "cmd package help" 2>&1 || true)"
+  grep -q -- '--enable-rollback' <<<"$package_help" || return 1
+  if grep -q -- 'rollback-app' <<<"$package_help"; then
+    return 0
+  fi
+
+  # Android 16's Pixel package-manager help omits this hidden command even
+  # though PackageManagerShellCommand implements it. With no package argument,
+  # the command cannot mutate state; reaching its arity check proves dispatch.
+  rollback_probe="$(rish_command "cmd package rollback-app" 2>&1 || true)"
+  grep -Fq 'Argument expected after "rollback-app"' <<<"$rollback_probe"
 }
 
 stage_apk_for_shell() {
@@ -418,6 +457,10 @@ wait_for_apk_backup_identity() {
 rollback_apk_native() {
   local probe="$STAGING_ROOT/installed-after-rollback.apk"
   [ "$APK_INSTALL_ATTEMPTED" = 1 ] || return 0
+  [ "$APK_BACKUP_READY" = 1 ] || {
+    say "CRITICAL: APK install was attempted without a proven rollback backup"
+    return 1
+  }
 
   # An interrupted rish/package-manager command can still commit after its
   # parent installer dies.  Never accept one early observation of the old APK:
@@ -438,8 +481,24 @@ rollback_apk_native() {
   return 1
 }
 
+wait_for_apk_rollback_availability() {
+  local expected_installed="$1" expected_backup="$2" dump
+  [ -f "$ROLLBACK_STATE_HELPER" ] && [ ! -L "$ROLLBACK_STATE_HELPER" ] || return 1
+  for _ in $(seq 1 30); do
+    dump="$(rish_command "dumpsys rollback" 2>/dev/null || true)"
+    if printf '%s\n' "$dump" \
+        | python3 "$ROLLBACK_STATE_HELPER" check \
+            "$PACKAGE_NAME" "$expected_installed" "$expected_backup"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 backup_database() {
   local source="$1" output="$2"
+  DB_BACKUP_READY=0
   [ -f "$source" ] || return 0
   python3 - "$source" "$output" <<'PY'
 import sqlite3
@@ -457,16 +516,44 @@ check.close()
 if result != "ok":
     raise SystemExit(f"database backup quick_check failed: {result}")
 PY
+  chmod 600 "$output"
   fsync_regular_file_and_parent "$output"
+  DB_BACKUP_READY=1
 }
 
 restore_database() {
   local target="${1:-$STATE/data/media-agent.db}"
-  [ -n "$DB_BACKUP" ] && [ -f "$DB_BACKUP" ] || return 0
+  [ "$DB_BACKUP_READY" = 1 ] || return 0
+  [ -n "$DB_BACKUP" ] && [ -f "$DB_BACKUP" ] && [ ! -L "$DB_BACKUP" ] \
+    && [ "$(stat -c '%a' "$DB_BACKUP")" = 600 ] || {
+      say "CRITICAL: proven database backup is missing or unsafe"
+      return 1
+    }
+  python3 - "$DB_BACKUP" <<'PY'
+import sqlite3
+import sys
+
+database = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+result = database.execute("PRAGMA quick_check").fetchone()[0]
+database.close()
+if result != "ok":
+    raise SystemExit(f"database rollback quick_check failed: {result}")
+PY
   mkdir -p "$(dirname "$target")"
   rm -f "$target-wal" "$target-shm"
   cp "$DB_BACKUP" "$target"
   fsync_regular_file_and_parent "$target"
+}
+
+backup_apk_for_rollback() {
+  local source="$1" output="$2"
+  APK_BACKUP_READY=0
+  [ -f "$source" ] && [ ! -L "$source" ] || return 1
+  cp "$source" "$output"
+  chmod 600 "$output"
+  fsync_regular_file_and_parent "$output"
+  cmp -s "$source" "$output" || return 1
+  APK_BACKUP_READY=1
 }
 
 atomic_link() {
@@ -505,6 +592,7 @@ backup_control_token() {
   local source="$1"
   CONTROL_TOKEN_BACKUP="$BACKUP_DIR/control-token.txt"
   CONTROL_TOKEN_EXISTED=0
+  CONTROL_TOKEN_BACKUP_READY=0
   if [ -e "$source" ] || [ -L "$source" ]; then
     [ -f "$source" ] && [ ! -L "$source" ] || {
       say "phone control token is not a regular private file"
@@ -598,10 +686,12 @@ write_transaction_journal() {
   TRANSACTION_PHASE="$phase"
   python3 - "$temporary" "$TRANSACTION_JOURNAL" \
     "$ROOT" "$phase" "$RELEASE_ID" "$NEW_RELEASE" "$PREVIOUS_TARGET" \
-    "$BACKUP_DIR" "$DB_BACKUP" "$APK_BACKUP" "$APK_CHANGED" \
+    "$BACKUP_DIR" "$DB_BACKUP" "$DB_BACKUP_READY" \
+    "$APK_BACKUP" "$APK_BACKUP_READY" "$APK_CHANGED" \
     "$APK_INSTALL_ATTEMPTED" "$PREVIOUS_APK_CODE" "$PREVIOUS_APK_SIGNER" \
-    "$INITIAL_MIGRATION" "$MIGRATION_STARTED" "$MIGRATION_DIR" "$CYCLE_GATE" \
-    "$CONTROL_TOKEN" "$CONTROL_TOKEN_BACKUP" "$CONTROL_TOKEN_EXISTED" <<'PY'
+    "$INITIAL_MIGRATION" "$MIGRATION_STARTED" "$SWITCH_STARTED" \
+    "$MIGRATION_DIR" "$CYCLE_GATE" "$CONTROL_TOKEN" "$CONTROL_TOKEN_BACKUP" \
+    "$CONTROL_TOKEN_EXISTED" "$CONTROL_TOKEN_BACKUP_READY" <<'PY'
 import json
 import os
 import pathlib
@@ -617,18 +707,22 @@ import sys
     previous_target,
     backup_dir,
     db_backup,
+    db_backup_ready,
     apk_backup,
+    apk_backup_ready,
     apk_changed,
     apk_install_attempted,
     previous_apk_code,
     previous_apk_signer,
     initial_migration,
     migration_started,
+    switch_started,
     migration_dir,
     cycle_gate,
     control_token,
     control_token_backup,
     control_token_existed,
+    control_token_backup_ready,
 ) = sys.argv[1:]
 payload = {
     "schema": "evogent.phone.install-transaction.v1",
@@ -639,18 +733,22 @@ payload = {
     "previousTarget": previous_target,
     "backupDir": backup_dir,
     "dbBackup": db_backup,
+    "dbBackupReady": int(db_backup_ready),
     "apkBackup": apk_backup,
+    "apkBackupReady": int(apk_backup_ready),
     "apkChanged": int(apk_changed),
     "apkInstallAttempted": int(apk_install_attempted),
     "previousApkCode": previous_apk_code,
     "previousApkSigner": previous_apk_signer,
     "initialMigration": int(initial_migration),
     "migrationStarted": int(migration_started),
+    "switchStarted": int(switch_started),
     "migrationDir": migration_dir,
     "cycleGate": cycle_gate,
     "controlToken": control_token,
     "controlTokenBackup": control_token_backup,
     "controlTokenExisted": int(control_token_existed),
+    "controlTokenBackupReady": int(control_token_backup_ready),
 }
 with open(temporary, "x", encoding="utf-8") as handle:
     json.dump(payload, handle, separators=(",", ":"), sort_keys=True)
@@ -665,6 +763,7 @@ try:
 finally:
     os.close(directory)
 PY
+  TRANSACTION_JOURNAL_WRITTEN=1
 }
 
 clear_transaction_journal() {
@@ -710,6 +809,8 @@ if data.get("schema") != "evogent.phone.install-transaction.v1":
 if data.get("root") != root:
     raise SystemExit("install transaction belongs to a different release root")
 if data.get("phase") not in {
+    "quiesce_pending",
+    "backup_pending",
     "prepared",
     "switch_pending",
     "apk_install_pending",
@@ -746,9 +847,13 @@ if data.get("cycleGate") not in {home_gate, state_gate}:
 for key in (
     "apkChanged",
     "apkInstallAttempted",
+    "apkBackupReady",
+    "dbBackupReady",
     "initialMigration",
     "migrationStarted",
+    "switchStarted",
     "controlTokenExisted",
+    "controlTokenBackupReady",
 ):
     if data.get(key) not in {0, 1}:
         raise SystemExit("transaction flag is invalid")
@@ -765,11 +870,8 @@ PY
 }
 
 rollback_initial_migration() {
-  [ "$INITIAL_MIGRATION" = 1 ] || return 0
+  [ "$INITIAL_MIGRATION" = 1 ] && [ "$MIGRATION_STARTED" = 1 ] || return 0
   rm -f "$CURRENT"
-  rm -f "$HOME/evogent" "$HOME/phone-tools" "$HOME/start-prod.sh" \
-    "$HOME/start-prod-sub.sh" "$HOME/restart-evo.sh" "$HOME/deploy-next.sh" \
-    "$HOME/install-evogent-release.sh"
   if [ -d "$MIGRATION_DIR/evogent" ]; then
     if [ -d "$STATE/data" ]; then
       if [ -d "$MIGRATION_DIR/evogent/data" ]; then
@@ -795,14 +897,15 @@ rollback_initial_migration() {
     rm -rf -- "$HOME/evogent"
     mv "$MIGRATION_DIR/evogent" "$HOME/evogent"
   fi
+  rm -rf -- "$HOME/phone-tools"
   rm -rf -- "$PHONE_STATE"
   if [ -d "$MIGRATION_DIR/phone-tools" ]; then
-    rm -rf -- "$HOME/phone-tools"
     mv "$MIGRATION_DIR/phone-tools" "$HOME/phone-tools"
   fi
-  for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh; do
+  for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh \
+      install-evogent-release.sh; do
+    rm -f "$HOME/$name"
     if [ -e "$MIGRATION_DIR/home/$name" ] || [ -L "$MIGRATION_DIR/home/$name" ]; then
-      rm -f "$HOME/$name"
       mv "$MIGRATION_DIR/home/$name" "$HOME/$name"
     fi
   done
@@ -844,10 +947,33 @@ rollback_phone_dispatch_changes() {
 
 rollback_release() {
   say "install failed; rolling back the complete release"
+  ROLLBACK_ATTEMPTED=1
   set +e
-  quiesce_control_plane
-  stop_tmux_session evo
-  rollback_phone_dispatch_changes || ROLLBACK_FAILED=1
+  CONTROL_PLANE_MUTATION_STARTED=1
+  if ! quiesce_control_plane; then
+    ROLLBACK_FAILED=1
+    if [ "$SWITCH_STARTED" = 0 ] && [ "$MIGRATION_STARTED" = 0 ] \
+        && [ "$APK_INSTALL_ATTEMPTED" = 0 ]; then
+      REARM_PRIOR_CONTROL_PLANE=1
+    fi
+    say "CRITICAL: rollback cannot prove the scheduler/watchdog control plane is quiescent"
+    set -e
+    return 1
+  fi
+  if ! stop_and_prove_runtime; then
+    ROLLBACK_FAILED=1
+    if [ "$SWITCH_STARTED" = 0 ] && [ "$MIGRATION_STARTED" = 0 ] \
+        && [ "$APK_INSTALL_ATTEMPTED" = 0 ]; then
+      REARM_PRIOR_CONTROL_PLANE=1
+    fi
+    say "CRITICAL: rollback cannot prove the prior runtime is stopped"
+    set -e
+    return 1
+  fi
+  QUIESCED=1
+  if [ "$SWITCH_STARTED" = 1 ] || [ "$MIGRATION_STARTED" = 1 ]; then
+    rollback_phone_dispatch_changes || ROLLBACK_FAILED=1
+  fi
   if [ -n "$PREVIOUS_TARGET" ]; then
     atomic_link "$PREVIOUS_TARGET" "$CURRENT" || ROLLBACK_FAILED=1
     restore_database || ROLLBACK_FAILED=1
@@ -890,21 +1016,49 @@ rollback_release() {
     ROLLBACK_FAILED=1
   fi
   set -e
+  [ "$ROLLBACK_FAILED" = 0 ]
 }
 
 cleanup() {
   local rc=$?
   trap - EXIT INT TERM HUP
   if [ "$rc" -ne 0 ] \
-    && { [ "$SWITCH_STARTED" = 1 ] || [ "$MIGRATION_STARTED" = 1 ] || [ "$QUIESCED" = 1 ]; }; then
-    rollback_release
+    && [ "$ROLLBACK_ATTEMPTED" = 0 ] \
+    && { [ "$SWITCH_STARTED" = 1 ] || [ "$MIGRATION_STARTED" = 1 ] \
+      || [ "$QUIESCED" = 1 ] || [ "$CONTROL_PLANE_MUTATION_STARTED" = 1 ]; }; then
+    rollback_release || true
     if [ "$ROLLBACK_FAILED" = 0 ]; then
       clear_transaction_journal || true
     fi
+  elif [ "$rc" -ne 0 ] && [ "$ROLLBACK_ATTEMPTED" = 0 ] \
+      && [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ]; then
+    # The durable intent exists but no production mutation began. A graceful
+    # failure can discard it; SIGKILL/reboot still leaves it for recovery.
+    clear_transaction_journal || true
   fi
   [ "$CYCLE_GATE_HELD" = 1 ] && release_lock_dir "$CYCLE_GATE" || true
-  [ "$INSTALL_LOCK_HELD" = 1 ] && release_lock_dir "$INSTALL_LOCK" || true
   [ -n "$STAGE" ] && [ -d "$STAGE" ] && rm -rf -- "$STAGE"
+  if [ "$INSTALL_LOCK_HELD" = 1 ] \
+      && [ -f "$DEPENDENCY_STATE_HELPER" ] \
+      && [ ! -L "$DEPENDENCY_STATE_HELPER" ]; then
+    # This safely makes sealed trees removable and also reaps a failed release
+    # candidate once rollback has cleared its transaction journal.
+    python3 "$DEPENDENCY_STATE_HELPER" prune "$ROOT" || true
+  elif [ -n "$DEPENDENCY_BUILD" ] \
+      && [ -d "$DEPENDENCY_BUILD" ] \
+      && [ "$(dirname "$DEPENDENCY_BUILD")" = "$DEPENDENCY_BUILDS" ]; then
+    rm -rf -- "$DEPENDENCY_BUILD"
+  fi
+  [ "$INSTALL_LOCK_HELD" = 1 ] && release_lock_dir "$INSTALL_LOCK" || true
+  if [ "$REARM_PRIOR_CONTROL_PLANE" = 1 ]; then
+    if [ -x "$HOME/phone-tools/evogent-boot.sh" ]; then
+      EVOGENT_RELEASE_RECOVERY=1 EVOGENT_RELEASE_BOOT=1 \
+        bash "$HOME/phone-tools/evogent-boot.sh" \
+        || say "CRITICAL: prior control plane could not be re-armed after safe rollback deferral"
+    else
+      say "CRITICAL: prior control plane could not be re-armed; boot program is unavailable"
+    fi
+  fi
   if [ "$SUCCESS" = 1 ] && [ "$RECOVERY_ACTIVE" = 1 ]; then
     say "interrupted release transaction recovered"
   elif [ "$SUCCESS" = 1 ]; then
@@ -912,7 +1066,7 @@ cleanup() {
   else
     say "release install exited with status $rc"
     [ "$ROLLBACK_FAILED" = 1 ] \
-      && say "CRITICAL: APK rollback could not be proven; manual recovery is required"
+      && say "CRITICAL: complete release rollback could not be proven; the recovery journal was retained"
   fi
   exit "$rc"
 }
@@ -924,8 +1078,18 @@ trap 'exit 129' HUP
 recover_interrupted_transaction() {
   local journal="$1" restored_target
   RECOVERY_ACTIVE=1
-  [ "$journal" = "$TRANSACTION_JOURNAL" ] \
-    && [ -f "$journal" ] && [ ! -L "$journal" ] \
+  [ "$journal" = "$TRANSACTION_JOURNAL" ] || {
+    say "interrupted install recovery path is invalid"
+    return 65
+  }
+  acquire_lock_dir "$INSTALL_LOCK" release-install-recovery
+  INSTALL_LOCK_HELD=1
+  if [ ! -e "$journal" ] && [ ! -L "$journal" ]; then
+    # A concurrent recoverer may have completed while this process waited.
+    SUCCESS=1
+    return 0
+  fi
+  [ -f "$journal" ] && [ ! -L "$journal" ] \
     && [ -f "$TRANSACTION_RECOVERER" ] && [ ! -L "$TRANSACTION_RECOVERER" ] || {
       say "interrupted install recovery metadata is missing or unsafe"
       return 65
@@ -943,24 +1107,26 @@ recover_interrupted_transaction() {
   PREVIOUS_TARGET="$(journal_field "$journal" previousTarget)"
   BACKUP_DIR="$(journal_field "$journal" backupDir)"
   DB_BACKUP="$(journal_field "$journal" dbBackup)"
+  DB_BACKUP_READY="$(journal_field "$journal" dbBackupReady)"
   APK_BACKUP="$(journal_field "$journal" apkBackup)"
+  APK_BACKUP_READY="$(journal_field "$journal" apkBackupReady)"
   APK_CHANGED="$(journal_field "$journal" apkChanged)"
   APK_INSTALL_ATTEMPTED="$(journal_field "$journal" apkInstallAttempted)"
   PREVIOUS_APK_CODE="$(journal_field "$journal" previousApkCode)"
   PREVIOUS_APK_SIGNER="$(journal_field "$journal" previousApkSigner)"
   INITIAL_MIGRATION="$(journal_field "$journal" initialMigration)"
   MIGRATION_STARTED="$(journal_field "$journal" migrationStarted)"
+  SWITCH_STARTED="$(journal_field "$journal" switchStarted)"
   MIGRATION_DIR="$(journal_field "$journal" migrationDir)"
   CYCLE_GATE="$(journal_field "$journal" cycleGate)"
   CONTROL_TOKEN="$(journal_field "$journal" controlToken)"
   CONTROL_TOKEN_BACKUP="$(journal_field "$journal" controlTokenBackup)"
   CONTROL_TOKEN_EXISTED="$(journal_field "$journal" controlTokenExisted)"
-  CONTROL_TOKEN_BACKUP_READY=1
+  CONTROL_TOKEN_BACKUP_READY="$(journal_field "$journal" controlTokenBackupReady)"
+  TRANSACTION_JOURNAL_WRITTEN=1
   MANIFEST_PATH="$NEW_RELEASE/manifest.json"
   STAGE="$(mktemp -d "$STAGING_ROOT/recover.XXXXXX")"
 
-  acquire_lock_dir "$INSTALL_LOCK" release-install-recovery
-  INSTALL_LOCK_HELD=1
   if [ -d "$PHONE_STATE/.cycle.lock" ]; then
     CYCLE_GATE="$PHONE_STATE/.cycle.lock"
   elif [ ! -d "$(dirname "$CYCLE_GATE")" ]; then
@@ -969,8 +1135,6 @@ recover_interrupted_transaction() {
   fi
   acquire_lock_dir "$CYCLE_GATE" release-install-recovery-cycle-gate
   CYCLE_GATE_HELD=1
-  QUIESCED=1
-  SWITCH_STARTED=1
 
   if [ "$APK_INSTALL_ATTEMPTED" = 1 ]; then
     for _ in $(seq 1 12); do
@@ -980,7 +1144,7 @@ recover_interrupted_transaction() {
   fi
 
   say "recovering interrupted release transaction at phase $TRANSACTION_PHASE"
-  rollback_release
+  rollback_release || true
   [ "$ROLLBACK_FAILED" = 0 ] || return 70
   if [ -n "$PREVIOUS_TARGET" ]; then
     restored_target="$(readlink -f "$CURRENT" 2>/dev/null || true)"
@@ -992,7 +1156,7 @@ recover_interrupted_transaction() {
     say "CRITICAL: interrupted initial install left a release pointer behind"
     return 70
   fi
-  if [ "$CONTROL_TOKEN_EXISTED" = 1 ]; then
+  if [ "$CONTROL_TOKEN_BACKUP_READY" = 1 ] && [ "$CONTROL_TOKEN_EXISTED" = 1 ]; then
     local restored_token="$CONTROL_TOKEN"
     if [ "$INITIAL_MIGRATION" = 1 ]; then
       restored_token="$HOME/evogent/data/control-token.txt"
@@ -1015,17 +1179,27 @@ if [ -n "$RECOVERY_JOURNAL_ARG" ]; then
   exit 0
 fi
 
-if [ -e "$TRANSACTION_JOURNAL" ] || [ -L "$TRANSACTION_JOURNAL" ]; then
-  [ -f "$TRANSACTION_RECOVERER" ] && [ ! -L "$TRANSACTION_RECOVERER" ] || {
-    say "a prior interrupted install has no safe recovery program"
-    exit 70
-  }
-  say "recovering the prior interrupted release before accepting a new archive"
-  bash "$TRANSACTION_RECOVERER" --recover "$TRANSACTION_JOURNAL" || exit 70
-fi
+acquire_install_lock_and_recover_prior_transactions() {
+  acquire_lock_dir "$INSTALL_LOCK" release-install
+  INSTALL_LOCK_HELD=1
+  while [ -e "$TRANSACTION_JOURNAL" ] || [ -L "$TRANSACTION_JOURNAL" ]; do
+    [ -f "$TRANSACTION_RECOVERER" ] && [ ! -L "$TRANSACTION_RECOVERER" ] \
+      && [ "$(stat -c '%a' "$TRANSACTION_RECOVERER")" = 700 ] || {
+        say "a prior interrupted install has no safe private recovery program"
+        return 70
+      }
+    say "recovering the prior interrupted release before accepting a new archive"
+    release_lock_dir "$INSTALL_LOCK"
+    INSTALL_LOCK_HELD=0
+    bash "$TRANSACTION_RECOVERER" --recover "$TRANSACTION_JOURNAL" || return 70
+    acquire_lock_dir "$INSTALL_LOCK" release-install
+    INSTALL_LOCK_HELD=1
+    # Recheck under the reacquired lock. Another transaction may have started
+    # and been interrupted while this process waited for the first recoverer.
+  done
+}
 
-acquire_lock_dir "$INSTALL_LOCK" release-install
-INSTALL_LOCK_HELD=1
+acquire_install_lock_and_recover_prior_transactions
 
 ACTUAL_ARCHIVE_SHA256="$(sha256_file "$ARCHIVE")"
 [ "${ACTUAL_ARCHIVE_SHA256,,}" = "${EXPECTED_ARCHIVE_SHA256,,}" ] || {
@@ -1078,6 +1252,92 @@ for part in sys.argv[2].split("."):
     value = value[part]
 print(value)
 PY
+}
+
+smoke_android_dependency_tree() {
+  local tree="$1"
+  (
+    cd "$tree"
+    npm ls --omit=dev --depth=0 >/dev/null
+    node <<'NODE'
+const Database = require('better-sqlite3');
+const db = new Database(':memory:');
+db.exec('CREATE TABLE proof(value INTEGER); INSERT INTO proof VALUES (1)');
+if (db.prepare('SELECT value FROM proof').get().value !== 1) {
+  throw new Error('better-sqlite3 Android smoke check failed');
+}
+db.close();
+for (const name of ['next', 'better-sqlite3', 'ws', 'dotenv', 'bullmq']) {
+  require.resolve(name);
+}
+NODE
+  )
+}
+
+verify_android_dependency_tree() {
+  local tree="$1" expected_lock="$2"
+  [ -f "$DEPENDENCY_STATE_HELPER" ] && [ ! -L "$DEPENDENCY_STATE_HELPER" ] || return 1
+  python3 "$DEPENDENCY_STATE_HELPER" verify "$tree" "$expected_lock" || return 1
+  smoke_android_dependency_tree "$tree"
+}
+
+prepare_android_dependency_tree() {
+  local expected_lock="$1" target="$DEPENDENCIES/$1"
+  local node_gyp
+  [[ "$expected_lock" =~ ^[0-9a-f]{64}$ ]] || {
+    say "release dependency identity is invalid"
+    return 65
+  }
+  if verify_android_dependency_tree "$target" "$expected_lock"; then
+    say "reusing verified Android dependency tree"
+    return 0
+  fi
+
+  DEPENDENCY_BUILD="$(mktemp -d "$DEPENDENCY_BUILDS/$expected_lock.XXXXXX")"
+  cp "$NEW_RELEASE/runtime/package.json" "$DEPENDENCY_BUILD/package.json"
+  cp "$NEW_RELEASE/runtime/package-lock.json" "$DEPENDENCY_BUILD/package-lock.json"
+  chmod 600 "$DEPENDENCY_BUILD/package.json" "$DEPENDENCY_BUILD/package-lock.json"
+
+  # Android packages do not publish a compatible better-sqlite3 prebuild. Install the exact
+  # public lock without lifecycle scripts, then compile that one native addon against the
+  # Termux toolchain. Unsupported optional packages (the host embedding model, SWC, image
+  # optimizers) remain absent; the runtime has explicit Android fallbacks for them.
+  (
+    cd "$DEPENDENCY_BUILD"
+    npm ci --ignore-scripts --omit=dev --omit=optional --no-audit --no-fund
+  )
+  node_gyp="$(npm root -g)/npm/node_modules/node-gyp/bin/node-gyp.js"
+  [ -f "$node_gyp" ] || {
+    say "Termux npm does not expose its bundled node-gyp"
+    return 69
+  }
+  (
+    cd "$DEPENDENCY_BUILD/node_modules/better-sqlite3"
+    GYP_DEFINES="android_ndk_path=$PREFIX" \
+      node "$node_gyp" rebuild --release
+  )
+
+  printf '%s\n' "$expected_lock" > "$DEPENDENCY_BUILD/.evogent-package-lock.sha256"
+  chmod 600 "$DEPENDENCY_BUILD/.evogent-package-lock.sha256"
+  python3 "$DEPENDENCY_STATE_HELPER" seal "$DEPENDENCY_BUILD" "$expected_lock" || {
+    say "new Android dependency tree could not be inventoried and sealed"
+    return 70
+  }
+  sync -f "$DEPENDENCY_BUILD"
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    say "quarantining invalid Android dependency tree during atomic replacement"
+  fi
+  python3 "$DEPENDENCY_STATE_HELPER" publish \
+    "$DEPENDENCY_BUILD" "$target" "$DEPENDENCY_QUARANTINE" "$expected_lock" || {
+      say "Android dependency tree could not be published atomically"
+      return 70
+    }
+  DEPENDENCY_BUILD=""
+  smoke_android_dependency_tree "$target" || {
+    say "published Android dependency tree failed its native runtime smoke test"
+    return 70
+  }
+  say "built and verified versioned Android dependency tree"
 }
 
 verify_release_tls_material() {
@@ -1188,7 +1448,8 @@ PY
     exit 65
 }
 RELEASE_ID="$(read_manifest releaseId)"
-[[ "$RELEASE_ID" =~ ^[A-Za-z0-9._-]{1,120}$ ]] || {
+[[ "$RELEASE_ID" =~ ^[A-Za-z0-9._-]{1,120}$ ]] \
+  && [ "$RELEASE_ID" != . ] && [ "$RELEASE_ID" != .. ] || {
   say "unsafe release id"
   exit 65
 }
@@ -1242,6 +1503,23 @@ if (root / "runtime/.next/BUILD_ID").read_text().strip() != manifest["web"]["bui
     raise SystemExit("Next.js BUILD_ID does not match manifest")
 PY
 
+DEPENDENCY_STATE_HELPER="$EXTRACTED/device/dependency-tree-state.py"
+[ -f "$DEPENDENCY_STATE_HELPER" ] && [ ! -L "$DEPENDENCY_STATE_HELPER" ] || {
+  say "release dependency-state helper is missing or unsafe"
+  exit 65
+}
+ROLLBACK_STATE_HELPER="$EXTRACTED/device/rollback-state.py"
+[ -f "$ROLLBACK_STATE_HELPER" ] && [ ! -L "$ROLLBACK_STATE_HELPER" ] || {
+  say "release rollback-state helper is missing or unsafe"
+  exit 65
+}
+# This runs while the exclusive install lock is held and before a new dependency
+# build begins. It bounds artifacts left by SIGKILL, reboot, or a failed candidate.
+python3 "$DEPENDENCY_STATE_HELPER" prune "$ROOT" || {
+  say "stale dependency/release state could not be pruned safely"
+  exit 70
+}
+
 NEW_RELEASE="$RELEASES/$RELEASE_ID"
 if [ -e "$NEW_RELEASE" ]; then
   [ -f "$NEW_RELEASE/manifest.json" ] \
@@ -1255,6 +1533,7 @@ if [ -e "$NEW_RELEASE" ]; then
   }
   rm -rf -- "$EXTRACTED"
 else
+  python3 "$DEPENDENCY_STATE_HELPER" candidate-add "$ROOT" "$RELEASE_ID"
   python3 - "$EXTRACTED" <<'PY'
 import json
 import os
@@ -1271,6 +1550,8 @@ PY
   mv "$EXTRACTED" "$NEW_RELEASE"
 fi
 MANIFEST_PATH="$NEW_RELEASE/manifest.json"
+DEPENDENCY_STATE_HELPER="$NEW_RELEASE/device/dependency-tree-state.py"
+ROLLBACK_STATE_HELPER="$NEW_RELEASE/device/rollback-state.py"
 [ "$(sha256_file "$NEW_RELEASE/files.sha256")" = "$(read_manifest inventory.sha256)" ] \
   && [ "$(sha256_file "$NEW_RELEASE/links.json")" = "$(read_manifest inventory.linksSha256)" ] || {
   say "installed release inventory metadata mismatch"
@@ -1328,6 +1609,17 @@ PY
 }
 verify_release_tls_material "$NEW_RELEASE" || exit 65
 
+# Build dependencies before taking the cycle gate or stopping production. The exact lock hash
+# names the tree, so a failed build cannot mutate the currently running release and a later
+# release with the same lock can reuse the verified Android-native result.
+EXPECTED_PACKAGE_LOCK="$(read_manifest dependencies.packageLockSha256)"
+EXPECTED_DEPENDENCY_LINK="../../../state/dependencies/$EXPECTED_PACKAGE_LOCK/node_modules"
+[ "$(read_manifest stateLinks.runtime/node_modules)" = "$EXPECTED_DEPENDENCY_LINK" ] || {
+  say "release dependency link does not match its lock identity"
+  exit 65
+}
+prepare_android_dependency_tree "$EXPECTED_PACKAGE_LOCK"
+
 # Same release + matching APK metadata is an intentional no-op. Still prove the
 # local server is healthy instead of trusting a symlink alone.
 CURRENT_RESOLVED="$(readlink -f "$CURRENT" 2>/dev/null || true)"
@@ -1360,6 +1652,20 @@ INSTALLED_APK_CODE="$(installed_apk_version_code)"
 INSTALLED_APK_SIGNER="$(apk_signer_sha256 "$CURRENT_APK_PROBE" 2>/dev/null || true)"
 PREVIOUS_APK_CODE="$INSTALLED_APK_CODE"
 PREVIOUS_APK_SIGNER="$INSTALLED_APK_SIGNER"
+CURRENT_APK_SHA256="$(sha256_file "$CURRENT_APK_PROBE")"
+if [ "$CURRENT_APK_SHA256" != "$EXPECTED_APK_SHA256" ]; then
+  APK_CHANGED=1
+  [[ "$INSTALLED_APK_CODE" =~ ^[0-9]+$ ]] \
+    && [[ "$EXPECTED_APK_CODE" =~ ^[0-9]+$ ]] \
+    && [ "$EXPECTED_APK_CODE" -gt "$INSTALLED_APK_CODE" ] || {
+      say "changed APK requires a strictly higher Android version code"
+      exit 65
+    }
+  package_manager_supports_apk_rollback || {
+      say "Android package manager does not expose native app rollback; refusing the APK upgrade"
+      exit 69
+    }
+fi
 if [ "$CURRENT_RESOLVED" = "$NEW_RELEASE" ] \
     && [ "$INSTALLED_APK_CODE" = "$EXPECTED_APK_CODE" ] \
     && [ "$INSTALLED_APK_SIGNER" = "$EXPECTED_APK_SIGNER" ] \
@@ -1385,58 +1691,16 @@ PY
   fi
 fi
 
-# Establish a cycle gate with the exact same mkdir/PID-start lease understood by
-# old and new cycles. Once held, no browse/curate task can begin during a switch.
-CYCLE_GATE="$HOME/phone-tools/.cycle.lock"
-if [ ! -e "$HOME/phone-tools" ]; then
-  mkdir -p "$PHONE_STATE"
-  atomic_link "$PHONE_STATE" "$HOME/phone-tools"
-  CYCLE_GATE="$PHONE_STATE/.cycle.lock"
-fi
-acquire_lock_dir "$CYCLE_GATE" release-install-cycle-gate
-CYCLE_GATE_HELD=1
-
-quiesce_control_plane
-QUIESCED=1
-
-# Stop and prove the exact server owner before moving its cwd or private data.
-# The cycle gate prevents a new background writer; taking the checked snapshot
-# here also closes the display-0/user-write race during initial migration.
-stop_tmux_session evo
-for _ in $(seq 1 20); do
-  phone_ports_open || break
-  sleep 1
-done
-if phone_ports_open; then
-  say "one of the server ports is still owned after the scoped evo session stopped; refusing an unsafe migration"
-  exit 70
-fi
-
+# Allocate every recovery path and durably record intent before the first cycle
+# gate or control-plane side effect. A SIGKILL from this point onward therefore
+# leaves BootReceiver/next install enough truthful state to restart the prior
+# runtime, while readiness flags prevent partial backups from being restored.
 BACKUP_DIR="$BACKUPS/$STAMP-$RELEASE_ID"
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 DB_BACKUP="$BACKUP_DIR/media-agent.db"
 APK_BACKUP="$BACKUP_DIR/evogent.apk"
-backup_database "$HOME/evogent/data/media-agent.db" "$DB_BACKUP"
-cp "$CURRENT_APK_PROBE" "$APK_BACKUP"
-chmod 600 "$APK_BACKUP"
-fsync_regular_file_and_parent "$APK_BACKUP"
-printf '%s\n' "$PREVIOUS_TARGET" > "$BACKUP_DIR/previous-release"
-cp "$NEW_RELEASE/manifest.json" "$BACKUP_DIR/new-release-manifest.json"
-
-if [ "$(sha256_file "$NEW_RELEASE/apk/evogent.apk")" != "$(sha256_file "$APK_BACKUP")" ]; then
-  APK_CHANGED=1
-  PACKAGE_HELP="$(rish_command "cmd package help" 2>&1 || true)"
-  printf '%s\n' "$PACKAGE_HELP" | grep -q -- '--enable-rollback' \
-    && printf '%s\n' "$PACKAGE_HELP" | grep -q -- 'rollback-app' || {
-      say "Android package manager does not expose native app rollback; refusing the APK upgrade"
-      exit 69
-    }
-fi
-
-# Record the pre-transaction authentication state before any migration.  The
-# backup contains the secret; the journal contains only private paths/flags.
-backup_control_token "$HOME/evogent/data/control-token.txt"
+CONTROL_TOKEN_BACKUP="$BACKUP_DIR/control-token.txt"
 if [ -z "$CURRENT_RESOLVED" ]; then
   INITIAL_MIGRATION=1
   MIGRATION_DIR="$MIGRATIONS/legacy-$STAMP"
@@ -1445,8 +1709,56 @@ else
   MIGRATION_DIR="$MIGRATIONS/install-$STAMP-$RELEASE_ID"
   mkdir -p "$MIGRATION_DIR"
 fi
-MIGRATION_STARTED=1
+
+# Establish a cycle gate with the exact same mkdir/PID-start lease understood by
+# old and new cycles. Once held, no browse/curate task can begin during a switch.
+CYCLE_GATE="$HOME/phone-tools/.cycle.lock"
+if [ ! -e "$HOME/phone-tools" ]; then
+  mkdir -p "$PHONE_STATE"
+  CYCLE_GATE="$PHONE_STATE/.cycle.lock"
+fi
+
 prepare_transaction_recoverer
+write_transaction_journal quiesce_pending
+acquire_lock_dir "$CYCLE_GATE" release-install-cycle-gate
+CYCLE_GATE_HELD=1
+
+CONTROL_PLANE_MUTATION_STARTED=1
+quiesce_control_plane
+QUIESCED=1
+
+# Stop and prove the exact server owner and both listeners before moving its cwd
+# or private data.
+# The cycle gate prevents a new background writer; taking the checked snapshot
+# here also closes the display-0/user-write race during initial migration.
+if ! stop_and_prove_runtime; then
+  say "refusing an unsafe migration while a server listener remains"
+  exit 70
+fi
+
+write_transaction_journal backup_pending
+backup_database "$HOME/evogent/data/media-agent.db" "$DB_BACKUP"
+backup_apk_for_rollback "$CURRENT_APK_PROBE" "$APK_BACKUP"
+printf '%s\n' "$PREVIOUS_TARGET" > "$BACKUP_DIR/previous-release"
+cp "$NEW_RELEASE/manifest.json" "$BACKUP_DIR/new-release-manifest.json"
+
+# Record the pre-transaction authentication state before any migration.  The
+# backup contains the secret; the journal contains only private paths/flags.
+backup_control_token "$HOME/evogent/data/control-token.txt"
+
+# Copy the small legacy dispatch surface before marking migration intent. If
+# this copy is interrupted, the pre-quiesce journal leaves the originals alone.
+if [ "$INITIAL_MIGRATION" = 1 ]; then
+  if [ -d "$HOME/phone-tools" ] && [ ! -L "$HOME/phone-tools" ]; then
+    cp -a "$HOME/phone-tools" "$MIGRATION_DIR/phone-tools"
+  fi
+  for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh \
+      install-evogent-release.sh; do
+    if [ -e "$HOME/$name" ] || [ -L "$HOME/$name" ]; then
+      cp -a "$HOME/$name" "$MIGRATION_DIR/home/$name"
+    fi
+  done
+fi
 write_transaction_journal prepared
 
 # Install and prove the release APK before moving any legacy HOME path.  From
@@ -1471,10 +1783,21 @@ INSTALLED_APK_SIGNER="$(apk_signer_sha256 "$INSTALLED_APK_PROBE" 2>/dev/null || 
   say "installed APK bytes, version, or signer do not match the release manifest"
   exit 70
 }
+if [ "$APK_CHANGED" = 1 ] \
+    && ! wait_for_apk_rollback_availability \
+        "$EXPECTED_APK_CODE" "$PREVIOUS_APK_CODE"; then
+  say "Android did not make the exact APK rollback available; recovering before the runtime switch"
+  exit 70
+fi
 
 # Initial migration preserves the full legacy runtime for recovery, then moves
 # only private/machine-built state out of it. No user file is copied into a
 # release or its manifest.
+SWITCH_STARTED=1
+if [ "$INITIAL_MIGRATION" = 1 ]; then
+  MIGRATION_STARTED=1
+fi
+write_transaction_journal switch_pending
 if [ -z "$CURRENT_RESOLVED" ]; then
   if [ -d "$HOME/evogent" ] && [ ! -L "$HOME/evogent" ]; then
     mv "$HOME/evogent" "$MIGRATION_DIR/evogent"
@@ -1488,22 +1811,23 @@ if [ -z "$CURRENT_RESOLVED" ]; then
     fi
   fi
   if [ -d "$HOME/phone-tools" ] && [ ! -L "$HOME/phone-tools" ]; then
-    # Preserve a small exact copy for rollback; the original becomes the stable
-    # state/dispatch directory so all existing locks and cadence artifacts live on.
-    cp -a "$HOME/phone-tools" "$MIGRATION_DIR/phone-tools"
+    # The original becomes the stable state/dispatch directory so all existing
+    # locks, logs, cadence artifacts, and recovery metadata live on.
     if [ "$HOME/phone-tools" != "$PHONE_STATE" ]; then
       rm -rf -- "$PHONE_STATE"
       mv "$HOME/phone-tools" "$PHONE_STATE"
+      CYCLE_GATE="$PHONE_STATE/.cycle.lock"
     fi
   fi
-  for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh; do
+  for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh \
+      install-evogent-release.sh; do
     if [ -e "$HOME/$name" ] || [ -L "$HOME/$name" ]; then
-      mv "$HOME/$name" "$MIGRATION_DIR/home/$name"
+      rm -f "$HOME/$name"
     fi
   done
 fi
 
-mkdir -p "$STATE/data" "$STATE/node_modules" "$STATE/config" "$STATE/next-cache/$RELEASE_ID" \
+mkdir -p "$STATE/data" "$STATE/config" "$STATE/next-cache/$RELEASE_ID" \
   "$PHONE_STATE"
 
 # Public defaults seed only missing private files.
@@ -1527,26 +1851,15 @@ if [ -e "$CONTROL_TOKEN" ] || [ -L "$CONTROL_TOKEN" ]; then
   chmod 600 "$CONTROL_TOKEN"
 fi
 
-# Validate the preserved Android-native dependency tree before touching current.
-EXPECTED_PACKAGE_LOCK="$(read_manifest dependencies.packageLockSha256)"
-DEPENDENCY_MARKER="$STATE/node_modules/.evogent-package-lock.sha256"
-if [ -f "$DEPENDENCY_MARKER" ]; then
-  DEPENDENCY_LOCK="$(tr -d '\r\n' < "$DEPENDENCY_MARKER")"
-  [ "$DEPENDENCY_LOCK" = "$EXPECTED_PACKAGE_LOCK" ] || {
-    say "native dependency lock changed; build a versioned Android dependency tree before this release"
-    exit 69
-  }
-elif [ -n "$CURRENT_RESOLVED" ]; then
-  say "native dependency identity marker is missing on an existing versioned install; refusing to guess"
-  exit 69
-fi
+# Re-prove native loading through the release link immediately before the switch.
+smoke_android_dependency_tree "$DEPENDENCIES/$EXPECTED_PACKAGE_LOCK" || {
+  say "versioned Android dependency tree failed its pre-switch runtime smoke test"
+  exit 70
+}
 (cd "$NEW_RELEASE/runtime" && npm ls --omit=dev --depth=0 >/dev/null)
 (cd "$NEW_RELEASE/runtime" && node -e '
 for (const name of ["next", "better-sqlite3", "ws", "dotenv"]) require.resolve(name);
 ')
-if [ ! -f "$DEPENDENCY_MARKER" ]; then
-  printf '%s\n' "$EXPECTED_PACKAGE_LOCK" > "$DEPENDENCY_MARKER"
-fi
 
 # Build a stable phone-tools dispatch directory. Code links all travel through
 # one current pointer; locks, logs, yield histories, and browse stamps stay here.
@@ -1576,8 +1889,6 @@ atomic_link "$ROOT/current/device/restart-evo.sh" "$HOME/restart-evo.sh"
 atomic_link "$ROOT/current/phone-tools/deploy-next.sh" "$HOME/deploy-next.sh"
 atomic_link "$ROOT/current/device/install-release.sh" "$HOME/install-evogent-release.sh"
 
-SWITCH_STARTED=1
-write_transaction_journal switch_pending
 atomic_link "releases/$RELEASE_ID" "$CURRENT"
 
 write_transaction_journal token_sync_pending
@@ -1629,6 +1940,12 @@ done
 clear_transaction_journal
 release_lock_dir "$CYCLE_GATE"
 CYCLE_GATE_HELD=0
+if [ "$INITIAL_MIGRATION" = 1 ]; then
+  python3 "$DEPENDENCY_STATE_HELPER" reclaim-legacy "$ROOT" \
+    || say "warning: committed legacy dependency state could not be reclaimed"
+fi
+python3 "$DEPENDENCY_STATE_HELPER" candidate-clear "$ROOT" "$RELEASE_ID" \
+  || say "warning: committed release candidate marker could not be cleared"
 
 # Bounded retention. Targets are validated release/backup/log names under exact
 # narrow directories; current and previous releases are never removed. Retention
@@ -1636,6 +1953,7 @@ CYCLE_GATE_HELD=0
 # release after its cycle gate has been reopened.
 python3 - "$ROOT" "$KEEP_RELEASES" "$KEEP_BACKUPS" "$KEEP_LOGS" <<'PY' \
   || say "warning: release retention cleanup did not complete"
+import json
 import os
 import pathlib
 import re
@@ -1676,6 +1994,32 @@ for release in releases[keep_releases:]:
         cache = root / "state" / "next-cache" / release.name
         if cache.is_dir():
             shutil.rmtree(cache)
+
+referenced_dependencies = set()
+for release in (root / "releases").iterdir():
+    manifest = release / "manifest.json"
+    if not release.is_dir() or release.is_symlink() or not manifest.is_file():
+        continue
+    try:
+        lock = json.loads(manifest.read_text(encoding="utf-8"))["dependencies"]["packageLockSha256"]
+        if re.fullmatch(r"[0-9a-f]{64}", lock):
+            referenced_dependencies.add(lock)
+    except (KeyError, OSError, ValueError, TypeError):
+        pass
+dependencies = root / "state" / "dependencies"
+if dependencies.is_dir() and not dependencies.is_symlink():
+    for tree in dependencies.iterdir():
+        if (
+            tree.is_dir()
+            and not tree.is_symlink()
+            and re.fullmatch(r"[0-9a-f]{64}", tree.name)
+            and tree.name not in referenced_dependencies
+        ):
+            for path in sorted(tree.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+                if not path.is_symlink():
+                    os.chmod(path, 0o700 if path.is_dir() else 0o600)
+            os.chmod(tree, 0o700)
+            shutil.rmtree(tree)
 
 backup_dirs = sorted(
     (p for p in backups.iterdir() if p.is_dir() and safe.fullmatch(p.name)),

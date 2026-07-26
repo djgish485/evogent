@@ -76,6 +76,13 @@ def table_count(conn: sqlite3.Connection, name: str) -> int:
         return 0
 
 
+def table_columns(conn: sqlite3.Connection, name: str) -> set[str]:
+    try:
+        return {str(row[1]) for row in conn.execute(f"pragma table_info({name})")}
+    except sqlite3.Error:
+        return set()
+
+
 def summary(conn: sqlite3.Connection, db: Path) -> dict[str, Any]:
     meta_rows = conn.execute("select key, value from meta order by key").fetchall()
     meta = {row["key"]: maybe_json(row["value"]) for row in meta_rows}
@@ -89,6 +96,8 @@ def summary(conn: sqlite3.Connection, db: Path) -> dict[str, Any]:
         "feed_backups",
         "db_snapshots",
         "signals",
+        "intent_contracts",
+        "intent_contract_history",
     ]
     return {
         "db": str(db),
@@ -116,6 +125,25 @@ def search_ledger(conn: sqlite3.Connection, terms: list[str], limit: int) -> dic
         needle = like(term)
         rows: list[dict[str, Any]] = []
         seen: set[str] = set()
+        contract_columns = table_columns(conn, "intent_contracts")
+        if {"contract_key", "source_line"}.issubset(contract_columns):
+            for row in conn.execute(
+                """
+                select 'intent_contracts' as source, area as category,
+                       contract_key as keyword, null as timestamp,
+                       'Active product contract' as title,
+                       substr(statement, 1, 500) as excerpt,
+                       'intent_contracts' as source_table,
+                       contract_key as source_id
+                from intent_contracts
+                where status != 'superseded'
+                  and lower(coalesce(statement,'') || ' ' || coalesce(evidence,'')) like ?
+                order by source_line
+                limit ?
+                """,
+                (needle, limit),
+            ):
+                add_row(rows, seen, dict(row))
         fts_query = to_fts_query(term)
         if fts_query:
             for row in conn.execute(
@@ -141,6 +169,7 @@ def search_ledger(conn: sqlite3.Connection, terms: list[str], limit: int) -> dic
                 from doc_fts
                 where doc_fts match ?
                   and rel_path not like 'data/intent-audits/%'
+                  and rel_path != '.intent/contracts.jsonl'
                 order by rank
                 limit ?
                 """,
@@ -169,6 +198,13 @@ def search_ledger(conn: sqlite3.Connection, terms: list[str], limit: int) -> dic
               and coalesce(source_id, '') not like 'data/intent-audits/%'
               and instr(coalesce(source_id, ''), '/data/intent-audits/') = 0
               and coalesce(title, '') not like 'data/intent-audits/%'
+              and not (
+                source_table = 'docs'
+                and (
+                  source_id = '.intent/contracts.jsonl'
+                  or source_id like '%/.intent/contracts.jsonl'
+                )
+              )
             order by timestamp desc
             limit ?
             """,
@@ -198,6 +234,7 @@ def search_ledger(conn: sqlite3.Connection, terms: list[str], limit: int) -> dic
                 from docs
                 where lower(coalesce(content,'') || ' ' || coalesce(rel_path,'')) like ?
                   and rel_path not like 'data/intent-audits/%'
+                  and rel_path != '.intent/contracts.jsonl'
                 order by mtime desc
                 limit ?
                 """,

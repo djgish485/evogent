@@ -30,6 +30,90 @@ require_command tar
 require_command unzip
 require_command openssl
 
+OUTPUT_DIR="$(python3 - "$OUTPUT_DIR" "$ROOT" <<'PY'
+import pathlib
+import sys
+
+raw_output, raw_root = sys.argv[1:]
+root = pathlib.Path(raw_root).resolve(strict=True)
+try:
+    output = pathlib.Path(raw_output).expanduser().resolve(strict=False)
+    output.relative_to(root)
+except ValueError:
+    print(output)
+except (OSError, RuntimeError):
+    print("phone release: release output path could not be resolved safely", file=sys.stderr)
+    raise SystemExit(65)
+else:
+    print(
+        "phone release: release output must resolve outside the source checkout",
+        file=sys.stderr,
+    )
+    raise SystemExit(65)
+PY
+)"
+
+BUILD_LOCK_WAIT_SECONDS="${EVOGENT_PHONE_BUILD_LOCK_WAIT_SECONDS:-21600}"
+[[ "$BUILD_LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]] || {
+  echo "phone release: build-lock wait must be a non-negative integer" >&2
+  exit 65
+}
+BUILD_LOCK_PARENT="${TMPDIR:-/tmp}/evogent-phone-release-locks"
+mkdir -p "$BUILD_LOCK_PARENT"
+chmod 700 "$BUILD_LOCK_PARENT"
+BUILD_LOCK_KEY="$(python3 - "$ROOT" <<'PY'
+import hashlib
+import pathlib
+import sys
+print(hashlib.sha256(str(pathlib.Path(sys.argv[1]).resolve()).encode()).hexdigest())
+PY
+)"
+BUILD_LOCK="$BUILD_LOCK_PARENT/$BUILD_LOCK_KEY.lock"
+BUILD_LOCK_HELD=0
+
+acquire_build_lock() {
+  local deadline=$(( $(date +%s) + BUILD_LOCK_WAIT_SECONDS ))
+  local owner stale="$BUILD_LOCK.stale.$$"
+  while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
+    owner="$(sed -n 's/^pid=//p' "$BUILD_LOCK/owner" 2>/dev/null | head -1)"
+    if ! [[ "$owner" =~ ^[0-9]+$ ]] || ! kill -0 "$owner" 2>/dev/null; then
+      if python3 - "$BUILD_LOCK" <<'PY'
+import pathlib
+import sys
+import time
+path = pathlib.Path(sys.argv[1])
+raise SystemExit(0 if time.time() - path.stat().st_mtime >= 2 else 1)
+PY
+      then
+        if mv "$BUILD_LOCK" "$stale" 2>/dev/null; then
+          rm -rf -- "$stale"
+          continue
+        fi
+      fi
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "phone release: timed out waiting for the checkout build lock" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  printf 'pid=%s\n' "$$" > "$BUILD_LOCK/owner"
+  BUILD_LOCK_HELD=1
+}
+
+release_build_lock() {
+  local owner
+  [ "$BUILD_LOCK_HELD" = 1 ] || return 0
+  owner="$(sed -n 's/^pid=//p' "$BUILD_LOCK/owner" 2>/dev/null | head -1)"
+  if [ "$owner" = "$$" ]; then
+    rm -rf -- "$BUILD_LOCK"
+  fi
+  BUILD_LOCK_HELD=0
+}
+
+trap release_build_lock EXIT
+acquire_build_lock
+
 if [ -z "${JAVA_HOME:-}" ] && [ -d /usr/local/opt/openjdk@11 ]; then
   export JAVA_HOME=/usr/local/opt/openjdk@11
   export PATH="$JAVA_HOME/bin:$PATH"
@@ -67,11 +151,22 @@ PY
 assert_clean_source
 SOURCE_COMMIT="$(git rev-parse HEAD)"
 SOURCE_SHORT="$(git rev-parse --short=12 HEAD)"
+ANDROID_VERSION_STATE_FILE="${EVOGENT_ANDROID_VERSION_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/evogent/android-version-code}"
+ANDROID_VERSION_ARGUMENTS=(
+  --state-file "$ANDROID_VERSION_STATE_FILE"
+  --forbid-root "$ROOT"
+)
+if [ "${EVOGENT_ANDROID_VERSION_CODE+x}" = x ]; then
+  ANDROID_VERSION_ARGUMENTS+=(--override "$EVOGENT_ANDROID_VERSION_CODE")
+fi
+ANDROID_VERSION_CODE="$(python3 scripts/allocate-android-version-code.py \
+  "${ANDROID_VERSION_ARGUMENTS[@]}")"
+export EVOGENT_ANDROID_VERSION_CODE="$ANDROID_VERSION_CODE"
 
 echo "phone release: building web application at $SOURCE_SHORT"
 npm run build
 
-echo "phone release: building and signing Android shell"
+echo "phone release: building and signing Android shell version $ANDROID_VERSION_CODE"
 bash android-shell/build.sh
 
 # A build script must not be able to quietly edit the source it claims to represent.
@@ -124,7 +219,7 @@ PY
 SAFE_BUILD_ID="$(printf '%s' "$BUILD_ID" | tr -cd 'A-Za-z0-9._-' | cut -c1-20)"
 [ -n "$SAFE_BUILD_ID" ] || SAFE_BUILD_ID=build
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/evogent-phone-release.XXXXXX")"
-trap 'rm -rf -- "$WORK_DIR"' EXIT
+trap 'rm -rf -- "$WORK_DIR"; release_build_lock' EXIT
 TLS_CERT="$ROOT/android-shell/build/server-cert.pem"
 TLS_KEY="$ROOT/android-shell/build/server-key.pem"
 EMBEDDED_CA="$WORK_DIR/evogent-phone-ca.pem"
@@ -242,6 +337,8 @@ cp -R "$ROOT/phone-paradigm/device/phone-tools/." "$RELEASE/phone-tools/"
 cp "$ROOT/phone-paradigm/device/start-prod.sh" \
   "$ROOT/phone-paradigm/device/restart-evo.sh" \
   "$ROOT/phone-paradigm/device/install-release.sh" \
+  "$ROOT/phone-paradigm/device/dependency-tree-state.py" \
+  "$ROOT/phone-paradigm/device/rollback-state.py" \
   "$ROOT/phone-paradigm/device/write-control-token.py" \
   "$RELEASE/device/"
 cp -R "$ROOT/phone-paradigm/device/bin" "$RELEASE/device/bin"
@@ -409,7 +506,7 @@ manifest = {
     },
     "stateLinks": {
         "runtime/data": "../../../state/data",
-        "runtime/node_modules": "../../../state/node_modules",
+        "runtime/node_modules": "../../../state/dependencies/$PACKAGE_LOCK_SHA256/node_modules",
         "runtime/.env.local": "../../../state/config/.env.local",
         "runtime/.next/cache": "../../../../state/next-cache/$RELEASE_ID",
     },
@@ -444,6 +541,8 @@ manifest = {
         "device/start-prod.sh",
         "device/restart-evo.sh",
         "device/install-release.sh",
+        "device/dependency-tree-state.py",
+        "device/rollback-state.py",
         "device/write-control-token.py",
         "apk/evogent.apk",
         "tls/server-cert.pem",

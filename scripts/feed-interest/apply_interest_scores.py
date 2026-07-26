@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Apply bootstrap interestingness scores to feed item metadata.
+"""Apply historical supporting interest judgments to feed item metadata.
 
 Input: JSONL with {"id": feed_id, "s": 0-100 int, "dur": "evergreen"|"dated"|"news", "why": short}
-Writes metadata.interest = { score (0-1), durability, reason, scoredBy, scoredAtMs }
+Writes metadata.interest = { score (0-1), durability, reason, scoredBy, scoredAtMs }.
+These fields are evidence only; they never decide shipment or display order.
 Only fills items that do NOT already have a curator-stamped interest score
-(scoredBy=curator wins over bootstrap; re-running bootstrap overwrites bootstrap).
+(scoredBy=curator wins; re-running this historical backfill may refresh its own
+supporting evidence).
 
 Usage: python3 apply_interest_scores.py --scores /tmp/merged-scores.jsonl [--db PATH] [--dry-run]
 """
@@ -13,7 +15,7 @@ import json
 import sqlite3
 import time
 
-SCORED_BY = "claude-bootstrap-20260611"
+SCORED_BY = "historical-interest-backfill"
 
 
 def main() -> None:

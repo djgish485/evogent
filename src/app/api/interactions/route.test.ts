@@ -136,7 +136,7 @@ describe('/api/interactions thread feedback', () => {
     assert.strictEqual(preferenceRow.reason, 'too much of this lane');
 
     const context = await fs.promises.readFile(path.join(tempDir, 'preferences-context.md'), 'utf8');
-    assert.match(context, /Recent Thread Feedback Probes/);
+    assert.match(context, /Thread Feedback Evidence \(newest first\)/);
     assert.match(context, /\[LESS\] "Probe thread"/);
 
     await delay(500);

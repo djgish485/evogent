@@ -7,6 +7,9 @@ import android.hardware.display.VirtualDisplay;
 import android.media.ImageReader;
 import android.util.Log;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
 /**
  * Shizuku UserService: instantiated by Shizuku in a process running as the
  * shell user (uid 2000). Because it runs as shell it can create a TRUSTED
@@ -85,12 +88,28 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     @Override
     public boolean launch(String pkg, String activity, int displayId) {
         try {
+            int ownedDisplayId = virtualDisplay == null || virtualDisplay.getDisplay() == null
+                    ? -1 : virtualDisplay.getDisplay().getDisplayId();
+            if (displayId <= 0 || displayId != ownedDisplayId) {
+                Log.e(TAG, "refusing launch on unowned/non-hidden display " + displayId);
+                return false;
+            }
             // singleTask/singleInstance apps (Gmail, YouTube, Twitter) would otherwise be
             // absorbed by an existing foreground instance instead of moving to the hidden
-            // display, so force-stop first for a clean launch on the target display. Safe for
-            // background browsing (runs when the app isn't in active foreground use).
-            try { Runtime.getRuntime().exec(new String[]{"am", "force-stop", pkg}).waitFor(); }
-            catch (Throwable ignored) {}
+            // display, so force-stop first for a clean launch on the target display. Re-check at
+            // this shell-uid mutation boundary as defense in depth: direct/internal callers may
+            // not bypass phone.sh and kill the exact app resumed on physical display 0.
+            String activities = commandOutput(
+                    new String[]{"dumpsys", "activity", "activities"}, 2 * 1024 * 1024);
+            if (!EvogentPhysicalDisplayPolicy.mayForceStop(pkg, activities)) {
+                Log.w(TAG, "refusing force-stop without unambiguous display-0 safety for " + pkg);
+                return false;
+            }
+            Process stop = Runtime.getRuntime().exec(new String[]{"am", "force-stop", pkg});
+            if (stop.waitFor() != 0) {
+                Log.e(TAG, "force-stop failed for " + pkg);
+                return false;
+            }
             String act = (activity != null && !activity.isEmpty())
                     ? pkg + "/" + activity : resolveLauncher(pkg);
             String[] cmd = act != null
@@ -105,6 +124,30 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
         } catch (Throwable t) {
             Log.e(TAG, "launch failed", t);
             return false;
+        }
+    }
+
+    private String commandOutput(String[] command, int maxChars) {
+        StringBuilder out = new StringBuilder();
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()));
+            String line;
+            boolean overflow = false;
+            while ((line = reader.readLine()) != null) {
+                if (out.length() + line.length() + 1 <= maxChars) {
+                    out.append(line).append('\n');
+                } else {
+                    // Keep draining the process so a full pipe cannot deadlock waitFor().
+                    overflow = true;
+                }
+            }
+            if (process.waitFor() != 0 || overflow) return null;
+            return out.toString();
+        } catch (Throwable error) {
+            Log.e(TAG, "command output failed", error);
+            return null;
         }
     }
 

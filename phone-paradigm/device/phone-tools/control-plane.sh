@@ -260,6 +260,175 @@ control_rish_bounded() {
   fi
 }
 
+# Parse the package of the activity actually resumed on the physical display. Android's
+# topDisplayFocusedRootTask line is not sufficient: on current Pixels it commonly contains only
+# "type=home", so a substring check against the target package can never protect the app in the
+# user's hands. Accept both dumpsys display-header spellings and both resumed-activity fields,
+# while rejecting missing or conflicting answers.
+control_display_zero_top_resumed_from_dump() {
+  awk '
+    function emit_component_package(line, fields, count, part, pkg) {
+      count = split(line, fields, /[[:space:]]+/)
+      for (part = 1; part <= count; part++) {
+        if (fields[part] ~ /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+\/[^[:space:]]+$/) {
+          pkg = fields[part]
+          sub(/\/.*/, "", pkg)
+          packages[pkg] = 1
+          found = 1
+          return
+        }
+      }
+    }
+    /^[[:space:]]*Display[[:space:]]+#?[0-9]+([[:space:]:(]|$)/ {
+      in_display_zero = ($0 ~ /^[[:space:]]*Display[[:space:]]+#?0([[:space:]:(]|$)/)
+      next
+    }
+    in_display_zero && /(topResumedActivity|mResumedActivity)[=:]/ {
+      emit_component_package($0)
+    }
+    END {
+      if (!found) exit 1
+      count = 0
+      for (pkg in packages) {
+        answer = pkg
+        count++
+      }
+      if (count != 1) exit 1
+      print answer
+    }
+  '
+}
+
+# Normalize PowerManager variants to an intentionally small state machine. Multiple contradictory
+# fields, unknown values, and missing fields are all "unknown"; callers must fail closed.
+control_screen_wake_state_from_dump() {
+  awk '
+    function observe(value) {
+      if (value == "Awake" || value == "1" || value == "true") awake = 1
+      else if (value == "Asleep" || value == "Dreaming" || value == "Dozing" || value == "0" || value == "2" || value == "3" || value == "false") asleep = 1
+      else unknown = 1
+    }
+    {
+      line = $0
+      while (match(line, /(mWakefulness|mInteractive)=[^[:space:]]+/)) {
+        field = substr(line, RSTART, RLENGTH)
+        sub(/^[^=]*=/, "", field)
+        observe(field)
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+    END {
+      if (unknown || (awake && asleep) || (!awake && !asleep)) print "unknown"
+      else if (awake) print "awake"
+      else print "not-awake"
+    }
+  '
+}
+
+# WindowManager has used several names for the keyguard-visible bit. Treat disagreement or absence
+# as unknown rather than guessing that the phone is unattended.
+control_lockscreen_state_from_dump() {
+  awk '
+    {
+      line = $0
+      while (match(line, /(mDreamingLockscreen|mShowingLockscreen|mKeyguardShowing|isKeyguardShowing)=(true|false)/)) {
+        field = substr(line, RSTART, RLENGTH)
+        sub(/^[^=]*=/, "", field)
+        if (field == "true") locked = 1
+        else unlocked = 1
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+    END {
+      if ((locked && unlocked) || (!locked && !unlocked)) print "unknown"
+      else if (locked) print "locked"
+      else print "unlocked"
+    }
+  '
+}
+
+# Return one stable verdict for phone.sh. Only two situations are safe:
+#   1. the physical screen is proved non-interactive or keyguard-locked; or
+#   2. it is awake and unlocked, and display 0 unambiguously has a different exact package.
+# Every incomplete or contradictory proof is a refusal.
+control_hidden_launch_verdict() {
+  local wake="${1:-unknown}" lock="${2:-unknown}" foreground="${3:-}" target="${4:-}"
+  if [ "$wake" = "not-awake" ]; then
+    printf '%s\n' safe-unattended
+  elif [ "$lock" = "locked" ]; then
+    printf '%s\n' safe-locked
+  elif [ "$wake" = "awake" ] && [ "$lock" = "unlocked" ] \
+      && [ -n "$foreground" ] && [ -n "$target" ]; then
+    if [ "$foreground" = "$target" ]; then
+      printf '%s\n' refuse-active-target
+    else
+      printf '%s\n' safe-different-app
+    fi
+  else
+    printf '%s\n' refuse-unproven
+  fi
+}
+
+# Resolve exactly one non-physical display containing the exact requested package. The accessibility
+# dump also lists display-0 windows, and accepting one of those would turn a failed background
+# launch into a false "hidden display" success.
+control_hidden_display_for_package_from_windows_dump() {
+  local package="${1:-}"
+  [[ "$package" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || return 1
+  awk -v wanted="$package" '
+    /^[[:space:]]*display[[:space:]]+[0-9]+[[:space:]]+windows=/ {
+      display_id = $2
+      next
+    }
+    display_id ~ /^[1-9][0-9]*$/ {
+      for (field = 1; field <= NF; field++) {
+        if ($field == "pkg=" wanted) displays[display_id] = 1
+      }
+    }
+    END {
+      count = 0
+      for (display_id in displays) {
+        answer = display_id
+        count++
+      }
+      if (count != 1) exit 1
+      print answer
+    }
+  '
+}
+
+# Force-stop is a device-wide mutation even when it is motivated by hidden-display cleanup.
+# Re-prove physical-display state immediately before each package stop. A different exact
+# display-0 package is safe; the target package is safe only when the phone is proved asleep or
+# locked. Any missing/ambiguous state skips the optimization.
+control_safe_force_stop_package() {
+  local package="${1:-}" activity_dump foreground power_dump window_dump wake lock verdict
+  [[ "$package" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || return 2
+
+  activity_dump=$(control_rish_bounded 'dumpsys activity activities 2>/dev/null' \
+    2>/dev/null || true)
+  foreground=$(printf '%s\n' "$activity_dump" |
+    control_display_zero_top_resumed_from_dump 2>/dev/null || true)
+  if [ -n "$foreground" ] && [ "$foreground" != "$package" ]; then
+    control_rish_bounded "am force-stop $package" >/dev/null 2>&1
+    return
+  fi
+
+  power_dump=$(control_rish_bounded 'dumpsys power 2>/dev/null' 2>/dev/null || true)
+  window_dump=$(control_rish_bounded 'dumpsys window 2>/dev/null' 2>/dev/null || true)
+  wake=$(printf '%s\n' "$power_dump" | control_screen_wake_state_from_dump)
+  lock=$(printf '%s\n' "$window_dump" | control_lockscreen_state_from_dump)
+  verdict=$(control_hidden_launch_verdict "$wake" "$lock" "$foreground" "$package")
+  case "$verdict" in
+    safe-unattended|safe-locked|safe-different-app)
+      control_rish_bounded "am force-stop $package" >/dev/null 2>&1
+      ;;
+    *)
+      return 75
+      ;;
+  esac
+}
+
 control_close_hidden_displays() {
   local pids pid
   # Exact argv[0] matching avoids the old `pgrep -f evopriv` self-match that killed probe
@@ -276,17 +445,13 @@ control_close_hidden_displays() {
 }
 
 control_cleanup_tracked_packages() {
-  local dir="${CONTROL_OWNER_DIR:-}/packages" fg pkg
+  local dir="${CONTROL_OWNER_DIR:-}/packages" pkg
   [ -d "$dir" ] || return 0
-  fg=$(control_rish_bounded \
-    "dumpsys activity activities 2>/dev/null | grep -m1 topResumedActivity | grep -oE '[a-z][a-z0-9_.]+/' | head -1 | tr -d '/'" \
-    2>/dev/null || true)
   for pkg in "$dir"/*; do
     [ -f "$pkg" ] || continue
     pkg="${pkg##*/}"
     [[ "$pkg" =~ ^[A-Za-z0-9_.]+$ ]] || continue
-    [ -n "$fg" ] && [ "$pkg" = "$fg" ] && continue
-    control_rish_bounded "am force-stop $pkg" >/dev/null 2>&1 || true
+    control_safe_force_stop_package "$pkg" || true
   done
 }
 

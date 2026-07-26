@@ -43,6 +43,7 @@ export function AnalysisSeriesCard({
   return (
     <section
       data-testid="analysis-series-card"
+      data-feed-stability-anchor
       className="w-full overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/90 shadow-[0_12px_36px_rgba(0,0,0,0.18)]"
     >
       {heroMediaUrl && (

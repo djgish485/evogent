@@ -62,6 +62,8 @@ Typical on-phone layout:
 - `~/evogent` — server, build, libraries, skills, and private `data/`
 - `~/phone-tools` — canonical mechanics and control-plane scripts
 - `~/evogent/phone-sources` — symlinks into `~/phone-tools`, never copied twins
+- `~/.local/share/evogent/state/dependencies/<package-lock-sha256>/` — immutable,
+  verified Android dependency trees selected by each release manifest
 - tmux `evo` — local Node server
 - tmux `evo-sched` — the sole Termux scheduler
 - control-plane leases and outcome state under `~/phone-tools/`
@@ -102,12 +104,23 @@ EVOGENT_SSH_PORT=<LOCAL_PORT> \
 bash scripts/deploy-phone-release.sh <RELEASE_ARCHIVE>
 ```
 
-The archive and its `.sha256` sidecar are one release unit. The installer waits
-for and owns a safe cycle boundary, preserves private data and Android-native
-dependencies, switches runtime and mechanics through one atomic pointer,
-installs the signed APK, and passes local health. It rolls back the release,
-database, and APK together on failure. Re-presenting the same healthy release is
-a no-op.
+The archive and its `.sha256` sidecar are one release unit. Its manifest pins
+`runtime/node_modules` to
+`state/dependencies/<package-lock-sha256>/node_modules`. The installer reuses
+that tree only after verification. If the exact tree is missing, it builds one
+before acquiring the cycle gate with
+`npm ci --ignore-scripts --omit=dev --omit=optional`, compiles
+`better-sqlite3` against Termux's bundled `node-gyp`, and proves native
+SQLite plus required runtime package resolution. Host-only optional embedding,
+SWC, and image-optimizer packages remain absent; the phone runtime uses its
+documented fallbacks. The completed tree is published immutably under the lock
+hash, and older trees remain while installed releases reference them.
+
+The installer then waits for and owns a safe cycle boundary, preserves private
+data, switches runtime and mechanics through one atomic pointer, installs the
+signed APK, and passes local health. It rolls back the release, database, APK,
+and compatible dependency reference together on failure. Re-presenting the same
+healthy release is a no-op.
 
 `deploy-next.sh` is a fail-closed compatibility tombstone. Do not revive partial
 `.next`, APK-only, skill-only, or direct-copy production paths.

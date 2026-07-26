@@ -94,6 +94,10 @@ public class ShizukuController {
                     if (id > 0) {
                         boolean ok = svc.launch(pkg, activity, id);
                         Log.i(TAG, "launch ok=" + ok);
+                        if (!ok) {
+                            try { svc.releaseDisplay(); } catch (Throwable ignored) {}
+                            id = -1;
+                        }
                     }
                     cb.ready(id);
                 } catch (Throwable t) {

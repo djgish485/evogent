@@ -59,20 +59,18 @@ export function insertBenchItems(items: BenchInsertInput[]): number {
   return inserted;
 }
 
-/** Best unconsumed bench items. Stale rows (>48h) are skipped and purged.
+/** Best unconsumed bench items.
  *
- * Reading is deliberately not an acknowledgement: the caller must prove each
+ * Agent approval does not expire because a wall clock advanced. Reading is
+ * deliberately not an acknowledgement: the caller must prove each
  * item reached durable feed storage before calling `ackBenchItems`. Source-id
  * deduplication makes concurrent peeks safe, while failed submits remain
  * available for a later retry instead of disappearing.
  */
 export function peekBenchItems(limit: number): BenchTakenItem[] {
   const db = getDb();
-  const staleBeforeMs = Date.now() - 48 * 60 * 60 * 1000;
   const taken: BenchTakenItem[] = [];
   const peek = db.transaction(() => {
-    db.prepare('DELETE FROM curation_bench WHERE consumed_at_ms IS NULL AND created_at_ms < ?')
-      .run(staleBeforeMs);
     const rows = db.prepare(`
       SELECT id, source, source_id, score, reason, item_json
       FROM curation_bench

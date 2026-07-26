@@ -5,12 +5,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { getDb } from '@/lib/db/client';
 import {
-  type FeedCarryForwardCandidate,
-  durabilityDecay,
   listFeedCarryForwardCandidates,
-  readEffectiveInterestByItemId,
   recordCarryForwardPromotions,
-  selectCarryForwardPromotions,
 } from './feed-carry-forward';
 
 type GlobalWithDb = typeof globalThis & {
@@ -54,7 +50,7 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
     }
   });
 
-  test('reviews all unviewed rows and ranks older high-signal items above newer bland rows', () => {
+  test('returns the complete unseen set in prior agent shipment then evidence order', () => {
     const db = getDb();
     const nowMs = Date.UTC(2026, 5, 7, 12, 0, 0);
     const insert = db.prepare(`
@@ -71,23 +67,154 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
         parent_id,
         published_at,
         created_at,
-        created_at_ms
+        created_at_ms,
+        metrics_likes,
+        metrics_reposts,
+        metrics_replies,
+        metrics_views
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'Body', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
     `);
-
-    for (let index = 0; index < 60; index += 1) {
-      const createdAtMs = nowMs - (index + 1) * 60 * 1000;
+    const insertCandidate = (
+      id: string,
+      type: 'tweet' | 'article' | 'analysis',
+      displayOrder: number | null,
+      metadata: Record<string, unknown>,
+      metrics: [number, number, number, number],
+      createdAtMs: number,
+    ) => {
       const createdAt = new Date(createdAtMs).toISOString();
       insert.run(
-        `newer-bland-${String(index).padStart(2, '0')}`,
-        'article',
-        'unit-test',
-        `newer-${index}`,
-        `Newer bland ${index}`,
-        'Body',
-        'Fresh',
-        JSON.stringify({}),
+        id,
+        type,
+        `source-${id}`,
+        `source-id-${id}`,
+        `Title ${id}`,
+        `Reason ${id}`,
+        JSON.stringify(metadata),
+        displayOrder,
+        createdAt,
+        createdAt,
+        createdAtMs,
+        ...metrics,
+      );
+    };
+
+    // Never-arranged evidence sequence begins here. It deliberately carries
+    // every legacy "high value" proxy so the test proves those fields do not
+    // move it ahead of prior explicit shipment order.
+    insertCandidate(
+      'evidence-first',
+      'tweet',
+      null,
+      {
+        preferenceMatch: { relevanceScore: 1 },
+        relevanceScore: 1,
+        prominence: { level: 'major' },
+        tasteScore: 10,
+        interest: { score: 1, durability: 'evergreen' },
+        carryForward: { promotedCount: 0 },
+      },
+      [1_000_000, 500_000, 100_000, 10_000_000],
+      nowMs,
+    );
+    insertCandidate(
+      'prior-second',
+      'analysis',
+      2,
+      {
+        preferenceMatch: { relevanceScore: 0 },
+        prominence: { level: 'low' },
+        tasteScore: 1,
+        interest: { score: 0.05, durability: 'news' },
+        carryForward: { promotedCount: 99 },
+      },
+      [0, 0, 0, 0],
+      nowMs - 200 * 24 * 60 * 60 * 1000,
+    );
+    insertCandidate(
+      'prior-first',
+      'article',
+      1,
+      {
+        preferenceMatch: { relevanceScore: 0 },
+        tasteScore: 1,
+        interest: { score: 0.01, durability: 'news' },
+      },
+      [0, 0, 0, 0],
+      nowMs - 300 * 24 * 60 * 60 * 1000,
+    );
+    insertCandidate(
+      'evidence-second',
+      'article',
+      null,
+      {
+        preferenceMatch: { relevanceScore: 0.99 },
+        interest: { score: 0.99, durability: 'evergreen' },
+      },
+      [2_000_000, 1_000_000, 500_000, 20_000_000],
+      nowMs + 60_000,
+    );
+
+    const candidates = listFeedCarryForwardCandidates({
+      includeAllUnviewed: true,
+      includeDisplayed: true,
+      // Complete-set mode deliberately ignores shortlist knobs.
+      limit: 1,
+      reviewLimit: 1,
+      nowMs,
+    });
+
+    assert.strictEqual(candidates.review.includeAllUnviewed, true);
+    assert.strictEqual(candidates.review.includeDisplayed, true);
+    assert.strictEqual(candidates.review.eligibleCount, 4);
+    assert.strictEqual(candidates.review.reviewedCount, 4);
+    assert.strictEqual(candidates.review.returnedCount, 4);
+    assert.strictEqual(candidates.review.queryLimit, 4);
+    assert.strictEqual(candidates.review.reviewLimit, 4);
+    assert.strictEqual(
+      candidates.review.orderBasis,
+      'prior_agent_shipment_then_evidence_sequence',
+    );
+    assert.deepStrictEqual(
+      candidates.map((candidate) => candidate.id),
+      ['prior-first', 'prior-second', 'evidence-first', 'evidence-second'],
+    );
+    assert.deepStrictEqual(
+      candidates.review.candidateIds,
+      ['prior-first', 'prior-second', 'evidence-first', 'evidence-second'],
+    );
+    assert.strictEqual(candidates[0]?.interestScore, 0.01);
+    assert.strictEqual(candidates[0]?.interestDurability, 'news');
+  });
+
+  test('complete-set mode has no candidate cap and applies only structural eligibility', () => {
+    const db = getDb();
+    const nowMs = Date.UTC(2026, 5, 8, 12, 0, 0);
+    const insert = db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, reason, metadata,
+        display_order, parent_id, published_at, created_at, created_at_ms
+      )
+      VALUES (?, ?, 'unit-test', ?, ?, 'Body', 'Reason', ?, NULL, ?, ?, ?, ?)
+    `);
+
+    for (let index = 0; index < 61; index += 1) {
+      const id = `eligible-${String(index).padStart(2, '0')}`;
+      const createdAtMs = nowMs + index;
+      const createdAt = new Date(createdAtMs).toISOString();
+      insert.run(
+        id,
+        index % 3 === 0 ? 'tweet' : index % 3 === 1 ? 'article' : 'analysis',
+        id,
+        `Title ${id}`,
+        JSON.stringify({
+          preferenceMatch: { relevanceScore: index % 2 },
+          interest: {
+            score: index / 100,
+            durability: index % 2 ? 'evergreen' : 'news',
+          },
+        }),
         null,
         createdAt,
         createdAt,
@@ -95,343 +222,110 @@ describe('listFeedCarryForwardCandidates', { concurrency: false }, () => {
       );
     }
 
-    const olderCreatedAtMs = nowMs - 120 * 24 * 60 * 60 * 1000;
-    const olderCreatedAt = new Date(olderCreatedAtMs).toISOString();
+    const excludedAt = new Date(nowMs + 1000).toISOString();
     insert.run(
-      'older-high-signal',
+      'reflection-excluded',
+      'analysis',
+      'reflection-excluded',
+      'Reflection',
+      JSON.stringify({ reflectionCycle: 'cycle' }),
+      null,
+      excludedAt,
+      excludedAt,
+      nowMs + 1000,
+    );
+    insert.run(
+      'child-excluded',
       'article',
-      'unit-test',
-      'older-high-signal-source',
-      'Older high-signal item',
-      'Body',
-      'This directly matches a durable user preference and still needs attention.',
+      'child-excluded',
+      'Child',
+      '{}',
+      'eligible-00',
+      excludedAt,
+      excludedAt,
+      nowMs + 1001,
+    );
+    insert.run(
+      'suggestion-excluded',
+      'suggestion',
+      'suggestion-excluded',
+      'Suggestion',
+      '{}',
+      null,
+      excludedAt,
+      excludedAt,
+      nowMs + 1002,
+    );
+    db.prepare(`
+      INSERT INTO interactions (feed_item_id, action)
+      VALUES ('eligible-00', 'view')
+    `).run();
+
+    const candidates = listFeedCarryForwardCandidates({
+      includeAllUnviewed: true,
+      includeDisplayed: true,
+      limit: 2,
+      reviewLimit: 2,
+      nowMs,
+    });
+
+    assert.strictEqual(candidates.review.eligibleCount, 60);
+    assert.strictEqual(candidates.review.reviewedCount, 60);
+    assert.strictEqual(candidates.review.returnedCount, 60);
+    assert.strictEqual(candidates.length, 60);
+    assert.ok(!candidates.some((candidate) => candidate.id === 'eligible-00'));
+    assert.ok(!candidates.some((candidate) => candidate.id === 'reflection-excluded'));
+    assert.ok(!candidates.some((candidate) => candidate.id === 'child-excluded'));
+    assert.ok(!candidates.some((candidate) => candidate.id === 'suggestion-excluded'));
+  });
+
+  test('recovers a real metadata thread behind a hidden singleton shipment id', () => {
+    const db = getDb();
+    const createdAt = '2026-06-08T12:00:00.000Z';
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, reason, metadata,
+        display_order, thread_id, parent_id, published_at, created_at, created_at_ms
+      )
+      VALUES (
+        'thread-candidate',
+        'article',
+        'unit-test',
+        'thread-candidate',
+        'Thread candidate',
+        'Body',
+        'Reason',
+        ?,
+        1,
+        'shipment-singleton:thread-candidate',
+        NULL,
+        ?,
+        ?,
+        ?
+      )
+    `).run(
       JSON.stringify({
-        bridge: 'Unseen but important background for the current feed.',
         thread: {
-          threadId: 'durable-old-signal',
-          threadTitle: 'Durable old signal',
-          threadRationale: 'Accepted earlier and still unread despite being older.',
-          prominence: { level: 'high' },
+          threadId: 'agent-thread',
+          threadTitle: 'Agent thread',
+          threadRationale: 'Explicit historical shipment evidence.',
         },
-        preferenceMatch: { relevanceScore: 0.92 },
-        interest: { score: 0.9, durability: 'evergreen', scoredBy: 'claude-bootstrap-20260611' },
       }),
-      42,
-      olderCreatedAt,
-      olderCreatedAt,
-      olderCreatedAtMs,
+      createdAt,
+      createdAt,
+      Date.parse(createdAt),
     );
 
     const candidates = listFeedCarryForwardCandidates({
       includeAllUnviewed: true,
       includeDisplayed: true,
-      limit: 5,
-      nowMs,
     });
 
-    assert.strictEqual(candidates.review.includeAllUnviewed, true);
-    assert.strictEqual(candidates.review.includeDisplayed, true);
-    assert.strictEqual(candidates.review.eligibleCount, 61);
-    assert.strictEqual(candidates.review.reviewedCount, 61);
-    assert.strictEqual(candidates.review.returnedCount, 5);
-    assert.strictEqual(candidates[0]?.id, 'older-high-signal');
-    assert.ok((candidates[0]?.score ?? 0) > (candidates[1]?.score ?? 0));
-    assert.deepStrictEqual(candidates.review.topCandidateIds[0], 'older-high-signal');
+    assert.strictEqual(candidates[0]?.threadId, 'agent-thread');
+    assert.strictEqual(candidates[0]?.threadTitle, 'Agent thread');
   });
 
-  test('includeAllUnviewed reviews every eligible row even when reviewLimit is smaller', () => {
-    const db = getDb();
-    const nowMs = Date.UTC(2026, 5, 7, 12, 0, 0);
-    const insert = db.prepare(`
-      INSERT INTO feed (
-        id,
-        type,
-        source,
-        source_id,
-        title,
-        text,
-        reason,
-        metadata,
-        display_order,
-        parent_id,
-        published_at,
-        created_at,
-        created_at_ms
-      )
-      VALUES (?, 'article', 'unit-test', ?, ?, 'Body', ?, ?, NULL, NULL, ?, ?, ?)
-    `);
-
-    for (let index = 0; index < 6; index += 1) {
-      const createdAtMs = nowMs - index * 60 * 1000;
-      const createdAt = new Date(createdAtMs).toISOString();
-      insert.run(
-        `newer-low-${index}`,
-        `newer-low-${index}`,
-        `Newer low signal ${index}`,
-        'Fresh but thin.',
-        JSON.stringify({}),
-        createdAt,
-        createdAt,
-        createdAtMs,
-      );
-    }
-
-    const olderCreatedAtMs = nowMs - 180 * 24 * 60 * 60 * 1000;
-    const olderCreatedAt = new Date(olderCreatedAtMs).toISOString();
-    insert.run(
-      'very-old-high-signal',
-      'very-old-high-signal-source',
-      'Very old high signal',
-      'This older unviewed item should still be scored before a shortlist is returned.',
-      JSON.stringify({
-        bridge: 'Old but still directly relevant.',
-        preferenceMatch: { relevanceScore: 0.95 },
-        thread: {
-          threadId: 'very-old-signal',
-          threadTitle: 'Very old signal',
-          threadRationale: 'Every unviewed row must be reviewed before ranking.',
-          prominence: { level: 'high' },
-        },
-        interest: { score: 0.92, durability: 'evergreen', scoredBy: 'claude-bootstrap-20260611' },
-      }),
-      olderCreatedAt,
-      olderCreatedAt,
-      olderCreatedAtMs,
-    );
-
-    const candidates = listFeedCarryForwardCandidates({
-      includeAllUnviewed: true,
-      reviewLimit: 2,
-      limit: 3,
-      nowMs,
-    });
-
-    assert.strictEqual(candidates.review.eligibleCount, 7);
-    assert.strictEqual(candidates.review.reviewedCount, 7);
-    assert.strictEqual(candidates.review.reviewLimit, 7);
-    assert.strictEqual(candidates.review.returnedCount, 3);
-    assert.strictEqual(candidates[0]?.id, 'very-old-high-signal');
-    assert.deepStrictEqual(candidates.review.topCandidateIds[0], 'very-old-high-signal');
-  });
-
-  test('curator interest outranks sheer age once the age curve plateaus', () => {
-    const db = getDb();
-    const nowMs = Date.UTC(2026, 5, 10, 12, 0, 0);
-    const insert = db.prepare(`
-      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
-      VALUES (?, 'article', 'unit-test', ?, ?, 'Body', ?, ?, NULL, NULL, ?, ?, ?)
-    `);
-
-    const richMetadata = {
-      bridge: 'Shared editorial framing for both items.',
-      thread: {
-        threadId: 'shared-thread',
-        threadTitle: 'Shared thread',
-        threadRationale: 'Both items carry the same editorial weight.',
-      },
-      preferenceMatch: { relevanceScore: 0.8 },
-    };
-
-    const ancientMs = nowMs - 120 * 24 * 60 * 60 * 1000;
-    const ancientAt = new Date(ancientMs).toISOString();
-    insert.run(
-      'ancient-no-interest',
-      'ancient-no-interest',
-      'Ancient item without curator interest',
-      'This item has waited a very long time without being viewed.',
-      JSON.stringify(richMetadata),
-      ancientAt,
-      ancientAt,
-      ancientMs,
-    );
-
-    const recentMs = nowMs - 2 * 24 * 60 * 60 * 1000;
-    const recentAt = new Date(recentMs).toISOString();
-    insert.run(
-      'recent-high-interest',
-      'recent-high-interest',
-      'Recent item the curator rated durable',
-      'This item directly matches a durable interest of the user.',
-      JSON.stringify({ ...richMetadata, interest: { score: 0.9, reason: 'durable mechanism story' } }),
-      recentAt,
-      recentAt,
-      recentMs,
-    );
-
-    const candidates = listFeedCarryForwardCandidates({ includeAllUnviewed: true, limit: 5, nowMs });
-    assert.strictEqual(candidates[0]?.id, 'recent-high-interest');
-    assert.ok((candidates[0]?.scoreBreakdown.curatorInterest ?? 0) > 0.8);
-    // Beyond the 48h plateau both items have the same age score.
-    assert.strictEqual(candidates[0]?.scoreBreakdown.age, candidates[1]?.scoreBreakdown.age);
-  });
-
-  test('repeated unviewed promotions decay an item behind an equal fresh competitor', () => {
-    const db = getDb();
-    const nowMs = Date.UTC(2026, 5, 10, 12, 0, 0);
-    const insert = db.prepare(`
-      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
-      VALUES (?, 'article', 'unit-test', ?, ?, 'Body', ?, ?, NULL, NULL, ?, ?, ?)
-    `);
-
-    const createdMs = nowMs - 30 * 24 * 60 * 60 * 1000;
-    const createdAt = new Date(createdMs).toISOString();
-    const sharedMetadata = {
-      bridge: 'Identical editorial framing for the rotation test.',
-      preferenceMatch: { relevanceScore: 0.85 },
-    };
-    insert.run(
-      'promoted-three-times',
-      'promoted-three-times',
-      'Already promoted repeatedly',
-      'Strong reason that has not earned a view in three promotions.',
-      JSON.stringify({ ...sharedMetadata, carryForward: { promotedCount: 3, lastPromotedAtMs: nowMs - 1000 } }),
-      createdAt,
-      createdAt,
-      createdMs,
-    );
-    insert.run(
-      'never-promoted',
-      'never-promoted',
-      'Never promoted before',
-      'Equally strong reason that has never had a slate slot.',
-      JSON.stringify(sharedMetadata),
-      createdAt,
-      createdAt,
-      createdMs,
-    );
-
-    const candidates = listFeedCarryForwardCandidates({ includeAllUnviewed: true, limit: 5, nowMs });
-    assert.strictEqual(candidates[0]?.id, 'never-promoted');
-    assert.strictEqual(candidates[1]?.id, 'promoted-three-times');
-    assert.ok((candidates[1]?.scoreBreakdown.promotedPenalty ?? 0) < -1);
-  });
-
-  test('selectCarryForwardPromotions reserves slots for away-gap candidates', () => {
-    const nowMs = Date.UTC(2026, 5, 10, 12, 0, 0);
-    const gapStartMs = nowMs - 3 * 24 * 60 * 60 * 1000;
-    const makeCandidate = (id: string, score: number, createdAtMs: number): FeedCarryForwardCandidate => ({
-      id,
-      type: 'article',
-      source: 'unit-test',
-      sourceId: id,
-      title: id,
-      text: null,
-      excerpt: null,
-      reason: null,
-      url: null,
-      createdAt: new Date(createdAtMs).toISOString(),
-      createdAtMs,
-      publishedAt: new Date(createdAtMs).toISOString(),
-      displayOrder: null,
-      score,
-      scoreBreakdown: {
-        editorial: 0,
-        preference: 0,
-        curatorInterest: 0,
-        prominence: 0,
-        engagement: 0,
-        age: 0,
-        promotedPenalty: 0,
-        itemType: 0,
-        total: score,
-      },
-      threadId: null,
-      threadTitle: null,
-      threadRationale: null,
-      bridge: null,
-      carryForward: true,
-    });
-
-    const ancientMs = nowMs - 40 * 24 * 60 * 60 * 1000;
-    const gapMs = nowMs - 24 * 60 * 60 * 1000;
-    const ranked = [
-      makeCandidate('ancient-1', 9, ancientMs),
-      makeCandidate('ancient-2', 8, ancientMs),
-      makeCandidate('ancient-3', 7, ancientMs),
-      makeCandidate('ancient-4', 6, ancientMs),
-      makeCandidate('gap-1', 3, gapMs),
-      makeCandidate('gap-2', 2, gapMs),
-    ];
-
-    const selection = selectCarryForwardPromotions(ranked, { slots: 4, gapStartMs });
-    assert.strictEqual(selection.promoted.length, 4);
-    assert.deepStrictEqual(selection.gapPromotedIds.sort(), ['gap-1', 'gap-2']);
-    assert.strictEqual(selection.gapCandidateCount, 2);
-    const promotedIds = selection.promoted.map((candidate) => candidate.id);
-    assert.ok(promotedIds.includes('gap-1'));
-    assert.ok(promotedIds.includes('gap-2'));
-    assert.ok(promotedIds.includes('ancient-1'));
-    assert.ok(promotedIds.includes('ancient-2'));
-    assert.ok(!promotedIds.includes('ancient-3'));
-
-    const noGapSelection = selectCarryForwardPromotions(ranked, { slots: 4, gapStartMs: null });
-    assert.deepStrictEqual(
-      noGapSelection.promoted.map((candidate) => candidate.id),
-      ['ancient-1', 'ancient-2', 'ancient-3', 'ancient-4'],
-    );
-  });
-
-  test('durabilityDecay holds evergreen flat and decays news fast', () => {
-    assert.strictEqual(durabilityDecay(24 * 90, 'evergreen'), 1);
-    assert.strictEqual(durabilityDecay(100, 'dated'), 1);
-    // 30 days dated: noticeably faded but alive.
-    const dated30d = durabilityDecay(24 * 30, 'dated');
-    assert.ok(dated30d > 0.3 && dated30d < 0.45, String(dated30d));
-    // 6 weeks dated: at/near the floor — the "out of date Codex take" case.
-    assert.ok(durabilityDecay(24 * 42, 'dated') <= 0.3);
-    assert.strictEqual(durabilityDecay(24, 'news'), 1);
-    // A week-old news item is mostly gone.
-    const news7d = durabilityDecay(24 * 7, 'news');
-    assert.ok(news7d < 0.35, String(news7d));
-    // Unknown class behaves like dated.
-    assert.strictEqual(durabilityDecay(100, null), 1);
-  });
-
-  test('persisted interest with durability dominates ranking', () => {
-    const db = getDb();
-    const nowMs = Date.UTC(2026, 5, 11, 12, 0, 0);
-    const insert = db.prepare(`
-      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
-      VALUES (?, 'article', 'unit-test', ?, ?, 'Body', ?, ?, NULL, NULL, ?, ?, ?)
-    `);
-    const oldMs = nowMs - 45 * 24 * 60 * 60 * 1000;
-    const oldAt = new Date(oldMs).toISOString();
-    insert.run('evergreen-45d', 'evergreen-45d', 'Evergreen gem', 'Mechanism that still lands.',
-      JSON.stringify({ interest: { score: 0.9, durability: 'evergreen' } }), oldAt, oldAt, oldMs);
-    insert.run('news-45d', 'news-45d', 'Stale breaking news', 'Release-day coverage.',
-      JSON.stringify({ interest: { score: 0.9, durability: 'news' } }), oldAt, oldAt, oldMs);
-    const freshMs = nowMs - 2 * 60 * 60 * 1000;
-    const freshAt = new Date(freshMs).toISOString();
-    insert.run('fresh-unscored', 'fresh-unscored', 'Fresh unscored item', 'Just curated.',
-      JSON.stringify({}), freshAt, freshAt, freshMs);
-
-    const candidates = listFeedCarryForwardCandidates({ includeAllUnviewed: true, limit: 5, nowMs });
-    assert.deepStrictEqual(
-      candidates.map((candidate) => candidate.id),
-      ['evergreen-45d', 'fresh-unscored', 'news-45d'],
-    );
-    assert.ok((candidates[0]?.scoreBreakdown.effectiveInterest ?? 0) > 0.85);
-    assert.ok((candidates[2]?.scoreBreakdown.effectiveInterest ?? 1) < 0.15);
-  });
-
-  test('readEffectiveInterestByItemId decays scored items and defaults unscored ones', () => {
-    const db = getDb();
-    const nowMs = Date.UTC(2026, 5, 11, 12, 0, 0);
-    const oldMs = nowMs - 45 * 24 * 60 * 60 * 1000;
-    const oldAt = new Date(oldMs).toISOString();
-    db.prepare(`
-      INSERT INTO feed (id, type, source, source_id, title, text, reason, metadata, display_order, parent_id, published_at, created_at, created_at_ms)
-      VALUES ('scored-news', 'article', 'unit-test', 'scored-news', 'Old news', 'Body', 'r', ?, NULL, NULL, ?, ?, ?)
-    `).run(JSON.stringify({ interest: { score: 0.8, durability: 'news' } }), oldAt, oldAt, oldMs);
-
-    const map = readEffectiveInterestByItemId(['scored-news', 'missing-row'], nowMs);
-    assert.ok((map.get('scored-news')?.effectiveInterest ?? 1) < 0.1);
-    assert.strictEqual(map.get('scored-news')?.scored, true);
-    assert.strictEqual(map.get('missing-row')?.scored, false);
-    assert.strictEqual(map.get('missing-row')?.effectiveInterest, 0.55);
-  });
-
-  test('recordCarryForwardPromotions increments the persisted promotion count', () => {
+  test('recordCarryForwardPromotions keeps a truthful shipment receipt', () => {
     const db = getDb();
     const nowMs = Date.UTC(2026, 5, 10, 12, 0, 0);
     const createdAt = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();

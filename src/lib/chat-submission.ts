@@ -141,6 +141,9 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
           messageId: userMessageId,
           sessionId: session.id,
           sessionTitle: session.title,
+          automatedCycleId: typeof input.metadata?.curationCycleId === 'string'
+            ? input.metadata.curationCycleId.trim() || null
+            : null,
           attachmentPaths,
         })
       : buildChatInstruction({

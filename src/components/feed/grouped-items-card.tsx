@@ -402,6 +402,7 @@ export function GroupedItemsCard({
         data-testid="grouped-items-card"
         data-group-id={groupId}
         data-group-type={groupType}
+        data-feed-stability-anchor
         className="group relative w-full overflow-hidden rounded-2xl border border-zinc-800/80 bg-[var(--grouped-card-bg)] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow] hover:border-zinc-700/80 hover:bg-[var(--grouped-card-bg-hover)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.24)]"
         style={styles.surfaceStyle}
       >
@@ -447,6 +448,7 @@ export function GroupedItemsCard({
       data-testid="grouped-items-card"
       data-group-id={groupId}
       data-group-type={groupType}
+      data-feed-stability-anchor
       className="group relative w-full overflow-hidden rounded-2xl border border-zinc-800/80 bg-[var(--grouped-card-bg)] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow] hover:border-zinc-700/80 hover:bg-[var(--grouped-card-bg-hover)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.24)]"
       style={styles.surfaceStyle}
     >

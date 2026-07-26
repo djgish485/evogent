@@ -487,6 +487,54 @@ export function listBrowseCacheItems(input: {
   return rows.map(rowToBrowseCacheItem);
 }
 
+/**
+ * Complete stable queue for the fallback shipment boundary.
+ *
+ * This deliberately has no age window, per-source allocation, or newest-first limit. Callers
+ * apply explicit agent judgments only after every structurally eligible unexpired/unseen row is
+ * visible, so sustained arrivals cannot hide older work. The source allow-list is a product
+ * boundary (public feed sources), not an editorial ranking signal.
+ */
+export function listUnseenShipmentCacheItems(
+  sources: string[],
+  nowMs: number,
+): BrowseCacheItemRecord[] {
+  const normalizedSources = [...new Set(sources.map(trimToNull).filter((value): value is string => Boolean(value)))];
+  const normalizedNowMs = normalizeTimestampMs(nowMs);
+  if (normalizedSources.length === 0 || normalizedNowMs === null) return [];
+
+  const selectColumns = [
+    'source',
+    'source_id',
+    'url',
+    'title',
+    'author_username',
+    'author_display_name',
+    'published_at_ms',
+    'payload_json',
+    'fetched_at_ms',
+    'expires_at_ms',
+    'seen_by_curation_at_ms',
+  ].join(',\n      ');
+  const placeholders = normalizedSources.map(() => '?').join(', ');
+  const rows = getDb().prepare(`
+    SELECT
+      ${selectColumns}
+    FROM browse_cache_items
+    WHERE source IN (${placeholders})
+      AND expires_at_ms >= ?
+      AND seen_by_curation_at_ms IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM feed
+        WHERE feed.source_id = browse_cache_items.source_id
+      )
+    ORDER BY fetched_at_ms ASC, source ASC, source_id ASC
+  `).all(...normalizedSources, normalizedNowMs) as BrowseCacheItemRow[];
+
+  return rows.map(rowToBrowseCacheItem);
+}
+
 export function getLatestBrowseCacheItemBySourceId(sourceId: string): BrowseCacheItemRecord | null {
   const normalizedSourceId = trimToNull(sourceId);
   if (!normalizedSourceId) {

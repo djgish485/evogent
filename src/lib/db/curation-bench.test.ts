@@ -63,6 +63,22 @@ describe('curation bench acknowledgement', { concurrency: false }, () => {
     assert.strictEqual(unconsumedBenchCount(), 0);
   });
 
+  test('an unconsumed agent-approved row does not expire by age alone', () => {
+    const oldCreatedAtMs = Date.now() - 180 * 24 * 60 * 60 * 1000;
+    getDb().prepare(`
+      INSERT INTO curation_bench
+        (cycle_id, source, source_id, score, reason, item_json, created_at_ms, consumed_at_ms)
+      VALUES
+        ('old-cycle', 'twitter', 'old-valid', 0.8, 'Agent approved', '{}', ?, NULL)
+    `).run(oldCreatedAtMs);
+
+    assert.deepStrictEqual(
+      peekBenchItems(10).map((entry) => entry.sourceId),
+      ['old-valid'],
+    );
+    assert.strictEqual(unconsumedBenchCount(), 1);
+  });
+
   test('malformed stored JSON is discarded without hiding valid rows', () => {
     const now = Date.now();
     getDb().prepare(`

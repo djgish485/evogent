@@ -106,6 +106,13 @@ records the exact mutually compatible state of:
 The builder rewrites Next's generated build-machine path to a portable value and
 fails if release text contains a non-example email address or the host
 path/user/hostname.
+Release builds reserve a monotonic Android `versionCode` in the host's private
+state directory. The default is Unix epoch seconds; an atomic reservation bumps
+past a same-second or clock-regression collision. A deliberate higher value can
+be supplied through `EVOGENT_ANDROID_VERSION_CODE`. The shell APK's tracked
+manifest remains at version 3 for standalone development builds, while `aapt2`
+overrides only the immutable release artifact. The signed 32-bit epoch scheme
+must be replaced before its 2038 limit.
 Additional exact strings can be checked through
 `EVOGENT_RELEASE_PRIVATE_MARKERS_FILE` (one private marker per line). Historical
 intent backlog and audit evidence do not ship; only the privacy-safe product
@@ -121,17 +128,51 @@ resolve through the same `current` pointer.
 
 The installer verifies the host-provided archive SHA-256, every bundled file
 hash, symlink inventory, required paths, web build identity, APK identity,
-APK-pinned CA/server-certificate pairing, and dependency tree. Android-native
-`node_modules` are shared only while the exact
-package-lock identity is unchanged; a dependency change requires a separately
-versioned Android dependency build and fails closed. It atomically owns the cycle lease before quiescing the exact
-scheduler/watchdog/server owners, takes a checked SQLite backup and a copy of the
-installed APK, switches, restarts through the phone profile, and requires local
-phone health plus the served release identity. APK upgrades opt into Android's
-native rollback manager. Any failure restores the prior release, database, and
-APK and verifies the restored APK identity.
+APK-pinned CA/server-certificate pairing, and dependency tree. The manifest
+links `runtime/node_modules` to the lock-addressed
+`state/dependencies/<package-lock-sha256>/node_modules` tree. A verified exact
+tree is reused. When it is missing, the installer builds a new staging tree
+before acquiring the cycle gate:
+`npm ci --ignore-scripts --omit=dev --omit=optional` installs the required
+public runtime lock without running package lifecycle code or host-only
+optional packages, then Termux's bundled `node-gyp` compiles
+`better-sqlite3`. A native in-memory SQLite smoke test and
+required-package resolution gate publishing the tree. Before publication, a
+deterministic inventory records every directory, regular-file digest, and
+symlink target. The complete inventory is re-verified and the entire tree is
+made read-only. Unsupported optional host packages such as the embedding
+backend, SWC, and image optimizers remain absent; Android runtime fallbacks own
+those paths.
+
+The new dependency tree is published under its lock hash without mutating an
+existing tree. If that name contains an invalid tree, the installer builds and
+seals the replacement first, atomically exchanges the two directories, and
+moves the old tree into bounded quarantine. Older valid trees remain available
+while installed releases reference them, so rollback restores a compatible
+runtime instead of reusing whatever `node_modules` happens to be current.
+The exclusive install lock also bounds staging trees and failed release
+candidates left by a reboot or Android process death.
+
+After dependency preparation, the installer atomically owns the cycle lease
+before quiescing the exact scheduler/watchdog/server owners, takes a checked
+SQLite backup and a copy of the installed APK, switches, restarts through the
+phone profile, and requires local phone health plus the served release identity.
+Every changed APK must advance `versionCode`. APK upgrades opt into Android's
+native rollback manager, then the installer requires an available, non-staged
+rollback with the exact new-to-prior version mapping before switching the
+runtime; Android's enable flag alone is only best-effort. Any failure restores
+the prior release, database, and APK and verifies the restored APK identity.
+Ordinary releases preserve the app signing certificate: moving the keystore
+outside the checkout or re-encrypting it does not rotate that identity. Signing
+certificate rotation is a separate, intentionally one-way migration. Android
+cannot natively roll an app back across a rotation unless the new lineage grants
+the old certificate rollback capability, and that grant defeats the security
+benefit by allowing the old key to sign a later update.
 Re-presenting the same healthy release is a no-op. Releases, rollback backups,
-and install logs have bounded retention.
+dependency quarantine, dependency build staging, and install logs have bounded
+retention. During the one-time legacy migration, the old shared `node_modules`
+tree remains intact until the new release passes health and the transaction
+journal commits; only then is that rollback-only copy reclaimed.
 
 The old `deploy-next.sh` names remain only as fail-closed tombstones. A copy that
 ships only `.next`, only an APK, or only a skill is not a deployment.

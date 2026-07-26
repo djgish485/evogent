@@ -186,6 +186,27 @@ export function insertCurationLogStart(input: CurationLogStartInput): number {
   return Number(result.lastInsertRowid);
 }
 
+export function insertCurationLogStartIfAbsent(input: CurationLogStartInput): boolean {
+  const db = getDb();
+  const result = db.prepare(`
+    INSERT INTO curation_log (request_id, triggered_by, started_at, feed_count_before)
+    VALUES (
+      @request_id,
+      @triggered_by,
+      @started_at,
+      COALESCE(@feed_count_before, (SELECT COUNT(*) FROM feed))
+    )
+    ON CONFLICT(request_id) DO NOTHING
+  `).run({
+    request_id: input.requestId,
+    triggered_by: input.triggeredBy,
+    started_at: toIso(input.startedAt),
+    feed_count_before: typeof input.feedCountBefore === 'number' ? Math.max(0, Math.floor(input.feedCountBefore)) : null,
+  });
+
+  return result.changes === 1;
+}
+
 export function completeCurationLogByRequestId(requestId: string, input: CurationLogCompleteInput): boolean {
   const db = getDb();
   const result = db.prepare(`
@@ -196,60 +217,12 @@ export function completeCurationLogByRequestId(requestId: string, input: Curatio
       completion_status = @completion_status,
       completion_reason = @completion_reason
     WHERE request_id = @request_id
+      AND completed_at IS NULL
   `).run({
     request_id: requestId,
     completed_at: toIso(input.completedAt),
     items_added: typeof input.itemsAdded === 'number' ? Math.max(0, Math.floor(input.itemsAdded)) : null,
     completion_status: normalizeCompletionStatus(input.completionStatus),
-    completion_reason: normalizeCompletionReason(input.completionReason),
-  });
-
-  return result.changes > 0;
-}
-
-export function completeLatestPendingAutomatedCurationCycle(input: CurationLogCompleteInput = {}): boolean {
-  const db = getDb();
-  const pendingRow = db.prepare(`
-    SELECT id, feed_count_before
-    FROM curation_log
-    WHERE completed_at IS NULL
-      AND triggered_by LIKE 'adaptive_heartbeat:%'
-    ORDER BY datetime(started_at) DESC, id DESC
-    LIMIT 1
-  `).get() as { id: number; feed_count_before: number | null } | undefined;
-
-  if (!pendingRow) return false;
-
-  const submittedItemsAdded = typeof input.itemsAdded === 'number'
-    ? Math.max(0, Math.floor(input.itemsAdded))
-    : 0;
-  const baseline = typeof pendingRow.feed_count_before === 'number'
-    ? Math.max(0, Math.floor(pendingRow.feed_count_before))
-    : null;
-  const feedDelta = baseline === null
-    ? 0
-    : Math.max(0, getFeedItemCount() - baseline);
-  const itemsAdded = Math.max(submittedItemsAdded, feedDelta);
-  const completionStatus: CurationLogCompletionStatus = normalizeCompletionStatus(input.completionStatus)
-    ?? (itemsAdded > 0 ? 'success' : 'successful_empty');
-  const resolvedCompletionStatus = itemsAdded > 0 && completionStatus === 'successful_empty'
-    ? 'success'
-    : completionStatus;
-
-  const result = db.prepare(`
-    UPDATE curation_log
-    SET
-      completed_at = @completed_at,
-      items_added = @items_added,
-      completion_status = @completion_status,
-      completion_reason = @completion_reason
-    WHERE id = @id
-      AND completed_at IS NULL
-  `).run({
-    id: pendingRow.id,
-    completed_at: toIso(input.completedAt),
-    items_added: itemsAdded,
-    completion_status: resolvedCompletionStatus,
     completion_reason: normalizeCompletionReason(input.completionReason),
   });
 

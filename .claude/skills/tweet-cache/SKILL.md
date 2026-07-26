@@ -33,7 +33,7 @@ If you later switch this deployment to Bird-backed fetching, uninstall this skil
 - Text-completeness cache rows must be explicit: complete status-page recoveries use `textCapture.textSource: "status_page"` and `textCapture.completeness: "complete"`; failed recoveries are either skipped or persisted with `textCapture.completeness: "incomplete"`, `cacheAudit.recoveryFailed: true`, and `sourceQuality.issue: "twitter_text_incomplete"` so cache-only curation does not count them as taste rejections.
 - Cache refresh cycle summaries should include `cycleSummary.textCompletenessAudit: { tweetRowsAudited, statusPageRecovered, skippedIncomplete, deduped }` so reflection can see whether status-page recovery is working.
 - Twitter cache source ids are bare numeric tweet ids. Deduplicate `twitter:<id>`, `tweet-<id>`, status URLs, and bare `<id>` before submit, keep the row with the best text-completeness evidence, and count duplicates in `cycleSummary.textCompletenessAudit.deduped`.
-- Edit `data/tweet-cache-policy.json` when you need to tune per-usage refresh volume, source ordering, phase ordering, search caps, or deadline budgets. Do not re-encode those judgments in product code.
+- Edit `data/tweet-cache-policy.json` when you need to tune mechanical refresh volume, surface sequence, search request caps, or deadline budgets. Do not turn those resource bounds into product-code editorial judgment.
 - When browser refresh diagnostics are present, read the raw probe fields directly: `currentUrl`, `pageTitle`, `visibleText`, `consoleErrors`, and `visibleMarkers`. Product code no longer classifies X pages as signed-out, consent, age-gated, interstitial, or provider-degraded from regex matches.
 - If the cache is stale or empty after diagnosis, the curation worker may use its own browser tools to recover a bounded number of Twitter items for that cycle and should record that experiment in `cycleSummary.metadata`.
 - Use `/setup-source x.com` when you need to authenticate the shared Chrome browse profile, verify provider MCP wiring, and prove packaged `/cache-refresh twitter` works.
@@ -50,7 +50,7 @@ See the OpenClaw curator memory for the cache-first curation workflow.
 
 ## Cacher Mode
 
-- MANDATORY SURFACE COVERAGE: Every Cacher run MUST browse all four kinds of surface in this order before submitting: (1) MANDATORY FOR YOU: `https://x.com/home` For You tab, (2) MANDATORY FOLLOWING: `https://x.com/home` Following tab, (3) MANDATORY PRIORITY PROFILES: at least three priority-account profiles read from the 'Top Engaged Accounts' section of `data/preferences-context.md` (visit `https://x.com/<username>` for each), (4) MANDATORY PLANNED SEARCHES: any planned topic searches from `data/cache-hints.json` if present. Reporting fewer than the first three kinds in `cycleSummary.surfaces` is a HARD FAILURE - submit `status: "failed"` with `error: "surface_coverage_incomplete: <missing kinds>"` instead of `status: "completed"` with partial coverage.
+- SURFACE COVERAGE: Inspect the broad For You and Following surfaces when they are reachable. Profile or search passes are optional evidence collection chosen by the runtime agent for the current task or an explicit caller request; never derive a priority-account list or mandatory account quota from engagement history. Record every attempted surface and its real terminal outcome. A failed or partial surface stays visible in the receipt, while a valid zero-row result is allowed when the source was actually inspected.
 - Cacher runs use the same DOM selectors, the same field shape, and the same browser tactics from `data/tweet-cache-policy.json` `browserPrompt` as Curation Task. The ONLY difference between Cacher Mode and Curation Task is downstream destination - Cacher writes to `/api/internal/browse-cache/submit`, Curation submits feed items.
 - Do not invent a reduced extractor. If Curation Task would capture a field, Cacher Mode captures the same field into `payload`.
 - External linked-page cards are part of that field shape. When visible, preserve them in `payload.linkCard`, `payload.linkPreviews`, and `payload.urlEntities` using the shapes named in `data/tweet-cache-policy.json`.
@@ -85,7 +85,7 @@ Before accepting an empty browser refresh, distinguish one empty surface from a 
 ## Guardrails
 
 - Already curated tweet IDs are excluded from cache results.
-- Author caps keep a single account from flooding the cache.
+- Request and result caps bound browser time and transport size only; they do not apply account-level editorial limits.
 - Tune cache breadth and fetch order in `data/tweet-cache-policy.json`, not in `src/lib/tweet-cache.ts`.
 - If the shared Chrome profile itself is logged out, re-run `/setup-source x.com`. On deployments with `/root/.config/x-auth-cookies.json`, tweet-cache may dispatch the Twitter-only `twitter-auth-repair` fallback before surfacing the warning, but the shared profile remains the source of truth.
 - Never pre-judge `/root/.config/x-auth-cookies.json` or `.env.local` `AUTH_TOKEN`/`CT0` as stale based on file age, mtime, context labels, or other a-priori freshness heuristics; when the repair fallback is available, attempt it and let the post-import `https://x.com/home` probe be the basis for declaring credentials stale.

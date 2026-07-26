@@ -222,48 +222,6 @@ function buildConciseLabel(item: FeedItem, conciseTitle: string | null): string 
   return truncateLabel(fallback, 44);
 }
 
-function scoreAnalysis(item: FeedItem, sourceItems: FeedItem[], conciseTitle: string | null): number {
-  let score = 0;
-  const textLength = item.text.trim().length;
-  const paragraphCount = item.text.split(/\n\s*\n/g).filter((paragraph) => paragraph.trim().length > 0).length;
-  const hasMarkdownStructure = /(^|\n)#{2,6}\s+\S/.test(item.text) || /(^|\n)[*-]\s+\S/.test(item.text);
-  const sourcePreviewCount = sourceItems.length + (item.metadata?.linkPreviews?.length ?? 0);
-
-  if (textLength >= 900) {
-    score += 3;
-  } else if (textLength >= 450) {
-    score += 2;
-  } else if (textLength >= 240) {
-    score += 1;
-  }
-
-  if (paragraphCount >= 3) {
-    score += 1;
-  }
-
-  if (hasMarkdownStructure) {
-    score += 1;
-  }
-
-  if (sourcePreviewCount >= 2) {
-    score += 1;
-  }
-
-  if (conciseTitle && conciseTitle.trim().length > 0) {
-    score += 1;
-  }
-
-  return score;
-}
-
-function sortFeedItemsByRecency(left: FeedItem, right: FeedItem): number {
-  const byCreated = right.createdAt.localeCompare(left.createdAt);
-  if (byCreated !== 0) {
-    return byCreated;
-  }
-  return right.publishedAt.localeCompare(left.publishedAt);
-}
-
 export function deriveAnalysisPresentation(
   item: FeedItem,
   contextItems: FeedItem[],
@@ -276,14 +234,15 @@ export function deriveAnalysisPresentation(
   const sourceItems = resolveSourceItems(item, contextLookup);
   const conciseTitle = buildConciseTitle(item, sourceItems);
   const conciseLabel = buildConciseLabel(item, conciseTitle);
-  const promotionScore = scoreAnalysis(item, sourceItems, conciseTitle);
   const primarySource = sourceItems[0] ?? null;
   const heroMedia = primarySource ? getPreferredHeroMedia(primarySource) : [];
 
   return {
     conciseTitle,
     conciseLabel,
-    promotionScore,
+    // Kept as a compatibility field for persisted/rendered shapes. Presentation mechanics
+    // never use prose length, structure, source count, or recency to override agent order.
+    promotionScore: 0,
     seriesKey: primarySource ? `analysis-series:${primarySource.id}` : null,
     seriesLabel: primarySource ? getReferenceLabel(primarySource) : null,
     heroMedia,
@@ -332,15 +291,10 @@ export function buildAnalysisRenderableEntries(
       continue;
     }
 
-    const ranked = [...groupItems].sort((left, right) => {
-      const byScore = (right.analysisPresentation?.promotionScore ?? 0) - (left.analysisPresentation?.promotionScore ?? 0);
-      if (byScore !== 0) {
-        return byScore;
-      }
-      return sortFeedItemsByRecency(left, right);
-    });
-    const leadItem = ranked[0];
-    const remainingItems = groupItems.filter((item) => item.id !== leadItem.id);
+    // The input is already the explicit feed/display order. Series grouping may compress
+    // related rows, but it must never invent a second ranking inside that order.
+    const leadItem = groupItems[0];
+    const remainingItems = groupItems.slice(1);
 
     entries.push({ kind: 'item', item: leadItem });
 

@@ -1,4 +1,4 @@
-# Migrated from ~/.clawdbot/ to repo on 2026-04-14
+# Public defaults only; deployment-specific agent choices belong in private configuration.
 
 # Default coding agent (claude, codex, gemini)
 DEFAULT_AGENT=${DEFAULT_AGENT:-codex}

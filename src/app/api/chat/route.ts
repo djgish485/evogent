@@ -8,6 +8,10 @@ import {
 import { submitChatMessage } from '@/lib/chat-submission';
 import { getChatAttachmentsDir, parseChatAttachments } from '@/lib/chat-attachments';
 import { getProviderReadiness } from '@/lib/setup-readiness';
+import {
+  completeCurationLogByRequestId,
+  insertCurationLogStartIfAbsent,
+} from '@/lib/db/activity';
 import type { ChatAttachment } from '@/types/chat';
 
 export const runtime = 'nodejs';
@@ -37,6 +41,13 @@ function sanitizeOptionalMetadata(value: unknown): Record<string, unknown> | nul
   }
 
   return null;
+}
+
+function readPhoneSchedulerCycleId(metadata: Record<string, unknown> | null): string | null {
+  if (metadata?.trigger !== 'phone_scheduler') return null;
+  if (typeof metadata.curationCycleId !== 'string') return null;
+  const cycleId = metadata.curationCycleId.trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/.test(cycleId) ? cycleId : null;
 }
 
 function normalizeContextKind(value: unknown): ChatContextKind {
@@ -146,6 +157,7 @@ export async function POST(request: Request) {
   const contextRefId = sanitizeOptionalText((payload as { contextRefId?: unknown }).contextRefId);
   const originView = normalizeOriginView((payload as { originView?: unknown }).originView);
   const requestMetadata = sanitizeOptionalMetadata((payload as { metadata?: unknown }).metadata);
+  const phoneSchedulerCycleId = readPhoneSchedulerCycleId(requestMetadata);
   const wantsFreshSession = (payload as { newSession?: unknown }).newSession === true;
   const attachments = await resolveExistingAttachments((payload as { attachments?: unknown }).attachments);
 
@@ -173,6 +185,47 @@ export async function POST(request: Request) {
     title: overlaySessionTitle(requestMetadata?.screenApp),
   });
 
+  if (requestMetadata?.trigger === 'phone_scheduler' && !phoneSchedulerCycleId) {
+    return NextResponse.json({
+      ok: false,
+      enqueued: false,
+      queueDepth: 0,
+      requestId: null,
+      message: 'phone_scheduler requests require a valid curationCycleId',
+    }, { status: 400 });
+  }
+
+  let insertedPhoneCycle = false;
+  if (phoneSchedulerCycleId) {
+    let inserted = false;
+    try {
+      // The unique cycle claim and its feed baseline are captured by one SQLite
+      // statement before the task can be accepted by the orchestrator.
+      inserted = insertCurationLogStartIfAbsent({
+        requestId: phoneSchedulerCycleId,
+        triggeredBy: 'phone_scheduler:cycle',
+      });
+    } catch {
+      return NextResponse.json({
+        ok: false,
+        enqueued: false,
+        queueDepth: 0,
+        requestId: null,
+        message: 'could not register the automated curation cycle',
+      }, { status: 503 });
+    }
+    if (!inserted) {
+      return NextResponse.json({
+        ok: false,
+        enqueued: false,
+        queueDepth: 0,
+        requestId: null,
+        message: 'curationCycleId has already been used',
+      }, { status: 409 });
+    }
+    insertedPhoneCycle = true;
+  }
+
   let result;
   try {
     result = await submitChatMessage({
@@ -187,6 +240,13 @@ export async function POST(request: Request) {
       attachments,
     });
   } catch (error) {
+    if (insertedPhoneCycle && phoneSchedulerCycleId) {
+      completeCurationLogByRequestId(phoneSchedulerCycleId, {
+        itemsAdded: 0,
+        completionStatus: 'failed',
+        completionReason: 'curation_task_enqueue_failed',
+      });
+    }
     return NextResponse.json({
       ok: false,
       enqueued: false,
@@ -194,6 +254,14 @@ export async function POST(request: Request) {
       requestId: null,
       message: error instanceof Error ? error.message : 'Failed to queue message for evogent orchestrator',
     }, { status: 503 });
+  }
+
+  if (!result.ok && insertedPhoneCycle && phoneSchedulerCycleId) {
+    completeCurationLogByRequestId(phoneSchedulerCycleId, {
+      itemsAdded: 0,
+      completionStatus: 'failed',
+      completionReason: 'curation_task_enqueue_failed',
+    });
   }
 
   return NextResponse.json({
@@ -204,5 +272,6 @@ export async function POST(request: Request) {
     message: result.message,
     userMessage: result.userMessage,
     sessionId: result.sessionId,
+    curationCycleId: phoneSchedulerCycleId,
   }, { status: result.ok ? 202 : 503 });
 }

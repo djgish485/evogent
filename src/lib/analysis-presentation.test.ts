@@ -79,7 +79,7 @@ test('deriveAnalysisPresentation inherits parent hero media for child analyses',
   assert.notEqual(presentation?.conciseTitle, analysis.title);
 });
 
-test('buildAnalysisRenderableEntries uses the strongest lead item and bundles the remainder', () => {
+test('buildAnalysisRenderableEntries preserves incoming display order inside a series', () => {
   const parent = createFeedItem({
     id: 'article-1',
     type: 'article',
@@ -93,11 +93,12 @@ test('buildAnalysisRenderableEntries uses the strongest lead item and bundles th
     relationship: 'analysis',
     parentId: parent.id,
     parentItem: parent,
-    text: 'Lead analysis body',
+    text: 'Brief lead.',
+    createdAt: '2026-03-08T00:00:00.000Z',
     analysisPresentation: {
       conciseTitle: 'Lead synthesis',
       conciseLabel: 'Lead synthesis',
-      promotionScore: 5,
+      promotionScore: 0,
       seriesKey: 'analysis-series:article-1',
       seriesLabel: 'The primary source story',
       heroMedia: [],
@@ -112,12 +113,12 @@ test('buildAnalysisRenderableEntries uses the strongest lead item and bundles th
     relationship: 'analysis',
     parentId: parent.id,
     parentItem: parent,
-    text: 'Follow-up analysis one',
+    text: '## Richer structure\n\nA much longer and more elaborately structured follow-up analysis.',
     createdAt: '2026-03-08T00:01:00.000Z',
     analysisPresentation: {
       conciseTitle: 'Follow-up angle one',
       conciseLabel: 'Follow-up angle one',
-      promotionScore: 2,
+      promotionScore: 999,
       seriesKey: 'analysis-series:article-1',
       seriesLabel: 'The primary source story',
       heroMedia: [],
@@ -132,12 +133,12 @@ test('buildAnalysisRenderableEntries uses the strongest lead item and bundles th
     relationship: 'analysis',
     parentId: parent.id,
     parentItem: parent,
-    text: 'Follow-up analysis two',
+    text: 'Another newer follow-up with more source references than the first displayed item.',
     createdAt: '2026-03-08T00:02:00.000Z',
     analysisPresentation: {
       conciseTitle: 'Follow-up angle two',
       conciseLabel: 'Follow-up angle two',
-      promotionScore: 1,
+      promotionScore: 500,
       seriesKey: 'analysis-series:article-1',
       seriesLabel: 'The primary source story',
       heroMedia: [],
@@ -150,6 +151,7 @@ test('buildAnalysisRenderableEntries uses the strongest lead item and bundles th
 
   assert.equal(entries.length, 2);
   assert.equal(entries[0]?.kind, 'item');
+  assert.equal(entries[0]?.kind === 'item' ? entries[0].item.id : null, 'analysis-lead');
   assert.equal(entries[1]?.kind, 'series');
   assert.deepStrictEqual(
     entries[1]?.kind === 'series' ? entries[1].items.map((item) => item.id) : [],

@@ -13,6 +13,7 @@ import {
   getCurationLogByRequestId,
   getLatestSuccessfulCurationTime,
   insertCurationLogStart,
+  insertCurationLogStartIfAbsent,
 } from './db/activity';
 
 type GlobalWithDb = typeof globalThis & {
@@ -216,12 +217,41 @@ Off
     assert.ok(enqueuePayload);
     assert.strictEqual(enqueuePayload?.message, '/curate');
     assert.strictEqual(enqueuePayload?.requestId, result.requestId);
+    assert.strictEqual(
+      (enqueuePayload?.metadata as Record<string, unknown> | undefined)?.curationCycleId,
+      result.requestId,
+    );
 
     const curationLogEntry = getCurationLogByRequestId(result.requestId as string);
     assert.ok(curationLogEntry);
     assert.strictEqual(curationLogEntry?.requestId, result.requestId);
     assert.strictEqual(curationLogEntry?.completedAt, null);
     assert.strictEqual(curationLogEntry?.triggeredBy, 'adaptive_heartbeat:unit-test:pull_refresh_immediate');
+  });
+
+  test('atomic cycle registration captures the feed baseline and rejects identity reuse', () => {
+    const db = getDb();
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO feed (id, type, text, published_at) VALUES (?, ?, ?, ?)').run(
+      'atomic-cycle-baseline-item',
+      'article',
+      'baseline',
+      now,
+    );
+    const requestId = 'phone-curation-atomic-registration-test';
+
+    assert.strictEqual(insertCurationLogStartIfAbsent({
+      requestId,
+      triggeredBy: 'phone_scheduler:cycle',
+    }), true);
+    assert.strictEqual(insertCurationLogStartIfAbsent({
+      requestId,
+      triggeredBy: 'phone_scheduler:cycle',
+    }), false);
+
+    const entry = getCurationLogByRequestId(requestId);
+    assert.strictEqual(entry?.feedCountBefore, 1);
+    assert.strictEqual(entry?.completedAt, null);
   });
 
   test('phone profile signals the single phone scheduler instead of dispatching /curate', async () => {
@@ -448,7 +478,7 @@ Off
     assert.strictEqual(result.queueDepth, 0);
   });
 
-  test('completeAdaptiveHeartbeat sets completed_at and items_added', () => {
+  test('legacy heartbeat completion records feed delta but cannot manufacture a valid receipt', () => {
     const requestId = `complete-${Date.now()}`;
 
     insertCurationLogStart({
@@ -481,7 +511,8 @@ Off
     assert.strictEqual(typeof entry?.completedAt, 'string');
     assert.ok((entry?.completedAt ?? '').length > 0);
     assert.strictEqual(entry?.itemsAdded, 2);
-    assert.strictEqual(entry?.completionStatus, 'success');
+    assert.strictEqual(entry?.completionStatus, 'failed');
+    assert.strictEqual(entry?.completionReason, 'missing_validated_cycle_receipt');
   });
 
   test('latest successful curation ignores cancelled zero-item run in max-interval timeline', () => {

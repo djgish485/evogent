@@ -325,6 +325,24 @@ describe('ThreadGroupHeader', () => {
     }
   });
 
+  test('renders a migrated singleton as a truthful plain card without thread chrome', async () => {
+    const rendered = await renderThreadGroupForInteraction({
+      analysisItems: [],
+      items: [createFeedItem('singleton-item', 'Standalone item')],
+    });
+
+    try {
+      assert.ok(rendered.container.querySelector('[data-testid="truthful-singleton-feed-entry"]'));
+      assert.equal(rendered.container.querySelector('header[role="button"]'), null);
+      assert.equal(rendered.container.querySelector('[aria-expanded]'), null);
+      assert.doesNotMatch(rendered.container.textContent ?? '', /items? hidden - tap to expand/);
+      assert.match(rendered.container.textContent ?? '', /Standalone item/);
+      assert.equal(rendered.container.querySelectorAll('[data-testid="content-card"]').length, 1);
+    } finally {
+      await rendered.cleanup();
+    }
+  });
+
   test('uses display subtitles for item connector copy before bridge metadata', async () => {
     const promotedItem = createFeedItem('item-promoted', 'Promoted older item');
     promotedItem.displaySubtitle = 'Still unread: promoted because it still matters.';
@@ -341,6 +359,40 @@ describe('ThreadGroupHeader', () => {
       const text = rendered.container.textContent ?? '';
       assert.match(text, /Still unread: promoted because it still matters\./);
       assert.doesNotMatch(text, /Generic bridge fallback\./);
+    } finally {
+      await rendered.cleanup();
+    }
+  });
+
+  test('uses explicit shipment reasons as cluster connector copy but hides legacy provenance', async () => {
+    const reason = 'This gives the concrete second angle on the shared topic.';
+    const explicitItem = createFeedItem('item-explicit-shipment', 'Explicit shipment');
+    explicitItem.metadata = {
+      ...explicitItem.metadata,
+      freshnessFloor: true,
+      interest: { score: 0.8, reason },
+      shipment: {
+        id: 'shipment-0123456789abcdef0123',
+        decision: 'ship',
+        rank: 0.8,
+        reason,
+      },
+    };
+    const legacyItem = createFeedItem('item-legacy-floor', 'Legacy floor item');
+    legacyItem.metadata = {
+      ...legacyItem.metadata,
+      freshnessFloor: true,
+      interest: { score: 0.7, reason: 'Deterministic floor provenance.' },
+    };
+    const rendered = await renderThreadGroupForInteraction({
+      analysisItems: [],
+      items: [explicitItem, legacyItem],
+    });
+
+    try {
+      const text = rendered.container.textContent ?? '';
+      assert.match(text, /This gives the concrete second angle on the shared topic\./);
+      assert.doesNotMatch(text, /Deterministic floor provenance\./);
     } finally {
       await rendered.cleanup();
     }

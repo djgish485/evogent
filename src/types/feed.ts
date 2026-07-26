@@ -217,15 +217,24 @@ export interface FeedMetadata {
   };
   currentInterestReason?: string;
   bridge?: string;
-  /** Set by the deterministic freshness floor. Marks a row as machine-ranked bookkeeping so the
-   *  display can suppress its provenance reason structurally (not by string-matching the text). */
+  /** Set on freshness-fallback rows. Legacy rows may contain machine-generated reason text;
+   *  v1 `shipment` rows carry an agent-authored public reason that is safe to display. */
   freshnessFloor?: boolean;
-  /** Curator's interestingness judgment: score/durability drive ranking; reason says WHY the
-   *  score — the "why this is here" the card surfaces when no bridge text exists. */
+  shipment?: {
+    id: string;
+    decision: 'ship';
+    rank: number;
+    reason: string;
+    cluster?: { key: string; title: string };
+  };
+  /** Supporting runtime-agent judgment evidence. Shipment and display ordering remain explicit
+   * agent decisions; mechanics never derive them from score or durability. */
   interest?: { score?: number; durability?: string; reason?: string };
   prominence?: FeedProminence;
   feedbackProbe?: FeedbackProbeMetadata;
   replyCapture?: ReplyCaptureMetadata;
+  /** The phone source saw only a display name; authorUsername must not be treated as URL proof. */
+  handleUncertain?: boolean;
   media?: MediaItem[];
   mediaTypes?: FeedMediaType[];
   communityNote?: TweetCommunityNote;

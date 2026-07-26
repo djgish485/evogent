@@ -41,13 +41,13 @@ async function postUnlocked(request: Request) {
       secondsSinceLastRefresh: Math.round((nowMs - lastRefreshAtMs) / 1000),
     });
   }
-  // Agent-judged freshness floor: before promoting, rank only cache rows already stamped by
-  // the on-phone taste agent. Unjudged rows remain private cache evidence for the full curator.
+  // Agent-judged freshness fallback: before promoting, accept only cache rows with an explicit
+  // validated ship decision. Unjudged rows remain private cache evidence for the full curator.
   // Pass harvest:false to promote only pre-existing bench items.
   let harvest: {
     scanned: number;
     awaitingJudgment: number;
-    withheldBelowThreshold: number;
+    heldByAgent: number;
     benched: number;
     bySource: Record<string, number>;
   } | null = null;

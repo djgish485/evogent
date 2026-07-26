@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Last reviewed: 2026-03-05
-#
 # Evogent — Linux/systemd service setup script
 #
 # Run this after cloning the repo and running npm install && npm run build.

@@ -436,7 +436,6 @@ test('phone mechanics and prompts do not bypass authenticated Evogent HTTP', () 
   const runtimeInstructions = [
     'AGENTS.md',
     'CLAUDE.md',
-    '.claude/skills/phone-browse/SKILL.md',
     'phone-paradigm/device/phone-tools/source-discovery-prompt.txt',
     'phone-paradigm/device/skills/phone-browse/SKILL.md',
   ].map((relative) => fs.readFileSync(path.join(root, relative), 'utf8')).join('\n');

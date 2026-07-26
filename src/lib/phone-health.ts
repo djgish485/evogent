@@ -28,11 +28,16 @@ interface PhoneControlOwnerStatus {
 
 interface PhoneControlStatus {
   scheduler?: PhoneControlOwnerStatus;
+  watchdog?: PhoneControlOwnerStatus;
   cycle?: PhoneControlOwnerStatus;
   sources?: Record<string, PhoneControlSourceStatus>;
   updatedAt?: unknown;
   updatedAtMs?: unknown;
 }
+
+const WATCHDOG_HEARTBEAT_MAX_AGE_MS = 3 * 60 * 1000;
+const STATUS_FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
+const BROWSE_REFRESH_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 
 function readJsonRecord(filePath: string): Record<string, unknown> | null {
   try {
@@ -91,6 +96,7 @@ function readProcessStartTicks(pid: number): number | null {
 function summarizeOwnerStatus(
   status: PhoneControlOwnerStatus | undefined,
   nowMs: number,
+  options: { maxHeartbeatAgeMs?: number } = {},
 ) {
   if (!status) {
     return {
@@ -98,6 +104,8 @@ function summarizeOwnerStatus(
       owner: null,
       pid: null,
       processStartTicks: null,
+      processIdentityLive: false,
+      heartbeatFresh: false,
       live: false,
       updatedAt: null,
       ageSeconds: null,
@@ -108,15 +116,25 @@ function summarizeOwnerStatus(
   const expectedStart = normalizePositiveNumber(status.processStartTicks);
   const updatedAtMs = normalizeEpochMs(status.updatedAtMs);
   const actualStart = pid === null ? null : readProcessStartTicks(pid);
+  const state = typeof status.state === 'string' ? status.state : null;
+  const processIdentityLive = pid !== null
+    && expectedStart !== null
+    && actualStart !== null
+    && actualStart === expectedStart;
+  const rawAgeMs = updatedAtMs === null ? null : nowMs - updatedAtMs;
+  const heartbeatFresh = options.maxHeartbeatAgeMs === undefined
+    ? true
+    : rawAgeMs !== null
+      && rawAgeMs >= -STATUS_FUTURE_SKEW_TOLERANCE_MS
+      && rawAgeMs <= options.maxHeartbeatAgeMs;
   return {
-    state: typeof status.state === 'string' ? status.state : null,
+    state,
     owner: typeof status.owner === 'string' ? status.owner : null,
     pid,
     processStartTicks: expectedStart,
-    live: pid !== null
-      && expectedStart !== null
-      && actualStart !== null
-      && actualStart === expectedStart,
+    processIdentityLive,
+    heartbeatFresh,
+    live: state === 'running' && processIdentityLive && heartbeatFresh,
     updatedAt: updatedAtMs === null ? null : new Date(updatedAtMs).toISOString(),
     ageSeconds: updatedAtMs === null
       ? null
@@ -182,6 +200,7 @@ function readQueueHealth() {
 function readSourceHealth(nowMs: number, controlStatus: PhoneControlStatus | null) {
   const db = getDb();
   const cadences = readSourceCadences();
+  const refreshTimestampUpperBoundMs = nowMs + BROWSE_REFRESH_TIMESTAMP_SKEW_MS;
   const cacheRows = db.prepare(`
     SELECT
       source,
@@ -215,6 +234,28 @@ function readSourceHealth(nowMs: number, controlStatus: PhoneControlStatus | nul
     completedAtMs: number | null;
   }>;
   const latestRunBySource = new Map(refreshRows.map((row) => [row.source, row]));
+  const completedRefreshRows = db.prepare(`
+    SELECT source, MAX(completed_at_ms) AS completedAtMs
+    FROM browse_cache_refresh_runs
+    WHERE LOWER(status) = 'completed'
+      AND completed_at_ms IS NOT NULL
+      AND completed_at_ms >= 0
+      AND completed_at_ms <= ?
+      AND started_at_ms >= 0
+      AND started_at_ms <= ?
+      AND completed_at_ms + ? >= started_at_ms
+    GROUP BY source
+  `).all(
+    refreshTimestampUpperBoundMs,
+    refreshTimestampUpperBoundMs,
+    BROWSE_REFRESH_TIMESTAMP_SKEW_MS,
+  ) as Array<{
+    source: string;
+    completedAtMs: number;
+  }>;
+  const latestCompletedRefreshBySource = new Map(
+    completedRefreshRows.map((row) => [row.source, row.completedAtMs]),
+  );
   const sourceNames = new Set([
     ...cacheRows.map((row) => row.source),
     ...refreshRows.map((row) => row.source),
@@ -229,20 +270,36 @@ function readSourceHealth(nowMs: number, controlStatus: PhoneControlStatus | nul
     const control = controlStatus?.sources?.[source];
     const cadenceHours = normalizePositiveNumber(cadences[source]?.cadenceHours);
     const latestFetchedAtMs = cache?.latestFetchedAtMs ?? null;
-    const ageMinutes = latestFetchedAtMs === null
+    const latestCompletedRefreshAtMs = latestCompletedRefreshBySource.get(source) ?? null;
+    // A completed zero-new/deduplicated run is still truthful evidence that the source was just
+    // inspected. Cache-item fetch time remains visible independently; whichever evidence is newer
+    // drives cadence freshness without pretending a failed/incomplete run succeeded.
+    const freshnessReferenceAtMs = Math.max(
+      latestFetchedAtMs ?? -1,
+      latestCompletedRefreshAtMs ?? -1,
+    );
+    const normalizedFreshnessReferenceAtMs = freshnessReferenceAtMs >= 0
+      ? freshnessReferenceAtMs
+      : null;
+    let freshnessReferenceKind: 'completed_refresh' | 'cache_item' | null = null;
+    if (normalizedFreshnessReferenceAtMs !== null) {
+      freshnessReferenceKind = latestCompletedRefreshAtMs !== null
+        && latestCompletedRefreshAtMs >= (latestFetchedAtMs ?? -1)
+        ? 'completed_refresh'
+        : 'cache_item';
+    }
+    const ageMinutes = normalizedFreshnessReferenceAtMs === null
       ? null
-      : Math.max(0, Math.round((nowMs - latestFetchedAtMs) / 60_000));
+      : Math.max(0, Math.round((nowMs - normalizedFreshnessReferenceAtMs) / 60_000));
     const overdue = cadenceHours !== null
       && ageMinutes !== null
       && ageMinutes > cadenceHours * 2 * 60;
     const latestRunFailed = Boolean(
-      latestRun
-      && latestRun.status.toLowerCase() !== 'completed'
-      && (latestRun.completedAtMs ?? latestRun.startedAtMs) >= (latestFetchedAtMs ?? 0),
+      latestRun && latestRun.status.toLowerCase() !== 'completed',
     );
     const state = latestRunFailed
       ? 'mechanics_failed'
-      : latestFetchedAtMs === null
+      : normalizedFreshnessReferenceAtMs === null
         ? 'empty'
         : overdue
           ? 'stale'
@@ -255,6 +312,13 @@ function readSourceHealth(nowMs: number, controlStatus: PhoneControlStatus | nul
       latestFetchedAt: latestFetchedAtMs === null
         ? null
         : new Date(latestFetchedAtMs).toISOString(),
+      latestCompletedRefreshAt: latestCompletedRefreshAtMs === null
+        ? null
+        : new Date(latestCompletedRefreshAtMs).toISOString(),
+      freshnessReferenceAt: normalizedFreshnessReferenceAtMs === null
+        ? null
+        : new Date(normalizedFreshnessReferenceAtMs).toISOString(),
+      freshnessReferenceKind,
       ageMinutes,
       cadenceHours,
       lastOutcome: typeof control?.outcome === 'string' ? control.outcome : null,
@@ -289,12 +353,24 @@ export function readPhoneHealth(nowMs = Date.now()) {
     || runtimeProfile === 'android'
     || runtimeProfile === 'pixel';
   const scheduler = summarizeOwnerStatus(controlStatus?.scheduler, nowMs);
+  const watchdog = summarizeOwnerStatus(controlStatus?.watchdog, nowMs, {
+    maxHeartbeatAgeMs: WATCHDOG_HEARTBEAT_MAX_AGE_MS,
+  });
   const cycle = summarizeOwnerStatus(controlStatus?.cycle, nowMs);
   const cycleClaimsRunning = cycle.state === 'running';
   const criticalProblems = [
     ...(!db.ok ? ['database_integrity'] : []),
     ...(phoneProfile && !controlStatus ? ['phone_control_status_missing'] : []),
     ...(phoneProfile && controlStatus && !scheduler.live ? ['scheduler_owner_not_live'] : []),
+    ...(phoneProfile && controlStatus && !watchdog.live
+      ? [
+          watchdog.state === 'running'
+            && watchdog.processIdentityLive
+            && !watchdog.heartbeatFresh
+            ? 'watchdog_heartbeat_stale'
+            : 'watchdog_owner_not_live',
+        ]
+      : []),
     ...(phoneProfile && cycleClaimsRunning && !cycle.live ? ['cycle_owner_not_live'] : []),
     ...(phoneProfile && (queues?.onPhoneDevelopment ?? 0) > 0 ? ['on_phone_development_active'] : []),
   ];
@@ -311,6 +387,7 @@ export function readPhoneHealth(nowMs = Date.now()) {
     control: {
       registry: controlStatus,
       scheduler,
+      watchdog,
       cycle,
     },
     queues,

@@ -176,6 +176,21 @@ export function canonicalizeTwitterFeedItemForSubmit(
   const metadataTweetId = getMetadataTweetId(isRecord(item.metadata) ? item.metadata : null);
   const cachedPayload = options.cachedPayload ?? null;
   const cacheTweetId = getPayloadTweetId(cachedPayload);
+  const originalMetadata = isRecord(item.metadata) ? item.metadata : {};
+  const handleUncertain = originalMetadata.handleUncertain === true
+    || cachedPayload?.handleUncertain === true;
+  const identitySafeItem: FeedInsertInput = handleUncertain
+    ? {
+        ...item,
+        // A status URL is backed by the immutable tweet id. A profile URL backed only by a
+        // display-name-derived handle is not evidence and must remain absent.
+        url: extractTweetIdFromStatusUrl(item.url) ? item.url : null,
+        metadata: {
+          ...originalMetadata,
+          handleUncertain: true,
+        },
+      }
+    : item;
 
   pushId(idsByEvidence, sourceIdTweetId, 'numeric_source_id');
   pushId(idsByEvidence, urlTweetId, 'status_url');
@@ -209,17 +224,19 @@ export function canonicalizeTwitterFeedItemForSubmit(
   if (!hasStructuralTweetEvidence || !canonicalTweetId) {
     return {
       ok: true,
-      item,
+      item: identitySafeItem,
       canonicalTweetId: null,
       converted: false,
     };
   }
 
   const converted = item.type === 'article';
-  const originalMetadata = isRecord(item.metadata) ? item.metadata : {};
+  const identitySafeMetadata = isRecord(identitySafeItem.metadata)
+    ? identitySafeItem.metadata
+    : {};
   const canonicalMetadata: FeedMetadata | null = converted
     ? {
-        ...originalMetadata,
+        ...identitySafeMetadata,
         twitterCanonicalization: {
           originalType: item.type,
           originalSource: item.source ?? null,
@@ -229,18 +246,20 @@ export function canonicalizeTwitterFeedItemForSubmit(
           evidence: [...evidence].sort(),
         },
       }
-    : item.metadata ?? null;
+    : identitySafeItem.metadata ?? null;
 
-  const statusUrl = extractTweetIdFromStatusUrl(item.url) === canonicalTweetId
-    ? item.url
-    : buildTweetStatusUrl(item.authorUsername, canonicalTweetId) ?? item.url;
+  const statusUrl = handleUncertain
+    ? `https://x.com/i/web/status/${canonicalTweetId}`
+    : extractTweetIdFromStatusUrl(item.url) === canonicalTweetId
+      ? item.url
+      : buildTweetStatusUrl(item.authorUsername, canonicalTweetId) ?? item.url;
 
   return {
     ok: true,
     converted,
     canonicalTweetId,
     item: {
-      ...item,
+      ...identitySafeItem,
       type: 'tweet',
       source: 'twitter',
       sourceId: canonicalTweetId,

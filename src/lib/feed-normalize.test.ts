@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compareThreadGroupItems } from './feed-render-entries';
 import {
+  compareFeedItems,
   getThreadDisplayGroupIdentity,
   getThreadGroupIdentity,
   isReflectionFeedItem,
@@ -44,11 +45,27 @@ function item(id: string, createdAt: string, displayOrder: number | null = null)
   };
 }
 
-test('compareThreadGroupItems honors fresh curator display order inside threads', () => {
+test('compareThreadGroupItems honors curator display order inside threads', () => {
   const olderPromoted = item('older-promoted', '2026-05-01T00:00:00.000Z', 1);
   const newerLower = item('newer-lower', '2026-05-02T00:00:00.000Z', 2);
 
   assert.equal(compareThreadGroupItems(olderPromoted, newerLower), -1);
+});
+
+test('compareFeedItems honors persisted display order even when the arrange timestamp is old', () => {
+  const olderPromoted = item('older-promoted', '2026-05-01T00:00:00.000Z', 1);
+  const newerLower = item('newer-lower', '2026-05-02T00:00:00.000Z', 2);
+  const nowMs = Date.parse('2026-06-01T00:00:00.000Z');
+
+  assert.deepEqual(
+    [newerLower, olderPromoted]
+      .sort((left, right) => compareFeedItems(left, right, 'created', {
+        lastArrangeAtMs: nowMs - 30 * 24 * 60 * 60 * 1000,
+        nowMs,
+      }))
+      .map((entry) => entry.id),
+    ['older-promoted', 'newer-lower'],
+  );
 });
 
 test('compareThreadGroupItems preserves newest-first thread fallback without display order', () => {

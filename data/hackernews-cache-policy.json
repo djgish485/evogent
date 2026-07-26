@@ -4,22 +4,19 @@
       "ttlHours": 48,
       "topStories": 30,
       "bestStories": 0,
-      "newStories": 0,
-      "outputAuthorCap": 2
+      "newStories": 0
     },
     "medium": {
       "ttlHours": 36,
       "topStories": 50,
       "bestStories": 30,
-      "newStories": 0,
-      "outputAuthorCap": 2
+      "newStories": 0
     },
     "high": {
       "ttlHours": 24,
       "topStories": 100,
       "bestStories": 50,
-      "newStories": 0,
-      "outputAuthorCap": 3
+      "newStories": 0
     }
   },
   "deadlineBudget": {
