@@ -344,6 +344,7 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /EXPECTED_APK_SHA256/);
   assert.match(installer, /APK_INSTALL_ATTEMPTED/);
   assert.match(installer, /"packageOperation": package_operation/);
+  assert.match(installer, /"controlTokenBridge": control_token_bridge/);
   assert.match(installer, /changed APK requires a strictly higher Android version code/);
   assert.match(installer, /wait_for_apk_rollback_availability/);
   assert.match(
@@ -390,6 +391,10 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(
     installer,
     /sync_control_token_from_apk\(\)[\s\S]*allocate_shell_staging_file control-token[\s\S]*cp '\$APP_CONTROL_TOKEN_PATH' '\$shell_path' && chmod 0644[\s\S]*python3 "\$writer" "\$CONTROL_TOKEN" < "\$staged_token"/,
+  );
+  assert.match(
+    installer,
+    /sync_control_token_from_apk\(\)[\s\S]*CONTROL_TOKEN_BRIDGE="\$shell_path"[\s\S]*write_transaction_journal "\$TRANSACTION_PHASE"[\s\S]*copy_published_shell_file "\$shell_path" "\$staged_token"[\s\S]*if ! remove_shell_staging_file "\$shell_path"[\s\S]*CONTROL_TOKEN_BRIDGE=""/,
   );
   assert.match(
     installer,
@@ -504,6 +509,7 @@ CONTROL_TOKEN="$2/state/data/control-token.txt"
 CONTROL_TOKEN_BACKUP="$2/backups/backup-1/control-token.txt"
 CONTROL_TOKEN_EXISTED=1
 CONTROL_TOKEN_BACKUP_READY=1
+CONTROL_TOKEN_BRIDGE=""
 TRANSACTION_JOURNAL_WRITTEN=0
 write_transaction_journal quiesce_pending
 `;
@@ -515,6 +521,7 @@ write_transaction_journal quiesce_pending
   assert.equal(payload.dbBackupReady, 0);
   assert.equal(payload.apkBackupReady, 1);
   assert.equal(payload.controlTokenBackupReady, 1);
+  assert.equal(payload.controlTokenBridge, '');
   assert.equal(payload.packageOperation, '');
   assert.equal(payload.switchStarted, 0);
 });
@@ -838,6 +845,7 @@ rollback_apk_native() { record apk; }
 restore_control_token() { record token; }
 rollback_initial_migration() { record migration; }
 reap_recorded_package_operation() { :; }
+reap_recorded_control_token_bridge() { :; }
 rish_command() { record rish; }
 bash() { record boot; }
 HOME="$1"
@@ -1014,50 +1022,64 @@ set -uo pipefail
 ${helper}
 record() { printf '%s\\n' "$1" >> "$TRACE"; }
 say() { :; }
-wait_for_package_manager_idle() { record barrier; return "$BARRIER_RESULT"; }
-wait_for_apk_backup_identity() { record proof; return "$PROOF_RESULT"; }
+reap_recorded_package_operation() { record cancel; return 0; }
+wait_for_package_manager_idle() { record barrier; return 0; }
+wait_for_apk_backup_identity() {
+  record proof
+  PROOF_CALLS=$((PROOF_CALLS + 1))
+  case "$PROOF_CALLS" in
+    1) return "$PROOF_ONE" ;;
+    2) return "$PROOF_TWO" ;;
+    *) return "$PROOF_THREE" ;;
+  esac
+}
 rish_command() { record native; return 0; }
-install_apk() { record fallback; return 0; }
+install_apk() { record fallback; return "$FALLBACK_RESULT"; }
+PROOF_CALLS=0
 if rollback_apk_native; then rc=0; else rc=$?; fi
 printf 'rc=%s\\n' "$rc"
 `;
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-apk-rollback-'));
   const trace = path.join(fixture, 'trace');
-  let result = spawnSync('bash', ['-c', harness], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      APK_BACKUP: path.join(fixture, 'backup.apk'),
-      APK_BACKUP_READY: '1',
-      APK_INSTALL_ATTEMPTED: '1',
-      BARRIER_RESULT: '0',
-      PACKAGE_NAME: 'com.example.evogent',
-      PROOF_RESULT: '0',
-      STAGING_ROOT: fixture,
-      TRACE: trace,
-    },
-  });
+  function runRollback(proofOne, proofTwo = '0', proofThree = '0') {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        APK_BACKUP: path.join(fixture, 'backup.apk'),
+        APK_BACKUP_READY: '1',
+        APK_INSTALL_ATTEMPTED: '1',
+        FALLBACK_RESULT: '0',
+        PACKAGE_NAME: 'com.example.evogent',
+        PROOF_ONE: proofOne,
+        PROOF_THREE: proofThree,
+        PROOF_TWO: proofTwo,
+        STAGING_ROOT: fixture,
+        TRACE: trace,
+      },
+    });
+  }
+
+  let result = runRollback('0');
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nproof\n');
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'cancel\nbarrier\nproof\n');
   assert.match(result.stdout, /rc=0/);
 
-  fs.rmSync(trace);
-  result = spawnSync('bash', ['-c', harness], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      APK_BACKUP: path.join(fixture, 'backup.apk'),
-      APK_BACKUP_READY: '1',
-      APK_INSTALL_ATTEMPTED: '1',
-      BARRIER_RESULT: '1',
-      PACKAGE_NAME: 'com.example.evogent',
-      PROOF_RESULT: '0',
-      STAGING_ROOT: fixture,
-      TRACE: trace,
-    },
-  });
+  result = runRollback('1', '0');
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nnative\nproof\n');
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'cancel\nbarrier\nproof\nnative\nbarrier\nproof\n',
+  );
+  assert.match(result.stdout, /rc=0/);
+
+  result = runRollback('1', '1', '0');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'cancel\nbarrier\nproof\nnative\nbarrier\nproof\nfallback\ncancel\nbarrier\nproof\n',
+  );
   assert.match(result.stdout, /rc=0/);
 });
 
@@ -1091,6 +1113,46 @@ printf 'rc=%s retained=%s\\n' "$rc" "$retained"
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
     `/data/local/tmp/evogent-package-op.${'a'.repeat(32)}\n`,
+  );
+
+  result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: { ...process.env, REMOVE_RESULT: '1', TRACE: trace },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 retained=yes/);
+});
+
+test('rollback retains its journal until the private token bridge is gone', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'reap_recorded_control_token_bridge');
+  const harness = `
+set -uo pipefail
+${helper}
+say() { :; }
+remove_shell_staging_file() {
+  printf '%s\\n' "$1" > "$TRACE"
+  return "$REMOVE_RESULT"
+}
+CONTROL_TOKEN_BRIDGE="/data/local/tmp/evogent-control-token.${'b'.repeat(32)}/payload"
+if reap_recorded_control_token_bridge; then rc=0; else rc=$?; fi
+if [ -n "$CONTROL_TOKEN_BRIDGE" ]; then retained=yes; else retained=no; fi
+printf 'rc=%s retained=%s\\n' "$rc" "$retained"
+`;
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-token-reap-'));
+  const trace = path.join(fixture, 'trace');
+  let result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: { ...process.env, REMOVE_RESULT: '0', TRACE: trace },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 retained=no/);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    `/data/local/tmp/evogent-control-token.${'b'.repeat(32)}/payload\n`,
   );
 
   result = spawnSync('bash', ['-c', harness], {

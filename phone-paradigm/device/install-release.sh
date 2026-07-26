@@ -270,6 +270,7 @@ CONTROL_TOKEN="$STATE/data/control-token.txt"
 CONTROL_TOKEN_BACKUP=""
 CONTROL_TOKEN_EXISTED=0
 CONTROL_TOKEN_BACKUP_READY=0
+CONTROL_TOKEN_BRIDGE=""
 TRANSACTION_PHASE=""
 TRANSACTION_JOURNAL_WRITTEN=0
 DEPENDENCY_BUILD=""
@@ -406,11 +407,18 @@ allocate_shell_staging_file() {
 }
 
 remove_shell_staging_file() {
-  local path="$1" operation
+  local path="$1" operation probe
   [[ "$path" =~ ^/data/local/tmp/evogent-(control-token|installed-apk|package-version|rollback-dump)\.[0-9a-f]{32}/payload$ ]] \
     || return 1
   operation="${path%/payload}"
-  rish_command "rm -rf '$operation'" >/dev/null 2>&1
+  rish_command "rm -rf '$operation'" >/dev/null 2>&1 || true
+  for probe in $(seq 1 100); do
+    if [ ! -e "$operation" ] && [ ! -L "$operation" ]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
 }
 
 copy_published_shell_file() {
@@ -555,7 +563,9 @@ install_apk() {
     operation="$(allocate_shell_package_operation)" || return 1
     PACKAGE_OPERATION="$operation"
     if [ "${TRANSACTION_JOURNAL_WRITTEN:-0}" = 1 ]; then
-      write_transaction_journal "${TRANSACTION_PHASE:-apk_install_pending}"
+      if ! write_transaction_journal "${TRANSACTION_PHASE:-apk_install_pending}"; then
+        return 1
+      fi
     fi
   fi
   candidate="$operation/candidate.apk"
@@ -716,10 +726,13 @@ rollback_apk_native() {
     return 1
   }
 
-  # An interrupted rish/package-manager command can finish after its parent
-  # installer dies. First cross the package-manager handler barrier and accept
-  # an already-restored APK only after three stable exact-identity observations.
-  # This avoids mutating a phone that had already rolled itself back.
+  # Cancel the exact journaled candidate before the final package-manager
+  # barrier. A detached shell that starts afterward can no longer open the APK;
+  # a shell already in PackageManager is drained by the barriers below.
+  reap_recorded_package_operation || return 1
+
+  # Accept an already-restored APK only after both package-manager handlers are
+  # idle and three stable exact-identity observations agree.
   if wait_for_package_manager_idle \
       && wait_for_apk_backup_identity "$probe"; then
     return 0
@@ -727,17 +740,27 @@ rollback_apk_native() {
 
   # Otherwise serialize a native rollback (or exact-byte fallback reinstall)
   # behind any pending package operation and prove its exact identity.
-  if rish_command "cmd package rollback-app '$PACKAGE_NAME'" >/dev/null 2>&1 \
+  rish_command "cmd package rollback-app '$PACKAGE_NAME'" >/dev/null 2>&1 || true
+  if wait_for_package_manager_idle \
       && wait_for_apk_backup_identity "$probe"; then
     return 0
   fi
 
   say "CRITICAL: Android native rollback did not restore the backed-up APK; trying -d fallback"
-  install_apk "$APK_BACKUP" fallback >/dev/null 2>&1 || {
+  if ! install_apk "$APK_BACKUP" fallback >/dev/null 2>&1; then
     say "CRITICAL: backed-up APK fallback install was rejected"
+    reap_recorded_package_operation || return 1
+    if wait_for_package_manager_idle \
+        && wait_for_apk_backup_identity "$probe"; then
+      return 0
+    fi
     return 1
-  }
-  wait_for_apk_backup_identity "$probe" && return 0
+  fi
+  reap_recorded_package_operation || return 1
+  if wait_for_package_manager_idle \
+      && wait_for_apk_backup_identity "$probe"; then
+    return 0
+  fi
   say "CRITICAL: installed APK did not return to its backed-up identity"
   return 1
 }
@@ -960,14 +983,31 @@ sync_control_token_from_apk() {
   rish_command "am start -n '$PACKAGE_NAME/.MainActivity' >/dev/null" \
     >/dev/null 2>&1 || true
   for _ in $(seq 1 30); do
-    shell_path="$(allocate_shell_staging_file control-token 2>/dev/null || true)"
+    if [ -n "$CONTROL_TOKEN_BRIDGE" ]; then
+      [[ "$CONTROL_TOKEN_BRIDGE" =~ ^/data/local/tmp/evogent-control-token\.[0-9a-f]{32}/payload$ ]] \
+        || return 1
+      shell_path="$CONTROL_TOKEN_BRIDGE"
+    else
+      shell_path="$(allocate_shell_staging_file control-token 2>/dev/null || true)"
+      if [ -n "$shell_path" ]; then
+        CONTROL_TOKEN_BRIDGE="$shell_path"
+        if [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ] \
+            && ! write_transaction_journal "$TRANSACTION_PHASE"; then
+          return 1
+        fi
+      fi
+    fi
     if [ -n "$shell_path" ]; then
       rish_command \
         "cp '$APP_CONTROL_TOKEN_PATH' '$shell_path' && chmod 0644 '$shell_path'" \
         >/dev/null 2>&1 || true
       if copy_published_shell_file "$shell_path" "$staged_token" 30; then
-        remove_shell_staging_file "$shell_path" || true
+        if ! remove_shell_staging_file "$shell_path"; then
+          say "CRITICAL: shell-visible phone control token could not be removed"
+          return 1
+        fi
         shell_path=""
+        CONTROL_TOKEN_BRIDGE=""
       fi
     fi
     if [ -s "$staged_token" ] \
@@ -976,7 +1016,13 @@ sync_control_token_from_apk() {
       say "phone control token synchronized from APK-scoped storage"
       return 0
     fi
-    [ -z "$shell_path" ] || remove_shell_staging_file "$shell_path" || true
+    if [ -n "$shell_path" ]; then
+      if ! remove_shell_staging_file "$shell_path"; then
+        say "CRITICAL: incomplete phone control-token bridge could not be removed"
+        return 1
+      fi
+      CONTROL_TOKEN_BRIDGE=""
+    fi
     shell_path=""
     rm -f -- "$staged_token"
     sleep 1
@@ -1006,7 +1052,8 @@ write_transaction_journal() {
     "$PREVIOUS_APK_CODE" "$PREVIOUS_APK_SIGNER" \
     "$INITIAL_MIGRATION" "$MIGRATION_STARTED" "$SWITCH_STARTED" \
     "$MIGRATION_DIR" "$CYCLE_GATE" "$CONTROL_TOKEN" "$CONTROL_TOKEN_BACKUP" \
-    "$CONTROL_TOKEN_EXISTED" "$CONTROL_TOKEN_BACKUP_READY" <<'PY'
+    "$CONTROL_TOKEN_EXISTED" "$CONTROL_TOKEN_BACKUP_READY" \
+    "$CONTROL_TOKEN_BRIDGE" <<'PY'
 import json
 import os
 import pathlib
@@ -1039,6 +1086,7 @@ import sys
     control_token_backup,
     control_token_existed,
     control_token_backup_ready,
+    control_token_bridge,
 ) = sys.argv[1:]
 payload = {
     "schema": "evogent.phone.install-transaction.v1",
@@ -1066,6 +1114,7 @@ payload = {
     "controlTokenBackup": control_token_backup,
     "controlTokenExisted": int(control_token_existed),
     "controlTokenBackupReady": int(control_token_backup_ready),
+    "controlTokenBridge": control_token_bridge,
 }
 with open(temporary, "x", encoding="utf-8") as handle:
     json.dump(payload, handle, separators=(",", ":"), sort_keys=True)
@@ -1167,6 +1216,20 @@ if not isinstance(package_operation, str) or (
     is None
 ):
     raise SystemExit("transaction package operation is invalid")
+control_token_bridge = data.get("controlTokenBridge", "")
+if not isinstance(control_token_bridge, str) or (
+    control_token_bridge
+    and re.fullmatch(
+        r"/data/local/tmp/evogent-control-token\.[0-9a-f]{32}/payload",
+        control_token_bridge,
+    )
+    is None
+):
+    raise SystemExit("transaction control-token bridge is invalid")
+if package_operation and (
+    data.get("apkChanged") != 1 or data.get("apkInstallAttempted") != 1
+):
+    raise SystemExit("transaction package operation has no APK mutation intent")
 if data.get("controlToken") != token:
     raise SystemExit("transaction control-token destination changed")
 if data.get("cycleGate") not in {home_gate, state_gate}:
@@ -1393,6 +1456,16 @@ reap_recorded_package_operation() {
   return 1
 }
 
+reap_recorded_control_token_bridge() {
+  [ -n "$CONTROL_TOKEN_BRIDGE" ] || return 0
+  if remove_shell_staging_file "$CONTROL_TOKEN_BRIDGE"; then
+    CONTROL_TOKEN_BRIDGE=""
+    return 0
+  fi
+  say "CRITICAL: recorded phone control-token bridge could not be reaped"
+  return 1
+}
+
 rollback_release() {
   say "install failed; rolling back the complete release"
   ROLLBACK_ATTEMPTED=1
@@ -1419,6 +1492,11 @@ rollback_release() {
     return 1
   fi
   QUIESCED=1
+  if ! reap_recorded_control_token_bridge; then
+    ROLLBACK_FAILED=1
+    set -e
+    return 1
+  fi
   if ! normalize_dangling_legacy_predecessor; then
     ROLLBACK_FAILED=1
     say "CRITICAL: rollback could not safely normalize the prior runtime topology"
@@ -1472,7 +1550,6 @@ rollback_release() {
       fi
     fi
   fi
-  reap_recorded_package_operation || ROLLBACK_FAILED=1
   if [ -n "$PREVIOUS_TARGET" ]; then
     is_real_release_target "$PREVIOUS_TARGET" \
       && [ -L "$CURRENT" ] \
@@ -1590,6 +1667,7 @@ recover_interrupted_transaction() {
   CONTROL_TOKEN_BACKUP="$(journal_field "$journal" controlTokenBackup)"
   CONTROL_TOKEN_EXISTED="$(journal_field "$journal" controlTokenExisted)"
   CONTROL_TOKEN_BACKUP_READY="$(journal_field "$journal" controlTokenBackupReady)"
+  CONTROL_TOKEN_BRIDGE="$(journal_optional_field "$journal" controlTokenBridge)"
   TRANSACTION_JOURNAL_WRITTEN=1
   MANIFEST_PATH="$NEW_RELEASE/manifest.json"
   STAGE="$(mktemp -d "$STAGING_ROOT/recover.XXXXXX")"
