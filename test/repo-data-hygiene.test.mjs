@@ -18,6 +18,7 @@ const allowedDataFiles = new Set([
   'data/interestingness-rubric.default.md',
   'data/life-execute-prompt.default.md',
   'data/hackernews-cache-policy.json',
+  'data/source-cadence.default.json',
   'data/substack-cache-policy.json',
   'data/tmp/.gitkeep',
   'data/tweet-cache-policy.json',
