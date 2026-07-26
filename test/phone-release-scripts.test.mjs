@@ -308,6 +308,10 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /atomic_link "releases\/\$RELEASE_ID" "\$CURRENT"/);
   assert.match(installer, /backup_database/);
   assert.match(installer, /backup_installed_apk/);
+  assert.match(
+    installer,
+    /backup_installed_apk\(\)[\s\S]*\$\{1\}\.partial-\$\$[\s\S]*for attempt in 1 2 3[\s\S]*mv -f -- "\$partial" "\$output"/,
+  );
   assert.match(installer, /rollback_release/);
   assert.match(installer, /cmd package install -r --enable-rollback/);
   assert.match(installer, /cmd package rollback-app/);

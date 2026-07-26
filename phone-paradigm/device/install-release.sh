@@ -398,12 +398,21 @@ install_apk() {
 }
 
 backup_installed_apk() {
-  local output="$1" installed_path
-  installed_path="$(rish_command "pm path '$PACKAGE_NAME'" 2>/dev/null \
-    | sed -n 's/^package://p' | head -1 | tr -d '\r')"
-  [ -n "$installed_path" ] || return 1
-  rish_command "cat '$installed_path'" > "$output"
-  [ -s "$output" ]
+  local output="$1" installed_path attempt partial="${1}.partial-$$"
+  rm -f -- "$partial"
+  for attempt in 1 2 3; do
+    installed_path="$(rish_command "pm path '$PACKAGE_NAME'" 2>/dev/null \
+      | sed -n 's/^package://p' | head -1 | tr -d '\r')"
+    if [ -n "$installed_path" ] \
+        && rish_command "cat '$installed_path'" > "$partial" \
+        && [ -s "$partial" ]; then
+      mv -f -- "$partial" "$output"
+      return 0
+    fi
+    rm -f -- "$partial"
+    [ "$attempt" -eq 3 ] || sleep 1
+  done
+  return 1
 }
 
 apk_signer_sha256() {
