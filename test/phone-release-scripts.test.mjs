@@ -310,8 +310,13 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /backup_installed_apk/);
   assert.match(
     installer,
-    /backup_installed_apk\(\)[\s\S]*\$\{1\}\.partial-\$\$[\s\S]*for attempt in 1 2 3[\s\S]*mv -f -- "\$partial" "\$output"/,
+    /backup_installed_apk\(\)[\s\S]*for attempt in 1 2 3[\s\S]*allocate_shell_staging_file installed-apk[\s\S]*cp '\$installed_path' '\$shell_path' && chmod 0644[\s\S]*unzip -tqq "\$partial"[\s\S]*mv -f -- "\$partial" "\$output"/,
   );
+  assert.match(
+    installer,
+    /stage_apk_for_shell\(\)[\s\S]*allocate_shell_staging_file candidate-apk[\s\S]*chmod 0666[\s\S]*cp "\$source_apk" "\$shell_path"[\s\S]*sha256_file "\$shell_path"/,
+  );
+  assert.doesNotMatch(installer, /rish_command "cat > '\$shell_path'/);
   assert.match(installer, /rollback_release/);
   assert.match(installer, /cmd package install -r --enable-rollback/);
   assert.match(installer, /cmd package rollback-app/);

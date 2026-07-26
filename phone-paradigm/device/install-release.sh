@@ -365,6 +365,27 @@ rish_command() {
   env RISH_APPLICATION_ID=com.termux "$HOME/rish-bin/rish" -c "$1"
 }
 
+allocate_shell_staging_file() {
+  local purpose="$1" path
+  case "$purpose" in
+    candidate-apk|installed-apk) ;;
+    *) return 1 ;;
+  esac
+  path="$(rish_command \
+    "mktemp '/data/local/tmp/evogent-${purpose}.XXXXXX'" 2>/dev/null \
+    | tr -d '\r' | tail -1)"
+  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|installed-apk)\.[A-Za-z0-9]+$ ]] \
+    || return 1
+  printf '%s\n' "$path"
+}
+
+remove_shell_staging_file() {
+  local path="$1"
+  [[ "$path" =~ ^/data/local/tmp/evogent-(candidate-apk|installed-apk)\.[A-Za-z0-9]+$ ]] \
+    || return 1
+  rish_command "rm -f '$path'" >/dev/null 2>&1
+}
+
 package_manager_supports_apk_rollback() {
   local package_help rollback_probe
   package_help="$(rish_command "cmd package help" 2>&1 || true)"
@@ -381,13 +402,21 @@ package_manager_supports_apk_rollback() {
 }
 
 stage_apk_for_shell() {
-  local source_apk="$1" shell_path="$2"
-  rish_command "cat > '$shell_path' && chmod 0644 '$shell_path'" < "$source_apk"
+  local source_apk="$1" shell_path
+  shell_path="$(allocate_shell_staging_file candidate-apk)" || return 1
+  if ! rish_command "chmod 0666 '$shell_path'" >/dev/null 2>&1 \
+      || ! cp "$source_apk" "$shell_path" \
+      || [ "$(sha256_file "$source_apk")" != "$(sha256_file "$shell_path")" ] \
+      || ! rish_command "chmod 0644 '$shell_path'" >/dev/null 2>&1; then
+    remove_shell_staging_file "$shell_path" || true
+    return 1
+  fi
+  printf '%s\n' "$shell_path"
 }
 
 install_apk() {
-  local apk="$1" mode="${2:-upgrade}" shell_path="/data/local/tmp/evogent-release-$$.apk"
-  stage_apk_for_shell "$apk" "$shell_path"
+  local apk="$1" mode="${2:-upgrade}" shell_path
+  shell_path="$(stage_apk_for_shell "$apk")" || return 1
   if [ "$mode" = upgrade ]; then
     rish_command "cmd package install -r --enable-rollback '$shell_path'; rc=\$?; rm -f '$shell_path'; exit \$rc"
   else
@@ -398,17 +427,24 @@ install_apk() {
 }
 
 backup_installed_apk() {
-  local output="$1" installed_path attempt partial="${1}.partial-$$"
+  local output="$1" installed_path attempt partial="${1}.partial-$$" shell_path
   rm -f -- "$partial"
   for attempt in 1 2 3; do
     installed_path="$(rish_command "pm path '$PACKAGE_NAME'" 2>/dev/null \
       | sed -n 's/^package://p' | head -1 | tr -d '\r')"
-    if [ -n "$installed_path" ] \
-        && rish_command "cat '$installed_path'" > "$partial" \
-        && [ -s "$partial" ]; then
+    shell_path="$(allocate_shell_staging_file installed-apk 2>/dev/null || true)"
+    if [ -n "$installed_path" ] && [ -n "$shell_path" ] \
+        && rish_command \
+          "cp '$installed_path' '$shell_path' && chmod 0644 '$shell_path'" \
+          >/dev/null 2>&1 \
+        && cp "$shell_path" "$partial" \
+        && [ -s "$partial" ] \
+        && unzip -tqq "$partial" >/dev/null 2>&1; then
+      remove_shell_staging_file "$shell_path" || true
       mv -f -- "$partial" "$output"
       return 0
     fi
+    [ -z "$shell_path" ] || remove_shell_staging_file "$shell_path" || true
     rm -f -- "$partial"
     [ "$attempt" -eq 3 ] || sleep 1
   done
