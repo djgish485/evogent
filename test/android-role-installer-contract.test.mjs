@@ -140,7 +140,7 @@ test('Android role reads use bounded typed filesystem publication, not rish stdo
   );
   assert.match(
     installer,
-    /evogent-\(android-role-query\|control-token\|installed-apk\|package-version\|rollback-dump\)/,
+    /evogent-\(android-role-query\|control-token\|installed-apk\|package-version\|rollback-dump\|package-idle\)/,
   );
 });
 

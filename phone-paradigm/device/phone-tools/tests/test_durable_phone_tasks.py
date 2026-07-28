@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import time
@@ -26,6 +27,7 @@ from durable_task_queue import (  # noqa: E402
     enqueue_task,
     ensure_nightly_task,
     finish_task,
+    mark_provider_launch_spent,
 )
 from interest_browse_runtime import (  # noqa: E402
     PNG_SIGNATURE,
@@ -37,16 +39,21 @@ from interest_browse_runtime import (  # noqa: E402
 from private_artifact import (  # noqa: E402
     artifact_identity,
     artifact_was_atomically_rewritten,
+    source_cadence_valid,
 )
 from scheduler_timing import (  # noqa: E402
+    clear_cycle_failure_backoff,
+    cycle_failure_remaining_seconds,
     ensure_watchdog_success_reference,
     initial_floor_remaining_seconds,
     normalize_scheduler_bounds,
+    record_cycle_failure,
     watchdog_success_reference_overdue,
 )
 import source_cadence  # noqa: E402
 from source_cadence import (  # noqa: E402
     SOURCE_DUE_SIGNAL_MARKER,
+    SOURCE_DUE_SIGNAL_PENDING_MODE,
     acknowledge_browse_success,
     cadence_decision,
 )
@@ -226,6 +233,170 @@ class DurableQueueTests(unittest.TestCase):
         )
         self.assertEqual(recovered["attempt"], 2)
 
+    def test_spent_overseer_lease_crash_quarantines_at_expiry(self) -> None:
+        enqueue_task(
+            self.root,
+            {
+                "kind": "oversee",
+                "serviceDate": "2035-05-10",
+                "notBeforeMs": 1_000,
+                "maxAttempts": 6,
+            },
+            task_id="oversee-2035-05-10",
+            stamp=1_000,
+        )
+        lease = claim_task(
+            self.root,
+            owner="scheduler-before-crash",
+            kind="oversee",
+            stamp=1_000,
+            lease_ms=1_000,
+        )
+        marked = mark_provider_launch_spent(
+            self.root,
+            lease["leasePath"],
+            stamp=1_500,
+        )
+        self.assertEqual(marked["action"], "marked")
+        on_disk = json.loads(Path(lease["leasePath"]).read_text(encoding="utf-8"))
+        self.assertEqual(
+            on_disk["providerLaunchSpent"]["leaseId"],
+            on_disk["lease"]["id"],
+        )
+        self.assertEqual(Path(lease["leasePath"]).stat().st_mode & 0o777, 0o600)
+
+        # No finish transition models SIGKILL/power loss after the durable cost
+        # linearization point. Expiry recovery must not produce a second lease.
+        self.assertIsNone(
+            claim_task(
+                self.root,
+                owner="scheduler-after-restart",
+                kind="oversee",
+                stamp=2_001,
+            )
+        )
+        quarantine = self.root / ".quarantine" / "oversee-2035-05-10.json"
+        recovered = json.loads(quarantine.read_text(encoding="utf-8"))
+        self.assertEqual(recovered["state"], "quarantined")
+        self.assertEqual(
+            recovered["outcome"],
+            "provider_launch_spent_lease_expired",
+        )
+        self.assertFalse(Path(lease["leasePath"]).exists())
+        self.assertFalse((self.root / "oversee-2035-05-10.json").exists())
+
+    def test_provider_spend_guard_survives_real_cli_process_restart(self) -> None:
+        tool = TOOLS / "durable_task_queue.py"
+
+        def invoke(*arguments: str) -> dict[str, object]:
+            result = subprocess.run(
+                [sys.executable, str(tool), *arguments],
+                cwd=TOOLS,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(result.stdout)
+
+        invoke(
+            "enqueue",
+            "--root",
+            str(self.root),
+            "--kind",
+            "oversee",
+            "--task-id",
+            "oversee-2035-05-11",
+            "--service-date",
+            "2035-05-11",
+            "--not-before-ms",
+            "1000",
+            "--now-ms",
+            "1000",
+        )
+        lease = invoke(
+            "claim",
+            "--root",
+            str(self.root),
+            "--kind",
+            "oversee",
+            "--owner",
+            "first-process",
+            "--lease-ms",
+            "1000",
+            "--now-ms",
+            "1000",
+        )
+        first_mark = invoke(
+            "mark-provider-launch-spent",
+            "--root",
+            str(self.root),
+            "--lease",
+            str(lease["leasePath"]),
+            "--now-ms",
+            "1500",
+        )
+        self.assertEqual(first_mark["action"], "marked")
+        second_mark = invoke(
+            "mark-provider-launch-spent",
+            "--root",
+            str(self.root),
+            "--lease",
+            str(lease["leasePath"]),
+            "--now-ms",
+            "1600",
+        )
+        self.assertEqual(second_mark["action"], "already_spent")
+
+        # The marking process is gone and no provider result was recorded.
+        # A fresh process performs the expiry scan and returns no launchable task.
+        recovered = invoke(
+            "claim",
+            "--root",
+            str(self.root),
+            "--kind",
+            "oversee",
+            "--owner",
+            "fresh-process",
+            "--now-ms",
+            "2001",
+        )
+        self.assertEqual(recovered, {})
+        self.assertTrue(
+            (self.root / ".quarantine" / "oversee-2035-05-11.json").is_file()
+        )
+
+    def test_retry_is_refused_after_overseer_provider_spend(self) -> None:
+        enqueue_task(
+            self.root,
+            {
+                "kind": "oversee",
+                "serviceDate": "2035-05-12",
+                "notBeforeMs": 1_000,
+            },
+            task_id="oversee-2035-05-12",
+            stamp=1_000,
+        )
+        lease = claim_task(
+            self.root,
+            owner="scheduler",
+            kind="oversee",
+            stamp=1_000,
+        )
+        mark_provider_launch_spent(self.root, lease["leasePath"], stamp=1_001)
+        result = finish_task(
+            self.root,
+            lease["leasePath"],
+            result="retry",
+            outcome="provider_transport_failed",
+            stamp=1_002,
+        )
+        self.assertEqual(result["action"], "quarantine")
+        self.assertEqual(
+            result["task"]["outcome"],
+            "provider_launch_already_spent",
+        )
+
     def test_crash_between_retry_write_and_lease_cleanup_cannot_double_claim(self) -> None:
         enqueue_task(
             self.root,
@@ -346,6 +517,16 @@ class SourceCadenceTests(unittest.TestCase):
         timestamp_ns = int(timestamp * 1_000_000_000)
         os.utime(self.signal, ns=(timestamp_ns, timestamp_ns))
 
+    def publish_pending_signal(self) -> tuple[int, int]:
+        pending = self.signal_directory / ".reddit.due.pending"
+        pending.write_bytes(SOURCE_DUE_SIGNAL_MARKER)
+        pending.chmod(SOURCE_DUE_SIGNAL_PENDING_MODE)
+        browse_started_ns = time.time_ns()
+        os.replace(pending, self.signal)
+        generation_ns = self.signal.stat().st_ctime_ns
+        self.assertGreaterEqual(generation_ns, browse_started_ns)
+        return browse_started_ns, generation_ns
+
     def test_fractional_hours_are_due_by_elapsed_seconds_without_shell_math(self) -> None:
         self.write_json(self.live, {"twitter": {"cadenceHours": 1.5}})
         self.stamp.touch()
@@ -368,8 +549,11 @@ class SourceCadenceTests(unittest.TestCase):
         self.assertTrue(due["due"])
         self.assertEqual(due["hours"], 1.5)
 
-    def test_missing_live_entry_inherits_default_and_invalid_value_fails_due(self) -> None:
-        self.write_json(self.defaults, {"hackernews": {"cadenceHours": 2.25}})
+    def test_missing_live_entry_and_invalid_value_use_nonzero_defaults(self) -> None:
+        self.write_json(self.defaults, {
+            "hackernews": {"cadenceHours": 2.25},
+            "twitter": {"cadenceHours": 3.5},
+        })
         self.write_json(self.live, {"twitter": {"cadenceHours": -1}})
         self.stamp.touch()
         os.utime(self.stamp, (10_000, 10_000))
@@ -389,8 +573,51 @@ class SourceCadenceTests(unittest.TestCase):
         )
         self.assertFalse(inherited["due"])
         self.assertEqual(inherited["hours"], 2.25)
-        self.assertTrue(invalid["due"])
-        self.assertEqual(invalid["reason"], "invalid_live")
+        self.assertFalse(invalid["due"])
+        self.assertEqual(invalid["hours"], 3.5)
+        self.assertEqual(invalid["reason"], "within_cadence")
+
+    def test_broken_or_zero_configuration_uses_conservative_nonzero_fallback(self) -> None:
+        self.write_json(self.defaults, {"twitter": {"cadenceHours": 0}})
+        self.write_json(self.live, {"twitter": {"cadenceHours": 0}})
+        self.stamp.touch()
+        os.utime(self.stamp, (10_000, 10_000))
+        decision = cadence_decision(
+            "twitter",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            now_seconds=10_000 + 60,
+        )
+        self.assertFalse(decision["due"])
+        self.assertEqual(decision["hours"], 6)
+        self.assertEqual(decision["reason"], "within_cadence")
+
+    def test_out_of_range_configuration_cannot_suppress_or_flood_a_source(self) -> None:
+        for live_hours, default_hours in ((0.24, 4), (169, 4), (0.24, 169)):
+            with self.subTest(live_hours=live_hours, default_hours=default_hours):
+                self.write_json(
+                    self.defaults,
+                    {"twitter": {"cadenceHours": default_hours}},
+                )
+                self.write_json(
+                    self.live,
+                    {"twitter": {"cadenceHours": live_hours}},
+                )
+                self.stamp.touch()
+                os.utime(self.stamp, (10_000, 10_000))
+                decision = cadence_decision(
+                    "twitter",
+                    stamp_path=self.stamp,
+                    live_path=self.live,
+                    default_path=self.defaults,
+                    now_seconds=10_000 + 60,
+                )
+                self.assertFalse(decision["due"])
+                self.assertEqual(
+                    decision["hours"],
+                    4 if default_hours == 4 else 6,
+                )
 
     def test_success_acknowledges_only_the_generation_covered_at_browse_start(self) -> None:
         self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
@@ -455,6 +682,60 @@ class SourceCadenceTests(unittest.TestCase):
         self.assertLess(acknowledged["ageSeconds"], 2)
         self.assertEqual(acknowledged["signalState"], "signal_obsolete")
         self.assertTrue(self.signal.exists())
+
+    def test_pending_publication_uses_final_rename_generation_at_the_browse_boundary(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        self.stamp.chmod(0o600)
+        browse_started_ns, publication_generation_ns = self.publish_pending_signal()
+        self.signal_ack.touch()
+        self.signal_ack.chmod(0o600)
+        os.utime(
+            self.signal_ack,
+            ns=(browse_started_ns, browse_started_ns),
+        )
+        now_seconds = max(
+            time.time(),
+            publication_generation_ns / 1_000_000_000 + 0.001,
+        )
+
+        raced = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=now_seconds,
+        )
+        self.assertTrue(raced["due"])
+        self.assertEqual(raced["reason"], "source_signal")
+        self.assertEqual(raced["signalState"], "signal_publication_pending")
+
+        next_browse_started_ns = max(
+            time.time_ns(),
+            publication_generation_ns + 1,
+        )
+        with patch(
+            "source_cadence.time.time_ns",
+            return_value=next_browse_started_ns + 1_000_000,
+        ):
+            acknowledge_browse_success(
+                self.stamp,
+                self.signal_ack,
+                next_browse_started_ns,
+            )
+        covered = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=(next_browse_started_ns + 2_000_000) / 1_000_000_000,
+        )
+        self.assertFalse(covered["due"])
+        self.assertEqual(covered["signalState"], "signal_obsolete")
 
     def test_completion_is_published_before_ack_and_missing_ack_is_migration_safe(self) -> None:
         self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
@@ -766,6 +1047,125 @@ class SchedulerTimingTests(unittest.TestCase):
             (45, 180),
         )
 
+    def test_cycle_failure_backoff_is_private_bounded_and_success_clears_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".cycle-failure-backoff.json"
+            now = 10_000
+            observed_delays = []
+            for _ in range(8):
+                state = record_cycle_failure(state_path, now_seconds=now)
+                observed_delays.append(state["delaySeconds"])
+                self.assertLessEqual(state_path.stat().st_size, 512)
+                self.assertEqual(state_path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(
+                    set(json.loads(state_path.read_text(encoding="utf-8"))),
+                    {
+                        "version",
+                        "consecutiveFailures",
+                        "delaySeconds",
+                        "notBeforeEpochSeconds",
+                        "updatedAtEpochSeconds",
+                    },
+                )
+                self.assertEqual(
+                    cycle_failure_remaining_seconds(
+                        state_path,
+                        now_seconds=now + 1,
+                    ),
+                    state["delaySeconds"] - 1,
+                )
+                now = state["notBeforeEpochSeconds"]
+            self.assertEqual(
+                observed_delays,
+                [300, 600, 1200, 2400, 4800, 7200, 7200, 7200],
+            )
+            clear_cycle_failure_backoff(state_path)
+            self.assertFalse(state_path.exists())
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=now),
+                0,
+            )
+
+    def test_cycle_failure_backoff_survives_real_helper_process_restarts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".cycle-failure-backoff.json"
+            tool = TOOLS / "scheduler_timing.py"
+
+            def invoke(action: str, now_seconds: int) -> str:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(tool),
+                        "--cycle-failure-state",
+                        str(state_path),
+                        "--cycle-failure-action",
+                        action,
+                        "--now-seconds",
+                        str(now_seconds),
+                    ],
+                    cwd=TOOLS,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return result.stdout.strip()
+
+            self.assertEqual(invoke("record-failure", 20_000), "300")
+            # A new interpreter sees and honors the original deadline.
+            self.assertEqual(invoke("remaining", 20_120), "180")
+            # Model a scheduler killed during that wait and restarted later.
+            self.assertEqual(invoke("remaining", 20_299), "1")
+            self.assertEqual(invoke("remaining", 20_300), "0")
+            self.assertEqual(invoke("record-failure", 20_301), "600")
+            self.assertEqual(invoke("remaining", 20_302), "599")
+            self.assertEqual(invoke("clear", 20_303), "0")
+            self.assertEqual(invoke("remaining", 20_304), "0")
+
+    def test_existing_invalid_backoff_is_repaired_to_one_base_window(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".cycle-failure-backoff.json"
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=30_000),
+                0,
+            )
+            state_path.write_text('{"unexpected":"crash-fragment"}\n', encoding="utf-8")
+            state_path.chmod(0o600)
+
+            # Existing invalid evidence is not equivalent to a fresh install.
+            # Repair it once, then count down that persisted base window.
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=30_000),
+                300,
+            )
+            repaired = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(repaired["consecutiveFailures"], 1)
+            self.assertEqual(repaired["delaySeconds"], 300)
+            self.assertEqual(repaired["notBeforeEpochSeconds"], 30_300)
+            self.assertEqual(state_path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=30_120),
+                180,
+            )
+
+    def test_large_future_clock_skew_is_repaired_to_one_bounded_window(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".cycle-failure-backoff.json"
+            record_cycle_failure(state_path, now_seconds=100_000)
+            # Rewind the clock by much more than the maximum. The first read
+            # caps and persists one two-hour window instead of suppressing work
+            # indefinitely on every process restart.
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=1_000),
+                7200,
+            )
+            repaired = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(repaired["notBeforeEpochSeconds"], 8_200)
+            self.assertEqual(
+                cycle_failure_remaining_seconds(state_path, now_seconds=8_200),
+                0,
+            )
+
     def test_restart_with_recent_completion_waits_for_remaining_minimum(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             stamp = Path(temporary) / "last-cycle-newitems"
@@ -844,6 +1244,14 @@ class SchedulerTimingTests(unittest.TestCase):
 
 
 class PrivateArtifactPostconditionTests(unittest.TestCase):
+    def test_empty_or_zero_cadence_cannot_ack_the_daily_overseer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "source-cadence.json"
+            for value in ({}, {"twitter": {"cadenceHours": 0, "why": "always"}}):
+                path.write_text(json.dumps(value), encoding="utf-8")
+                path.chmod(0o600)
+                self.assertFalse(source_cadence_valid(path))
+
     def test_exit_zero_without_atomic_rewrite_cannot_pass_postcondition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "preference-insights.md"

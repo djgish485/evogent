@@ -12,6 +12,7 @@ import {
   completeCurationLogByRequestId,
   insertCurationLogStartIfAbsent,
 } from '@/lib/db/activity';
+import { getDurableChatRequestMetadata, getFreshChatSessionTitle } from '@/lib/screen-chat-privacy';
 import type { ChatAttachment } from '@/types/chat';
 
 export const runtime = 'nodejs';
@@ -60,41 +61,6 @@ function normalizeOriginView(value: unknown): ChatOriginView {
   if (value === 'feed/setup_card') return 'feed/setup_card';
   if (value === 'feed/source_health_button') return 'feed/source_health_button';
   return value === 'post_detail' ? 'post_detail' : 'feed';
-}
-
-// Friendly session titles for the overlay's "ask about this screen" sessions, keyed by the
-// foreground package the accessibility service reported. Falls back to a generic label so a
-// title is always meaningful in the session list. (A real per-app label from PackageManager
-// would be nicer; this covers the common apps without a native round-trip.)
-const OVERLAY_APP_TITLES: Record<string, string> = {
-  'com.google.android.gm': 'Gmail',
-  'com.google.android.youtube': 'YouTube',
-  'com.google.android.apps.docs': 'Drive',
-  'com.google.android.apps.nbu.files': 'Files',
-  'com.google.android.apps.maps': 'Maps',
-  'com.google.android.apps.messaging': 'Messages',
-  'com.android.chrome': 'Chrome',
-  'com.android.settings': 'Settings',
-  'com.twitter.android': 'X',
-  'com.reddit.frontpage': 'Reddit',
-  'com.instagram.android': 'Instagram',
-  'com.amazon.kindle': 'Kindle',
-  'com.spotify.music': 'Spotify',
-  'com.slack': 'Slack',
-  'com.whatsapp': 'WhatsApp',
-};
-
-function overlaySessionTitle(screenApp: unknown): string {
-  if (typeof screenApp === 'string' && screenApp.trim()) {
-    const pkg = screenApp.trim();
-    if (OVERLAY_APP_TITLES[pkg]) return OVERLAY_APP_TITLES[pkg];
-    // Derive a rough label from the package's most specific segment (…android.gm -> "Gm").
-    const segment = pkg.split('.').filter(Boolean).pop();
-    if (segment && /^[a-z]/i.test(segment)) {
-      return segment.charAt(0).toUpperCase() + segment.slice(1);
-    }
-  }
-  return 'Quick question';
 }
 
 // A send without an explicit session normally targets the durable main session — never
@@ -156,7 +122,10 @@ export async function POST(request: Request) {
   const contextKind = normalizeContextKind((payload as { contextKind?: unknown }).contextKind);
   const contextRefId = sanitizeOptionalText((payload as { contextRefId?: unknown }).contextRefId);
   const originView = normalizeOriginView((payload as { originView?: unknown }).originView);
-  const requestMetadata = sanitizeOptionalMetadata((payload as { metadata?: unknown }).metadata);
+  const requestMetadata = getDurableChatRequestMetadata(
+    contextKind,
+    sanitizeOptionalMetadata((payload as { metadata?: unknown }).metadata),
+  );
   const phoneSchedulerCycleId = readPhoneSchedulerCycleId(requestMetadata);
   const wantsFreshSession = (payload as { newSession?: unknown }).newSession === true;
   const attachments = await resolveExistingAttachments((payload as { attachments?: unknown }).attachments);
@@ -182,7 +151,7 @@ export async function POST(request: Request) {
   const currentProvider = providerReadiness.selected;
   const sessionId = await resolveTargetSessionId(selectedSessionId, currentProvider, {
     createFresh: wantsFreshSession && !selectedSessionId,
-    title: overlaySessionTitle(requestMetadata?.screenApp),
+    title: getFreshChatSessionTitle(contextKind),
   });
 
   if (requestMetadata?.trigger === 'phone_scheduler' && !phoneSchedulerCycleId) {

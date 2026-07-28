@@ -5,9 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, test } from 'node:test';
+import {
+  ensureChatReplyPushOutboxSchema,
+  resetChatReplyPushOutboxRuntimeForTests,
+  waitForChatReplyPushOutboxIdleForTests,
+} from '@/lib/chat-reply-push-outbox';
+import { insertUserActivity } from '@/lib/db/activity';
 import { insertChatMessage } from '@/lib/db/chat';
 import { createChatSession } from '@/lib/db/chat-sessions';
 import { getDb } from '@/lib/db/client';
+import { recordAppPresence } from '@/lib/db/presence';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -63,6 +70,8 @@ describe('internal chat submit route', { concurrency: false }, () => {
 
   afterEach(async () => {
     routeModule = null;
+    await waitForChatReplyPushOutboxIdleForTests();
+    resetChatReplyPushOutboxRuntimeForTests();
 
     if (globalWithDb.evogentDb) {
       globalWithDb.evogentDb.close();
@@ -268,6 +277,358 @@ describe('internal chat submit route', { concurrency: false }, () => {
     assert.deepStrictEqual(
       (notifyPayloads[0]?.items as Array<{ id: string }> | undefined)?.map((item) => item.id),
       ['chat-submit-route-first'],
+    );
+  });
+
+  test('an outbox receipt fault cannot fail or duplicate an already-durable reply', async () => {
+    assert.ok(routeModule);
+
+    const dataDir = path.join(tempDir, 'data');
+    await fs.promises.mkdir(dataDir, { recursive: true });
+    await fs.promises.writeFile(path.join(dataDir, 'push-notifications.json'), JSON.stringify({
+      enabled: true,
+      provider: 'ntfy',
+      ntfy: {
+        topic: 'chat-submit-receipt-fault',
+        server: 'https://ntfy.example.com',
+      },
+      events: {
+        chat_reply: {
+          enabled: true,
+          suppressWhenForeground: false,
+        },
+      },
+    }), 'utf8');
+
+    const session = createChatSession({ id: randomUUID(), title: 'Receipt Fault' });
+    const userMessage = insertChatMessage({
+      id: 'msg-submit-receipt-fault',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Question',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    ensureChatReplyPushOutboxSchema();
+    getDb().exec(`
+      CREATE TRIGGER fail_test_chat_reply_push_receipt
+      BEFORE INSERT ON chat_reply_push_outbox
+      BEGIN
+        SELECT RAISE(FAIL, 'synthetic receipt failure');
+      END;
+    `);
+
+    const originalConsoleError = console.error;
+    const loggedErrors: string[] = [];
+    console.error = (...args: unknown[]) => {
+      loggedErrors.push(args.map(String).join(' '));
+    };
+    try {
+      const payload = {
+        type: 'chat',
+        id: 'chat-submit-receipt-fault',
+        inReplyTo: userMessage.id,
+        taskId: 'task-submit-receipt-fault',
+        sessionId: session.id,
+        text: 'Durable despite optional delivery fault',
+      };
+      const first = await routeModule.POST(new Request(
+        'http://127.0.0.1/api/internal/chat/submit',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      ));
+      const duplicate = await routeModule.POST(new Request(
+        'http://127.0.0.1/api/internal/chat/submit',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      ));
+
+      assert.strictEqual(first.status, 200);
+      assert.strictEqual(duplicate.status, 200);
+      assert.strictEqual(
+        (await duplicate.json() as { inserted?: boolean }).inserted,
+        false,
+      );
+    } finally {
+      console.error = originalConsoleError;
+    }
+
+    assert.strictEqual(
+      (getDb().prepare(`
+        SELECT COUNT(*) AS count
+        FROM chat_messages
+        WHERE id = 'chat-submit-receipt-fault'
+      `).get() as { count: number }).count,
+      1,
+    );
+    const auditLines = (
+      await fs.promises.readFile(path.join(dataDir, 'chat-output.jsonl'), 'utf8')
+    ).trim().split('\n');
+    assert.strictEqual(auditLines.length, 1);
+    assert.strictEqual(notifyPayloads.length, 1);
+    assert.ok(loggedErrors.some((line) => line.includes('push receipt persistence failed')));
+  });
+
+  test('queues native push after audit without waiting for WebSocket delivery', async () => {
+    assert.ok(routeModule);
+
+    const dataDir = path.join(tempDir, 'data');
+    await fs.promises.mkdir(dataDir, { recursive: true });
+    await fs.promises.writeFile(path.join(dataDir, 'push-notifications.json'), JSON.stringify({
+      enabled: true,
+      provider: 'ntfy',
+      ntfy: {
+        topic: 'chat-submit-order',
+        server: 'https://ntfy.example.com',
+      },
+      events: {
+        chat_reply: {
+          enabled: true,
+          suppressWhenForeground: false,
+        },
+      },
+    }), 'utf8');
+
+    let releaseWebSocket!: (response: Response) => void;
+    const webSocketGate = new Promise<Response>((resolve) => {
+      releaseWebSocket = resolve;
+    });
+    let markWebSocketStarted!: () => void;
+    const webSocketStarted = new Promise<void>((resolve) => {
+      markWebSocketStarted = resolve;
+    });
+    let markPushStarted!: (auditWasDurable: boolean) => void;
+    const pushStarted = new Promise<boolean>((resolve) => {
+      markPushStarted = resolve;
+    });
+
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      if (url === 'https://ntfy.example.com/chat-submit-order') {
+        const audit = await fs.promises.readFile(path.join(dataDir, 'chat-output.jsonl'), 'utf8');
+        const receipt = getDb().prepare(`
+          SELECT state
+          FROM chat_reply_push_outbox
+          WHERE message_id = 'chat-submit-push-order'
+        `).get() as { state?: string } | undefined;
+        markPushStarted(
+          audit.includes('"id":"chat-submit-push-order"')
+          && receipt?.state === 'pending',
+        );
+        return new Response(null, { status: 200 });
+      }
+
+      const rawBody = init?.body;
+      notifyPayloads.push(typeof rawBody === 'string' ? JSON.parse(rawBody) as Record<string, unknown> : {});
+      markWebSocketStarted();
+      return webSocketGate;
+    }) as typeof fetch;
+
+    const session = createChatSession({ id: randomUUID(), title: 'Push Ordering' });
+    const userMessage = insertChatMessage({
+      id: 'msg-submit-push-order',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Question',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    const responsePromise = routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-push-order',
+        inReplyTo: userMessage.id,
+        taskId: 'task-submit-push-order',
+        sessionId: session.id,
+        text: 'Answer ready for native push',
+      }),
+    }));
+
+    await webSocketStarted;
+    let pushWaitTimer!: ReturnType<typeof setTimeout>;
+    const pushBeforeWebSocketRelease = await Promise.race([
+      pushStarted,
+      new Promise<false>((resolve) => {
+        pushWaitTimer = setTimeout(() => resolve(false), 1_000);
+      }),
+    ]);
+    clearTimeout(pushWaitTimer);
+
+    let responseTimer!: ReturnType<typeof setTimeout>;
+    const responseBeforeWebSocket = await Promise.race([
+      responsePromise,
+      new Promise<null>((resolve) => {
+        responseTimer = setTimeout(() => resolve(null), 1_000);
+      }),
+    ]);
+    clearTimeout(responseTimer);
+
+    releaseWebSocket(new Response(
+      JSON.stringify({ ok: true, deliveredToClients: 0 }),
+      { headers: { 'Content-Type': 'application/json' } },
+    ));
+
+    assert.ok(responseBeforeWebSocket);
+    assert.strictEqual(responseBeforeWebSocket.status, 200);
+    assert.strictEqual(pushBeforeWebSocketRelease, true);
+    assert.strictEqual(notifyPayloads.length, 1);
+  });
+
+  test('a hanging native push cannot delay the durable chat submit response', async () => {
+    assert.ok(routeModule);
+
+    const dataDir = path.join(tempDir, 'data');
+    await fs.promises.mkdir(dataDir, { recursive: true });
+    await fs.promises.writeFile(path.join(dataDir, 'push-notifications.json'), JSON.stringify({
+      enabled: true,
+      provider: 'ntfy',
+      ntfy: {
+        topic: 'chat-submit-hanging-push',
+        server: 'https://ntfy.example.com',
+      },
+      events: {
+        chat_reply: {
+          enabled: true,
+          suppressWhenForeground: false,
+        },
+      },
+    }), 'utf8');
+
+    let markPushStarted!: () => void;
+    const pushStarted = new Promise<void>((resolve) => {
+      markPushStarted = resolve;
+    });
+    let releasePush!: (response: Response) => void;
+    const pushGate = new Promise<Response>((resolve) => {
+      releasePush = resolve;
+    });
+
+    globalThis.fetch = (async (input) => {
+      if (String(input) === 'https://ntfy.example.com/chat-submit-hanging-push') {
+        markPushStarted();
+        return pushGate;
+      }
+      return new Response(
+        JSON.stringify({ ok: true, deliveredToClients: 0 }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const session = createChatSession({ id: randomUUID(), title: 'Nonblocking Push' });
+    const userMessage = insertChatMessage({
+      id: 'msg-submit-hanging-push',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Question',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    const responsePromise = routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-hanging-push',
+        inReplyTo: userMessage.id,
+        taskId: 'task-submit-hanging-push',
+        sessionId: session.id,
+        text: 'Reply whose native delivery is still pending',
+      }),
+    }));
+
+    await pushStarted;
+    let responseTimer!: ReturnType<typeof setTimeout>;
+    const responseBeforePush = await Promise.race([
+      responsePromise,
+      new Promise<null>((resolve) => {
+        responseTimer = setTimeout(() => resolve(null), 1_000);
+      }),
+    ]);
+    clearTimeout(responseTimer);
+
+    assert.ok(responseBeforePush);
+    assert.strictEqual(responseBeforePush.status, 200);
+    releasePush(new Response(null, { status: 200 }));
+  });
+
+  test('suppresses push from presence even when later behavioral events are newer', async () => {
+    assert.ok(routeModule);
+
+    const dataDir = path.join(tempDir, 'data');
+    await fs.promises.mkdir(dataDir, { recursive: true });
+    await fs.promises.writeFile(path.join(dataDir, 'push-notifications.json'), JSON.stringify({
+      enabled: true,
+      provider: 'ntfy',
+      ntfy: {
+        topic: 'chat-submit-presence',
+        server: 'https://ntfy.example.com',
+      },
+      events: {
+        chat_reply: {
+          enabled: true,
+          suppressWhenForeground: true,
+          suppressWindowSeconds: 120,
+        },
+      },
+    }), 'utf8');
+
+    const requestedUrls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      requestedUrls.push(String(input));
+      return new Response(
+        JSON.stringify({ ok: true, deliveredToClients: 0 }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const session = createChatSession({ id: randomUUID(), title: 'Presence Suppression' });
+    const userMessage = insertChatMessage({
+      id: 'msg-submit-presence',
+      role: 'user',
+      sessionId: session.id,
+      text: 'Question while visible',
+      status: 'queued',
+    });
+    assert.ok(userMessage);
+
+    recordAppPresence('foreground', randomUUID(), 1);
+    insertUserActivity('pull_refresh');
+    insertUserActivity('ping');
+
+    const response = await routeModule.POST(new Request('http://127.0.0.1/api/internal/chat/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'chat',
+        id: 'chat-submit-presence',
+        inReplyTo: userMessage.id,
+        taskId: 'task-submit-presence',
+        sessionId: session.id,
+        text: 'Visible reply',
+      }),
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      requestedUrls.filter((url) => url === 'https://ntfy.example.com/chat-submit-presence').length,
+      0,
+    );
+    assert.strictEqual(
+      (getDb().prepare('SELECT COUNT(*) AS count FROM user_activity').get() as { count: number }).count,
+      2,
+      'presence must not add a behavioral-history row',
     );
   });
 

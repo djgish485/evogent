@@ -40,6 +40,11 @@ permissions appropriate for private notes.
 - A phone-generated code-fix suggestion enters the host-review queue. It never
   launches a software-development agent on the phone.
 
+An optional host maintainer may periodically review that privacy-safe queue,
+edit product code and instructions, run tests, build and release, and verify the
+result at the physical glass. Its model and schedule are deployment-private.
+This host convenience never gives the on-phone overseer development authority.
+
 When a runtime task fails, improve the general container, then dispatch the
 natural skill trigger again without item-specific hints. Do not hand-author the
 runtime output as a shortcut.
@@ -111,10 +116,12 @@ that tree only after verification. If the exact tree is missing, it builds one
 before acquiring the cycle gate with
 `npm ci --ignore-scripts --omit=dev --omit=optional`, compiles
 `better-sqlite3` against Termux's bundled `node-gyp`, and proves native
-SQLite plus required runtime package resolution. Host-only optional embedding,
-SWC, and image-optimizer packages remain absent; the phone runtime uses its
-documented fallbacks. The completed tree is published immutably under the lock
-hash, and older trees remain while installed releases reference them.
+SQLite plus a complete production Next preparation. Host-only optional
+embedding, SWC, and image-optimizer packages remain absent. The production Next
+config is plain CommonJS, so startup never needs the omitted SWC compiler;
+Android runtime features use their documented fallbacks. The completed tree is
+published immutably under the lock hash, and older trees remain while installed
+releases reference them.
 
 The installer then waits for and owns a safe cycle boundary, preserves private
 data, switches runtime and mechanics through one atomic pointer, installs the
@@ -127,6 +134,44 @@ the control-plane mutation barrier. A live install lock without a journal may be
 building or verifying dependencies while production continues. Once the journal
 exists, scheduler dispatch and watchdog revival stay gated until rollback or
 committed finalization removes it; boot invokes the pinned recovery copy first.
+
+### Exact equal-APK forward recovery
+
+Do not use this for an ordinary failure. It accepts only the one fail-closed
+initial-migration shape documented in `docs/phone-production.md`: private v3
+`health_pending` metadata, a fully restored legacy database/token/role
+snapshot, the exact installed failed-release APK/TLS identity, and positive
+RollbackManager proof that its exact rollback was consumed.
+
+Build the successor from committed source while reusing the complete private
+APK/TLS artifact set:
+
+```bash
+EVOGENT_REUSE_ANDROID_TLS_FROM_RELEASE=<ABSOLUTE_PRIVATE_PRIOR_ARCHIVE> \
+bash scripts/build-phone-release.sh
+```
+
+Then make the exceptional installer intent explicit:
+
+```bash
+EVOGENT_ADB_SERIAL=<DEVICE_SERIAL> \
+EVOGENT_SSH_USER=<TERMUX_USER> \
+EVOGENT_SSH_PORT=<LOCAL_PORT> \
+bash scripts/deploy-phone-release.sh --forward-supersede <RELEASE_ARCHIVE>
+```
+
+There is no environment-variable alias, automatic fallback, version-code
+downgrade, or `pm install -d` escape hatch. Activation revalidates the retained
+v3 transaction and exact native identity before publishing the
+`evogent.phone.forward-rescue.v1` decision journal. Before that publication,
+the retained source transaction remains untouched. After it, recovery is
+forward-only and boot always invokes the pinned recoverer before ordinary
+installer logic.
+
+If that successor fails in `prepare_pending` or `health_pending`, exactly one
+later explicit forward-supersede may chain a second runtime successor that
+retains the same APK/TLS identity and bound private state. No second chain or
+native change is accepted.
 
 `deploy-next.sh` is a fail-closed compatibility tombstone. Do not revive partial
 `.next`, APK-only, skill-only, or direct-copy production paths.

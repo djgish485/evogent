@@ -32,6 +32,21 @@ function assertResolvedBrowseEnv(callsite, label) {
 test('cycle passes one resolved browse route to every routine Python browse child', () => {
   const cycle = read('evogent-cycle.sh');
 
+  assert.match(cycle, /resolve_model_route browse_youtube/);
+  const promptBrowse = sliceBetween(
+    cycle,
+    'browse_source(){',
+    '# Run one prompt-driven source only when due.',
+  );
+  assert.match(
+    promptBrowse,
+    /if \[ "\$src" = youtube \]; then[\s\S]*?route_model="\$YOUTUBE_BROWSE_MODEL"[\s\S]*?route_effort="\$YOUTUBE_BROWSE_EFFORT"/,
+  );
+  assert.match(
+    promptBrowse,
+    /codex exec --model "\$route_model" -c model_reasoning_effort="\$route_effort"/,
+  );
+
   assertResolvedBrowseEnv(
     sliceBetween(cycle, 'run_owned_timeout 900 30 env', 'xrc=$?'),
     'X extraction',

@@ -46,7 +46,7 @@ def source_cadence_valid(path: Path) -> bool:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or not data:
         return False
     for source, entry in data.items():
         if not isinstance(source, str) or not source.strip() or not isinstance(entry, dict):
@@ -57,7 +57,8 @@ def source_cadence_valid(path: Path) -> bool:
             isinstance(hours, bool)
             or not isinstance(hours, (int, float))
             or not math.isfinite(float(hours))
-            or float(hours) < 0
+            or float(hours) < 0.25
+            or float(hours) > 168
         ):
             return False
         if not isinstance(why, str) or not why.strip() or len(why.strip()) > 240:

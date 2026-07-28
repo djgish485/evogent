@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, mock, test } from 'node:test';
+import { pathToFileURL } from 'node:url';
+import Database from 'better-sqlite3';
 
 import {
   classifyPhoneNotification,
@@ -16,7 +18,9 @@ import {
 import { getDb } from './db/client';
 import {
   getSourceDueSignalPath,
+  signalSourceDue,
   SOURCE_DUE_SIGNAL_MARKER,
+  SOURCE_DUE_SIGNAL_PENDING_MODE,
 } from './source-due-signal';
 
 const originalDataDir = process.env.DATA_DIR;
@@ -127,11 +131,123 @@ test('curated mode requires an explicit opt-in and is reversible', async () => {
   assert.equal(observed.config.mode, 'observe');
 });
 
-test('server independently protects urgent, system, ongoing, grouped, secret, and unranked events', () => {
+test('settings replacement and revocation fsync the final inode and parent directory', async () => {
+  const originalFsync = fs.fsyncSync.bind(fs);
+  const synchronizedKinds: string[] = [];
+  mock.method(fs, 'fsyncSync', (descriptor: number) => {
+    synchronizedKinds.push(fs.fstatSync(descriptor).isDirectory() ? 'directory' : 'file');
+    originalFsync(descriptor);
+  });
+
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementPackages: ['example.reader'],
+    confirmBestEffortReplacement: true,
+  });
+  await updatePhoneNotificationSettings({ replacementPackages: [] });
+
+  assert.deepEqual(synchronizedKinds, [
+    'file', 'file', 'directory',
+    'file', 'file', 'directory',
+  ]);
+  assert.deepEqual(
+    (await readPhoneNotificationSettings()).config.replacementPackages,
+    [],
+  );
+});
+
+test('concurrent unrelated PATCH cannot resurrect a durably revoked replacement package across route bundles', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementPackages: ['example.reader'],
+    confirmBestEffortReplacement: true,
+  });
+
+  const moduleUrl = pathToFileURL(
+    path.join(process.cwd(), 'src/lib/phone-notification-curation.ts'),
+  ).href;
+  const unrelatedBundle = await import(`${moduleUrl}?settings-bundle=unrelated-${Date.now()}`);
+  const revocationBundle = await import(`${moduleUrl}?settings-bundle=revoke-${Date.now()}`);
+  const settingsFilePath = path.join(
+    temporaryDataDir,
+    'phone-notification-curation.json',
+  );
+  const originalReadFile = fs.promises.readFile.bind(fs.promises);
+  let firstRead = true;
+  let settingsReadCount = 0;
+  let announceFirstRead!: () => void;
+  let releaseFirstRead!: () => void;
+  const firstReadStarted = new Promise<void>((resolve) => {
+    announceFirstRead = resolve;
+  });
+  const firstReadCanReturn = new Promise<void>((resolve) => {
+    releaseFirstRead = resolve;
+  });
+
+  mock.method(fs.promises, 'readFile', async (...args) => {
+    // Capture the bytes first. Without one process-global read/merge/write lock,
+    // this held unrelated PATCH would later overwrite a completed revocation
+    // with the stale replacementPackages array it captured here.
+    const contents = await originalReadFile(...args);
+    if (args[0] === settingsFilePath) {
+      settingsReadCount += 1;
+      if (firstRead) {
+        firstRead = false;
+        announceFirstRead();
+        await firstReadCanReturn;
+      }
+    }
+    return contents;
+  });
+
+  let unrelatedSettled = false;
+  let revocationSettled = false;
+  const unrelatedPatch = unrelatedBundle.updatePhoneNotificationSettings({
+    lockScreenPreview: 'detailed',
+  }).finally(() => {
+    unrelatedSettled = true;
+  });
+  await firstReadStarted;
+  const revocationPatch = revocationBundle.updatePhoneNotificationSettings({
+    replacementPackages: [],
+  }).finally(() => {
+    revocationSettled = true;
+  });
+
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settingsReadCount, 1);
+  assert.equal(unrelatedSettled, false);
+  assert.equal(revocationSettled, false);
+
+  releaseFirstRead();
+  await Promise.all([unrelatedPatch, revocationPatch]);
+
+  const finalConfig = (await readPhoneNotificationSettings()).config;
+  assert.equal(finalConfig.lockScreenPreview, 'detailed');
+  assert.deepEqual(finalConfig.replacementPackages, []);
+  assert.equal(settingsReadCount, 3);
+});
+
+test('server independently protects urgent, system, communication, unknown, ongoing, grouped, secret, and unranked events', () => {
   const protectedCases: Array<[string, Record<string, unknown>]> = [
     ['call', { category: 'call' }],
     ['alarm', { category: 'alarm' }],
     ['navigation', { category: 'navigation' }],
+    ['Android system literal', { category: 'sys' }],
+    ['Android error/authentication literal', { category: 'err' }],
+    ['Android message literal', { category: 'msg' }],
+    ['email', { category: 'email' }],
+    ['voicemail', { category: 'voicemail' }],
+    ['missed call', { category: 'missed_call' }],
+    ['car emergency', { category: 'car_emergency' }],
+    ['car warning', { category: 'car_warning' }],
+    ['car information', { category: 'car_information' }],
+    ['unknown category', { category: 'vendor_private_category' }],
+    ['missing category', { category: null }],
+    ['conversation', { conversation: true }],
+    ['native protection', { nativeProtectionReason: 'native_policy' }],
     ['high importance', { importance: 4 }],
     ['unranked', { importance: -1000 }],
     ['ongoing', { ongoing: true }],
@@ -149,6 +265,17 @@ test('server independently protects urgent, system, ongoing, grouped, secret, an
       classification.protectedFromSuppression,
       true,
       `${label} was not protected`,
+    );
+  }
+});
+
+test('server replacement allowlist contains only low-stakes editorial categories', () => {
+  for (const category of ['promo', 'recommendation', 'social']) {
+    const classification = classifyPhoneNotification(payload({ category }));
+    assert.equal(
+      classification.protectedFromSuppression,
+      false,
+      `${category} should remain eligible for the later per-package policy gates`,
     );
   }
 });
@@ -283,6 +410,32 @@ test('Curated mode never suppresses a user-preserved app or protected event', as
   }));
   assert.equal(alarm.policy.suppressOriginal, false);
   assert.equal(alarm.policy.preserveReason, 'protected_category');
+
+  for (const [eventCharacter, category] of [
+    ['2', 'car_emergency'],
+    ['3', 'car_warning'],
+    ['4', 'msg'],
+    ['5', 'email'],
+    ['6', 'voicemail'],
+    ['7', 'vendor_unknown'],
+  ] as const) {
+    const protectedResult = await ingestPhoneNotification(payload({
+      eventId: eventCharacter.repeat(64),
+      category,
+      nativeCanSuppress: true,
+      digestCapability: true,
+      postedAtMs: Date.now() + Number(eventCharacter),
+    }));
+    assert.equal(
+      protectedResult.policy.suppressOriginal,
+      false,
+      `${category} must stay Android-owned`,
+    );
+    assert.match(
+      protectedResult.policy.preserveReason,
+      /protected_category|category_unavailable/,
+    );
+  }
 });
 
 test('Paused mode stores no event and can never produce a cancellation receipt', async () => {
@@ -327,6 +480,16 @@ test('eligible content-app notification writes only a content-free source due ma
   );
 });
 
+test('historical notification scans never refresh source due markers', async () => {
+  const result = await ingestPhoneNotification(payload({
+    packageName: 'com.reddit.frontpage',
+    historical: true,
+  }));
+  assert.equal(result.receipt.persisted, true);
+  assert.equal(result.policy.suppressOriginal, false);
+  assert.equal(fs.existsSync(getSourceDueSignalPath('reddit')), false);
+});
+
 test('YouTube, X, and Substack notifications use canonical content-free source markers', async () => {
   const mappings = [
     ['com.google.android.youtube', 'youtube', 'c'],
@@ -367,11 +530,82 @@ test('source due publication fsyncs the renamed marker and its parent directory'
     appLabel: 'Private reader app label',
   }));
 
-  assert.deepEqual(synchronizedKinds, ['file', 'file', 'directory']);
+  assert.deepEqual(synchronizedKinds, ['file', 'file', 'file', 'directory']);
   assert.equal(
     fs.readFileSync(getSourceDueSignalPath('reddit'), 'utf8'),
     SOURCE_DUE_SIGNAL_MARKER,
   );
+});
+
+test('source due generation is stamped after the final rename boundary', () => {
+  const originalRename = fs.renameSync.bind(fs);
+  let browseStartedNs = 0n;
+  mock.method(fs, 'renameSync', (oldPath: fs.PathLike, newPath: fs.PathLike) => {
+    // Reproduce the bug: a long-lived temp marker predates a browse, while
+    // final publication lands after that browse has started.
+    fs.utimesSync(oldPath, 1, 1);
+    browseStartedNs = BigInt(Date.now()) * 1_000_000n;
+    originalRename(oldPath, newPath);
+  });
+
+  const signalPath = signalSourceDue('reddit');
+  const published = fs.statSync(signalPath, { bigint: true });
+
+  assert.ok(browseStartedNs > 0n);
+  assert.ok(
+    published.mtimeNs > browseStartedNs,
+    'the final marker generation must be newer than a browse already in flight at rename',
+  );
+  assert.equal(Number(published.mode & 0o777n), 0o600);
+});
+
+test('a post-rename stamping failure durably leaves a fail-due pending marker', () => {
+  const originalRename = fs.renameSync.bind(fs);
+  const originalWrite = fs.writeSync.bind(fs);
+  const originalFsync = fs.fsyncSync.bind(fs);
+  const synchronizedKinds: string[] = [];
+  let published = false;
+
+  mock.method(fs, 'renameSync', (oldPath: fs.PathLike, newPath: fs.PathLike) => {
+    originalRename(oldPath, newPath);
+    published = true;
+  });
+  mock.method(
+    fs,
+    'writeSync',
+    (
+      descriptor: number,
+      buffer: Uint8Array,
+      offset: number,
+      length: number,
+      position: number,
+    ) => {
+      if (published) throw new Error('simulated post-rename write failure');
+      return originalWrite(descriptor, buffer, offset, length, position);
+    },
+  );
+  mock.method(fs, 'fsyncSync', (descriptor: number) => {
+    synchronizedKinds.push(fs.fstatSync(descriptor).isDirectory() ? 'directory' : 'file');
+    originalFsync(descriptor);
+  });
+
+  assert.throws(
+    () => signalSourceDue('reddit'),
+    /simulated post-rename write failure/,
+  );
+
+  const signalPath = getSourceDueSignalPath('reddit');
+  assert.equal(fs.readFileSync(signalPath, 'utf8'), SOURCE_DUE_SIGNAL_MARKER);
+  assert.equal(
+    fs.statSync(signalPath).mode & 0o777,
+    SOURCE_DUE_SIGNAL_PENDING_MODE,
+  );
+  assert.deepEqual(
+    synchronizedKinds,
+    ['file', 'file', 'directory'],
+    'the pending inode and its final directory entry remain durable on failure',
+  );
+  assert.deepEqual(fs.readdirSync(path.dirname(signalPath)), ['reddit.due']);
 });
 
 test('redacted or conversational content-app notifications write no due marker', async () => {
@@ -384,13 +618,23 @@ test('redacted or conversational content-app notifications write no due marker',
     eventId: 'f'.repeat(64),
     packageName: 'com.twitter.android',
     appLabel: 'X',
-    category: 'message',
+    category: 'msg',
     conversation: true,
     title: 'Private conversation',
     text: 'Private direct message',
   }));
+  await ingestPhoneNotification(payload({
+    eventId: '8'.repeat(64),
+    packageName: 'com.reddit.frontpage',
+    appLabel: 'Reader',
+    category: 'msg',
+    conversation: false,
+    title: 'Private direct message',
+    text: 'Private direct message body',
+  }));
   assert.equal(fs.existsSync(getSourceDueSignalPath('gmail')), false);
   assert.equal(fs.existsSync(getSourceDueSignalPath('twitter')), false);
+  assert.equal(fs.existsSync(getSourceDueSignalPath('reddit')), false);
   const browseCacheCount = getDb().prepare(`
     SELECT COUNT(*) AS count
     FROM browse_cache_items
@@ -398,9 +642,40 @@ test('redacted or conversational content-app notifications write no due marker',
   assert.equal(browseCacheCount.count, 0);
 });
 
-test('database startup purges legacy notification-content browse signals', () => {
+test('database startup purges legacy notification content from known agent-evidence stores', () => {
   const privateCanary = 'LEGACY_PRIVATE_NOTIFICATION_CANARY_9182';
+  const claudeAppSessionId = '11111111-1111-4111-8111-111111111111';
+  const oldClaudeProviderSessionId = '22222222-2222-4222-8222-222222222222';
+  const codexAppSessionId = '33333333-3333-4333-8333-333333333333';
+  const oldCodexProviderSessionId = '44444444-4444-4444-8444-444444444444';
+  const safeAppSessionId = '55555555-5555-4555-8555-555555555555';
+  const safeProviderSessionId = '66666666-6666-4666-8666-666666666666';
+  const taskLogsDir = path.join(temporaryDataDir, 'task-logs');
+  const affectedTaskIds = [
+    'task-private-linked',
+    'task-private-later',
+    'task-private-history-only',
+    'task-private-provider-only',
+  ];
   const database = getDb();
+  database.prepare(`
+    INSERT INTO feed (
+      id, type, source, source_id, title, text, published_at
+    ) VALUES
+      (
+        'legacy-private-notification', 'notification', 'phone-notification',
+        'phone-notification:legacy-private', ?, ?, ?
+      ),
+      (
+        'ordinary-safe-evidence', 'article', 'publisher',
+        'publisher:ordinary-safe-evidence', 'Ordinary title', 'Ordinary body', ?
+      )
+  `).run(
+    `Private title ${privateCanary}`,
+    `Private body ${privateCanary}`,
+    '2026-07-28T12:00:00.000Z',
+    '2026-07-28T11:00:00.000Z',
+  );
   database.prepare(`
     INSERT INTO browse_cache_items (
       source, source_id, title, payload_json, fetched_at_ms, expires_at_ms
@@ -434,6 +709,332 @@ test('database startup purges legacy notification-content browse signals', () =>
     null,
     null,
   );
+  database.prepare(`
+    INSERT INTO interactions (feed_item_id, action)
+    VALUES
+      ('legacy-private-notification', 'expand'),
+      ('legacy-private-notification', 'suggestion_dismissed'),
+      ('ordinary-safe-evidence', 'expand')
+  `).run();
+  database.prepare(`
+    INSERT INTO feed_engagement_sessions (
+      session_id, feed_item_id, item_snapshot
+    ) VALUES
+      ('legacy:private:engagement', 'legacy-private-notification', ?),
+      ('ordinary:safe:engagement', 'ordinary-safe-evidence', ?)
+  `).run(
+    JSON.stringify({
+      type: 'notification',
+      source: 'phone-notification',
+      title: `Private title ${privateCanary}`,
+      text: `Private body ${privateCanary}`,
+    }),
+    JSON.stringify({
+      type: 'article',
+      source: 'publisher',
+      title: 'Ordinary title',
+      text: 'Ordinary body',
+    }),
+  );
+  database.prepare(`
+    INSERT INTO preferences (
+      id, feed_item_id, signal_type, source, text, source_id
+    ) VALUES
+      (
+        'legacy-private-preference', 'legacy-private-notification',
+        'liked', 'app_thumbsup', ?, NULL
+      ),
+      (
+        'legacy-private-orphan-preference', NULL,
+        'liked', 'legacy', ?, 'phone-notification:orphan'
+      ),
+      (
+        'ordinary-safe-preference', 'ordinary-safe-evidence',
+        'liked', 'app_thumbsup', 'Ordinary preference', NULL
+      )
+  `).run(
+    `Private preference ${privateCanary}`,
+    `Private orphan preference ${privateCanary}`,
+  );
+  database.prepare(`
+    INSERT INTO preference_vectors (
+      id, text, signal_type, source
+    ) VALUES
+      ('legacy-private-preference', ?, 'liked', 'app_thumbsup'),
+      ('legacy-private-orphan-preference', ?, 'liked', 'legacy'),
+      ('ordinary-safe-preference', 'Ordinary preference', 'liked', 'app_thumbsup')
+  `).run(
+    `Private preference ${privateCanary}`,
+    `Private orphan preference ${privateCanary}`,
+  );
+  database.prepare(`
+    INSERT INTO thread_feedback (
+      id, thread_id, feed_item_id, vote, thread_title, reason, source_item_ids
+    ) VALUES
+      (
+        'legacy-private-feedback', 'legacy-private-thread',
+        'legacy-private-notification', 'more', ?, ?, ?
+      ),
+      (
+        'legacy-private-indirect-feedback', 'legacy-private-indirect-thread',
+        'ordinary-safe-evidence', 'more', ?, ?, ?
+      ),
+      (
+        'ordinary-safe-feedback', 'ordinary-safe-thread',
+        'ordinary-safe-evidence', 'more', 'Ordinary thread', 'Ordinary reason', ?
+      )
+  `).run(
+    `Private thread ${privateCanary}`,
+    `Private reason ${privateCanary}`,
+    JSON.stringify(['legacy-private-notification']),
+    `Private indirect thread ${privateCanary}`,
+    `Private indirect reason ${privateCanary}`,
+    JSON.stringify(['legacy-private-notification']),
+    JSON.stringify(['ordinary-safe-evidence']),
+  );
+  database.prepare(`
+    INSERT INTO chat_sessions (
+      id, provider, provider_session_id, claude_session_id, title, created_at, updated_at
+    ) VALUES
+      (?, 'claude', ?, ?, 'Legacy private Claude chat', datetime('now'), datetime('now')),
+      (?, 'codex', ?, ?, 'Legacy private Codex chat', datetime('now'), datetime('now')),
+      (?, 'claude', ?, ?, 'Ordinary safe chat', datetime('now'), datetime('now'))
+  `).run(
+    claudeAppSessionId,
+    oldClaudeProviderSessionId,
+    oldClaudeProviderSessionId,
+    codexAppSessionId,
+    oldCodexProviderSessionId,
+    oldCodexProviderSessionId,
+    safeAppSessionId,
+    safeProviderSessionId,
+    safeProviderSessionId,
+  );
+  database.prepare(`
+    INSERT INTO chat_messages (
+      id, type, role, in_reply_to, task_id, session_id, text, timestamp,
+      context, suggestions, status, metadata
+    ) VALUES
+      (
+        'legacy-private-chat', 'chat', 'user', NULL, NULL, ?, ?, ?,
+        ?, ?, 'delivered', ?
+      ),
+      (
+        'legacy-private-linked-reply', 'chat', 'agent',
+        'legacy-private-chat', 'task-private-linked', ?, ?, ?,
+        ?, ?, 'delivered', ?
+      ),
+      (
+        'legacy-private-follow-up', 'chat', 'user', NULL, NULL, ?,
+        'Could you clarify?', ?, NULL, NULL, 'delivered', '{}'
+      ),
+      (
+        'legacy-private-later-reply', 'chat', 'agent',
+        'legacy-private-follow-up', 'task-private-later', ?, ?, ?,
+        ?, ?, 'delivered', ?
+      ),
+      (
+        'legacy-private-codex-chat', 'chat', 'user', NULL, NULL, ?, ?, ?,
+        ?, NULL, 'delivered', ?
+      ),
+      (
+        'ordinary-safe-chat', 'chat', 'user', NULL, NULL, ?,
+        'Ordinary question', ?, 'Ordinary context', NULL, 'delivered', ?
+      )
+  `).run(
+    claudeAppSessionId,
+    'Chat: What is this?',
+    '2026-07-28T12:00:00.000Z',
+    'The selected phone notification is a local, model-free card. Its title and body are intentionally unavailable to runtime agents.',
+    JSON.stringify([{ label: `Private suggestion ${privateCanary}` }]),
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'legacy-private-notification',
+      phoneNotificationContentWithheld: true,
+      legacyPrivateMetadata: privateCanary,
+    }),
+    claudeAppSessionId,
+    `Linked answer derived from ${privateCanary}`,
+    '2026-07-28T12:01:00.000Z',
+    `Linked context ${privateCanary}`,
+    JSON.stringify([{ label: `Linked suggestion ${privateCanary}` }]),
+    JSON.stringify({ privateDerivedMetadata: privateCanary }),
+    claudeAppSessionId,
+    '2026-07-28T12:02:00.000Z',
+    claudeAppSessionId,
+    `Later answer still derived from ${privateCanary}`,
+    '2026-07-28T12:03:00.000Z',
+    `Later context ${privateCanary}`,
+    JSON.stringify([{ label: `Later suggestion ${privateCanary}` }]),
+    JSON.stringify({ privateLaterMetadata: privateCanary }),
+    codexAppSessionId,
+    `Chat: Preserve this Codex question\n\nContext — discussing this post:\nBody: ${privateCanary}`,
+    '2026-07-28T13:00:00.000Z',
+    `Codex context ${privateCanary}`,
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'legacy-private-notification',
+      legacyPrivateMetadata: privateCanary,
+    }),
+    safeAppSessionId,
+    '2026-07-28T11:00:00.000Z',
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'ordinary-safe-evidence',
+    }),
+  );
+  database.prepare(`
+    INSERT INTO chat_messages (
+      id, type, role, in_reply_to, task_id, session_id, text, timestamp,
+      context, suggestions, status, metadata
+    ) VALUES
+      (
+        'current-safe-notification-chat', 'chat', 'user', NULL, NULL, ?,
+        'What should I do?', '2026-07-28T14:00:00.000Z', ?, NULL,
+        'delivered', ?
+      ),
+      (
+        'current-safe-notification-reply', 'chat', 'agent',
+        'current-safe-notification-chat', 'task-current-safe', ?,
+        'The private card stayed withheld.', '2026-07-28T14:01:00.000Z',
+        NULL, NULL, 'delivered', '{"safeReply":true}'
+      )
+  `).run(
+    safeAppSessionId,
+    'The selected phone notification is a local, model-free card. Its title and body are intentionally unavailable to runtime agents.',
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'legacy-private-notification',
+      phoneNotificationContentWithheld: true,
+      phoneNotificationSessionEvidencePurged: true,
+      phoneNotificationAuditEvidencePurged: true,
+      phoneNotificationOrchestratorEvidencePurged: true,
+    }),
+    safeAppSessionId,
+  );
+  fs.writeFileSync(
+    path.join(temporaryDataDir, 'chat-output.jsonl'),
+    [
+      {
+        type: 'chat',
+        id: 'legacy-private-linked-reply',
+        role: 'agent',
+        inReplyTo: 'legacy-private-chat',
+        sessionId: claudeAppSessionId,
+        text: `Linked audit answer ${privateCanary}`,
+        timestamp: '2026-07-28T12:01:00.000Z',
+        metadata: { privateDerivedMetadata: privateCanary },
+      },
+      {
+        type: 'chat',
+        id: 'legacy-private-later-reply',
+        role: 'agent',
+        inReplyTo: 'legacy-private-follow-up',
+        sessionId: claudeAppSessionId,
+        text: `Later audit answer ${privateCanary}`,
+        timestamp: '2026-07-28T12:03:00.000Z',
+        metadata: { privateLaterMetadata: privateCanary },
+      },
+      {
+        type: 'chat',
+        id: 'ordinary-safe-audit',
+        role: 'agent',
+        sessionId: safeAppSessionId,
+        text: 'Ordinary safe audit reply',
+        timestamp: '2026-07-28T11:01:00.000Z',
+      },
+      {
+        type: 'chat',
+        id: 'current-safe-notification-reply',
+        role: 'agent',
+        inReplyTo: 'current-safe-notification-chat',
+        sessionId: safeAppSessionId,
+        text: 'The private card stayed withheld.',
+        timestamp: '2026-07-28T14:01:00.000Z',
+      },
+    ].map((record) => JSON.stringify(record)).join('\n')
+      + `\n{"type":"chat","id":"legacy-private-later-reply","text":"${privateCanary}"\n`,
+    'utf8',
+  );
+  fs.mkdirSync(taskLogsDir, { recursive: true });
+  for (const taskId of affectedTaskIds) {
+    fs.writeFileSync(
+      path.join(taskLogsDir, `${taskId}.jsonl`),
+      `${JSON.stringify({ type: 'result', result: `${taskId} ${privateCanary}` })}\n`,
+      'utf8',
+    );
+  }
+  fs.writeFileSync(
+    path.join(taskLogsDir, 'task-ordinary-safe.jsonl'),
+    `${JSON.stringify({ type: 'result', result: 'Ordinary safe task log' })}\n`,
+    'utf8',
+  );
+  const reflectionSession = {
+    id: '77777777-7777-4777-8777-777777777777',
+    provider: 'claude',
+    createdAt: '2026-07-28T00:00:00.000Z',
+    trackedFileMtimes: {},
+  };
+  fs.writeFileSync(
+    path.join(temporaryDataDir, 'orchestrator-history.json'),
+    JSON.stringify({
+      history: [
+        {
+          id: 'task-private-linked',
+          message: `Original prompt ${privateCanary}`,
+          response: `Derived response ${privateCanary}`,
+          paneTail: privateCanary,
+          logFile: path.join(taskLogsDir, 'task-private-linked.jsonl'),
+          metadata: {
+            chatMessageId: 'legacy-private-chat',
+            sessionId: claudeAppSessionId,
+            providerSessionId: oldClaudeProviderSessionId,
+          },
+        },
+        {
+          id: 'task-private-history-only',
+          message: `Later prompt ${privateCanary}`,
+          response: `Later response ${privateCanary}`,
+          logFile: path.join(taskLogsDir, 'task-private-history-only.jsonl'),
+          metadata: {
+            chatMessageId: 'legacy-private-follow-up',
+            sessionId: claudeAppSessionId,
+          },
+        },
+        {
+          id: 'task-private-provider-only',
+          message: `Provider-linked prompt ${privateCanary}`,
+          logFile: path.join(taskLogsDir, 'task-private-provider-only.jsonl'),
+          metadata: {
+            providerSessionId: oldCodexProviderSessionId,
+          },
+        },
+        {
+          id: 'task-ordinary-safe',
+          message: 'Ordinary safe task',
+          response: 'Ordinary safe response',
+          logFile: path.join(taskLogsDir, 'task-ordinary-safe.jsonl'),
+          metadata: {
+            chatMessageId: 'ordinary-safe-chat',
+            sessionId: safeAppSessionId,
+            providerSessionId: safeProviderSessionId,
+          },
+        },
+        {
+          id: 'task-current-safe-notification',
+          message: 'Current safe notification question',
+          response: 'The private card stayed withheld.',
+          metadata: {
+            chatMessageId: 'current-safe-notification-chat',
+            sessionId: safeAppSessionId,
+            providerSessionId: safeProviderSessionId,
+          },
+        },
+      ],
+      reflectionSession,
+    }, null, 2),
+    'utf8',
+  );
   closeDatabase();
 
   const reopened = getDb();
@@ -449,6 +1050,399 @@ test('database startup purges legacy notification-content browse signals', () =>
   `).get() as { count: number };
   assert.equal(cacheCount.count, 0);
   assert.equal(refreshCount.count, 0);
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT feed_item_id, action
+      FROM interactions
+      ORDER BY feed_item_id, action
+    `).all(),
+    [
+      { feed_item_id: 'legacy-private-notification', action: 'suggestion_dismissed' },
+      { feed_item_id: 'ordinary-safe-evidence', action: 'expand' },
+    ],
+  );
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT session_id
+      FROM feed_engagement_sessions
+      ORDER BY session_id
+    `).all(),
+    [{ session_id: 'ordinary:safe:engagement' }],
+  );
+  assert.deepEqual(
+    reopened.prepare(`SELECT id FROM preferences ORDER BY id`).all(),
+    [{ id: 'ordinary-safe-preference' }],
+  );
+  assert.deepEqual(
+    reopened.prepare(`SELECT id FROM preference_vectors ORDER BY id`).all(),
+    [{ id: 'ordinary-safe-preference' }],
+  );
+  assert.deepEqual(
+    reopened.prepare(`SELECT id FROM thread_feedback ORDER BY id`).all(),
+    [{ id: 'ordinary-safe-feedback' }],
+  );
+
+  const privateChat = reopened.prepare(`
+    SELECT text, context, metadata
+    FROM chat_messages
+    WHERE id = 'legacy-private-chat'
+  `).get() as { text: string; context: string; metadata: string };
+  assert.equal(privateChat.text, 'Chat: What is this?');
+  assert.doesNotMatch(`${privateChat.text}\n${privateChat.context}`, new RegExp(privateCanary));
+  assert.equal(
+    JSON.parse(privateChat.metadata).phoneNotificationContentWithheld,
+    true,
+  );
+  assert.equal(
+    JSON.parse(privateChat.metadata).phoneNotificationSessionEvidencePurged,
+    true,
+  );
+  assert.equal(
+    JSON.parse(privateChat.metadata).phoneNotificationAuditEvidencePurged,
+    true,
+  );
+  assert.equal(
+    JSON.parse(privateChat.metadata).phoneNotificationOrchestratorEvidencePurged,
+    true,
+  );
+  assert.equal(
+    (reopened.prepare(`
+      SELECT text
+      FROM chat_messages
+      WHERE id = 'legacy-private-codex-chat'
+    `).get() as { text: string }).text,
+    'Chat: Preserve this Codex question',
+  );
+  const derivedReplies = reopened.prepare(`
+    SELECT id, text, context, suggestions, metadata
+    FROM chat_messages
+    WHERE id IN ('legacy-private-linked-reply', 'legacy-private-later-reply')
+    ORDER BY id
+  `).all() as Array<{
+    id: string;
+    text: string;
+    context: string;
+    suggestions: string | null;
+    metadata: string;
+  }>;
+  assert.equal(derivedReplies.length, 2);
+  for (const reply of derivedReplies) {
+    assert.match(reply.text, /withheld/i);
+    assert.match(reply.context, /unavailable/i);
+    assert.equal(reply.suggestions, null);
+    assert.deepEqual(JSON.parse(reply.metadata), {
+      phoneNotificationDerivedContentWithheld: true,
+    });
+  }
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT text
+      FROM chat_messages
+      WHERE id = 'legacy-private-follow-up'
+    `).get(),
+    { text: 'Could you clarify?' },
+  );
+  assert.doesNotMatch(
+    JSON.stringify(reopened.prepare(`
+      SELECT text, context, suggestions, metadata
+      FROM chat_messages
+    `).all()),
+    new RegExp(privateCanary),
+  );
+
+  const claudeSession = reopened.prepare(`
+    SELECT provider_session_id, claude_session_id
+    FROM chat_sessions
+    WHERE id = ?
+  `).get(claudeAppSessionId) as {
+    provider_session_id: string;
+    claude_session_id: string;
+  };
+  assert.match(
+    claudeSession.provider_session_id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+  assert.notEqual(claudeSession.provider_session_id, oldClaudeProviderSessionId);
+  assert.equal(claudeSession.claude_session_id, claudeSession.provider_session_id);
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT provider_session_id, claude_session_id
+      FROM chat_sessions
+      WHERE id = ?
+    `).get(codexAppSessionId),
+    { provider_session_id: '', claude_session_id: '' },
+  );
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT provider_session_id, claude_session_id
+      FROM chat_sessions
+      WHERE id = ?
+    `).get(safeAppSessionId),
+    {
+      provider_session_id: safeProviderSessionId,
+      claude_session_id: safeProviderSessionId,
+    },
+  );
+
+  const scrubbedAudit = fs.readFileSync(
+    path.join(temporaryDataDir, 'chat-output.jsonl'),
+    'utf8',
+  );
+  assert.doesNotMatch(scrubbedAudit, new RegExp(privateCanary));
+  assert.doesNotMatch(scrubbedAudit, /legacy-private-(?:linked|later)-reply/);
+  assert.match(scrubbedAudit, /ordinary-safe-audit/);
+  assert.match(scrubbedAudit, /current-safe-notification-reply/);
+  assert.equal(
+    fs.statSync(path.join(temporaryDataDir, 'chat-output.jsonl')).mode & 0o777,
+    0o600,
+  );
+  const scrubbedHistory = JSON.parse(
+    fs.readFileSync(
+      path.join(temporaryDataDir, 'orchestrator-history.json'),
+      'utf8',
+    ),
+  ) as {
+    history: Array<{ id: string }>;
+    reflectionSession: typeof reflectionSession;
+  };
+  assert.deepEqual(
+    scrubbedHistory.history.map((entry) => entry.id),
+    ['task-ordinary-safe', 'task-current-safe-notification'],
+  );
+  assert.deepEqual(scrubbedHistory.reflectionSession, reflectionSession);
+  assert.doesNotMatch(JSON.stringify(scrubbedHistory), new RegExp(privateCanary));
+  for (const taskId of affectedTaskIds) {
+    assert.equal(
+      fs.existsSync(path.join(taskLogsDir, `${taskId}.jsonl`)),
+      false,
+      `${taskId} log should be removed`,
+    );
+  }
+  assert.equal(
+    fs.readFileSync(path.join(taskLogsDir, 'task-ordinary-safe.jsonl'), 'utf8'),
+    `${JSON.stringify({ type: 'result', result: 'Ordinary safe task log' })}\n`,
+  );
+  const safeChat = reopened.prepare(`
+    SELECT text, context
+    FROM chat_messages
+    WHERE id = 'ordinary-safe-chat'
+  `).get() as { text: string; context: string };
+  assert.deepEqual(safeChat, {
+    text: 'Ordinary question',
+    context: 'Ordinary context',
+  });
+  assert.deepEqual(
+    reopened.prepare(`
+      SELECT text, metadata
+      FROM chat_messages
+      WHERE id = 'current-safe-notification-reply'
+    `).get(),
+    {
+      text: 'The private card stayed withheld.',
+      metadata: '{"safeReply":true}',
+    },
+  );
+
+  const notificationRow = reopened.prepare(`
+    SELECT title, text
+    FROM feed
+    WHERE id = 'legacy-private-notification'
+  `).get() as { title: string; text: string };
+  assert.match(`${notificationRow.title}\n${notificationRow.text}`, new RegExp(privateCanary));
+
+  const rotatedClaudeProviderSessionId = claudeSession.provider_session_id;
+  closeDatabase();
+  const reopenedAgain = getDb();
+  assert.equal(
+    (reopenedAgain.prepare(`
+      SELECT provider_session_id
+      FROM chat_sessions
+      WHERE id = ?
+    `).get(claudeAppSessionId) as { provider_session_id: string }).provider_session_id,
+    rotatedClaudeProviderSessionId,
+    'the completed migration must not rotate the clean Claude session again',
+  );
+});
+
+test('runtime-artifact cleanup retries after a durable history rewrite failure', () => {
+  const privateCanary = 'LEGACY_RUNTIME_RETRY_CANARY_4176';
+  const appSessionId = '88888888-8888-4888-8888-888888888888';
+  const providerSessionId = '99999999-9999-4999-8999-999999999999';
+  const taskId = 'task-private-retry';
+  const historyPath = path.join(temporaryDataDir, 'orchestrator-history.json');
+  const taskLogsDir = path.join(temporaryDataDir, 'task-logs');
+  const taskLogPath = path.join(taskLogsDir, `${taskId}.jsonl`);
+  const database = getDb();
+
+  database.prepare(`
+    INSERT INTO feed (
+      id, type, source, source_id, title, text, published_at
+    ) VALUES (
+      'legacy-retry-notification', 'notification', 'phone-notification',
+      'phone-notification:legacy-retry', ?, ?, ?
+    )
+  `).run(privateCanary, privateCanary, '2026-07-28T15:00:00.000Z');
+  database.prepare(`
+    INSERT INTO chat_sessions (
+      id, provider, provider_session_id, claude_session_id, title
+    ) VALUES (?, 'claude', ?, ?, 'Retry cleanup')
+  `).run(appSessionId, providerSessionId, providerSessionId);
+  database.prepare(`
+    INSERT INTO chat_messages (
+      id, type, role, in_reply_to, task_id, session_id, text, timestamp,
+      context, status, metadata
+    ) VALUES
+      (
+        'legacy-retry-root', 'chat', 'user', NULL, NULL, ?,
+        'What is this?', '2026-07-28T15:00:00.000Z', ?,
+        'delivered', ?
+      ),
+      (
+        'legacy-retry-reply', 'chat', 'agent', 'legacy-retry-root', ?, ?,
+        ?, '2026-07-28T15:01:00.000Z', ?, 'delivered', ?
+      )
+  `).run(
+    appSessionId,
+    privateCanary,
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'legacy-retry-notification',
+    }),
+    taskId,
+    appSessionId,
+    privateCanary,
+    privateCanary,
+    JSON.stringify({ privateCanary }),
+  );
+  fs.mkdirSync(taskLogsDir, { recursive: true });
+  fs.writeFileSync(taskLogPath, `${privateCanary}\n`, 'utf8');
+  fs.writeFileSync(
+    historyPath,
+    JSON.stringify({
+      history: [{
+        id: taskId,
+        message: privateCanary,
+        response: privateCanary,
+        logFile: taskLogPath,
+        metadata: {
+          chatMessageId: 'legacy-retry-root',
+          sessionId: appSessionId,
+          providerSessionId,
+        },
+      }],
+      reflectionSession: null,
+    }),
+    'utf8',
+  );
+  closeDatabase();
+
+  const originalRename = fs.renameSync.bind(fs);
+  mock.method(fs, 'renameSync', (oldPath: fs.PathLike, newPath: fs.PathLike) => {
+    if (newPath === historyPath) {
+      throw new Error('simulated history rewrite failure');
+    }
+    return originalRename(oldPath, newPath);
+  });
+
+  assert.throws(() => getDb(), /simulated history rewrite failure/);
+  assert.equal(fs.existsSync(taskLogPath), false);
+  assert.match(fs.readFileSync(historyPath, 'utf8'), new RegExp(privateCanary));
+  closeDatabase();
+  const rawDatabase = new Database(path.join(temporaryDataDir, 'media-agent.db'));
+  try {
+    const failedMetadata = rawDatabase.prepare(`
+      SELECT metadata
+      FROM chat_messages
+      WHERE id = 'legacy-retry-root'
+    `).get() as { metadata: string };
+    assert.equal(
+      JSON.parse(failedMetadata.metadata).phoneNotificationOrchestratorEvidencePurged,
+      undefined,
+      'failed durable cleanup must roll back its root marker',
+    );
+  } finally {
+    rawDatabase.close();
+  }
+  mock.restoreAll();
+
+  const retried = getDb();
+  assert.doesNotMatch(fs.readFileSync(historyPath, 'utf8'), new RegExp(privateCanary));
+  const rootMetadata = retried.prepare(`
+    SELECT metadata
+    FROM chat_messages
+    WHERE id = 'legacy-retry-root'
+  `).get() as { metadata: string };
+  assert.equal(
+    JSON.parse(rootMetadata.metadata).phoneNotificationOrchestratorEvidencePurged,
+    true,
+  );
+});
+
+test('malformed orchestrator history is reset and Evogent task logs fail closed', () => {
+  const privateCanary = 'MALFORMED_RUNTIME_HISTORY_CANARY_6248';
+  const historyPath = path.join(temporaryDataDir, 'orchestrator-history.json');
+  const taskLogsDir = path.join(temporaryDataDir, 'task-logs');
+  const database = getDb();
+
+  database.prepare(`
+    INSERT INTO feed (
+      id, type, source, source_id, title, text, published_at
+    ) VALUES (
+      'malformed-history-notification', 'notification', 'phone-notification',
+      'phone-notification:malformed-history', ?, ?, ?
+    )
+  `).run(privateCanary, privateCanary, '2026-07-28T16:00:00.000Z');
+  database.prepare(`
+    INSERT INTO chat_messages (
+      id, type, role, session_id, text, timestamp, context, status, metadata
+    ) VALUES (
+      'malformed-history-root', 'chat', 'user',
+      'malformed-history-session', 'What is this?',
+      '2026-07-28T16:00:00.000Z', ?, 'delivered', ?
+    )
+  `).run(
+    privateCanary,
+    JSON.stringify({
+      contextKind: 'post',
+      contextRefId: 'malformed-history-notification',
+    }),
+  );
+  fs.mkdirSync(taskLogsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(taskLogsDir, 'possibly-private.jsonl'),
+    `${privateCanary}\n`,
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(taskLogsDir, 'otherwise-unrelated.jsonl'),
+    'unclassifiable diagnostic\n',
+    'utf8',
+  );
+  fs.writeFileSync(
+    historyPath,
+    `{"history":[{"message":"${privateCanary}"}`,
+    'utf8',
+  );
+  closeDatabase();
+
+  const reopened = getDb();
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(historyPath, 'utf8')),
+    { history: [], reflectionSession: null },
+  );
+  assert.deepEqual(
+    fs.readdirSync(taskLogsDir).filter((entry) => entry.endsWith('.jsonl')),
+    [],
+  );
+  const rootMetadata = reopened.prepare(`
+    SELECT metadata
+    FROM chat_messages
+    WHERE id = 'malformed-history-root'
+  `).get() as { metadata: string };
+  assert.equal(
+    JSON.parse(rootMetadata.metadata).phoneNotificationOrchestratorEvidencePurged,
+    true,
+  );
 });
 
 test('settings view exposes observed apps and immutable safeguards without notification content', async () => {

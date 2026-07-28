@@ -92,6 +92,7 @@ interface FeedRow {
 type FeedOrderFreshnessOptions = {
   lastArrangeAtMs?: number | null;
   nowMs?: number;
+  agentEvidence?: boolean;
 };
 
 export interface FeedInsertInput {
@@ -3626,6 +3627,7 @@ function buildFeedListWhereClause(
   options?: {
     forcedTypes?: FeedItemType[];
     excludeDismissedSuggestions?: boolean;
+    agentEvidence?: boolean;
   },
 ): { whereSql: string; values: Array<string | number> } {
   const whereClauses: string[] = [
@@ -3648,6 +3650,16 @@ function buildFeedListWhereClause(
   const values: Array<string | number> = [];
   const effectiveTypes = options?.forcedTypes ?? query.types;
   const searchTokens = tokenizeSearchQuery(query.search);
+
+  if (options?.agentEvidence) {
+    // Phone-notification cards remain available to the browser UI through the
+    // normal feed view, but their title/body/app content is never a general
+    // runtime-agent, curator, reflection, or overseer evidence candidate.
+    whereClauses.push(`NOT (
+      f.type = 'notification'
+      AND f.source = 'phone-notification'
+    )`);
+  }
 
   if (searchTokens.length === 0) {
     whereClauses.unshift("(f.parent_id IS NULL OR f.type = 'suggestion')");
@@ -3724,12 +3736,14 @@ function buildFeedListWhereClause(
 
 export function getFeedPage(
   query: FeedQuery,
-  _options: FeedOrderFreshnessOptions = {},
+  options: FeedOrderFreshnessOptions = {},
 ): { items: FeedItem[]; total: number; hasMore: boolean } {
   const db = getDb();
   dismissExpiredNotifications();
 
-  const { whereSql, values } = buildFeedListWhereClause(query);
+  const { whereSql, values } = buildFeedListWhereClause(query, {
+    agentEvidence: options.agentEvidence,
+  });
   const fallbackOrderBySql = query.sort === 'published'
     ? 'feed_with_state.published_at_ms DESC, feed_with_state.created_at_ms DESC'
     : 'feed_with_state.created_at_ms DESC, feed_with_state.published_at_ms DESC';
@@ -3781,7 +3795,7 @@ export function getFeedPage(
 
 export function getSuggestionFeedGroup(
   query: FeedQuery,
-  _options: FeedOrderFreshnessOptions = {},
+  options: FeedOrderFreshnessOptions = {},
 ): FeedSuggestionGroup | null {
   if (query.types.length > 0 && !query.types.includes('suggestion')) {
     return null;
@@ -3793,6 +3807,7 @@ export function getSuggestionFeedGroup(
   const { whereSql, values } = buildFeedListWhereClause(query, {
     forcedTypes: ['suggestion'],
     excludeDismissedSuggestions: true,
+    agentEvidence: options.agentEvidence,
   });
   const fallbackOrderBySql = query.sort === 'published'
     ? 'f.published_at_ms DESC, f.created_at_ms DESC'
@@ -3834,7 +3849,9 @@ export function getSuggestionFeedGroup(
   };
 }
 
-export function getPendingFeedCounts(): FeedPendingCounts {
+export function getPendingFeedCounts(
+  options: { agentEvidence?: boolean } = {},
+): FeedPendingCounts {
   const db = getDb();
   dismissExpiredNotifications();
 
@@ -3844,6 +3861,11 @@ export function getPendingFeedCounts(): FeedPendingCounts {
       COUNT(*) AS count
     FROM feed f
     WHERE (f.parent_id IS NULL OR f.type = 'suggestion')
+      AND (
+        ? = 0
+        OR f.type != 'notification'
+        OR f.source != 'phone-notification'
+      )
       AND (
         (
           ${buildPendingSuggestionClause('f')}
@@ -3859,7 +3881,7 @@ export function getPendingFeedCounts(): FeedPendingCounts {
         )
       )
     GROUP BY f.type
-  `).all() as Array<{ type: FeedItemType; count: number }>;
+  `).all(options.agentEvidence ? 1 : 0) as Array<{ type: FeedItemType; count: number }>;
 
   const counts = createEmptyPendingCounts();
   for (const row of rows) {

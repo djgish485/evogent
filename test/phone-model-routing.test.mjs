@@ -44,6 +44,11 @@ function withFixture(run) {
         effort: 'low',
         qualification: { suiteId: 'suite-1' },
       },
+      browse_youtube: {
+        model: 'gpt-5.6-terra',
+        effort: 'low',
+        qualification: { suiteId: 'suite-1' },
+      },
       curator: {
         model: 'gpt-5.6-terra',
         effort: 'low',
@@ -62,13 +67,14 @@ function withFixture(run) {
 function resolve(paths, task = 'browse', {
   modelOverride = '',
   effortOverride = '',
+  policyPath = policy,
 } = {}) {
   const args = [
     tool,
     'resolve',
     '--task', task,
     '--config', paths.config,
-    '--policy', policy,
+    '--policy', policyPath,
     '--live', paths.live,
     '--receipts', paths.receipts,
     '--json',
@@ -76,6 +82,61 @@ function resolve(paths, task = 'browse', {
   if (modelOverride) args.push('--model-override', modelOverride);
   if (effortOverride) args.push('--effort-override', effortOverride);
   return JSON.parse(execFileSync('python3', args, { encoding: 'utf8' }));
+}
+
+// The production resolver deliberately cannot consume today's browse or
+// curator receipt formats. Keep testing their content-free validators in
+// isolation so a future safe qualifying harness can reuse the sound parts
+// without making the current receipts production proof.
+function inspectDormantReceiptValidator(paths, task) {
+  const source = String.raw`
+import importlib.util, json, pathlib, sys
+spec = importlib.util.spec_from_file_location("model_routing", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+rows = []
+try:
+    for line in pathlib.Path(sys.argv[2]).read_text(encoding="utf-8").splitlines():
+        value = json.loads(line)
+        if isinstance(value, dict):
+            rows.append(value)
+except OSError:
+    pass
+decision = module.qualification_decision(
+    rows,
+    task=sys.argv[3],
+    suite_id="suite-1",
+    candidate_model="gpt-5.6-terra",
+    candidate_effort="low",
+    baseline_model="gpt-5.6-sol",
+    baseline_effort="high",
+    minimum_paired_passes=3,
+    max_age_hours=720,
+)
+print(json.dumps({
+    "model": "gpt-5.6-terra" if decision["qualified"] else "gpt-5.6-sol",
+    "effort": "low" if decision["qualified"] else "high",
+    "origin": (
+        "benchmark_qualified_live"
+        if decision["qualified"]
+        else "baseline_" + decision["reason"]
+    ),
+    "qualification": decision,
+}))
+`;
+  return JSON.parse(execFileSync(
+    'python3',
+    ['-c', source, tool, paths.receipts, task],
+    { encoding: 'utf8' },
+  ));
+}
+
+function inspectDormantBrowseReceiptValidator(paths) {
+  return inspectDormantReceiptValidator(paths, 'browse');
+}
+
+function inspectDormantCuratorReceiptValidator(paths) {
+  return inspectDormantReceiptValidator(paths, 'curator');
 }
 
 function record(paths, receipt) {
@@ -144,17 +205,26 @@ function passingReceipt({
   role,
   model,
   effort,
-  task = 'browse_full_v2',
-  benchmarkKind = 'full_browse',
+  task = 'browse_mixed_full_v3',
+  benchmarkKind = 'full_browse_mixed',
   recordedAtMs = Date.now(),
 }) {
   const metrics = {
     elapsedMs: role === 'baseline' ? 1000 : 600,
+    inputTokens: role === 'baseline' ? 800 : 650,
+    cachedInputTokens: role === 'baseline' ? 200 : 150,
+    outputTokens: role === 'baseline' ? 200 : 150,
+    totalTokens: role === 'baseline' ? 1000 : 800,
     reportedTitles: 5,
     groundedTitles: 5,
     requiredTitles: 5,
   };
-  if (task === 'browse_full_v2') {
+  if ([
+    'browse_mixed_full_v3',
+    'browse_youtube_smoke_v1',
+    'browse_youtube_full_v1',
+    'browse_full_v2',
+  ].includes(task)) {
     Object.assign(metrics, {
       terminalProof: true,
       terminalItems: 5,
@@ -223,13 +293,70 @@ function curatorReceipt({
   return receipt;
 }
 
-test('routine route stays on its configured baseline without paired quality proof', () => {
+test('routine browse ignores persistent overrides while relevance proof is unavailable', () => {
   withFixture((paths) => {
     const result = resolve(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.effort, 'high');
-    assert.match(result.origin, /^baseline_/);
-    assert.equal(result.qualification.qualified, false);
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+    assert.equal(result.qualification, undefined);
+  });
+});
+
+test('routine override gates remain closed if a local policy accidentally enables them', () => {
+  withFixture((paths) => {
+    const unsafePolicy = path.join(paths.directory, 'unsafe-policy.json');
+    const policyValue = JSON.parse(fs.readFileSync(policy, 'utf8'));
+    policyValue.routes.browse.persistentOverrideAllowed = true;
+    policyValue.routes.browse_youtube.persistentOverrideAllowed = true;
+    policyValue.routes.curator.persistentOverrideAllowed = true;
+    fs.writeFileSync(unsafePolicy, JSON.stringify(policyValue));
+
+    for (const task of ['browse', 'browse_youtube', 'curator']) {
+      const result = resolve(paths, task, { policyPath: unsafePolicy });
+      assert.equal(result.model, 'gpt-5.6-sol');
+      assert.equal(result.effort, 'high');
+      assert.equal(result.origin, 'baseline_persistent_override_disabled');
+      assert.equal(result.qualification, undefined);
+    }
+  });
+});
+
+test('routine browsing inherits Codex Model unless Browse Model is explicit', () => {
+  withFixture((paths) => {
+    const config = fs.readFileSync(paths.config, 'utf8')
+      .replace(/## Browse Model\n[^\n]*\n\n/, '')
+      .replace(/## Browse Reasoning\n[^\n]*\n\n/, '');
+    fs.writeFileSync(paths.config, config);
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const browse = resolve(paths);
+    assert.equal(browse.model, 'gpt-5.6-sol');
+    assert.equal(browse.effort, 'medium');
+    assert.equal(browse.origin, 'config');
+
+    const curator = resolve(paths, 'curator');
+    assert.equal(curator.model, 'gpt-5.6-sol');
+    assert.equal(curator.effort, 'high');
+    assert.equal(curator.origin, 'config');
+  });
+});
+
+test('Terra remains the browse fallback only when no browse or Codex model is configured', () => {
+  withFixture((paths) => {
+    const config = fs.readFileSync(paths.config, 'utf8')
+      .replace(/## Codex Model\n[^\n]*\n\n/, '')
+      .replace(/## Browse Model\n[^\n]*\n\n/, '')
+      .replace(/## Browse Reasoning\n[^\n]*\n\n/, '');
+    fs.writeFileSync(paths.config, config);
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const browse = resolve(paths);
+    assert.equal(browse.model, 'gpt-5.6-terra');
+    assert.equal(browse.effort, 'medium');
+    assert.equal(browse.origin, 'policy');
   });
 });
 
@@ -246,7 +373,22 @@ test('one-run curator model and effort overrides remain independent of qualifica
   });
 });
 
-test('routine route accepts a cheaper candidate only after three paired passes', () => {
+test('one-run browse overrides remain available for supervised screening', () => {
+  withFixture((paths) => {
+    for (const task of ['browse', 'browse_youtube']) {
+      const result = resolve(paths, task, {
+        modelOverride: 'gpt-5.6-terra',
+        effortOverride: 'low',
+      });
+      assert.equal(result.model, 'gpt-5.6-terra');
+      assert.equal(result.effort, 'low');
+      assert.equal(result.origin, 'environment');
+      assert.equal(result.qualification, undefined);
+    }
+  });
+});
+
+test('reviewless browse receipts cannot override production even after three paired passes', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 3; round += 1) {
       record(paths, passingReceipt({
@@ -263,11 +405,49 @@ test('routine route accepts a cheaper candidate only after three paired passes',
       }));
     }
     const result = resolve(paths);
-    assert.equal(result.model, 'gpt-5.6-terra');
-    assert.equal(result.effort, 'low');
-    assert.equal(result.origin, 'benchmark_qualified_live');
-    assert.equal(result.qualification.pairedPasses, 3);
-    assert.ok(result.qualification.meanElapsedRatio < 1);
+    assert.equal(result.model, 'gpt-5.6-sol');
+    assert.equal(result.effort, 'high');
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+    assert.equal(result.qualification, undefined);
+
+    const dormant = inspectDormantBrowseReceiptValidator(paths);
+    assert.equal(dormant.qualification.pairedPasses, 3);
+    assert.equal(dormant.qualification.qualified, true);
+  });
+});
+
+test('mutable-feed YouTube smoke evidence cannot qualify any persistent route', () => {
+  withFixture((paths) => {
+    for (let round = 1; round <= 3; round += 1) {
+      record(paths, passingReceipt({
+        round,
+        role: 'baseline',
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        task: 'browse_youtube_smoke_v1',
+        benchmarkKind: 'full_browse_youtube_smoke',
+      }));
+      record(paths, passingReceipt({
+        round,
+        role: 'candidate',
+        model: 'gpt-5.6-terra',
+        effort: 'low',
+        task: 'browse_youtube_smoke_v1',
+        benchmarkKind: 'full_browse_youtube_smoke',
+      }));
+    }
+
+    const youtube = resolve(paths, 'browse_youtube');
+    assert.equal(youtube.model, 'gpt-5.6-sol');
+    assert.equal(youtube.effort, 'high');
+    assert.equal(youtube.origin, 'baseline_persistent_override_disabled');
+    assert.equal(youtube.qualification, undefined);
+
+    const global = resolve(paths);
+    assert.equal(global.model, 'gpt-5.6-sol');
+    assert.equal(global.effort, 'high');
+    assert.equal(global.origin, 'baseline_persistent_override_disabled');
+    assert.equal(global.qualification, undefined);
   });
 });
 
@@ -296,7 +476,7 @@ test('declared receipt roles must agree with their model and effort side', () =>
       effort: 'low',
     }));
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.qualified, false);
     assert.equal(result.qualification.reason, 'ledger_integrity_failure');
@@ -363,13 +543,13 @@ test('grounded micro receipts remain invisible to production and task-only legac
       0,
     );
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.effort, 'high');
     assert.equal(result.origin, 'baseline_insufficient_paired_quality_passes');
     assert.equal(result.qualification.qualified, false);
-    assert.equal(result.qualification.requiredBenchmarkKind, 'full_browse');
-    assert.equal(result.qualification.requiredBenchmarkTask, 'browse_full_v2');
+    assert.equal(result.qualification.requiredBenchmarkKind, 'full_browse_mixed');
+    assert.equal(result.qualification.requiredBenchmarkTask, 'browse_mixed_full_v3');
   });
 });
 
@@ -380,7 +560,7 @@ test('benchmark receipt writer rejects mismatched task and kind pairs', () => {
       role: 'candidate',
       model: 'gpt-5.6-terra',
       effort: 'low',
-      task: 'browse_full_v2',
+      task: 'browse_mixed_full_v3',
       benchmarkKind: 'grounded_micro',
     })));
     assert.throws(() => record(paths, passingReceipt({
@@ -389,7 +569,7 @@ test('benchmark receipt writer rejects mismatched task and kind pairs', () => {
       model: 'gpt-5.6-terra',
       effort: 'low',
       task: 'browse_micro',
-      benchmarkKind: 'full_browse',
+      benchmarkKind: 'full_browse_mixed',
     })));
     assert.throws(() => record(paths, passingReceipt({
       round: 1,
@@ -397,7 +577,7 @@ test('benchmark receipt writer rejects mismatched task and kind pairs', () => {
       model: 'gpt-5.6-terra',
       effort: 'low',
       task: 'browse',
-      benchmarkKind: 'full_browse',
+      benchmarkKind: 'full_browse_mixed',
     })));
     assert.throws(() => record(paths, passingReceipt({
       round: 1,
@@ -405,13 +585,13 @@ test('benchmark receipt writer rejects mismatched task and kind pairs', () => {
       model: 'gpt-5.6-terra',
       effort: 'low',
       task: 'unknown_benchmark',
-      benchmarkKind: 'full_browse',
+      benchmarkKind: 'full_browse_mixed',
     })));
     assert.equal(fs.existsSync(paths.receipts), false);
   });
 });
 
-test('production resolver rejects schema-v1 browse receipts with an ineligible kind', () => {
+test('dormant browse validator rejects schema-v1 receipts with an ineligible kind', () => {
   withFixture((paths) => {
     const rows = [];
     for (let round = 1; round <= 3; round += 1) {
@@ -438,15 +618,15 @@ test('production resolver rejects schema-v1 browse receipts with an ineligible k
       { mode: 0o600 },
     );
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.origin, 'baseline_ineligible_benchmark_kind');
     assert.equal(result.qualification.qualified, false);
-    assert.equal(result.qualification.requiredBenchmarkKind, 'full_browse');
+    assert.equal(result.qualification.requiredBenchmarkKind, 'full_browse_mixed');
   });
 });
 
-test('production resolver rejects legacy task-name full browse receipts', () => {
+test('dormant browse validator rejects legacy task-name full browse receipts', () => {
   withFixture((paths) => {
     const rows = [];
     for (let round = 1; round <= 3; round += 1) {
@@ -473,15 +653,15 @@ test('production resolver rejects legacy task-name full browse receipts', () => 
       { mode: 0o600 },
     );
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.origin, 'baseline_ineligible_benchmark_task');
     assert.equal(result.qualification.qualified, false);
-    assert.equal(result.qualification.requiredBenchmarkTask, 'browse_full_v2');
+    assert.equal(result.qualification.requiredBenchmarkTask, 'browse_mixed_full_v3');
   });
 });
 
-test('full browse qualification requires an exact successful terminal proof for every pair', () => {
+test('dormant browse validator requires exact terminal proof for every pair', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 3; round += 1) {
       const baseline = passingReceipt({
@@ -503,7 +683,7 @@ test('full browse qualification requires an exact successful terminal proof for 
       record(paths, candidate);
     }
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.qualified, false);
     assert.equal(result.qualification.reason, 'mechanics_failure');
@@ -511,7 +691,7 @@ test('full browse qualification requires an exact successful terminal proof for 
   });
 });
 
-test('an unpaired full browse mechanics failure invalidates an otherwise passing suite', () => {
+test('dormant browse validator rejects an unpaired mechanics failure', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 3; round += 1) {
       record(paths, passingReceipt({
@@ -538,7 +718,7 @@ test('an unpaired full browse mechanics failure invalidates an otherwise passing
     failed.metrics.terminalProof = false;
     record(paths, failed);
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.qualified, false);
     assert.equal(result.qualification.reason, 'mechanics_failure');
@@ -546,7 +726,7 @@ test('an unpaired full browse mechanics failure invalidates an otherwise passing
   });
 });
 
-test('candidate cannot qualify with less than eighty percent of paired fresh yield', () => {
+test('dormant browse validator rejects less than eighty percent paired fresh yield', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 3; round += 1) {
       const baseline = passingReceipt({
@@ -575,7 +755,7 @@ test('candidate cannot qualify with less than eighty percent of paired fresh yie
       record(paths, candidate);
     }
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.qualified, false);
     assert.equal(result.qualification.reason, 'outcome_equivalence_failure');
@@ -589,7 +769,7 @@ test('candidate cannot qualify with less than eighty percent of paired fresh yie
   });
 });
 
-test('candidate cannot qualify when any passing pair exceeds one hundred twenty percent latency', () => {
+test('dormant browse validator rejects a pair above one hundred twenty percent latency', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 3; round += 1) {
       const baseline = passingReceipt({
@@ -610,7 +790,7 @@ test('candidate cannot qualify when any passing pair exceeds one hundred twenty 
       record(paths, candidate);
     }
 
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.qualified, false);
     assert.equal(result.qualification.reason, 'latency_equivalence_failure');
@@ -624,7 +804,38 @@ test('candidate cannot qualify when any passing pair exceeds one hundred twenty 
   });
 });
 
-test('curator promotion requires three paired explicitly reviewed full-snapshot rounds', () => {
+test('dormant browse validator rejects token use above the bounded ratio', () => {
+  withFixture((paths) => {
+    for (let round = 1; round <= 3; round += 1) {
+      const baseline = passingReceipt({
+        round,
+        role: 'baseline',
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+      });
+      const candidate = passingReceipt({
+        round,
+        role: 'candidate',
+        model: 'gpt-5.6-terra',
+        effort: 'low',
+      });
+      if (round === 2) {
+        candidate.metrics.inputTokens = 1400;
+        candidate.metrics.outputTokens = 200;
+        candidate.metrics.totalTokens = 1600;
+      }
+      record(paths, baseline);
+      record(paths, candidate);
+    }
+    const result = inspectDormantBrowseReceiptValidator(paths);
+    assert.equal(result.model, 'gpt-5.6-sol');
+    assert.equal(result.qualification.reason, 'token_equivalence_failure');
+    assert.equal(result.qualification.tokenEquivalenceFailedPairs, 1);
+    assert.equal(result.qualification.maximumTotalTokenRatio, 1.5);
+  });
+});
+
+test('dormant curator validator requires three paired reviewed full-snapshot rounds', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 2; round += 1) {
       record(paths, curatorReceipt({
@@ -640,7 +851,7 @@ test('curator promotion requires three paired explicitly reviewed full-snapshot 
         effort: 'low',
       }));
     }
-    let result = resolve(paths, 'curator');
+    let result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.pairedPasses, 2);
     assert.equal(result.qualification.minimumPairedPasses, 3);
@@ -659,11 +870,17 @@ test('curator promotion requires three paired explicitly reviewed full-snapshot 
       model: 'gpt-5.6-terra',
       effort: 'low',
     }));
-    result = resolve(paths, 'curator');
+    result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-terra');
     assert.equal(result.effort, 'low');
     assert.equal(result.origin, 'benchmark_qualified_live');
     assert.equal(result.qualification.pairedPasses, 3);
+
+    const production = resolve(paths, 'curator');
+    assert.equal(production.model, 'gpt-5.6-sol');
+    assert.equal(production.effort, 'high');
+    assert.equal(production.origin, 'baseline_persistent_override_disabled');
+    assert.equal(production.qualification, undefined);
     assert.equal(
       legacyTaskOnlyCuratorPairedPasses(readReceiptRows(paths)),
       0,
@@ -672,7 +889,7 @@ test('curator promotion requires three paired explicitly reviewed full-snapshot 
   });
 });
 
-test('expired curator artifact reviews cannot keep a cheaper route qualified', () => {
+test('dormant curator validator rejects expired artifact reviews', () => {
   withFixture((paths) => {
     const expiredAtMs = Date.now() - (31 * 24 * 60 * 60 * 1000);
     for (let round = 1; round <= 3; round += 1) {
@@ -691,7 +908,7 @@ test('expired curator artifact reviews cannot keep a cheaper route qualified', (
         recordedAtMs: expiredAtMs,
       }));
     }
-    const result = resolve(paths, 'curator');
+    const result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.origin, 'baseline_insufficient_paired_quality_passes');
     assert.equal(result.qualification.pairedPasses, 0);
@@ -769,7 +986,7 @@ test('curator receipt writer refuses inferred quality and mismatched benchmark k
   });
 });
 
-test('production resolver rejects legacy task-name curator receipts', () => {
+test('dormant curator validator rejects legacy task-name receipts', () => {
   withFixture((paths) => {
     const rows = [];
     for (let round = 1; round <= 3; round += 1) {
@@ -796,7 +1013,7 @@ test('production resolver rejects legacy task-name curator receipts', () => {
       { mode: 0o600 },
     );
 
-    const result = resolve(paths, 'curator');
+    const result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.origin, 'baseline_ineligible_benchmark_task');
     assert.equal(result.qualification.qualified, false);
@@ -831,7 +1048,7 @@ test('reviewed curator receipts retain proof metrics but no private artifact con
   });
 });
 
-test('unreviewed or ambiguously labeled curator rows cannot qualify production', () => {
+test('dormant curator validator rejects unreviewed or ambiguous rows', () => {
   withFixture((paths) => {
     const rows = [];
     for (let round = 1; round <= 3; round += 1) {
@@ -854,7 +1071,7 @@ test('unreviewed or ambiguously labeled curator rows cannot qualify production',
       `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`,
       { mode: 0o600 },
     );
-    const result = resolve(paths, 'curator');
+    const result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.origin, 'baseline_ineligible_benchmark_kind');
     assert.equal(result.qualification.qualified, false);
@@ -888,7 +1105,7 @@ test('legacy curator quality labels without artifact-review proof stay on baseli
       { mode: 0o600 },
     );
 
-    const result = resolve(paths, 'curator');
+    const result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.reason, 'quality_review_proof_failure');
     assert.equal(result.qualification.qualityReviewProofFailedPairs, 3);
@@ -921,7 +1138,7 @@ test('any curator mechanics failure invalidates the suite even without a peer', 
       reviewed: false,
     }));
 
-    const result = resolve(paths, 'curator');
+    const result = inspectDormantCuratorReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.reason, 'mechanics_failure');
     assert.equal(result.qualification.pairedPasses, 3);
@@ -929,7 +1146,7 @@ test('any curator mechanics failure invalidates the suite even without a peer', 
   });
 });
 
-test('mechanics failures invalidate a suite without becoming model-quality failures', () => {
+test('dormant browse validator separates mechanics failures from model-quality failures', () => {
   withFixture((paths) => {
     for (let round = 1; round <= 4; round += 1) {
       const baseline = passingReceipt({
@@ -951,7 +1168,7 @@ test('mechanics failures invalidate a suite without becoming model-quality failu
       record(paths, baseline);
       record(paths, candidate);
     }
-    const result = resolve(paths);
+    const result = inspectDormantBrowseReceiptValidator(paths);
     assert.equal(result.model, 'gpt-5.6-sol');
     assert.equal(result.qualification.reason, 'mechanics_failure');
     assert.equal(result.qualification.pairedPasses, 3);
@@ -1020,6 +1237,39 @@ test('grounded micro benchmark rejects duplicate titles after normalization', ()
   });
 });
 
+test('codex JSON usage extraction emits only bounded numeric metrics', () => {
+  withFixture((paths) => {
+    const events = path.join(paths.directory, 'codex-events.jsonl');
+    fs.writeFileSync(events, [
+      JSON.stringify({
+        type: 'item.completed',
+        item: { type: 'agent_message', text: 'private source content' },
+      }),
+      JSON.stringify({
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 1200,
+          cached_input_tokens: 700,
+          output_tokens: 300,
+        },
+      }),
+    ].join('\n'), { mode: 0o600 });
+
+    const output = execFileSync('python3', [
+      tool,
+      'codex-usage',
+      '--events', events,
+    ], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), {
+      inputTokens: 1200,
+      cachedInputTokens: 700,
+      outputTokens: 300,
+      totalTokens: 1500,
+    });
+    assert.doesNotMatch(output, /private source content|agent_message/);
+  });
+});
+
 test('durable benchmark receipts contain only safe metrics and no source text', () => {
   withFixture((paths) => {
     record(paths, passingReceipt({
@@ -1032,8 +1282,8 @@ test('durable benchmark receipts contain only safe metrics and no source text', 
     assert.doesNotMatch(content, /useful title|response|sourceText|rawOutput/);
     assert.equal(fs.statSync(paths.receipts).mode & 0o777, 0o600);
     const row = JSON.parse(content.trim());
-    assert.equal(row.task, 'browse_full_v2');
-    assert.equal(row.benchmarkKind, 'full_browse');
+    assert.equal(row.task, 'browse_mixed_full_v3');
+    assert.equal(row.benchmarkKind, 'full_browse_mixed');
 
     const contentBearingStatus = passingReceipt({
       round: 2,
@@ -1127,6 +1377,7 @@ test('phone cycle routes browse and curator independently and passes the curator
   );
   assert.match(cycle, /model_routing\.py/);
   assert.match(cycle, /resolve_model_route browse/);
+  assert.match(cycle, /resolve_model_route browse_youtube/);
   assert.match(cycle, /resolve_model_route curator/);
   assert.match(cycle, /model_reasoning_effort="\$BROWSE_EFFORT"/);
   assert.match(cycle, /"codexModel":sys\.argv\[5\]/);
@@ -1172,8 +1423,11 @@ test('computer-use benchmarks persist downgrade-safe content-free receipts', () 
     path.join(root, 'phone-paradigm/device/phone-tools/benchmark-browse-models.sh'),
     'utf8',
   );
-  assert.match(fullBrowse, /"task":"browse_full_v2"/);
-  assert.match(fullBrowse, /"benchmarkKind":"full_browse"/);
+  assert.match(fullBrowse, /"task":"browse_youtube_smoke_v1"/);
+  assert.match(fullBrowse, /"benchmarkKind":"full_browse_youtube_smoke"/);
+  assert.match(fullBrowse, /cannot qualify any persistent route/);
+  assert.doesNotMatch(fullBrowse, /QUALITY=passed/);
+  assert.doesNotMatch(fullBrowse, /using a suite to change routing/);
   assert.match(fullBrowse, /RUN_ID="full-browse-/);
   assert.match(fullBrowse, /benchmark-browse-finalize\.py finalize --run-id/);
   assert.match(fullBrowse, /benchmark-browse-finalize\.py"|FINALIZER=/);
@@ -1201,6 +1455,17 @@ test('daily overseer is one bounded review and cannot become a phone-side develo
   assert.equal(policyValue.routes.overseer.maximumRunsPerServiceDay, 1);
   assert.equal(policyValue.routes.overseer.persistentOverrideAllowed, false);
   assert.deepEqual(policyValue.routes.overseer.modelSections, ['Overseer Model']);
+  assert.deepEqual(
+    policyValue.routes.browse.modelSections,
+    ['Browse Model', 'Codex Model'],
+  );
+  assert.equal(policyValue.routes.browse.persistentOverrideAllowed, false);
+  assert.deepEqual(
+    policyValue.routes.browse_youtube.modelSections,
+    ['YouTube Browse Model', 'Browse Model', 'Codex Model'],
+  );
+  assert.equal(policyValue.routes.browse_youtube.persistentOverrideAllowed, false);
+  assert.equal(policyValue.routes.curator.persistentOverrideAllowed, false);
   assert.match(instruction, /Do not edit product code/);
   assert.match(instruction, /Do not change the `overseer` route/);
   assert.match(instruction, /Do not launch a\s+development agent on the phone/);

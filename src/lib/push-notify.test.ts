@@ -5,6 +5,9 @@ import path from 'node:path';
 import { test } from 'node:test';
 import {
   getPushNotificationEventConfig,
+  PUSH_NOTIFICATION_BODY_MAX_BYTES,
+  PUSH_NOTIFICATION_MIN_FOREGROUND_SUPPRESS_WINDOW_SECONDS,
+  PUSH_NOTIFICATION_REQUEST_TIMEOUT_MS,
   readPushNotificationConfig,
   sendPushNotification,
   shouldSuppressPushNotification,
@@ -58,7 +61,7 @@ test('sendPushNotification posts enabled events to ntfy', async () => {
       'utf8',
     );
 
-    let request: { url: string; init: RequestInit } | null = null;
+    let request!: { url: string; init: RequestInit };
     const ok = await sendPushNotification('chat_reply', 'Reply is ready', {
       fetchImpl: async (url, init) => {
         request = { url: String(url), init: init ?? {} };
@@ -67,20 +70,49 @@ test('sendPushNotification posts enabled events to ntfy', async () => {
     });
 
     assert.strictEqual(ok, true);
-    assert.deepStrictEqual(request, {
-      url: 'https://ntfy.example.com/evogent-test',
-      init: {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          Title: 'Agent reply ready',
-          Priority: '4',
-          Tags: 'chat,reply',
-        },
-        body: 'Reply is ready',
-      },
+    assert.strictEqual(request.url, 'https://ntfy.example.com/evogent-test');
+    assert.deepStrictEqual(request.init.headers, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      Title: 'Agent reply ready',
+      Priority: '4',
+      Tags: 'chat,reply',
     });
+    assert.strictEqual(request.init.method, 'POST');
+    assert.strictEqual(request.init.body, 'Reply is ready');
+    assert.ok(request.init.signal instanceof AbortSignal);
+    assert.strictEqual(request.init.signal.aborted, false);
+    assert.strictEqual(PUSH_NOTIFICATION_REQUEST_TIMEOUT_MS, 5_000);
   });
+});
+
+test('sendPushNotification bounds long UTF-8 notification bodies without splitting characters', async () => {
+  const config: PushNotificationsConfig = {
+    enabled: true,
+    provider: 'ntfy',
+    ntfy: {
+      topic: 'bounded-body',
+      server: 'https://ntfy.example.com',
+    },
+    events: {
+      chat_reply: {
+        enabled: true,
+      },
+    },
+  };
+  let requestBody = '';
+
+  const ok = await sendPushNotification('chat_reply', `  ${'🙂'.repeat(200)}  `, {
+    config,
+    fetchImpl: async (_url, init) => {
+      requestBody = typeof init?.body === 'string' ? init.body : '';
+      return new Response(null, { status: 200 });
+    },
+  });
+
+  assert.strictEqual(ok, true);
+  assert.ok(Buffer.byteLength(requestBody, 'utf8') <= PUSH_NOTIFICATION_BODY_MAX_BYTES);
+  assert.ok(requestBody.endsWith('…'));
+  assert.doesNotMatch(requestBody, /\uFFFD/);
 });
 
 test('getPushNotificationEventConfig applies the default suppress window', () => {
@@ -101,7 +133,34 @@ test('getPushNotificationEventConfig applies the default suppress window', () =>
   });
 });
 
-test('shouldSuppressPushNotification only suppresses recent foreground activity', () => {
+test('getPushNotificationEventConfig keeps presence fresh between low-frequency heartbeats', () => {
+  const tooShort = getPushNotificationEventConfig({
+    enabled: true,
+    events: {
+      chat_reply: {
+        enabled: true,
+        suppressWindowSeconds: 30,
+      },
+    },
+  }, 'chat_reply');
+  const longer = getPushNotificationEventConfig({
+    enabled: true,
+    events: {
+      chat_reply: {
+        enabled: true,
+        suppressWindowSeconds: 300,
+      },
+    },
+  }, 'chat_reply');
+
+  assert.strictEqual(
+    tooShort?.suppressWindowSeconds,
+    PUSH_NOTIFICATION_MIN_FOREGROUND_SUPPRESS_WINDOW_SECONDS,
+  );
+  assert.strictEqual(longer?.suppressWindowSeconds, 300);
+});
+
+test('shouldSuppressPushNotification follows the dedicated foreground-presence lease', () => {
   const now = Date.parse('2026-04-11T10:00:00.000Z');
   const eventConfig = {
     enabled: true,
@@ -111,23 +170,26 @@ test('shouldSuppressPushNotification only suppresses recent foreground activity'
   };
 
   assert.strictEqual(shouldSuppressPushNotification({
-    id: 1,
-    event: 'foreground',
-    timestamp: '2026-04-11T09:58:30.000Z',
-    metadata: null,
+    state: 'foreground',
+    clientId: 'visible-page',
+    lastSeenAt: '2026-04-11T09:58:30.000Z',
   }, eventConfig, now), true);
 
   assert.strictEqual(shouldSuppressPushNotification({
-    id: 2,
-    event: 'background',
-    timestamp: '2026-04-11T09:58:30.000Z',
-    metadata: null,
+    state: 'background',
+    clientId: 'hidden-page',
+    lastSeenAt: '2026-04-11T09:58:30.000Z',
   }, eventConfig, now), false);
 
   assert.strictEqual(shouldSuppressPushNotification({
-    id: 3,
-    event: 'foreground',
-    timestamp: '2026-04-11T09:57:00.000Z',
-    metadata: null,
+    state: 'foreground',
+    clientId: 'stale-page',
+    lastSeenAt: '2026-04-11T09:57:00.000Z',
+  }, eventConfig, now), false);
+
+  assert.strictEqual(shouldSuppressPushNotification({
+    state: 'foreground',
+    clientId: 'future-page',
+    lastSeenAt: '2026-04-11T10:00:01.000Z',
   }, eventConfig, now), false);
 });

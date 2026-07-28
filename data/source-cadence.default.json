@@ -1,9 +1,9 @@
 {
-  "_comment": "Public bootstrap only. cadenceHours 0 lets the first private runtime cycles collect evidence without encoding a person's routine in the repository. The scheduler-owned daily private review maintains the live file from observed yield, attention, battery cost, latency, provider use, and notification urgency. Mechanics in evogent-cycle.sh only read the values.",
-  "twitter": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" },
-  "hackernews": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" },
-  "instagram": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" },
-  "youtube": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" },
-  "substack": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" },
-  "gmail": { "cadenceHours": 0, "why": "bootstrap until private runtime evidence supports tuning" }
+  "_comment": "Public cost-aware bootstrap only, not a person's routine. Nonzero source-specific intervals prevent a missing private file from turning every full cycle into an all-source sweep; content-free source signals can still wake only their matching source early. The scheduler-owned daily private review maintains the live file from measured yield, attention, battery cost, latency, provider use, and notification urgency.",
+  "twitter": { "cadenceHours": 4, "why": "bounded app-driving bootstrap" },
+  "hackernews": { "cadenceHours": 2, "why": "low-cost public retrieval bootstrap" },
+  "instagram": { "cadenceHours": 8, "why": "bounded app-driving bootstrap" },
+  "youtube": { "cadenceHours": 6, "why": "bounded app-driving bootstrap" },
+  "substack": { "cadenceHours": 8, "why": "bounded inbox-derived bootstrap" },
+  "gmail": { "cadenceHours": 4, "why": "bounded inbox-derived bootstrap" }
 }

@@ -46,12 +46,35 @@ There is one scheduling authority on the phone:
 The Android shell owns preference-aware launcher mechanics, the WebView, native-app routing,
 the system-assistant composer, local notification observation/replacement mechanics,
 accessibility mechanics, boot signaling, and the per-install control-token boundary. The
-notification stream enters a deterministic local light-curation lane; no notification content is
-sent to a runtime agent, and urgent/system/safety originals remain Android-owned. It does not
+notification stream enters a deterministic local light-curation lane; supported
+runtime-agent evidence APIs omit notification content, policy forbids provider
+workers from reading its shared SQLite rows, and urgent/system/safety originals
+remain Android-owned. Provider workers currently share the server's Unix UID,
+so this is not OS isolation from a compromised or adversarial same-UID process;
+the hard-boundary requirement is documented in
+`docs/phone-notification-curation.md`. The Android shell does not
 choose primary-feed content, run editorial policy, or accept arbitrary external commands. Until a
 successful main-frame page proves the authenticated
 server process and an HTTP-success document, the WebView stays invisible behind
 an opaque native Starting/Error surface with Retry and stock-app escape actions.
+
+Model routing follows the same scope law. Notifications are deterministic and
+model-free. An explicit `Browse Model` wins; otherwise routine browsing
+preserves the deployment's existing `Codex Model`, with Terra only as the
+public fallback when neither is configured. Persistent overrides for global
+browse, YouTube browse, and curation are disabled in policy and code. The
+current computer-use harnesses are screening only: the YouTube feed changes
+between sequential runs, successful sharing does not prove private relevance,
+and the existing mixed-browse receipt does not bind a frozen, blinded review.
+The curator harness is unavailable until it can isolate every production side
+effect. The harnesses retain content-free mechanics, yield, latency, and token
+metrics while raw source text and model output remain in short-lived private
+files. A future browse qualifier must use a new versioned receipt, give both
+routes the same frozen workload, and bind a blinded private-relevance review to
+every pair. The daily private overseer reviews receipts once per service day;
+it does not edit product code or promote a model route while those gates are
+closed.
+
 Android Back first unwinds one React layer, then traverses only reauthenticated
 trusted history; it never exits launcher root.
 
@@ -144,8 +167,11 @@ required-package resolution gate publishing the tree. Before publication, a
 deterministic inventory records every directory, regular-file digest, and
 symlink target. The complete inventory is re-verified and the entire tree is
 made read-only. Unsupported optional host packages such as the embedding
-backend, SWC, and image optimizers remain absent; Android runtime fallbacks own
-those paths.
+backend, SWC, and image optimizers remain absent. The release uses a plain
+CommonJS Next config, so production startup does not need the omitted SWC
+compiler or an on-device download. The installer runs a complete production
+Next preparation against the sealed Android dependency tree before switching;
+Android runtime fallbacks own the remaining optional paths.
 
 The new dependency tree is published under its lock hash without mutating an
 existing tree. If that name contains an invalid tree, the installer builds and
@@ -165,6 +191,37 @@ native rollback manager, then the installer requires an available, non-staged
 rollback with the exact new-to-prior version mapping before switching the
 runtime; Android's enable flag alone is only best-effort. Any failure restores
 the prior release, database, and APK and verifies the restored APK identity.
+
+One narrow recovery exception exists for a failed initial migration that
+reached `health_pending` after installing its APK, restored the complete legacy
+database/token/role snapshot, and then proved Android had already consumed the
+exact native rollback. It is not a force-install or downgrade path. The builder
+must reuse the failed release's exact APK, embedded CA, TLS certificate, and TLS
+key as one verified artifact set; the installer accepts
+`--forward-supersede` only for that exact private v3 transaction shape and exact
+installed APK/TLS identity.
+
+The successor revalidates and hashes the retained v3 journal, rollback plan,
+role snapshot, restored private state, installed APK/TLS identity, complete
+release inventories, and its pinned recovery program before publishing the
+`evogent.phone.forward-rescue.v1` decision journal. Nothing in the new release
+may mutate production before that journal is durable. Once published, the
+transaction is deliberately forward-only: recovery stops the exact prior
+writers, migrates the already-restored private state, prepares the sealed
+runtime, switches mechanics and `current`, starts and health-checks the exact
+successor, commits, and only then retires live recovery intent. It never
+replays a database/token backup, invokes APK rollback, downgrades, or changes
+the installed package.
+
+If the selected successor itself proves unusable before switching
+(`prepare_pending`) or after its runtime health attempt (`health_pending`), one
+later explicit `--forward-supersede` may chain exactly one more runtime
+successor with the same APK/TLS identity. The chained decision rebinds all
+private-state and native evidence, quiesces the failed successor, and resumes
+at preparation. A second chain, a native-identity change, an unbound state
+inode, or any ambiguous journal fails closed. See
+`docs/phone-release-artifact-reuse.md` for the private artifact input contract.
+
 Ordinary releases preserve the app signing certificate: moving the keystore
 outside the checkout or re-encrypting it does not rotate that identity. Signing
 certificate rotation is a separate, intentionally one-way migration. Android

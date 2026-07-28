@@ -7,6 +7,21 @@ const defaultDbPath = path.join(dataDir, 'media-agent.db');
 const outputPath = path.join(dataDir, 'preferences-context.md');
 const MAX_CONTEXT_BYTES = 16 * 1024;
 const CONTEXT_COMPACTION_NOTE = 'Raw preference and attention evidence remains in the private SQLite database; this file is a bounded neutral evidence window.';
+const PHONE_NOTIFICATION_FEED_EVIDENCE_EXCLUSION = `
+  NOT (
+    COALESCE(feed.type, '') = 'notification'
+    AND COALESCE(feed.source, '') = 'phone-notification'
+  )
+`;
+const PHONE_NOTIFICATION_PREFERENCE_EVIDENCE_EXCLUSION = `
+  NOT (
+    (
+      COALESCE(feed.type, '') = 'notification'
+      AND COALESCE(feed.source, '') = 'phone-notification'
+    )
+    OR COALESCE(preferences.source_id, '') LIKE 'phone-notification:%'
+  )
+`;
 
 function getDbPath() {
   return process.env.MEDIA_AGENT_DB_PATH || defaultDbPath;
@@ -56,19 +71,21 @@ function readRecentThreadFeedback(db) {
   if (!tableExists(db, 'thread_feedback')) return [];
   return db.prepare(`
     SELECT
-      thread_id,
-      cycle_id,
-      vote,
-      thread_title,
-      reason,
-      category,
-      probe_reason,
-      probe_uncertainty,
-      source_item_ids,
-      origin_session_id,
-      created_at
+      thread_feedback.thread_id,
+      thread_feedback.cycle_id,
+      thread_feedback.vote,
+      thread_feedback.thread_title,
+      thread_feedback.reason,
+      thread_feedback.category,
+      thread_feedback.probe_reason,
+      thread_feedback.probe_uncertainty,
+      thread_feedback.source_item_ids,
+      thread_feedback.origin_session_id,
+      thread_feedback.created_at
     FROM thread_feedback
-    ORDER BY datetime(created_at) DESC, id DESC
+    LEFT JOIN feed ON feed.id = thread_feedback.feed_item_id
+    WHERE ${PHONE_NOTIFICATION_FEED_EVIDENCE_EXCLUSION}
+    ORDER BY datetime(thread_feedback.created_at) DESC, thread_feedback.id DESC
     LIMIT 12
   `).all().map((row) => ({
     ...row,
@@ -112,6 +129,24 @@ function readBehavioralAttention(db) {
       MAX(sessions.opened_at) AS last_opened_at
     FROM feed_engagement_sessions AS sessions
     LEFT JOIN feed ON feed.id = sessions.feed_item_id
+    WHERE NOT (
+      COALESCE(
+        feed.type,
+        json_extract(
+          CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+          '$.type'
+        ),
+        ''
+      ) = 'notification'
+      AND COALESCE(
+        feed.source,
+        json_extract(
+          CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+          '$.source'
+        ),
+        ''
+      ) = 'phone-notification'
+    )
     GROUP BY sessions.feed_item_id
     ORDER BY datetime(last_opened_at) DESC, sessions.feed_item_id ASC
     LIMIT 12
@@ -131,12 +166,17 @@ function readPreferenceRows(db) {
     };
   }
 
-  const total = Number(
-    db.prepare('SELECT COUNT(*) AS count FROM preferences').get().count,
-  ) || 0;
+  const total = Number(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM preferences
+    LEFT JOIN feed ON feed.id = preferences.feed_item_id
+    WHERE ${PHONE_NOTIFICATION_PREFERENCE_EVIDENCE_EXCLUSION}
+  `).get().count) || 0;
   const byTypeRows = db.prepare(`
     SELECT signal_type, COUNT(*) AS count
     FROM preferences
+    LEFT JOIN feed ON feed.id = preferences.feed_item_id
+    WHERE ${PHONE_NOTIFICATION_PREFERENCE_EVIDENCE_EXCLUSION}
     GROUP BY signal_type
   `).all();
   const statsByType = Object.fromEntries(
@@ -154,6 +194,7 @@ function readPreferenceRows(db) {
       feed.reason AS agent_reason
     FROM preferences
     LEFT JOIN feed ON feed.id = preferences.feed_item_id
+    WHERE ${PHONE_NOTIFICATION_PREFERENCE_EVIDENCE_EXCLUSION}
     ORDER BY datetime(preferences.created_at) DESC, preferences.id DESC
     LIMIT 40
   `).all();

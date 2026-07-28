@@ -82,6 +82,14 @@ function searchCosine(
       vec_distance_cosine(v.embedding, ?) AS distance
     FROM pref_vec v
     JOIN preferences p ON p.id = v.id
+    LEFT JOIN feed f ON f.id = p.feed_item_id
+    WHERE NOT (
+      (
+        COALESCE(f.type, '') = 'notification'
+        AND COALESCE(f.source, '') = 'phone-notification'
+      )
+      OR COALESCE(p.source_id, '') LIKE 'phone-notification:%'
+    )
     ORDER BY distance ASC, p.id ASC
     LIMIT ?
   `).all(embedding, limit) as MatchCandidate[];
@@ -103,6 +111,14 @@ function searchL2(
       vec_distance_L2(v.embedding, ?) AS distance
     FROM pref_vec v
     JOIN preferences p ON p.id = v.id
+    LEFT JOIN feed f ON f.id = p.feed_item_id
+    WHERE NOT (
+      (
+        COALESCE(f.type, '') = 'notification'
+        AND COALESCE(f.source, '') = 'phone-notification'
+      )
+      OR COALESCE(p.source_id, '') LIKE 'phone-notification:%'
+    )
     ORDER BY distance ASC, p.id ASC
     LIMIT ?
   `).all(embedding, limit) as MatchCandidate[];

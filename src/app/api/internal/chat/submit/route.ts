@@ -5,7 +5,6 @@ import {
   sanitizeTopics,
 } from '@/lib/anticipation';
 import { appendChatAuditMessage, notifyChatUpdate } from '@/lib/chat-output';
-import { getMostRecentActivity } from '@/lib/db/activity';
 import {
   markChatMessageDelivered,
   normalizeAgentChatOutput,
@@ -14,12 +13,10 @@ import {
 } from '@/lib/db/chat';
 import { getDb } from '@/lib/db/client';
 import {
-  getPushNotificationEventConfig,
-  readPushNotificationConfig,
-  sendPushNotification,
-  shouldSuppressPushNotification,
-} from '@/lib/push-notify';
-import type { ChatMessage } from '@/types/chat';
+  kickChatReplyPushOutbox,
+  recordChatReplyPushReceipt,
+  scheduleChatReplyPushOutboxMaintenance,
+} from '@/lib/chat-reply-push-outbox';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -91,28 +88,6 @@ function recordAnticipationFromSubmit(rawBody: unknown, sessionId: string, messa
   }
 }
 
-function queueChatReplyPushNotification(message: ChatMessage): void {
-  void (async () => {
-    try {
-      const config = await readPushNotificationConfig();
-      const eventConfig = getPushNotificationEventConfig(config, 'chat_reply');
-      if (!eventConfig) return;
-
-      const latestActivity = getMostRecentActivity();
-      if (shouldSuppressPushNotification(latestActivity, eventConfig)) {
-        return;
-      }
-
-      await sendPushNotification('chat_reply', message.text, {
-        config,
-        title: eventConfig.title,
-      });
-    } catch (error) {
-      console.warn(`[chat-submit] failed to send push notification for chat ${message.id}`, error);
-    }
-  })();
-}
-
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -161,14 +136,30 @@ export async function POST(request: Request) {
       console.warn('[chat-submit] failed to append chat audit line', error);
     }
 
-    try {
-      await notifyChatUpdate([persisted.message]);
-    } catch (error) {
-      console.error('[chat-submit] failed to notify chat websocket server', error);
+    const isAgentChatReply = persisted.message.role === 'agent' && persisted.message.type === 'chat';
+    if (isAgentChatReply) {
+      // The receipt is committed only after the reply row is durable and the audit append
+      // has been attempted. It contains only the chat-row id; native network delivery starts
+      // immediately but remains detached from the submit response. A receipt-storage fault
+      // must not make the already-durable chat look failed and provoke a duplicate model
+      // submission; the primary reply and WebSocket fanout remain successful.
+      try {
+        const pushReceipt = await recordChatReplyPushReceipt(persisted.message.id);
+        if (pushReceipt.state === 'pending') {
+          kickChatReplyPushOutbox();
+        } else {
+          scheduleChatReplyPushOutboxMaintenance();
+        }
+      } catch {
+        console.error('[chat-submit] push receipt persistence failed after durable chat commit');
+      }
     }
 
-    if (persisted.message.role === 'agent' && persisted.message.type === 'chat') {
-      queueChatReplyPushNotification(persisted.message);
+    void notifyChatUpdate([persisted.message]).catch((error) => {
+      console.error('[chat-submit] failed to notify chat websocket server', error);
+    });
+
+    if (isAgentChatReply) {
       recordAnticipationFromSubmit(body, sessionId, persisted.message.inReplyTo);
     }
   }

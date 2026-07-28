@@ -12,6 +12,9 @@ const { extractChatProgressFromEvent } = require('./src/lib/chat-progress.js');
 const { buildSessionResetHistoryBlock, getRecentChatMessages } = require('./src/lib/chat-session-rehydrate.js');
 const { extractStreamingChatTextFromEvent, summarizeStreamingChatEvent } = require('./src/lib/chat-streaming.js');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
+const {
+  scrubLegacyPhoneNotificationRuntimeArtifacts,
+} = require('./lib/phone-notification-chat-artifact-cleanup');
 const { readConfigUsageLevel } = require('./lib/cache-refresh-config');
 const { persistFailedCacheRefreshRun } = require('./lib/cache-refresh-task-result');
 const { isCurationStatusMissingPidStale } = require('./lib/curation-runtime');
@@ -1437,6 +1440,12 @@ const BrainOrchestrator = createBrainOrchestrator({
   writeStoredChatProviderSessionId,
 });
 
+// Clean shared durable chat history before this worker can load it and later
+// write an in-memory legacy entry back to disk.
+scrubLegacyPhoneNotificationRuntimeArtifacts({
+  db: getChatStatusDb(),
+  dataDir,
+});
 const backgroundOrchestrator = new BrainOrchestrator('evogent-background-worker');
 
 async function maybeApplyPendingWorkerRestart(trigger = 'status') {

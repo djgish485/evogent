@@ -102,6 +102,45 @@ export interface PhoneNotificationIngestResult {
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const MAX_POST_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const PHONE_NOTIFICATION_SETTINGS_LOCK_KEY = Symbol.for(
+  'evogent.phone-notification-settings-lock.v1',
+);
+
+type PhoneNotificationSettingsLockState = {
+  tail: Promise<void>;
+};
+
+function getPhoneNotificationSettingsLockState(): PhoneNotificationSettingsLockState {
+  const processGlobal = globalThis as Record<PropertyKey, unknown>;
+  const existing = processGlobal[PHONE_NOTIFICATION_SETTINGS_LOCK_KEY];
+  if (existing && typeof existing === 'object' && 'tail' in existing) {
+    return existing as PhoneNotificationSettingsLockState;
+  }
+
+  const state: PhoneNotificationSettingsLockState = {
+    tail: Promise.resolve(),
+  };
+  processGlobal[PHONE_NOTIFICATION_SETTINGS_LOCK_KEY] = state;
+  return state;
+}
+
+async function withPhoneNotificationSettingsLock<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const state = getPhoneNotificationSettingsLockState();
+  let release!: () => void;
+  const predecessor = state.tail;
+  state.tail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await predecessor;
+
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
+}
 
 const CONTENT_SOURCE_BY_PACKAGE: Readonly<Record<string, string>> = Object.freeze({
   'com.google.android.gm': 'gmail',
@@ -117,17 +156,26 @@ const CONTENT_SOURCE_BY_PACKAGE: Readonly<Record<string, string>> = Object.freez
   'com.nytimes.android': 'nytimes',
 });
 
-const PROTECTED_CATEGORIES = new Set([
+// Android's Notification.CATEGORY_* values are wire literals, not their Java
+// constant names: for example SYSTEM is "sys", ERROR is "err", and MESSAGE is
+// "msg". Replacement is intentionally allowlisted. A missing, vendor-defined,
+// newly added, communication, authentication, or safety category remains
+// Android-owned even if an older native client reports nativeCanSuppress=true.
+const REPLACEMENT_ELIGIBLE_CATEGORIES = new Set([
+  'promo',
+  'recommendation',
+  'social',
+]);
+
+const CRITICAL_CATEGORIES = new Set([
   'alarm',
   'call',
+  'car_emergency',
+  'car_warning',
   'emergency',
-  'navigation',
-  'service',
-  'transport',
-  'system',
+  'err',
   'error',
-  'location_sharing',
-  'workout',
+  'navigation',
 ]);
 
 const CRITICAL_SYSTEM_PACKAGES = new Set([
@@ -303,11 +351,28 @@ async function persistPhoneNotificationSettings(config: PhoneNotificationSetting
       0o600,
     );
     await handle.writeFile(`${JSON.stringify(config, null, 2)}\n`, 'utf8');
-    await handle.sync();
+    fs.fsyncSync(handle.fd);
     await handle.close();
     handle = null;
     await fs.promises.rename(temporaryPath, filePath);
     await fs.promises.chmod(filePath, 0o600);
+
+    // A successful revocation response is an authority boundary: prove both
+    // the renamed inode (including its final mode) and directory entry reached
+    // stable storage before returning it to the caller.
+    const noFollow = fs.constants.O_NOFOLLOW ?? 0;
+    const finalDescriptor = fs.openSync(filePath, fs.constants.O_RDONLY | noFollow);
+    try {
+      fs.fsyncSync(finalDescriptor);
+    } finally {
+      fs.closeSync(finalDescriptor);
+    }
+    const directoryDescriptor = fs.openSync(directory, fs.constants.O_RDONLY);
+    try {
+      fs.fsyncSync(directoryDescriptor);
+    } finally {
+      fs.closeSync(directoryDescriptor);
+    }
   } catch (error) {
     if (handle) await handle.close().catch(() => undefined);
     await fs.promises.unlink(temporaryPath).catch(() => undefined);
@@ -319,71 +384,76 @@ export async function updatePhoneNotificationSettings(
   patch: unknown,
 ): Promise<PhoneNotificationSettingsState> {
   if (!isRecord(patch)) throw new Error('Invalid notification settings payload');
-  const current = await readPhoneNotificationSettings();
-  let mode = current.config.mode;
-  let lockScreenPreview = current.config.lockScreenPreview;
-  let preservedPackages = current.config.preservedPackages;
-  let replacementPackages = current.config.replacementPackages;
+  return withPhoneNotificationSettingsLock(async () => {
+    // Reading and validating authority additions must be in the same critical
+    // section as the final durable rename. Otherwise an unrelated concurrent
+    // PATCH can merge from stale bytes and resurrect a completed revocation.
+    const current = await readPhoneNotificationSettings();
+    let mode = current.config.mode;
+    let lockScreenPreview = current.config.lockScreenPreview;
+    let preservedPackages = current.config.preservedPackages;
+    let replacementPackages = current.config.replacementPackages;
 
-  if ('mode' in patch) {
-    if (patch.mode !== 'observe' && patch.mode !== 'curated' && patch.mode !== 'paused') {
-      throw new Error('mode must be observe, curated, or paused');
-    }
-    if (
-      patch.mode === 'curated'
-      && current.config.mode !== 'curated'
-      && patch.confirmCurated !== true
-    ) {
-      throw new Error('Enabling curated mode requires explicit confirmation');
-    }
-    mode = patch.mode;
-  }
-  if ('lockScreenPreview' in patch) {
-    if (patch.lockScreenPreview !== 'private' && patch.lockScreenPreview !== 'detailed') {
-      throw new Error('lockScreenPreview must be private or detailed');
-    }
-    lockScreenPreview = patch.lockScreenPreview;
-  }
-  if ('preservedPackages' in patch) {
-    if (!Array.isArray(patch.preservedPackages) || patch.preservedPackages.length > 256) {
-      throw new Error('preservedPackages must be an array with at most 256 entries');
-    }
-    preservedPackages = Array.from(new Set(patch.preservedPackages.map((entry) => {
-      if (typeof entry !== 'string' || !isPackageName(entry.trim())) {
-        throw new Error('preservedPackages contains an invalid package name');
+    if ('mode' in patch) {
+      if (patch.mode !== 'observe' && patch.mode !== 'curated' && patch.mode !== 'paused') {
+        throw new Error('mode must be observe, curated, or paused');
       }
-      return entry.trim();
-    }))).sort();
-  }
-  if ('replacementPackages' in patch) {
-    if (!Array.isArray(patch.replacementPackages) || patch.replacementPackages.length > 256) {
-      throw new Error('replacementPackages must be an array with at most 256 entries');
-    }
-    const nextReplacementPackages = Array.from(new Set(patch.replacementPackages.map((entry) => {
-      if (typeof entry !== 'string' || !isPackageName(entry.trim())) {
-        throw new Error('replacementPackages contains an invalid package name');
+      if (
+        patch.mode === 'curated'
+        && current.config.mode !== 'curated'
+        && patch.confirmCurated !== true
+      ) {
+        throw new Error('Enabling curated mode requires explicit confirmation');
       }
-      return entry.trim();
-    }))).sort();
-    const existing = new Set(replacementPackages);
-    const addsReplacementAuthority = nextReplacementPackages.some((entry) => !existing.has(entry));
-    if (addsReplacementAuthority && patch.confirmBestEffortReplacement !== true) {
-      throw new Error(
-        'Allowing Android-original replacement requires explicit best-effort confirmation',
-      );
+      mode = patch.mode;
     }
-    replacementPackages = nextReplacementPackages;
-  }
+    if ('lockScreenPreview' in patch) {
+      if (patch.lockScreenPreview !== 'private' && patch.lockScreenPreview !== 'detailed') {
+        throw new Error('lockScreenPreview must be private or detailed');
+      }
+      lockScreenPreview = patch.lockScreenPreview;
+    }
+    if ('preservedPackages' in patch) {
+      if (!Array.isArray(patch.preservedPackages) || patch.preservedPackages.length > 256) {
+        throw new Error('preservedPackages must be an array with at most 256 entries');
+      }
+      preservedPackages = Array.from(new Set(patch.preservedPackages.map((entry) => {
+        if (typeof entry !== 'string' || !isPackageName(entry.trim())) {
+          throw new Error('preservedPackages contains an invalid package name');
+        }
+        return entry.trim();
+      }))).sort();
+    }
+    if ('replacementPackages' in patch) {
+      if (!Array.isArray(patch.replacementPackages) || patch.replacementPackages.length > 256) {
+        throw new Error('replacementPackages must be an array with at most 256 entries');
+      }
+      const nextReplacementPackages = Array.from(new Set(patch.replacementPackages.map((entry) => {
+        if (typeof entry !== 'string' || !isPackageName(entry.trim())) {
+          throw new Error('replacementPackages contains an invalid package name');
+        }
+        return entry.trim();
+      }))).sort();
+      const existing = new Set(replacementPackages);
+      const addsReplacementAuthority = nextReplacementPackages.some((entry) => !existing.has(entry));
+      if (addsReplacementAuthority && patch.confirmBestEffortReplacement !== true) {
+        throw new Error(
+          'Allowing Android-original replacement requires explicit best-effort confirmation',
+        );
+      }
+      replacementPackages = nextReplacementPackages;
+    }
 
-  const config: PhoneNotificationSettings = {
-    schemaVersion: 1,
-    mode,
-    lockScreenPreview,
-    preservedPackages,
-    replacementPackages,
-  };
-  await persistPhoneNotificationSettings(config);
-  return { config, state: 'loaded' };
+    const config: PhoneNotificationSettings = {
+      schemaVersion: 1,
+      mode,
+      lockScreenPreview,
+      preservedPackages,
+      replacementPackages,
+    };
+    await persistPhoneNotificationSettings(config);
+    return { config, state: 'loaded' };
+  });
 }
 
 export function parsePhoneNotificationIngestInput(
@@ -469,8 +539,10 @@ export function classifyPhoneNotification(
   const category = input.category ?? '';
   let protectionReason: string | null = null;
   if (input.packageName === 'net.dangish.evogent') protectionReason = 'self';
+  else if (input.nativeProtectionReason) protectionReason = 'native_protected';
   else if (input.fullScreen) protectionReason = 'full_screen';
   else if (input.groupSummary) protectionReason = 'group_summary';
+  else if (input.conversation) protectionReason = 'conversation';
   else if (input.ongoing || (input.flags & 0x00000002) !== 0) protectionReason = 'ongoing';
   else if ((input.flags & 0x00000040) !== 0) protectionReason = 'foreground_service';
   else if ((input.flags & 0x00000004) !== 0) protectionReason = 'insistent';
@@ -478,7 +550,9 @@ export function classifyPhoneNotification(
   else if (input.importance === -1000) protectionReason = 'ranking_unavailable';
   else if (input.importance >= 4) protectionReason = 'high_importance';
   else if (CRITICAL_SYSTEM_PACKAGES.has(input.packageName)) protectionReason = 'system_safety';
-  else if (PROTECTED_CATEGORIES.has(category)) protectionReason = 'protected_category';
+  else if (!REPLACEMENT_ELIGIBLE_CATEGORIES.has(category)) {
+    protectionReason = category ? 'protected_category' : 'category_unavailable';
+  }
 
   const contentRedacted = input.contentRedacted
     || input.visibility === -1
@@ -489,10 +563,7 @@ export function classifyPhoneNotification(
   let priority: ServerClassification['priority'] = input.nativePriority;
   if (
     input.fullScreen
-    || category === 'call'
-    || category === 'alarm'
-    || category === 'emergency'
-    || category === 'error'
+    || CRITICAL_CATEGORIES.has(category)
     || protectionReason === 'system_safety'
   ) {
     priority = 'critical';
@@ -639,9 +710,10 @@ function recordContentSourceDueSignal(
   const source = CONTENT_SOURCE_BY_PACKAGE[input.packageName];
   if (
     !source
+    || input.historical
     || classification.contentRedacted
     || input.conversation
-    || input.category === 'message'
+    || input.category === 'msg'
     || input.category === 'call'
   ) {
     return;
@@ -743,7 +815,10 @@ export async function ingestAndNotifyPhoneNotification(
 ): Promise<PhoneNotificationIngestResult> {
   const result = await ingestPhoneNotification(input);
   if (result.feedItem) {
-    await notifyFeedUpdate([result.feedItem]);
+    // The native listener has one short end-to-end deadline because the response is its
+    // durable cancellation/preservation receipt. WebSocket publication is best-effort UI
+    // freshness and must never consume that deadline; clients reconcile from SQLite.
+    void notifyFeedUpdate([result.feedItem]);
   }
   return result;
 }

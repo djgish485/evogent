@@ -22,7 +22,11 @@ from typing import Any
 SOURCE_DUE_SIGNAL_MARKER = b"EVOGENT_SOURCE_DUE_V1\n"
 SOURCE_DUE_SIGNAL_DIRECTORY = "source-due-signals"
 SOURCE_DUE_SIGNAL_MAX_FUTURE_SKEW_NS = 5 * 60 * 1_000_000_000
+SOURCE_DUE_SIGNAL_PENDING_MODE = 0o400
 SOURCE_NAME = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
+SAFE_FALLBACK_CADENCE_HOURS = 6.0
+MIN_CADENCE_HOURS = 0.25
+MAX_CADENCE_HOURS = 168.0
 
 
 def _read_record(path: Path) -> dict[str, Any]:
@@ -41,30 +45,41 @@ def _cadence_hours(
 ) -> tuple[float, str]:
     """Return a validated cadence and where the value came from.
 
-    The private live file overrides only entries it actually contains.  Missing
-    live entries inherit the public default instead of silently becoming zero.
-    Invalid values fail open to due-now, rather than crashing the scheduler or
-    suppressing a source indefinitely.
+    The private live file overrides only entries it actually contains. Missing
+    live entries inherit the public default. Invalid live values fall back to a
+    valid public default, and a broken/missing default gets one conservative
+    nonzero interval. Configuration damage therefore never becomes a repeated
+    all-source sweep or suppresses a source indefinitely.
     """
 
     live = _read_record(live_path)
     defaults = _read_record(default_path)
-    if source in live:
-        raw = live.get(source)
-        origin = "live"
-    else:
-        raw = defaults.get(source)
-        origin = "default" if source in defaults else "missing"
 
-    value = raw.get("cadenceHours") if isinstance(raw, dict) else 0
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(float(value))
-        or float(value) < 0
-    ):
-        return 0.0, f"invalid_{origin}"
-    return float(value), origin
+    def valid_hours(raw: object) -> float | None:
+        value = raw.get("cadenceHours") if isinstance(raw, dict) else None
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) < MIN_CADENCE_HOURS
+            or float(value) > MAX_CADENCE_HOURS
+        ):
+            return None
+        return float(value)
+
+    if source in live:
+        live_hours = valid_hours(live.get(source))
+        if live_hours is not None:
+            return live_hours, "live"
+        default_hours = valid_hours(defaults.get(source))
+        if default_hours is not None:
+            return default_hours, "invalid_live_default"
+        return SAFE_FALLBACK_CADENCE_HOURS, "invalid_live_safe_fallback"
+
+    default_hours = valid_hours(defaults.get(source))
+    if default_hours is not None:
+        return default_hours, "default"
+    return SAFE_FALLBACK_CADENCE_HOURS, "safe_fallback"
 
 
 def _source_signal_state(
@@ -130,9 +145,10 @@ def _source_signal_state(
             dir_fd=parent_descriptor,
         )
         metadata = os.fstat(signal_descriptor)
+        signal_mode = stat.S_IMODE(metadata.st_mode)
         if (
             not stat.S_ISREG(metadata.st_mode)
-            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or signal_mode not in (0o600, SOURCE_DUE_SIGNAL_PENDING_MODE)
             or metadata.st_uid != owner_uid
             or metadata.st_nlink != 1
             or metadata.st_size != len(SOURCE_DUE_SIGNAL_MARKER)
@@ -164,11 +180,21 @@ def _source_signal_state(
             os.close(parent_descriptor)
     if marker != SOURCE_DUE_SIGNAL_MARKER:
         return False, "signal_invalid"
-    if metadata.st_mtime_ns > now_ns + SOURCE_DUE_SIGNAL_MAX_FUTURE_SKEW_NS:
+    publication_pending = signal_mode == SOURCE_DUE_SIGNAL_PENDING_MODE
+    generation_ns = metadata.st_ctime_ns if publication_pending else metadata.st_mtime_ns
+    if publication_pending:
+        # The writer publishes a mode-0400 marker before its post-rename mtime
+        # stamp. If it crashes in that narrow window, rename-updated ctime is
+        # the generation. It remains due until a browse that started after that
+        # publication succeeds; normal mode-0600 acknowledgement is unchanged.
+        if acknowledged_mtime_ns is None or generation_ns > acknowledged_mtime_ns:
+            return True, "signal_publication_pending"
+        return False, "signal_obsolete"
+    if generation_ns > now_ns + SOURCE_DUE_SIGNAL_MAX_FUTURE_SKEW_NS:
         return False, "signal_future_skew"
     if acknowledged_mtime_ns is None:
         return True, "signal_unacknowledged"
-    if metadata.st_mtime_ns > acknowledged_mtime_ns:
+    if generation_ns > acknowledged_mtime_ns:
         return True, "source_signal"
     return False, "signal_obsolete"
 
@@ -273,10 +299,6 @@ def cadence_decision(
         live_path=live_path,
         default_path=default_path,
     )
-    if origin.startswith("invalid_"):
-        return {"due": True, "hours": 0, "reason": origin, "ageSeconds": None}
-    if hours == 0:
-        return {"due": True, "hours": 0, "reason": f"{origin}_zero", "ageSeconds": None}
     try:
         stamp_metadata = stamp_path.stat()
         stamp_seconds = stamp_metadata.st_mtime

@@ -14,6 +14,7 @@ const {
   SESSION_DOMAIN,
   hmacHex,
 } = require('../lib/phone-loopback-auth.js');
+const Database = require('better-sqlite3');
 
 const repoDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const testToken = 'integration-control-token-with-enough-entropy';
@@ -313,6 +314,55 @@ async function main() {
     assert.equal(termuxClient.code, 0, termuxClient.stderr);
     assert.ok(JSON.parse(termuxClient.stdout).running);
 
+    const privateCanary = 'PRIVATE_PHONE_NOTIFICATION_RUNTIME_CANARY_6217';
+    const database = new Database(path.join(dataDir, 'media-agent.db'));
+    database.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, published_at, created_at
+      ) VALUES
+        (
+          'phone-runtime-private',
+          'notification',
+          'phone-notification',
+          'phone-notification:runtime-private',
+          ?,
+          ?,
+          '2026-07-28T12:01:00.000Z',
+          '2026-07-28T12:01:00.000Z'
+        ),
+        (
+          'phone-runtime-safe',
+          'article',
+          'integration-test',
+          'integration-test:safe',
+          'Safe runtime evidence',
+          'Safe runtime evidence body',
+          '2026-07-28T12:00:00.000Z',
+          '2026-07-28T12:00:00.000Z'
+        )
+    `).run(`Private title ${privateCanary}`, `Private body ${privateCanary}`);
+    database.close();
+
+    // This is the exact caller used by on-phone runtime agents. The ordinary
+    // feed URL must automatically select the supported agent-evidence view from
+    // its direct application session; no voluntary query flag is involved.
+    // This tests API routing, not isolation from same-UID filesystem access.
+    const runtimeFeed = await runEvoCurl({
+      port,
+      dataDir,
+      args: [
+        '--fail',
+        '--silent',
+        '--show-error',
+        `${baseUrl}/api/feed?limit=20`,
+      ],
+    });
+    assert.equal(runtimeFeed.code, 0, runtimeFeed.stderr);
+    assert.doesNotMatch(runtimeFeed.stdout, new RegExp(privateCanary));
+    assert.ok(
+      JSON.parse(runtimeFeed.stdout).items.some((item) => item.id === 'phone-runtime-safe'),
+    );
+
     const direct = await authenticate(baseUrl, 'direct');
     const directHeader = {
       Authorization: `EvogentSession ${direct.session.sessionToken}`,
@@ -336,6 +386,14 @@ async function main() {
     const cookie = (web.setCookie || '').split(';', 1)[0];
     assert.equal((await fetch(`${baseUrl}/`, { headers: { Cookie: cookie } })).status, 401);
     assert.equal((await secureGet(`${secureBaseUrl}/`, { Cookie: cookie })).status, 200);
+    const webFeedResponse = await secureGet(
+      `${secureBaseUrl}/api/feed?limit=20`,
+      { Cookie: cookie },
+    );
+    assert.equal(webFeedResponse.status, 200);
+    const webFeed = await webFeedResponse.json();
+    assert.match(JSON.stringify(webFeed), new RegExp(privateCanary));
+    assert.ok(webFeed.items.some((item) => item.id === 'phone-runtime-private'));
     assert.equal(
       (await securePost(`${secureBaseUrl}/api/internal/feed-notify`, { items: [] }, { Cookie: cookie })).status,
       200

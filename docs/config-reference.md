@@ -36,12 +36,13 @@ cadence. The sole Termux scheduler combines predicted app opens, source yield,
 notification signals, and this broad usage preference. Do not treat the example
 intervals from VM-era docs as phone product laws.
 
-The live source schedule is private `data/source-cadence.json`. Reflection may
-tune each source independently from recent yield, health, attention, battery,
-provider cost, and notification urgency, then writes the file atomically with
-mode `0600`. Public `data/source-cadence.default.json` is bootstrap-only and
-contains no person's routine. Scheduler mechanics read the private values; they
-do not invent source priorities.
+The live source schedule is private `data/source-cadence.json`. The daily
+overseer may tune each source independently from recent yield, health,
+attention, battery, provider cost, and notification urgency, then writes the
+file atomically with mode `0600`. Public
+`data/source-cadence.default.json` is bootstrap-only and contains no person's
+routine. Scheduler mechanics read the private values; they do not invent
+source priorities.
 
 ## Codex Reasoning Effort
 
@@ -80,9 +81,14 @@ high|xhigh|max|ultra
 ```
 
 These are private deployment choices, not setup-time public defaults. Use the
-lowest route that passes the representative workload. Persistent cheaper
-overrides live in mode-`0600` `data/model-routing.json` and are accepted only
-with recent paired benchmark proof; see
+lowest route that passes the representative workload. An explicit
+`Browse Model` wins; otherwise browse preserves the deployment's existing
+`Codex Model`. Terra/medium is only the public fallback when neither model
+heading is configured. Persistent overrides for global browse, YouTube browse,
+and curation are currently disabled: the available computer-use receipts do not
+bind a frozen, blinded private-relevance review, and the curator harness cannot
+yet isolate every production side effect. One-run environment overrides remain
+available for supervised screening; see
 [`phone-efficiency-and-model-routing.md`](phone-efficiency-and-model-routing.md).
 The daily overseer defaults to one bounded Sol/high run. Max or Ultra is an
 explicit operator setting only and belongs on a measured, quality-first review

@@ -1,7 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Transactionally install one host-built Evogent phone release.
 #
-# Usage: install-release.sh <evogent-phone-*.tar.gz> <archive-sha256>
+# Usage:
+#   install-release.sh <evogent-phone-*.tar.gz> <archive-sha256>
+#   install-release.sh --recover <transaction-journal>
 #
 # One atomic `current` link selects both the web runtime and phone mechanics.
 # Private data, Android-built node_modules, and phone control state live outside
@@ -21,14 +23,27 @@ ROOT="${EVOGENT_RELEASE_ROOT:-$DEFAULT_RELEASE_ROOT}"
   exit 65
 }
 
+usage() {
+  echo "usage: install-release.sh [--forward-supersede] <release-archive> <archive-sha256> | --recover <transaction-journal>" >&2
+  exit 65
+}
+
+FORWARD_SUPERSEDE=0
+if [ "${1:-}" = "--forward-supersede" ]; then
+  FORWARD_SUPERSEDE=1
+  shift
+fi
+
 RECOVERY_JOURNAL_ARG=""
 if [ "${1:-}" = "--recover" ]; then
-  RECOVERY_JOURNAL_ARG="${2:?transaction journal required}"
+  [ "$FORWARD_SUPERSEDE" = 0 ] && [ "$#" = 2 ] || usage
+  RECOVERY_JOURNAL_ARG="$2"
   ARCHIVE=""
   EXPECTED_ARCHIVE_SHA256=""
 else
-  ARCHIVE="${1:?release archive required}"
-  EXPECTED_ARCHIVE_SHA256="${2:?expected archive sha256 required}"
+  [ "$#" = 2 ] && [[ "$1" != -* ]] || usage
+  ARCHIVE="$1"
+  EXPECTED_ARCHIVE_SHA256="$2"
   [[ "$EXPECTED_ARCHIVE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || {
     echo "release install: expected archive SHA-256 is invalid" >&2
     exit 65
@@ -1303,7 +1318,8 @@ rish_command() {
 allocate_shell_staging_file() {
   local purpose="$1" operation="" path="" nonce="" attempt probe
   case "$purpose" in
-    android-role-query|control-token|installed-apk|package-version|rollback-dump) ;;
+    android-role-query|control-token|installed-apk|package-version|\
+    rollback-dump|package-idle) ;;
     *) return 1 ;;
   esac
   for attempt in $(seq 1 3); do
@@ -1331,7 +1347,7 @@ allocate_shell_staging_file() {
 
 remove_shell_staging_file() {
   local path="$1" operation probe
-  [[ "$path" =~ ^/data/local/tmp/evogent-(android-role-query|control-token|installed-apk|package-version|rollback-dump)\.[0-9a-f]{32}/payload$ ]] \
+  [[ "$path" =~ ^/data/local/tmp/evogent-(android-role-query|control-token|installed-apk|package-version|rollback-dump|package-idle)\.[0-9a-f]{32}/payload$ ]] \
     || return 1
   operation="${path%/payload}"
   rish_command "rm -rf '$operation'" >/dev/null 2>&1 || true
@@ -1554,10 +1570,27 @@ install_apk() {
 }
 
 wait_for_package_manager_idle() {
+  local shell_path="" private_result="$STAGE/package-manager-idle.txt"
+  shell_path="$(allocate_shell_staging_file package-idle 2>/dev/null || true)"
+  [ -n "$shell_path" ] || return 1
   rish_command \
-    "cmd package wait-for-handler --timeout 120000 && cmd package wait-for-background-handler --timeout 120000" \
+    "if cmd package wait-for-handler --timeout 120000 && cmd package wait-for-background-handler --timeout 120000; then printf 'EVOGENT_PACKAGE_MANAGER_IDLE_V1\\n' > '$shell_path' && chmod 0644 '$shell_path'; fi" \
     300 \
-    >/dev/null 2>&1
+    >/dev/null 2>&1 || true
+  if ! copy_published_shell_file "$shell_path" "$private_result" 3000; then
+    remove_shell_staging_file "$shell_path" >/dev/null 2>&1 || true
+    rm -f -- "$private_result"
+    return 1
+  fi
+  remove_shell_staging_file "$shell_path" >/dev/null 2>&1 || {
+    rm -f -- "$private_result"
+    return 1
+  }
+  [ "$(cat "$private_result")" = EVOGENT_PACKAGE_MANAGER_IDLE_V1 ] || {
+    rm -f -- "$private_result"
+    return 1
+  }
+  rm -f -- "$private_result"
 }
 
 backup_installed_apk() {
@@ -3975,7 +4008,7 @@ validate_transaction_journal() {
   python3 - "$1" "$ROOT" "$RELEASES" "$BACKUPS" "$MIGRATIONS" \
     "$CONTROL_TOKEN" "$HOME/phone-tools/.cycle.lock" "$PHONE_STATE/.cycle.lock" \
     "$TRANSACTION_DIR/initial-cycle.lock" \
-    "$TRANSACTION_DIR/recovery-cycle.lock" <<'PY'
+    "$TRANSACTION_DIR/recovery-cycle.lock" <<'PY' || return 1
 import json
 import hashlib
 import os
@@ -7696,12 +7729,6 @@ recover_interrupted_transaction() {
       ROLLBACK_FAILED=1
       return 70
     fi
-    if [ "$ANDROID_ROLE_RESTORE_REQUIRED" = 1 ] \
-        && ! restore_android_roles; then
-      say "CRITICAL: durable rollback recovery could not restore Android roles"
-      ROLLBACK_FAILED=1
-      return 70
-    fi
     QUIESCED=1
   else
     rollback_release || true
@@ -7794,6 +7821,20 @@ fi
 acquire_install_lock_and_recover_prior_transactions() {
   acquire_lock_dir "$INSTALL_LOCK" release-install
   INSTALL_LOCK_HELD=1
+  if [ "$FORWARD_SUPERSEDE" = 1 ]; then
+    [ -f "$TRANSACTION_JOURNAL" ] && [ ! -L "$TRANSACTION_JOURNAL" ] \
+      && [ "$(stat -c '%a' "$TRANSACTION_JOURNAL")" = 600 ] \
+      && [ "$(stat -c '%u' "$TRANSACTION_JOURNAL")" = "$(id -u)" ] \
+      && [ "$(stat -c '%h' "$TRANSACTION_JOURNAL")" = 1 ] \
+      && [ -f "$TRANSACTION_RECOVERER" ] && [ ! -L "$TRANSACTION_RECOVERER" ] \
+      && [ "$(stat -c '%a' "$TRANSACTION_RECOVERER")" = 700 ] \
+      && [ "$(stat -c '%u' "$TRANSACTION_RECOVERER")" = "$(id -u)" ] \
+      && [ "$(stat -c '%h' "$TRANSACTION_RECOVERER")" = 1 ] || {
+      say "forward supersede requires one exact private interrupted transaction"
+      return 70
+    }
+    return 0
+  fi
   while [ -e "$TRANSACTION_JOURNAL" ] || [ -L "$TRANSACTION_JOURNAL" ]; do
     [ -f "$TRANSACTION_RECOVERER" ] && [ ! -L "$TRANSACTION_RECOVERER" ] \
       && [ "$(stat -c '%a' "$TRANSACTION_RECOVERER")" = 700 ] || {
@@ -7812,10 +7853,12 @@ acquire_install_lock_and_recover_prior_transactions() {
 }
 
 acquire_install_lock_and_recover_prior_transactions
-prune_orphan_migrations || {
-  say "orphaned migration state could not be pruned safely"
-  exit 70
-}
+if [ "$FORWARD_SUPERSEDE" = 0 ]; then
+  prune_orphan_migrations || {
+    say "orphaned migration state could not be pruned safely"
+    exit 70
+  }
+fi
 
 ACTUAL_ARCHIVE_SHA256="$(sha256_file "$ARCHIVE")"
 [ "${ACTUAL_ARCHIVE_SHA256,,}" = "${EXPECTED_ARCHIVE_SHA256,,}" ] || {
@@ -7909,8 +7952,9 @@ prepare_android_dependency_tree() {
 
   # Android packages do not publish a compatible better-sqlite3 prebuild. Install the exact
   # public lock without lifecycle scripts, then compile that one native addon against the
-  # Termux toolchain. Unsupported optional packages (the host embedding model, SWC, image
-  # optimizers) remain absent; the runtime has explicit Android fallbacks for them.
+  # Termux toolchain. Host-only optional packages (the embedding model, SWC, and image
+  # optimizers) remain absent. The production Next config is plain CommonJS, so startup
+  # never needs the omitted SWC compiler; runtime features have explicit Android fallbacks.
   (
     cd "$DEPENDENCY_BUILD"
     npm ci --ignore-scripts --omit=dev --omit=optional --no-audit --no-fund
@@ -7947,6 +7991,39 @@ prepare_android_dependency_tree() {
     return 70
   }
   say "built and verified versioned Android dependency tree"
+}
+
+verify_release_runtime_prepared() {
+  smoke_android_dependency_tree "$DEPENDENCIES/$EXPECTED_PACKAGE_LOCK" \
+    || return 1
+  (
+    cd "$NEW_RELEASE/runtime"
+    npm ls --omit=dev --depth=0 >/dev/null
+    timeout -k 5 120 env NODE_ENV=production node <<'NODE'
+for (const name of ['next', 'better-sqlite3', 'ws', 'dotenv']) {
+  require.resolve(name);
+}
+const next = require('next');
+const app = next({
+  dev: false,
+  dir: process.cwd(),
+  hostname: '127.0.0.1',
+  port: 3001,
+});
+async function prepareAndClose() {
+  try {
+    await app.prepare();
+  } finally {
+    await app.close();
+  }
+}
+prepareAndClose().catch((error) => {
+  console.error('release install: production Next runtime preparation failed');
+  console.error(error);
+  process.exitCode = 1;
+});
+NODE
+  )
 }
 
 validate_release_phone_tools_namespace() {
@@ -8121,10 +8198,12 @@ android_role_state_helper_safe || {
 }
 # This runs while the exclusive install lock is held and before a new dependency
 # build begins. It bounds artifacts left by SIGKILL, reboot, or a failed candidate.
-python3 "$DEPENDENCY_STATE_HELPER" prune "$ROOT" || {
-  say "stale dependency/release state could not be pruned safely"
-  exit 70
-}
+if [ "$FORWARD_SUPERSEDE" = 0 ]; then
+  python3 "$DEPENDENCY_STATE_HELPER" prune "$ROOT" || {
+    say "stale dependency/release state could not be pruned safely"
+    exit 70
+  }
+fi
 
 NEW_RELEASE="$RELEASES/$RELEASE_ID"
 if [ -e "$NEW_RELEASE" ]; then
@@ -8285,6 +8364,25 @@ INSTALLED_APK_SIGNER="$(apk_signer_sha256 "$CURRENT_APK_PROBE" 2>/dev/null || tr
 PREVIOUS_APK_CODE="$INSTALLED_APK_CODE"
 PREVIOUS_APK_SIGNER="$INSTALLED_APK_SIGNER"
 CURRENT_APK_SHA256="$(sha256_file "$CURRENT_APK_PROBE")"
+if [ "$FORWARD_SUPERSEDE" = 1 ]; then
+  [ "$INSTALLED_APK_CODE" = "$EXPECTED_APK_CODE" ] \
+    && [ "$INSTALLED_APK_SIGNER" = "$EXPECTED_APK_SIGNER" ] \
+    && [ "$CURRENT_APK_SHA256" = "$EXPECTED_APK_SHA256" ] || {
+    say "forward supersede cannot change the retained installed APK"
+    exit 70
+  }
+  FORWARD_RESCUER="$NEW_RELEASE/device/forward-rescue.sh"
+  [ -f "$FORWARD_RESCUER" ] && [ ! -L "$FORWARD_RESCUER" ] \
+    && [ "$(stat -c '%u' "$FORWARD_RESCUER")" = "$(id -u)" ] \
+    && [ "$(stat -c '%h' "$FORWARD_RESCUER")" = 1 ] || {
+    say "release forward-rescue program is missing or unsafe"
+    exit 65
+  }
+  rm -rf -- "$STAGE"
+  STAGE=""
+  exec python3 "$FORWARD_RESCUER" \
+    --activate "$NEW_RELEASE" "$ROOT" "$TRANSACTION_JOURNAL"
+fi
 if [ "$CURRENT_APK_SHA256" != "$EXPECTED_APK_SHA256" ]; then
   APK_CHANGED=1
   [[ "$INSTALLED_APK_CODE" =~ ^[0-9]+$ ]] \
@@ -8628,15 +8726,11 @@ if [ -e "$CONTROL_TOKEN" ] || [ -L "$CONTROL_TOKEN" ]; then
   chmod 600 "$CONTROL_TOKEN"
 fi
 
-# Re-prove native loading through the release link immediately before the switch.
-smoke_android_dependency_tree "$DEPENDENCIES/$EXPECTED_PACKAGE_LOCK" || {
-  say "versioned Android dependency tree failed its pre-switch runtime smoke test"
+# Re-prove the production runtime through the release link immediately before the switch.
+verify_release_runtime_prepared || {
+  say "release production Next runtime failed its pre-switch preparation test"
   exit 70
 }
-(cd "$NEW_RELEASE/runtime" && npm ls --omit=dev --depth=0 >/dev/null)
-(cd "$NEW_RELEASE/runtime" && node -e '
-for (const name of ["next", "better-sqlite3", "ws", "dotenv"]) require.resolve(name);
-')
 
 if [ "$INITIAL_MIGRATION" = 1 ] \
     && [ "$(legacy_plan_original_type phoneTools)" = absent ]; then

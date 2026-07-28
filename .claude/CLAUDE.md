@@ -60,7 +60,8 @@ npm run test
   scheduling.
 - On-phone runtime agents own curation and source diagnosis. Host development
   agents own source changes and the host-review development queue.
-- The per-file and `.next` deploy scripts are transitional. Follow the complete
-  release contract in `docs/phone-production.md` and verify on display 0.
+- The per-file and `.next` deploy scripts are fail-closed compatibility
+  tombstones. Follow the complete release contract in
+  `docs/phone-production.md` and verify on display 0.
 - Keep device serials, SSH values, account identifiers, private `data/`, and raw
   device evidence outside the checkout.

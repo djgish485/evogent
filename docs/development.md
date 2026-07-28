@@ -64,11 +64,11 @@ device connection details.
 
 ## Phone release and verification
 
-The current direct-copy and `.next` deploy scripts are transitional. The release
-contract is one immutable, versioned bundle containing compatible web, server,
-library, skills, mechanics, and APK state, with atomic activation, health check,
-and rollback. Do not invent a new release command until that workflow has a
-canonical implementation.
+The direct-copy and `.next` deploy scripts are fail-closed compatibility
+tombstones. The release contract is one immutable, versioned bundle containing
+compatible web, server, library, skills, mechanics, and APK state, with atomic
+activation, health check, and rollback. Do not revive a partial deployment
+path.
 
 For user-visible phone work, automated checks are followed by a normal
 scheduler-owned browse → cache → score → curate → arrange cycle, inspection on

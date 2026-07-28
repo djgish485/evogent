@@ -105,26 +105,56 @@ cfg(){ awk -v want="## $1" '
 is_on(){ echo "${1:-}" | grep -qiE '(^|[^a-z])on([^a-z]|$)|enabled|^yes$|^true$'; }
 
 # Source cadence is deployment-configurable; the public script carries no personal schedule.
+# A cadence-helper fault is an availability failure, never authority to launch every source.
+# Leave every freshness/signal acknowledgement untouched so the next healthy cycle can recover.
+cadence_helper_defer(){
+  local src="$1"
+  CYCLE_DEGRADED=1
+  say "source-browse[$src]: cadence decision unavailable — browsing deferred"
+  control_status_write sources "$src" degraded cadence_helper_failure 0 70 \
+    "cadence helper unavailable; browse deferred" || true
+  return 1
+}
 src_due(){
   local src="$1" stamp="$TOOLS/.last-browse-$1"
   local signal="$EVO/data/source-due-signals/$1.due"
-  local signal_ack="$TOOLS/.last-source-signal-ack-$1" decision due hours reason
-  decision=$(python3 "$TOOLS/source_cadence.py" \
+  local signal_ack="$TOOLS/.last-source-signal-ack-$1"
+  local decision="" due="" hours="" reason="" extra=""
+  if ! decision=$(python3 "$TOOLS/source_cadence.py" \
     --source "$src" \
     --stamp "$stamp" \
     --live "$EVO/data/source-cadence.json" \
     --default "$EVO/data/source-cadence.default.json" \
     --signal "$signal" \
-    --signal-ack "$signal_ack" 2>/dev/null) \
-    || decision=$'1\t0\tcadence_helper_failure'
-  IFS=$'\t' read -r due hours reason <<< "$decision"
+    --signal-ack "$signal_ack" 2>/dev/null); then
+    cadence_helper_defer "$src"
+    return 1
+  fi
+  if [[ "$decision" == *$'\n'* ]]; then
+    cadence_helper_defer "$src"
+    return 1
+  fi
+  IFS=$'\t' read -r due hours reason extra <<< "$decision"
+  if [ -n "$extra" ] \
+      || ! [[ "$due" =~ ^[01]$ ]] \
+      || ! [[ "$hours" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+      || [[ "$hours" =~ ^0([.]0*)?$ ]]; then
+    cadence_helper_defer "$src"
+    return 1
+  fi
+  case "$due:$reason" in
+    0:within_cadence|1:elapsed|1:source_signal|1:stamp_clock_skew|1:stamp_missing) ;;
+    *)
+      cadence_helper_defer "$src"
+      return 1
+      ;;
+  esac
   if [ "${due:-1}" = 1 ]; then
     if [ "$reason" = source_signal ]; then
       say "source-browse[$src]: content-free notification signal overrides cadence — browsing now"
       return 0
     fi
-    [ "$reason" = elapsed ] || [ "$reason" = stamp_missing ] || [ "$reason" = live_zero ] \
-      || [ "$reason" = default_zero ] || [ "$reason" = missing_zero ] \
+    [ "$reason" = elapsed ] || [ "$reason" = stamp_missing ] \
       || say "source-browse[$src]: cadence decision=$reason — browsing now"
     return 0
   fi
@@ -175,13 +205,19 @@ resolve_model_route(){
 BROWSE_ROUTE=$(resolve_model_route browse "${EVOGENT_BROWSE_MODEL:-}" \
   "${EVOGENT_BROWSE_REASONING:-}" $'gpt-5.6-terra\tmedium\tfallback')
 IFS=$'\t' read -r BROWSE_MODEL BROWSE_EFFORT BROWSE_ROUTE_ORIGIN <<< "$BROWSE_ROUTE"
+YOUTUBE_ROUTE=$(resolve_model_route browse_youtube \
+  "${EVOGENT_YOUTUBE_BROWSE_MODEL:-${EVOGENT_BROWSE_MODEL:-}}" \
+  "${EVOGENT_YOUTUBE_BROWSE_REASONING:-${EVOGENT_BROWSE_REASONING:-}}" \
+  "$BROWSE_MODEL"$'\t'"$BROWSE_EFFORT"$'\t''fallback')
+IFS=$'\t' read -r YOUTUBE_BROWSE_MODEL YOUTUBE_BROWSE_EFFORT \
+  YOUTUBE_ROUTE_ORIGIN <<< "$YOUTUBE_ROUTE"
 CURATOR_ROUTE=$(resolve_model_route curator "${EVOGENT_CODEX_MODEL:-}" \
   "${EVOGENT_CURATOR_REASONING:-}" $'gpt-5.6-sol\thigh\tfallback')
 IFS=$'\t' read -r CODEX_MODEL CURATOR_EFFORT CURATOR_ROUTE_ORIGIN <<< "$CURATOR_ROUTE"
 DIAGNOSIS_ROUTE=$(resolve_model_route diagnosis "${EVOGENT_DIAGNOSIS_MODEL:-}" \
   "${EVOGENT_DIAGNOSIS_REASONING:-}" $'gpt-5.6-sol\thigh\tfallback')
 IFS=$'\t' read -r DIAGNOSIS_MODEL DIAGNOSIS_EFFORT DIAGNOSIS_ROUTE_ORIGIN <<< "$DIAGNOSIS_ROUTE"
-say "model-routing: browse=$BROWSE_ROUTE_ORIGIN curator=$CURATOR_ROUTE_ORIGIN diagnosis=$DIAGNOSIS_ROUTE_ORIGIN"
+say "model-routing: browse=$BROWSE_ROUTE_ORIGIN youtube=$YOUTUBE_ROUTE_ORIGIN curator=$CURATOR_ROUTE_ORIGIN diagnosis=$DIAGNOSIS_ROUTE_ORIGIN"
 
 # Every source shares one automatic diagnosis slot per local service date. The
 # helper durably consumes that slot before this script may launch a provider, so
@@ -243,6 +279,11 @@ print(", ".join(t))' 2>/dev/null || echo ""
 # browse gets a longer budget (4 surfaces, 40-60 tweets) than the single-app sources.
 browse_source(){
   local src="$1" pf="$2" budget="${3:-420}"
+  local route_model="$BROWSE_MODEL" route_effort="$BROWSE_EFFORT"
+  if [ "$src" = youtube ]; then
+    route_model="$YOUTUBE_BROWSE_MODEL"
+    route_effort="$YOUTUBE_BROWSE_EFFORT"
+  fi
   # Prompt file: absolute path (user recipes in data/phone-sources/) or relative to phone-tools.
   [ -f "$pf" ] || pf="$TOOLS/$2"
   [ -f "$pf" ] || {
@@ -282,7 +323,7 @@ A blank tree, login screen, timeout, navigation miss, or parser mismatch is neve
   started_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
   control_status_write sources "$src" running "" "" "" "runner=provider budget=${budget}s"
   if [ "$BRAIN" = "codex" ]; then
-    ( cd "$EVO" && run_owned_timeout "$budget" 30 codex exec --model "$BROWSE_MODEL" -c model_reasoning_effort="$BROWSE_EFFORT" \
+    ( cd "$EVO" && run_owned_timeout "$budget" 30 codex exec --model "$route_model" -c model_reasoning_effort="$route_effort" \
         --dangerously-bypass-approvals-and-sandbox "$prompt" >>"$LOG" 2>&1 )
     rc=$?
   else
@@ -814,7 +855,7 @@ if is_on "$BG_BROWSE" && [ "$SCOUT_AGE" -gt 79200 ]; then
 fi
 
 # feed post count (first-class items only) -- used as the productivity signal for dynamic backoff
-feed_posts(){ "$EVO_CURL" -s -m8 "$BASE/api/feed?limit=200" | python3 -c '
+feed_posts(){ "$EVO_CURL" -s -m8 "$BASE/api/feed?agentEvidence=1&limit=200" | python3 -c '
 import sys,json
 d=json.load(sys.stdin); i=d if isinstance(d,list) else d.get("items",d.get("feed",[]))
 print(sum(1 for x in i if x.get("type") not in ("chat",)))' 2>/dev/null || echo 0; }

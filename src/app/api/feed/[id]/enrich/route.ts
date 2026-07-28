@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveFeedItemByIdentifier } from '@/lib/db/feed';
 import { queueFeedItemEnrichment } from '@/lib/feed-enrichment';
+import { isPhoneNotificationFeedItem } from '@/lib/agent-evidence-boundary';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,12 @@ export async function POST(
   const item = resolveFeedItemByIdentifier(id);
 
   if (!item) {
+    return NextResponse.json({ ok: false, error: 'Post not found' }, { status: 404 });
+  }
+  if (isPhoneNotificationFeedItem(item)) {
+    // Enrichment always queues a runtime model. Phone notification cards are a
+    // deterministic local-only lane, regardless of which authenticated surface
+    // attempts to invoke this endpoint.
     return NextResponse.json({ ok: false, error: 'Post not found' }, { status: 404 });
   }
 

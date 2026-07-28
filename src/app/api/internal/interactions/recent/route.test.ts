@@ -127,4 +127,77 @@ describe('/api/internal/interactions/recent', { concurrency: false }, () => {
     assert.strictEqual(body.engagementSessions[0]?.maxScrollDepthPercent, 84);
     assert.strictEqual(body.engagementSessions[0]?.isReturn, true);
   });
+
+  test('omits phone-notification interactions and engagement snapshots from agent evidence', async () => {
+    const db = getDb();
+    const privateCanary = 'PRIVATE_NOTIFICATION_INTERACTION_CANARY_9024';
+    db.prepare(`
+      INSERT INTO feed (id, type, source, source_id, title, text, published_at)
+      VALUES
+        ('phone-private', 'notification', 'phone-notification', 'phone-notification:private', ?, ?, ?),
+        ('article-safe', 'article', 'publisher', 'article:safe', 'Safe title', 'Safe body', ?)
+    `).run(
+      `Private title ${privateCanary}`,
+      `Private body ${privateCanary}`,
+      '2026-05-01T12:00:00.000Z',
+      '2026-05-01T11:00:00.000Z',
+    );
+    db.prepare(`
+      INSERT INTO interactions (feed_item_id, action, created_at)
+      VALUES
+        ('phone-private', 'expand', '2026-05-01 12:30:00'),
+        ('article-safe', 'thumbsup', '2026-05-01 11:30:00')
+    `).run();
+    db.prepare(`
+      INSERT INTO feed_engagement_sessions (
+        session_id, feed_item_id, opened_at, last_seen_at, closed_at,
+        active_dwell_ms, max_scroll_depth_pct, is_return, surface, item_snapshot
+      ) VALUES
+        (
+          'detail:phone-private:session', 'phone-private', '2026-05-01 12:31:00',
+          '2026-05-01 12:32:00', '2026-05-01 12:32:00',
+          61000, 84, 0, 'detail_overlay', ?
+        ),
+        (
+          'detail:article-safe:session', 'article-safe', '2026-05-01 11:31:00',
+          '2026-05-01 11:32:00', '2026-05-01 11:32:00',
+          30000, 50, 0, 'detail_overlay', '{"title":"Safe title"}'
+        ),
+        (
+          'detail:phone-orphan:session', 'deleted-phone-private', '2026-05-01 12:33:00',
+          '2026-05-01 12:34:00', '2026-05-01 12:34:00',
+          40000, 70, 0, 'detail_overlay', ?
+        )
+    `).run(
+      JSON.stringify({
+        type: 'notification',
+        source: 'phone-notification',
+        title: `Private title ${privateCanary}`,
+        text: `Private body ${privateCanary}`,
+      }),
+      JSON.stringify({
+        type: 'notification',
+        source: 'phone-notification',
+        title: `Orphan private title ${privateCanary}`,
+        text: `Orphan private body ${privateCanary}`,
+      }),
+    );
+
+    const { GET } = await importRoute();
+    const response = await GET(new Request(
+      'http://127.0.0.1/api/internal/interactions/recent?limit=10',
+    ));
+    assert.strictEqual(response.status, 200);
+    const body = await response.json() as {
+      interactions: Array<{ feedItemId: string }>;
+      engagementSessions: Array<{ feedItemId: string }>;
+    };
+
+    assert.deepStrictEqual(body.interactions.map((entry) => entry.feedItemId), ['article-safe']);
+    assert.deepStrictEqual(
+      body.engagementSessions.map((entry) => entry.feedItemId),
+      ['article-safe'],
+    );
+    assert.doesNotMatch(JSON.stringify(body), new RegExp(privateCanary));
+  });
 });

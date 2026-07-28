@@ -3,6 +3,8 @@
 #
 # Output defaults outside the checkout so creating a release cannot make the
 # source tree dirty. The bundle is accepted by device/install-release.sh.
+# Recovery-only Android/TLS reuse is documented in
+# docs/phone-release-artifact-reuse.md.
 set -euo pipefail
 umask 077
 # macOS otherwise synthesizes AppleDouble `._*` entries for extended metadata.
@@ -389,6 +391,634 @@ if paths:
 PY
 }
 
+android_artifact_provenance() {
+  python3 - "$@" <<'PY'
+# EVOGENT_ANDROID_ARTIFACT_PROVENANCE_HELPER_V1
+import hashlib
+import json
+import os
+import pathlib
+import posixpath
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+
+SCHEMA = "evogent.android-tls.artifact-provenance.v1"
+TREE_PATH = "android-shell"
+HEX_DIGEST = re.compile(r"[0-9a-f]{64}")
+GIT_OID = re.compile(r"[0-9a-f]{40,64}")
+SAFE_RELEASE_ID = re.compile(r"[A-Za-z0-9._-]{1,240}")
+SAFE_ARCHIVE_NAME = re.compile(r"[A-Za-z0-9._-]+\.tar\.gz")
+SAFE_VERSION_NAME = re.compile(r"[A-Za-z0-9._+-]{1,80}")
+SPECIAL_FILES = {"manifest.json", "files.sha256", "links.json"}
+ARTIFACT_FILES = {
+    "apk/evogent.apk",
+    "tls/server-cert.pem",
+    "tls/server-key.pem",
+}
+
+
+def fail(message):
+    raise SystemExit(f"phone release: {message}")
+
+
+def git_output(root, arguments):
+    result = subprocess.run(
+        ["git", "-C", str(root), *arguments],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail("Android source provenance could not be resolved")
+    try:
+        return result.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        fail("Android source provenance was not ASCII")
+
+
+def commit_and_tree(root, raw_commit):
+    if not isinstance(raw_commit, str) or not GIT_OID.fullmatch(raw_commit):
+        fail("Android source commit provenance is invalid")
+    commit = git_output(root, ["rev-parse", "--verify", f"{raw_commit}^{{commit}}"])
+    if commit != raw_commit:
+        fail("Android source commit provenance is not exact")
+    tree = git_output(root, ["rev-parse", f"{commit}:{TREE_PATH}"])
+    if not GIT_OID.fullmatch(tree):
+        fail("Android source tree provenance is invalid")
+    if git_output(root, ["cat-file", "-t", tree]) != "tree":
+        fail("Android source provenance does not identify a tree")
+    return commit, tree
+
+
+def path_components_are_not_links(path):
+    current = pathlib.Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            metadata = os.lstat(current)
+        except OSError:
+            fail("trusted prior release path is unavailable")
+        if stat.S_ISLNK(metadata.st_mode):
+            fail("trusted prior release path must not contain symlinks")
+
+
+def assert_private_regular(path, *, exact_mode=0o600):
+    try:
+        metadata = os.lstat(path)
+    except OSError:
+        fail("trusted prior release artifact is unavailable")
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != exact_mode
+    ):
+        fail("trusted prior release artifact must be private, owned, and regular")
+    return metadata
+
+
+def copy_stable_regular(source, destination, expected):
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    source_descriptor = os.open(source, flags)
+    try:
+        opened = os.fstat(source_descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_uid != os.geteuid()
+            or opened.st_nlink != 1
+            or stat.S_IMODE(opened.st_mode) != 0o600
+            or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)
+        ):
+            fail("trusted prior release artifact changed before validation")
+        destination_descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        digest = hashlib.sha256()
+        try:
+            while True:
+                chunk = os.read(source_descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(destination_descriptor, view)
+                    view = view[written:]
+            os.fsync(destination_descriptor)
+        finally:
+            os.close(destination_descriptor)
+        completed = os.fstat(source_descriptor)
+        current = os.lstat(source)
+        identity = (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+        if (
+            identity
+            != (
+                completed.st_dev,
+                completed.st_ino,
+                completed.st_size,
+                completed.st_mtime_ns,
+            )
+            or identity
+            != (
+                current.st_dev,
+                current.st_ino,
+                current.st_size,
+                current.st_mtime_ns,
+            )
+        ):
+            fail("trusted prior release artifact changed during validation")
+        return digest.hexdigest()
+    finally:
+        os.close(source_descriptor)
+
+
+def safe_release_relative(raw):
+    if not isinstance(raw, str) or not raw or "\\" in raw or "\0" in raw:
+        fail("trusted prior release inventory contains an unsafe path")
+    pure = pathlib.PurePosixPath(raw)
+    if (
+        pure.is_absolute()
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or pure.as_posix() != raw
+    ):
+        fail("trusted prior release inventory contains an unsafe path")
+    return raw
+
+
+def bounded_member_bytes(bundle, member, limit, label):
+    if member.size < 0 or member.size > limit:
+        fail(f"trusted prior release {label} is unreasonably large")
+    stream = bundle.extractfile(member)
+    if stream is None:
+        fail(f"trusted prior release {label} is unreadable")
+    data = stream.read(limit + 1)
+    if len(data) != member.size or len(data) > limit:
+        fail(f"trusted prior release {label} is unreadable")
+    return data
+
+
+def parse_inventory(data):
+    try:
+        text = data.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        fail("trusted prior release inventory is not UTF-8")
+    if not text.endswith("\n"):
+        fail("trusted prior release inventory is not newline terminated")
+    rows = {}
+    for line in text.splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if match is None:
+            fail("trusted prior release inventory row is invalid")
+        relative = safe_release_relative(match.group(2))
+        if relative in SPECIAL_FILES or relative in rows:
+            fail("trusted prior release inventory is ambiguous")
+        rows[relative] = match.group(1)
+    if not rows:
+        fail("trusted prior release inventory is empty")
+    return rows
+
+
+def member_sha256(bundle, member):
+    stream = bundle.extractfile(member)
+    if stream is None:
+        fail("trusted prior release file is unreadable")
+    digest = hashlib.sha256()
+    observed = 0
+    while True:
+        chunk = stream.read(1024 * 1024)
+        if not chunk:
+            break
+        observed += len(chunk)
+        if observed > member.size:
+            fail("trusted prior release file size changed while reading")
+        digest.update(chunk)
+    if observed != member.size:
+        fail("trusted prior release file is truncated")
+    return digest.hexdigest()
+
+
+def string_field(container, name, label, pattern=None):
+    value = container.get(name) if isinstance(container, dict) else None
+    if not isinstance(value, str) or not value:
+        fail(f"trusted prior release {label} is invalid")
+    if pattern is not None and pattern.fullmatch(value) is None:
+        fail(f"trusted prior release {label} is invalid")
+    return value
+
+
+def integer_field(container, name, label):
+    value = container.get(name) if isinstance(container, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int):
+        fail(f"trusted prior release {label} is invalid")
+    return value
+
+
+def validate_manifest(manifest, root, current_commit, current_tree):
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema") != "evogent.phone.release.v1"
+        or manifest.get("releaseFormat") != 1
+    ):
+        fail("trusted prior release manifest schema is unsupported")
+    release_id = string_field(
+        manifest,
+        "releaseId",
+        "release identity",
+        SAFE_RELEASE_ID,
+    )
+    source = manifest.get("source")
+    source_commit = string_field(
+        source,
+        "commit",
+        "source commit",
+        GIT_OID,
+    )
+    source_short = string_field(source, "commitShort", "short source commit")
+    if not source_commit.startswith(source_short) or len(source_short) < 7:
+        fail("trusted prior release short source commit is inconsistent")
+    _, prior_tree = commit_and_tree(root, source_commit)
+    if prior_tree != current_tree:
+        fail("Android source inputs changed; prior APK/TLS reuse is forbidden")
+
+    android = manifest.get("android")
+    package = string_field(android, "package", "Android package")
+    if package != "net.dangish.evogent":
+        fail("trusted prior release Android package is unexpected")
+    version_code = integer_field(android, "versionCode", "Android version code")
+    if version_code < 1 or version_code > 2147483647:
+        fail("trusted prior release Android version code is out of range")
+    version_name = string_field(
+        android,
+        "versionName",
+        "Android version name",
+        SAFE_VERSION_NAME,
+    )
+    signer_sha256 = string_field(
+        android,
+        "signerSha256",
+        "Android signer",
+        HEX_DIGEST,
+    )
+    apk_sha256 = string_field(android, "sha256", "APK digest", HEX_DIGEST)
+
+    phone_tls = manifest.get("phoneTls")
+    if (
+        not isinstance(phone_tls, dict)
+        or phone_tls.get("host") != "127.0.0.1"
+        or phone_tls.get("port") != 3443
+    ):
+        fail("trusted prior release TLS endpoint is invalid")
+    certificate_sha256 = string_field(
+        phone_tls,
+        "certificateDerSha256",
+        "TLS certificate digest",
+        HEX_DIGEST,
+    )
+    string_field(phone_tls, "certificateNotAfter", "TLS certificate expiry")
+
+    identity = hashlib.sha256(
+        (
+            f"apk-sha256:{apk_sha256}\n"
+            f"tls-cert-der-sha256:{certificate_sha256}\n"
+        ).encode("ascii")
+    ).hexdigest()[:12]
+    if (
+        manifest.get("releaseIdentityDigest") != identity
+        or not release_id.endswith(f"-apk{version_code}-{identity}")
+    ):
+        fail("trusted prior release APK/TLS identity is inconsistent")
+
+    provenance_root = manifest.get("artifactProvenance")
+    if provenance_root is None:
+        origin_release_id = release_id
+        origin_commit = source_commit
+        origin_tree = prior_tree
+    else:
+        if not isinstance(provenance_root, dict):
+            fail("trusted prior release artifact provenance is invalid")
+        provenance = provenance_root.get("androidTls")
+        if (
+            not isinstance(provenance, dict)
+            or provenance.get("schema") != SCHEMA
+            or provenance.get("mode") not in {"built", "reused"}
+        ):
+            fail("trusted prior release Android/TLS provenance is invalid")
+        origin_release_id = string_field(
+            provenance,
+            "originReleaseId",
+            "Android/TLS origin release",
+            SAFE_RELEASE_ID,
+        )
+        origin_commit = string_field(
+            provenance,
+            "sourceCommit",
+            "Android/TLS origin commit",
+            GIT_OID,
+        )
+        source_tree = provenance.get("sourceTree")
+        if not isinstance(source_tree, dict) or source_tree.get("path") != TREE_PATH:
+            fail("trusted prior release Android/TLS source-tree path is invalid")
+        declared_tree = string_field(
+            source_tree,
+            "oid",
+            "Android/TLS source-tree identity",
+            GIT_OID,
+        )
+        _, origin_tree = commit_and_tree(root, origin_commit)
+        if declared_tree != origin_tree or origin_tree != prior_tree:
+            fail("trusted prior release Android/TLS provenance is inconsistent")
+        if (
+            not origin_release_id.startswith(f"{origin_commit[:12]}-")
+            or not origin_release_id.endswith(f"-apk{version_code}-{identity}")
+        ):
+            fail("trusted prior release Android/TLS origin identity is inconsistent")
+        if provenance.get("mode") == "built" and (
+            origin_release_id != release_id or origin_commit != source_commit
+        ):
+            fail("trusted prior built-artifact provenance is inconsistent")
+        if provenance.get("mode") == "reused" and origin_release_id == release_id:
+            fail("trusted prior reused-artifact provenance is self-referential")
+
+    if origin_tree != current_tree:
+        fail("Android artifact origin differs from current Android inputs")
+    return {
+        "priorReleaseId": release_id,
+        "priorSourceCommit": source_commit,
+        "originReleaseId": origin_release_id,
+        "originSourceCommit": origin_commit,
+        "originSourceTreeOid": origin_tree,
+        "package": package,
+        "versionCode": version_code,
+        "versionName": version_name,
+        "signerSha256": signer_sha256,
+        "apkSha256": apk_sha256,
+        "tlsCertificateDerSha256": certificate_sha256,
+        "currentSourceCommit": current_commit,
+        "currentSourceTreeOid": current_tree,
+    }
+
+
+def stage_archive_artifacts(root, current_commit, raw_archive, staging):
+    archive = pathlib.Path(raw_archive)
+    if not archive.is_absolute():
+        fail("trusted prior release archive path must be absolute")
+    normalized = pathlib.Path(os.path.normpath(raw_archive))
+    try:
+        canonical = archive.resolve(strict=True)
+    except OSError:
+        fail("trusted prior release archive is unavailable")
+    if archive != normalized or archive != canonical:
+        fail("trusted prior release archive path must be canonical")
+    path_components_are_not_links(archive)
+    try:
+        archive.relative_to(root)
+    except ValueError:
+        pass
+    else:
+        fail("trusted prior release archive must live outside the source checkout")
+    if SAFE_ARCHIVE_NAME.fullmatch(archive.name) is None:
+        fail("trusted prior release archive name is unsafe")
+    sidecar = pathlib.Path(f"{archive}.sha256")
+    path_components_are_not_links(sidecar)
+    archive_metadata = assert_private_regular(archive)
+    sidecar_metadata = assert_private_regular(sidecar)
+    if (
+        archive_metadata.st_size < 1
+        or archive_metadata.st_size > 4 * 1024 * 1024 * 1024
+        or sidecar_metadata.st_size < 1
+        or sidecar_metadata.st_size > 1024
+    ):
+        fail("trusted prior release artifact size is invalid")
+
+    if staging.exists():
+        fail("trusted prior release staging path already exists")
+    staging.mkdir(mode=0o700)
+    snapshot = staging / "prior-release.tar.gz"
+    snapshot_sidecar = staging / "prior-release.tar.gz.sha256"
+    archive_digest = copy_stable_regular(archive, snapshot, archive_metadata)
+    copy_stable_regular(sidecar, snapshot_sidecar, sidecar_metadata)
+    try:
+        expected_sidecar = snapshot_sidecar.read_text(
+            encoding="ascii",
+            errors="strict",
+        )
+    except (OSError, UnicodeError):
+        fail("trusted prior release checksum sidecar is unreadable")
+    expected_line = f"{archive_digest}  {archive.name}\n"
+    if expected_sidecar != expected_line:
+        fail("trusted prior release archive checksum does not match its sidecar")
+
+    _, current_tree = commit_and_tree(root, current_commit)
+    try:
+        bundle = tarfile.open(snapshot, "r:gz")
+    except (OSError, tarfile.TarError):
+        fail("trusted prior release archive is unreadable")
+    with bundle:
+        members = {}
+        total_regular_size = 0
+        for member in bundle.getmembers():
+            raw_name = member.name
+            name = raw_name[:-1] if member.isdir() and raw_name.endswith("/") else raw_name
+            pure = pathlib.PurePosixPath(name)
+            if (
+                not name
+                or "\\" in name
+                or pure.is_absolute()
+                or any(part in {"", ".", ".."} for part in pure.parts)
+                or pure.as_posix() != name
+                or pure.parts[0] != "release"
+                or name in members
+            ):
+                fail("trusted prior release archive contains an unsafe member")
+            if member.islnk() or member.isdev() or member.isfifo():
+                fail("trusted prior release archive contains an unsupported member")
+            if not (member.isdir() or member.isreg() or member.issym()):
+                fail("trusted prior release archive contains an unsupported member")
+            if member.issym():
+                target = member.linkname
+                if not isinstance(target, str) or not target or "\\" in target:
+                    fail("trusted prior release archive symlink is invalid")
+                resolved = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(name), target)
+                )
+                if resolved != "release" and not resolved.startswith("release/"):
+                    fail("trusted prior release archive symlink escapes its root")
+            if member.isreg():
+                total_regular_size += member.size
+                if member.size < 0 or total_regular_size > 4 * 1024 * 1024 * 1024:
+                    fail("trusted prior release archive is unreasonably large")
+            members[name] = member
+
+        root_member = members.get("release")
+        if (
+            root_member is None
+            or not root_member.isdir()
+            or stat.S_IMODE(root_member.mode) & 0o077
+        ):
+            fail("trusted prior release archive root is not private")
+        required = {
+            "release/manifest.json",
+            "release/files.sha256",
+            "release/links.json",
+            *(f"release/{relative}" for relative in ARTIFACT_FILES),
+        }
+        if not required.issubset(members):
+            fail("trusted prior release archive lacks required identity artifacts")
+        for name in required:
+            member = members[name]
+            if not member.isreg():
+                fail("trusted prior release identity artifact is not regular")
+            mode = stat.S_IMODE(member.mode)
+            relative = name.removeprefix("release/")
+            if relative == "tls/server-cert.pem":
+                if mode & 0o022 or not mode & 0o400:
+                    fail("trusted prior release TLS certificate mode is unsafe")
+            elif mode != 0o600:
+                fail("trusted prior release identity artifact is not private")
+
+        manifest_bytes = bounded_member_bytes(
+            bundle,
+            members["release/manifest.json"],
+            1024 * 1024,
+            "manifest",
+        )
+        inventory_bytes = bounded_member_bytes(
+            bundle,
+            members["release/files.sha256"],
+            64 * 1024 * 1024,
+            "inventory",
+        )
+        links_bytes = bounded_member_bytes(
+            bundle,
+            members["release/links.json"],
+            16 * 1024 * 1024,
+            "symlink inventory",
+        )
+        try:
+            manifest = json.loads(manifest_bytes)
+            links = json.loads(links_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            fail("trusted prior release metadata is invalid JSON")
+        inventory_contract = manifest.get("inventory") if isinstance(manifest, dict) else None
+        if (
+            not isinstance(inventory_contract, dict)
+            or inventory_contract.get("algorithm") != "sha256"
+            or inventory_contract.get("path") != "files.sha256"
+            or inventory_contract.get("linksPath") != "links.json"
+            or inventory_contract.get("sha256")
+            != hashlib.sha256(inventory_bytes).hexdigest()
+            or inventory_contract.get("linksSha256")
+            != hashlib.sha256(links_bytes).hexdigest()
+        ):
+            fail("trusted prior release manifest does not bind its inventory")
+        inventory = parse_inventory(inventory_bytes)
+        regular_members = {
+            name.removeprefix("release/"): member
+            for name, member in members.items()
+            if member.isreg()
+            and name.startswith("release/")
+            and name.removeprefix("release/") not in SPECIAL_FILES
+        }
+        if set(regular_members) != set(inventory):
+            fail("trusted prior release inventory is incomplete")
+        for relative, expected_digest in inventory.items():
+            if member_sha256(bundle, regular_members[relative]) != expected_digest:
+                fail("trusted prior release file does not match its inventory")
+
+        if not isinstance(links, dict) or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in links.items()
+        ):
+            fail("trusted prior release symlink inventory is invalid")
+        archive_links = {
+            name.removeprefix("release/"): member.linkname
+            for name, member in members.items()
+            if member.issym() and name.startswith("release/")
+        }
+        if archive_links != links:
+            fail("trusted prior release symlink inventory is incomplete")
+        for relative, target in links.items():
+            safe_release_relative(relative)
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), target))
+            if resolved == ".." or resolved.startswith("../") or posixpath.isabs(resolved):
+                fail("trusted prior release symlink inventory escapes its root")
+
+        metadata = validate_manifest(manifest, root, current_commit, current_tree)
+        if inventory["apk/evogent.apk"] != metadata["apkSha256"]:
+            fail("trusted prior release APK digest disagrees with its manifest")
+        artifact_dir = staging / "artifacts"
+        artifact_dir.mkdir(mode=0o700)
+        for relative in sorted(ARTIFACT_FILES):
+            destination = artifact_dir / pathlib.PurePosixPath(relative).name
+            stream = bundle.extractfile(regular_members[relative])
+            if stream is None:
+                fail("trusted prior release identity artifact is unreadable")
+            with open(destination, "xb") as output:
+                shutil.copyfileobj(stream, output, 1024 * 1024)
+                output.flush()
+                os.fsync(output.fileno())
+            os.chmod(destination, 0o600)
+
+    metadata_path = staging / "metadata.json"
+    with open(metadata_path, "x", encoding="utf-8") as handle:
+        json.dump(metadata, handle, separators=(",", ":"), sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(metadata_path, 0o600)
+
+
+def metadata_value(path, key):
+    try:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        fail("trusted prior release staging metadata is unreadable")
+    value = metadata.get(key) if isinstance(metadata, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        fail("trusted prior release staging metadata is invalid")
+    print(value)
+
+
+def main():
+    if len(sys.argv) < 2:
+        fail("Android artifact provenance operation is missing")
+    operation = sys.argv[1]
+    if operation == "tree-oid" and len(sys.argv) == 4:
+        root = pathlib.Path(sys.argv[2]).resolve(strict=True)
+        _, tree = commit_and_tree(root, sys.argv[3])
+        print(tree)
+        return
+    if operation == "stage-reuse" and len(sys.argv) == 6:
+        root = pathlib.Path(sys.argv[2]).resolve(strict=True)
+        commit, _ = commit_and_tree(root, sys.argv[3])
+        stage_archive_artifacts(
+            root,
+            commit,
+            sys.argv[4],
+            pathlib.Path(sys.argv[5]),
+        )
+        return
+    if operation == "metadata" and len(sys.argv) == 4:
+        metadata_value(pathlib.Path(sys.argv[2]), sys.argv[3])
+        return
+    fail("Android artifact provenance operation is invalid")
+
+
+try:
+    main()
+except SystemExit:
+    raise
+except Exception:
+    fail("trusted prior release validation failed")
+PY
+}
+
 assert_clean_source
 SOURCE_COMMIT="$(git rev-parse HEAD)"
 SOURCE_SHORT="$(git rev-parse --short=12 HEAD)"
@@ -398,23 +1028,100 @@ assert_source_commit_unchanged() {
     exit 65
   }
 }
-ANDROID_VERSION_STATE_FILE="${EVOGENT_ANDROID_VERSION_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/evogent/android-version-code}"
-ANDROID_VERSION_ARGUMENTS=(
-  --state-file "$ANDROID_VERSION_STATE_FILE"
-  --forbid-root "$ROOT"
-)
-if [ "${EVOGENT_ANDROID_VERSION_CODE+x}" = x ]; then
-  ANDROID_VERSION_ARGUMENTS+=(--override "$EVOGENT_ANDROID_VERSION_CODE")
+ANDROID_SOURCE_TREE_OID="$(
+  android_artifact_provenance tree-oid "$ROOT" "$SOURCE_COMMIT"
+)"
+[[ "$ANDROID_SOURCE_TREE_OID" =~ ^[0-9a-f]{40,64}$ ]] || {
+  echo "phone release: Android source-tree identity is invalid" >&2
+  exit 66
+}
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/evogent-phone-release.XXXXXX")"
+trap 'rm -rf -- "$WORK_DIR"; release_build_lock' EXIT
+REUSE_ANDROID_TLS_ARCHIVE="${EVOGENT_REUSE_ANDROID_TLS_FROM_RELEASE:-}"
+ANDROID_TLS_PROVENANCE_MODE="built"
+ANDROID_TLS_ORIGIN_RELEASE_ID=""
+ANDROID_TLS_ORIGIN_SOURCE_COMMIT="$SOURCE_COMMIT"
+ANDROID_TLS_ORIGIN_SOURCE_TREE_OID="$ANDROID_SOURCE_TREE_OID"
+REUSED_EXPECTED_PACKAGE=""
+REUSED_EXPECTED_VERSION_NAME=""
+REUSED_EXPECTED_SIGNER_SHA256=""
+REUSED_EXPECTED_APK_SHA256=""
+REUSED_EXPECTED_TLS_CERT_SHA256=""
+REUSED_FROM_RELEASE_ID=""
+
+if [ -n "$REUSE_ANDROID_TLS_ARCHIVE" ]; then
+  [ "${EVOGENT_ANDROID_VERSION_CODE+x}" != x ] || {
+    echo "phone release: an Android version override cannot accompany exact artifact reuse" >&2
+    exit 65
+  }
+  echo "phone release: validating trusted prior Android/TLS artifact set"
+  REUSED_ANDROID_STAGE="$WORK_DIR/reused-android"
+  android_artifact_provenance stage-reuse \
+    "$ROOT" "$SOURCE_COMMIT" "$REUSE_ANDROID_TLS_ARCHIVE" \
+    "$REUSED_ANDROID_STAGE"
+  REUSED_METADATA="$REUSED_ANDROID_STAGE/metadata.json"
+  APK="$REUSED_ANDROID_STAGE/artifacts/evogent.apk"
+  TLS_CERT="$REUSED_ANDROID_STAGE/artifacts/server-cert.pem"
+  TLS_KEY="$REUSED_ANDROID_STAGE/artifacts/server-key.pem"
+  ANDROID_VERSION_CODE="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" versionCode
+  )"
+  REUSED_EXPECTED_PACKAGE="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" package
+  )"
+  REUSED_EXPECTED_VERSION_NAME="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" versionName
+  )"
+  REUSED_EXPECTED_SIGNER_SHA256="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" signerSha256
+  )"
+  REUSED_EXPECTED_APK_SHA256="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" apkSha256
+  )"
+  REUSED_EXPECTED_TLS_CERT_SHA256="$(
+    android_artifact_provenance metadata \
+      "$REUSED_METADATA" tlsCertificateDerSha256
+  )"
+  REUSED_FROM_RELEASE_ID="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" priorReleaseId
+  )"
+  ANDROID_TLS_ORIGIN_RELEASE_ID="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" originReleaseId
+  )"
+  ANDROID_TLS_ORIGIN_SOURCE_COMMIT="$(
+    android_artifact_provenance metadata "$REUSED_METADATA" originSourceCommit
+  )"
+  ANDROID_TLS_ORIGIN_SOURCE_TREE_OID="$(
+    android_artifact_provenance metadata \
+      "$REUSED_METADATA" originSourceTreeOid
+  )"
+  ANDROID_TLS_PROVENANCE_MODE="reused"
+else
+  ANDROID_VERSION_STATE_FILE="${EVOGENT_ANDROID_VERSION_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/evogent/android-version-code}"
+  ANDROID_VERSION_ARGUMENTS=(
+    --state-file "$ANDROID_VERSION_STATE_FILE"
+    --forbid-root "$ROOT"
+  )
+  if [ "${EVOGENT_ANDROID_VERSION_CODE+x}" = x ]; then
+    ANDROID_VERSION_ARGUMENTS+=(--override "$EVOGENT_ANDROID_VERSION_CODE")
+  fi
+  ANDROID_VERSION_CODE="$(python3 scripts/allocate-android-version-code.py \
+    "${ANDROID_VERSION_ARGUMENTS[@]}")"
+  export EVOGENT_ANDROID_VERSION_CODE="$ANDROID_VERSION_CODE"
 fi
-ANDROID_VERSION_CODE="$(python3 scripts/allocate-android-version-code.py \
-  "${ANDROID_VERSION_ARGUMENTS[@]}")"
-export EVOGENT_ANDROID_VERSION_CODE="$ANDROID_VERSION_CODE"
 
 echo "phone release: building web application at $SOURCE_SHORT"
 npm run build
 
-echo "phone release: building and signing Android shell version $ANDROID_VERSION_CODE"
-bash android-shell/build.sh
+if [ -n "$REUSE_ANDROID_TLS_ARCHIVE" ]; then
+  echo "phone release: reusing verified Android/TLS artifact version $ANDROID_VERSION_CODE"
+else
+  echo "phone release: building and signing Android shell version $ANDROID_VERSION_CODE"
+  bash android-shell/build.sh
+  APK="$ROOT/android-shell/build/evogent.apk"
+  TLS_CERT="$ROOT/android-shell/build/server-cert.pem"
+  TLS_KEY="$ROOT/android-shell/build/server-key.pem"
+fi
 
 # A build script must not be able to quietly edit the source it claims to represent.
 assert_clean_source
@@ -426,7 +1133,6 @@ BUILD_ID="$(tr -d '\r\n' < .next/BUILD_ID)"
   exit 66
 }
 
-APK="$ROOT/android-shell/build/evogent.apk"
 [ -s "$APK" ] || {
   echo "phone release: signed APK missing: $APK" >&2
   exit 66
@@ -449,7 +1155,9 @@ APK_PACKAGE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'
 APK_VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: .*versionCode='\\([^']*\\)'.*/\\1/p" | head -1)"
 APK_VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/^package: .*versionName='\\([^']*\\)'.*/\\1/p" | head -1)"
 APK_SIGNER_SHA256="$("$APKSIGNER" verify --print-certs "$APK" \
-  | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+  | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+  | tr '[:upper:]' '[:lower:]' \
+  | head -1)"
 APK_SHA256="$(python3 - "$APK" <<'PY'
 import hashlib, sys
 print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())
@@ -457,19 +1165,25 @@ PY
 )"
 
 [ "$APK_PACKAGE" = "net.dangish.evogent" ] \
+  && [ "$APK_VERSION_CODE" = "$ANDROID_VERSION_CODE" ] \
   && [[ "$APK_VERSION_CODE" =~ ^[0-9]+$ ]] \
   && [ -n "$APK_VERSION_NAME" ] \
   && [[ "$APK_SIGNER_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || {
     echo "phone release: could not verify APK package, version, and signer" >&2
     exit 66
   }
+if [ -n "$REUSE_ANDROID_TLS_ARCHIVE" ]; then
+  [ "$APK_PACKAGE" = "$REUSED_EXPECTED_PACKAGE" ] \
+    && [ "$APK_VERSION_NAME" = "$REUSED_EXPECTED_VERSION_NAME" ] \
+    && [ "$APK_SIGNER_SHA256" = "$REUSED_EXPECTED_SIGNER_SHA256" ] \
+    && [ "$APK_SHA256" = "$REUSED_EXPECTED_APK_SHA256" ] || {
+      echo "phone release: reused APK identity differs from the trusted release" >&2
+      exit 66
+    }
+fi
 
 SAFE_BUILD_ID="$(printf '%s' "$BUILD_ID" | tr -cd 'A-Za-z0-9._-' | cut -c1-20)"
 [ -n "$SAFE_BUILD_ID" ] || SAFE_BUILD_ID=build
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/evogent-phone-release.XXXXXX")"
-trap 'rm -rf -- "$WORK_DIR"; release_build_lock' EXIT
-TLS_CERT="$ROOT/android-shell/build/server-cert.pem"
-TLS_KEY="$ROOT/android-shell/build/server-key.pem"
 EMBEDDED_CA="$WORK_DIR/evogent-phone-ca.pem"
 [ -f "$TLS_CERT" ] && [ ! -L "$TLS_CERT" ] \
   && [ -f "$TLS_KEY" ] && [ ! -L "$TLS_KEY" ] || {
@@ -513,6 +1227,11 @@ TLS_CERT_NOT_AFTER="$(openssl x509 -in "$TLS_CERT" -noout -enddate | cut -d= -f2
   echo "phone release: Android TLS certificate identity could not be read" >&2
   exit 66
 }
+if [ -n "$REUSE_ANDROID_TLS_ARCHIVE" ] \
+    && [ "$TLS_CERT_DER_SHA256" != "$REUSED_EXPECTED_TLS_CERT_SHA256" ]; then
+  echo "phone release: reused TLS identity differs from the trusted release" >&2
+  exit 66
+fi
 
 RELEASE_IDENTITY_DIGEST="$(python3 - "$APK_SHA256" "$TLS_CERT_DER_SHA256" <<'PY'
 import hashlib
@@ -531,6 +1250,12 @@ PY
 # same source/build/version are intentionally different releases.  Bind the
 # directory/archive identity to the actual APK plus its matching TLS leaf.
 RELEASE_ID="${SOURCE_SHORT}-${SAFE_BUILD_ID}-apk${APK_VERSION_CODE}-${RELEASE_IDENTITY_DIGEST}"
+if [ "$ANDROID_TLS_PROVENANCE_MODE" = "built" ]; then
+  ANDROID_TLS_ORIGIN_RELEASE_ID="$RELEASE_ID"
+elif [ "$RELEASE_ID" = "$REUSED_FROM_RELEASE_ID" ]; then
+  echo "phone release: artifact reuse must create a distinct successor release" >&2
+  exit 65
+fi
 RELEASE="$WORK_DIR/release"
 RUNTIME="$RELEASE/runtime"
 
@@ -541,7 +1266,7 @@ mkdir -p "$RUNTIME" "$RELEASE/phone-tools" "$RELEASE/device" "$RELEASE/apk" \
 # The clean tree equals HEAD, but archive from Git anyway: ignored build caches,
 # local secrets, worktrees, and private data can never enter a release by accident.
 git archive "$SOURCE_COMMIT" \
-  server.js worker.js package.json package-lock.json next.config.ts tsconfig.json \
+  server.js worker.js package.json package-lock.json next.config.js tsconfig.json \
   CLAUDE.md AGENTS.md LICENSE lib src scripts .claude \
   .intent/contracts.jsonl .intent/failure-modes.jsonl skills-library data \
   | tar -xf - -C "$RUNTIME"
@@ -615,6 +1340,7 @@ git archive "$SOURCE_COMMIT" \
   phone-paradigm/device/start-prod.sh \
   phone-paradigm/device/restart-evo.sh \
   phone-paradigm/device/install-release.sh \
+  phone-paradigm/device/forward-rescue.sh \
   phone-paradigm/device/android-role-state.py \
   phone-paradigm/device/dependency-tree-state.py \
   phone-paradigm/device/rollback-state.py \
@@ -766,6 +1492,18 @@ manifest = {
         "commit": "$SOURCE_COMMIT",
         "commitShort": "$SOURCE_SHORT",
     },
+    "artifactProvenance": {
+        "androidTls": {
+            "schema": "evogent.android-tls.artifact-provenance.v1",
+            "mode": "$ANDROID_TLS_PROVENANCE_MODE",
+            "originReleaseId": "$ANDROID_TLS_ORIGIN_RELEASE_ID",
+            "sourceCommit": "$ANDROID_TLS_ORIGIN_SOURCE_COMMIT",
+            "sourceTree": {
+                "path": "android-shell",
+                "oid": "$ANDROID_TLS_ORIGIN_SOURCE_TREE_OID",
+            },
+        },
+    },
     "web": {"buildId": "$BUILD_ID"},
     "android": {
         "package": "$APK_PACKAGE",
@@ -822,6 +1560,7 @@ manifest = {
         "device/start-prod.sh",
         "device/restart-evo.sh",
         "device/install-release.sh",
+        "device/forward-rescue.sh",
         "device/android-role-state.py",
         "device/dependency-tree-state.py",
         "device/rollback-state.py",

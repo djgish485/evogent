@@ -37,6 +37,18 @@ const notificationCuration = fs.readFileSync(
 );
 const architecture = fs.readFileSync('docs/phone-notification-curation.md', 'utf8');
 const architectureProse = architecture.replace(/\s+/g, ' ');
+const efficiency = fs.readFileSync(
+  'docs/phone-efficiency-and-model-routing.md',
+  'utf8',
+);
+const production = fs.readFileSync('docs/phone-production.md', 'utf8');
+const auditCore = fs.readFileSync('.claude/shared/audit-core.md', 'utf8');
+const runtimePrivacyProse = [
+  architecture,
+  efficiency,
+  production,
+  auditCore,
+].join('\n').replace(/\s+/g, ' ');
 const listenerWithoutComments = listener
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/\/\/.*$/gm, '');
@@ -100,6 +112,8 @@ test('live notification lane uses one monotonic network deadline without changin
   assert.match(loopbackAuth, /DEFAULT_AUTH_STAGE_TIMEOUT_MS\s*=\s*6000/);
   assert.match(loopbackAuth, /authenticate\(context, sessionKind, DEFAULT_AUTH_STAGE_TIMEOUT_MS\)/);
   assert.match(shareReceiver, /postJsonDirect\([\s\S]*?8000,\s*8000\)/);
+  assert.match(notificationCuration, /void notifyFeedUpdate\(\[result\.feedItem\]\)/);
+  assert.doesNotMatch(notificationCuration, /await notifyFeedUpdate\(\[result\.feedItem\]\)/);
   assert.match(architectureProse, /Live `onNotificationPosted` callbacks always leapfrog reconnect history/);
   assert.match(architectureProse, /newest pending live callback is always selected next/);
   assert.match(architectureProse, /Historical completeness is best-effort/);
@@ -182,4 +196,35 @@ test('public architecture does not overclaim Android lock-screen or cancellation
   assert.match(architectureProse, /key-only cancellation race/i);
   assert.match(architectureProse, /no atomic.*cancel only if this version still matches/i);
   assert.doesNotMatch(architectureProse, /cancels only an exact match/i);
+});
+
+test('public runtime privacy contract distinguishes supported filtering from a hard boundary', () => {
+  assert.match(architectureProse, /same Unix UID/i);
+  assert.match(architectureProse, /not an OS confidentiality boundary/i);
+  assert.match(
+    architectureProse,
+    /Android app-private, native-only storage that the provider UID cannot open/i,
+  );
+  assert.match(
+    architectureProse,
+    /genuine UID and mount\/filesystem isolation/i,
+  );
+  assert.match(
+    architectureProse,
+    /does not delete or claim deletion of provider-owned on-disk transcript files/i,
+  );
+  assert.match(
+    architectureProse,
+    /before loading it into memory so a later save cannot restore a removed entry/i,
+  );
+  assert.match(
+    architectureProse,
+    /malformed.*replaces it with an empty valid document and durably clears Evogent-owned task logs/i,
+  );
+  assert.match(auditCore, /mandatory worker policy/i);
+  assert.match(auditCore, /Never use shell, filesystem, alternate endpoint, or direct SQLite access/i);
+  assert.doesNotMatch(
+    runtimePrivacyProse,
+    /mechanically different identities|No runtime agent or external service receives the notification|every runtime-agent evidence bundle|Notification content never goes to the runtime brain|no notification content is sent to a runtime agent/i,
+  );
 });

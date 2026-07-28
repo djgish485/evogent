@@ -65,10 +65,10 @@ Before investigating anything, find and triage ALL previous audit-originated ite
 a. Fetch ALL suggestions and notifications, then filter for audit-related items by checking sourceId and text/title for audit keywords:
    ```bash
    # Fetch suggestions — filter broadly for any audit-originated item
-   "$API_CURL" -s "$API_BASE/api/feed?type=suggestion&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
+   "$API_CURL" -s "$API_BASE/api/feed?agentEvidence=1&type=suggestion&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
 
    # Fetch notifications — same broad filter
-   "$API_CURL" -s "$API_BASE/api/feed?type=notification&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
+   "$API_CURL" -s "$API_BASE/api/feed?agentEvidence=1&type=notification&limit=50" | jq '[.items[] | select(.sourceId | test("audit|pipeline-audit"; "i")) // select(.title | test("audit"; "i"))]'
    ```
 
 b. Check which suggestions have already been acted on — look at metadata.codeFixOrchestratorStatus (values: dispatched, merged, failed) and metadata.suggestionStatus (values: accepted, dismissed). A merged fix is not yet live evidence if step 0 shows the app is still running an older commit.

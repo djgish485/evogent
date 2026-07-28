@@ -58,6 +58,11 @@ export async function GET(request: Request) {
       feed.text AS feed_text
     FROM interactions
     LEFT JOIN feed ON feed.id = interactions.feed_item_id
+    WHERE (
+      feed.id IS NULL
+      OR feed.type != 'notification'
+      OR feed.source != 'phone-notification'
+    )
     ORDER BY datetime(interactions.created_at) DESC, interactions.id DESC
     LIMIT ?
   `).all(limit) as InteractionRow[];
@@ -78,7 +83,7 @@ export async function GET(request: Request) {
       text: truncateText(row.feed_text),
     },
   }));
-  const engagementSessions = getRecentFeedEngagementSessions(limit);
+  const engagementSessions = getRecentFeedEngagementSessions(limit, { agentEvidence: true });
 
   return NextResponse.json({
     ok: true,

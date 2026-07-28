@@ -28,6 +28,8 @@ describe('ensureFeedSchema', () => {
       assert.ok(tables.has('chat_messages'));
       assert.ok(tables.has('claude_task_usage'));
       assert.ok(tables.has('user_activity'));
+      assert.ok(tables.has('app_presence'));
+      assert.ok(tables.has('app_presence_generations'));
       assert.ok(tables.has('curation_log'));
       assert.ok(tables.has('preferences'));
       assert.ok(tables.has('preference_vectors'));
@@ -58,7 +60,58 @@ describe('ensureFeedSchema', () => {
       );
       assert.ok(benchColumns.has('quarantined_at_ms'));
       assert.ok(benchColumns.has('last_error'));
+
+      const presenceColumns = new Set(
+        (db.prepare(`PRAGMA table_info(app_presence)`).all() as Array<{ name: string }>)
+          .map((row) => row.name),
+      );
+      assert.ok(presenceColumns.has('server_epoch'));
+      assert.ok(presenceColumns.has('generation_id'));
+      assert.ok(presenceColumns.has('generation_sequence'));
+      assert.ok(presenceColumns.has('generation_order'));
     });
+  });
+
+  test('adds nullable ordering fields to a legacy presence row so it starts untrusted', () => {
+    const db = new Database(':memory:');
+    try {
+      db.exec(`
+        CREATE TABLE app_presence (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          state TEXT NOT NULL CHECK (state IN ('foreground', 'background')),
+          client_id TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL
+        );
+        INSERT INTO app_presence (id, state, client_id, last_seen_at)
+        VALUES (1, 'foreground', 'legacy-page', '2026-04-11T10:00:00.000Z');
+      `);
+
+      ensureFeedSchema(db);
+
+      assert.deepStrictEqual(
+        db.prepare(`
+          SELECT
+            state,
+            client_id,
+            server_epoch,
+            generation_id,
+            generation_sequence,
+            generation_order
+          FROM app_presence
+          WHERE id = 1
+        `).get(),
+        {
+          state: 'foreground',
+          client_id: 'legacy-page',
+          server_epoch: null,
+          generation_id: null,
+          generation_sequence: null,
+          generation_order: null,
+        },
+      );
+    } finally {
+      db.close();
+    }
   });
 
   test('adds user scroll evidence to a legacy engagement ledger', () => {
@@ -834,6 +887,34 @@ describe('ensureFeedSchema', () => {
       for (const name of expected) {
         assert.ok(indexes.has(name), `missing index: ${name}`);
       }
+    });
+  });
+
+  test('removes synthetic foreground heartbeats without erasing behavioral activity', () => {
+    withSchemaDb((db) => {
+      db.exec(`
+        INSERT INTO user_activity (event, timestamp, metadata)
+        VALUES
+          ('foreground', '2026-07-28T10:00:00.000Z', '{"heartbeat":true,"path":"/"}'),
+          ('foreground', '2026-07-28T10:01:00.000Z', '{"path":"/"}'),
+          ('app_open', '2026-07-28T10:02:00.000Z', NULL),
+          ('pull_refresh', '2026-07-28T10:03:00.000Z', NULL),
+          ('ping', '2026-07-28T10:04:00.000Z', NULL);
+      `);
+
+      ensureFeedSchema(db);
+
+      const rows = db.prepare(`
+        SELECT event, metadata
+        FROM user_activity
+        ORDER BY timestamp
+      `).all();
+      assert.deepStrictEqual(rows, [
+        { event: 'foreground', metadata: '{"path":"/"}' },
+        { event: 'app_open', metadata: null },
+        { event: 'pull_refresh', metadata: null },
+        { event: 'ping', metadata: null },
+      ]);
     });
   });
 

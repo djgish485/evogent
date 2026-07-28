@@ -1,6 +1,14 @@
+import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import { getDataPath } from '@/lib/data-dir';
-import type { UserActivityRecord } from '@/lib/db/activity';
+import type { AppPresenceRecord } from '@/lib/db/presence';
+
+export const PUSH_NOTIFICATION_BODY_MAX_BYTES = 512;
+export const PUSH_NOTIFICATION_REQUEST_TIMEOUT_MS = 5_000;
+// Background reports clear presence immediately. This window only protects
+// against a missed lifecycle signal, so keep enough margin above the 75-second
+// visible heartbeat rather than increasing phone wakeups/writes.
+export const PUSH_NOTIFICATION_MIN_FOREGROUND_SUPPRESS_WINDOW_SECONDS = 120;
 
 export interface PushNotificationEventConfig {
   enabled: boolean;
@@ -30,6 +38,33 @@ function toPositiveInt(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+function boundNotificationBody(value: string): string {
+  const characters: string[] = [];
+  const byteLengths: number[] = [];
+  let totalBytes = 0;
+
+  for (const character of value) {
+    const characterBytes = Buffer.byteLength(character, 'utf8');
+    if (totalBytes + characterBytes > PUSH_NOTIFICATION_BODY_MAX_BYTES) {
+      const suffix = '…';
+      const suffixBytes = Buffer.byteLength(suffix, 'utf8');
+      while (
+        byteLengths.length > 0
+        && totalBytes > PUSH_NOTIFICATION_BODY_MAX_BYTES - suffixBytes
+      ) {
+        totalBytes -= byteLengths.pop() ?? 0;
+        characters.pop();
+      }
+      return `${characters.join('').trimEnd()}${suffix}`;
+    }
+    characters.push(character);
+    byteLengths.push(characterBytes);
+    totalBytes += characterBytes;
+  }
+
+  return value;
+}
+
 export async function readPushNotificationConfig(): Promise<PushNotificationsConfig | null> {
   try {
     const raw = await fs.promises.readFile(getDataPath('push-notifications.json'), 'utf8');
@@ -52,25 +87,35 @@ export function getPushNotificationEventConfig(
     enabled: true,
     title: typeof eventConfig.title === 'string' && eventConfig.title.trim() ? eventConfig.title.trim() : null,
     suppressWhenForeground: eventConfig.suppressWhenForeground !== false,
-    suppressWindowSeconds: toPositiveInt(eventConfig.suppressWindowSeconds, 120),
+    suppressWindowSeconds: Math.max(
+      toPositiveInt(
+        eventConfig.suppressWindowSeconds,
+        PUSH_NOTIFICATION_MIN_FOREGROUND_SUPPRESS_WINDOW_SECONDS,
+      ),
+      PUSH_NOTIFICATION_MIN_FOREGROUND_SUPPRESS_WINDOW_SECONDS,
+    ),
   };
 }
 
 export function shouldSuppressPushNotification(
-  activity: UserActivityRecord | null,
+  presence: AppPresenceRecord | null,
   eventConfig: PushNotificationEventConfig | null,
   now = Date.now(),
 ): boolean {
-  if (!eventConfig?.enabled || !eventConfig.suppressWhenForeground || activity?.event !== 'foreground') {
+  if (
+    !eventConfig?.enabled
+    || !eventConfig.suppressWhenForeground
+    || presence?.state !== 'foreground'
+  ) {
     return false;
   }
 
-  const activityTime = Date.parse(activity.timestamp);
-  if (!Number.isFinite(activityTime) || activityTime > now) {
+  const lastSeenAt = Date.parse(presence.lastSeenAt);
+  if (!Number.isFinite(lastSeenAt) || lastSeenAt > now) {
     return false;
   }
 
-  return now - activityTime <= eventConfig.suppressWindowSeconds * 1000;
+  return now - lastSeenAt <= eventConfig.suppressWindowSeconds * 1000;
 }
 
 export async function sendPushNotification(
@@ -82,8 +127,9 @@ export async function sendPushNotification(
     fetchImpl?: typeof fetch;
   } = {},
 ): Promise<boolean> {
-  const body = message.trim();
-  if (!body) return false;
+  const trimmedBody = message.trim();
+  if (!trimmedBody) return false;
+  const body = boundNotificationBody(trimmedBody);
 
   const config = options.config ?? await readPushNotificationConfig();
   const eventConfig = getPushNotificationEventConfig(config, eventType);
@@ -109,6 +155,7 @@ export async function sendPushNotification(
       ...(tags.length > 0 ? { Tags: tags.join(',') } : {}),
     },
     body,
+    signal: AbortSignal.timeout(PUSH_NOTIFICATION_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {

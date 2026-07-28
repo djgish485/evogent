@@ -234,14 +234,39 @@ export function recordFeedEngagementSession(input: FeedEngagementInput): FeedEng
   })();
 }
 
-export function getRecentFeedEngagementSessions(limit = 50): FeedEngagementSession[] {
+export function getRecentFeedEngagementSessions(
+  limit = 50,
+  options: { agentEvidence?: boolean } = {},
+): FeedEngagementSession[] {
   const safeLimit = clampInteger(limit, 1, 200);
   const rows = getDb().prepare(`
-    SELECT *
-    FROM feed_engagement_sessions
-    ORDER BY datetime(opened_at) DESC, rowid DESC
+    SELECT sessions.*
+    FROM feed_engagement_sessions AS sessions
+    LEFT JOIN feed ON feed.id = sessions.feed_item_id
+    WHERE (
+      ? = 0
+      OR NOT (
+        COALESCE(
+          feed.type,
+          json_extract(
+            CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+            '$.type'
+          ),
+          ''
+        ) = 'notification'
+        AND COALESCE(
+          feed.source,
+          json_extract(
+            CASE WHEN json_valid(sessions.item_snapshot) THEN sessions.item_snapshot ELSE '{}' END,
+            '$.source'
+          ),
+          ''
+        ) = 'phone-notification'
+      )
+    )
+    ORDER BY datetime(sessions.opened_at) DESC, sessions.rowid DESC
     LIMIT ?
-  `).all(safeLimit) as FeedEngagementDbRow[];
+  `).all(options.agentEvidence ? 1 : 0, safeLimit) as FeedEngagementDbRow[];
 
   return rows.map(toSession);
 }

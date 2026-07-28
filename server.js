@@ -38,6 +38,9 @@ const {
 } = require('./lib/internal-request-auth.js');
 const { recoverClaudeSessionPoison } = require('./lib/chat-session-repair');
 const { createBrainOrchestrator } = require('./lib/brain-orchestrator');
+const {
+  scrubLegacyPhoneNotificationRuntimeArtifacts,
+} = require('./lib/phone-notification-chat-artifact-cleanup');
 const { resolveBrainProviderByName } = require('./lib/brain-provider');
 const { enqueueCacheRefreshForCuration } = require('./lib/cache-refresh-on-demand');
 const { dispatchCodeFixSuggestionsInBackground } = require('./lib/code-fix-dispatch');
@@ -619,6 +622,15 @@ async function resumeConfigApplyTasksOnStartup(taskIds) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[config-apply-recovery] could not resume task=${taskId}: ${message}`);
     }
+  }
+}
+
+async function startChatReplyPushOutboxOnStartup() {
+  try {
+    await postInternal('/api/internal/chat-reply-push-outbox/drain', {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[chat-reply-push-outbox] startup drain could not start: ${message}`);
   }
 }
 
@@ -2538,6 +2550,13 @@ const agentProgressClients = new Set();
 const compactingChatSessions = new Map();
 const pendingCompactRequests = new Set();
 
+// This must run before BrainOrchestrator loads orchestrator-history.json into
+// memory; otherwise a later history save could restore the legacy evidence that
+// the database migration removed from disk.
+scrubLegacyPhoneNotificationRuntimeArtifacts({
+  db: getChatStatusDb(),
+  dataDir,
+});
 const orchestrator = new BrainOrchestrator('evogent-ephemeral');
 let workerOrchestratorStatus = null;
 
@@ -4479,6 +4498,9 @@ app.prepare().then(async () => {
           priority: typeof body.priority === 'string' ? body.priority : undefined,
           source: typeof body.source === 'string' ? body.source : undefined,
           metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : null,
+          transientScreenContext: typeof body.transientScreenContext === 'string'
+            ? body.transientScreenContext
+            : null,
           requestId: typeof body.requestId === 'string' ? body.requestId : undefined,
           timeoutMs,
         });
@@ -5036,6 +5058,7 @@ app.prepare().then(async () => {
   await Promise.all(listeners);
 
   publishServerLoopbackSecret();
+  await startChatReplyPushOutboxOnStartup();
   await initializeWatchersOnStartup();
   await resumeConfigApplyTasksOnStartup(startupConfigApplyTaskIds);
   await orchestrator.checkBrainAvailability();

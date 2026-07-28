@@ -7,6 +7,11 @@ export interface EnqueueOrchestratorRequest {
   priority?: OrchestratorPriority | string;
   source?: string;
   metadata?: Record<string, unknown> | null;
+  /**
+   * Provider-only context for a screen-backed user chat. The orchestrator keeps this
+   * outside its serializable task object and releases it when that one task finishes.
+   */
+  transientScreenContext?: string | null;
   requestId?: string;
   timeoutMs?: number;
 }

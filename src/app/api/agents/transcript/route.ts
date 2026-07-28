@@ -7,13 +7,25 @@ import { extractTranscriptTextFromAgentLogEvent } from '@/lib/agent-log-events';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const AGENT_LOGS_DIR = path.resolve(getDataPath('agent-logs'));
-const TASK_LOGS_DIR = path.resolve(getDataPath('task-logs'));
+const AGENT_LOGS_DIR = path.resolve(
+  /* turbopackIgnore: true */ getDataPath('agent-logs'),
+);
+const TASK_LOGS_DIR = path.resolve(
+  /* turbopackIgnore: true */ getDataPath('task-logs'),
+);
 const SHARED_AGENT_LOGS_DIR = process.env.MEDIA_AGENT_ROOT
-  ? path.resolve(process.env.MEDIA_AGENT_ROOT, 'data', 'agent-logs')
+  ? path.resolve(
+      /* turbopackIgnore: true */ process.env.MEDIA_AGENT_ROOT,
+      'data',
+      'agent-logs',
+    )
   : AGENT_LOGS_DIR;
 const SHARED_TASK_LOGS_DIR = process.env.MEDIA_AGENT_ROOT
-  ? path.resolve(process.env.MEDIA_AGENT_ROOT, 'data', 'task-logs')
+  ? path.resolve(
+      /* turbopackIgnore: true */ process.env.MEDIA_AGENT_ROOT,
+      'data',
+      'task-logs',
+    )
   : TASK_LOGS_DIR;
 
 const ALLOWED_LOG_DIRS = [...new Set([
@@ -27,7 +39,7 @@ function resolveLogFilePath(rawFile: string): string | null {
   const trimmed = rawFile.trim();
   if (!trimmed) return null;
 
-  const resolved = path.resolve(trimmed);
+  const resolved = path.resolve(/* turbopackIgnore: true */ trimmed);
   const inAllowedDir = ALLOWED_LOG_DIRS.some((baseDir) => (
     resolved === baseDir || resolved.startsWith(`${baseDir}${path.sep}`)
   ));
@@ -52,7 +64,10 @@ export async function GET(request: Request) {
 
   let content: string;
   try {
-    content = await fs.promises.readFile(resolvedPath, 'utf8');
+    content = await fs.promises.readFile(
+      /* turbopackIgnore: true */ resolvedPath,
+      'utf8',
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return NextResponse.json({ error: 'Transcript file not found' }, { status: 404 });

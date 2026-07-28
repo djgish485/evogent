@@ -51,7 +51,7 @@ mkdir -p "${TMPDIR:-$HOME/.cache}"
 BENCH_TMP=$(mktemp -d "${TMPDIR:-$HOME/.cache}/evogent-cu-bench.XXXXXX") || exit 70
 chmod 700 "$BENCH_TMP"
 if [ "${#ROUTES[@]}" -eq 0 ]; then
-  CURRENT=$(python3 "$ROUTER" resolve --task browse \
+  CURRENT=$(python3 "$ROUTER" resolve --task browse_youtube \
     --config "$EVO/data/config.md" \
     --policy "$TOOLS/model-routing.default.json" \
     --live "$EVO/data/model-routing.json" \
@@ -79,8 +79,10 @@ for ROUND in $(seq 1 "$ROUNDS"); do
     [ "$MODEL" = "$EFFORT" ] && EFFORT=low
     ROLE=candidate; [ "$MODEL_INDEX" -eq 1 ] && ROLE=baseline
     RESPONSE="$BENCH_TMP/response-$ROUND-$MODEL_INDEX.txt"
+    EVENTS="$BENCH_TMP/events-$ROUND-$MODEL_INDEX.jsonl"
     TREE="$BENCH_TMP/tree-$ROUND-$MODEL_INDEX.txt"
-    : > "$RESPONSE"; : > "$TREE"; chmod 600 "$RESPONSE" "$TREE"
+    : > "$RESPONSE"; : > "$EVENTS"; : > "$TREE"
+    chmod 600 "$RESPONSE" "$EVENTS" "$TREE"
     T0_MS=$(python3 -c 'import time; print(int(time.time()*1000))')
     if ! control_safe_force_stop_package com.google.android.youtube; then
       RUN_RC=70
@@ -91,8 +93,8 @@ for ROUND in $(seq 1 "$ROUNDS"); do
       sleep 2
       ( cd "$EVO" && printf '%s\n' "$TASK" | run_owned_timeout_stdin 180 15 \
           codex exec --model "$MODEL" -c model_reasoning_effort="$EFFORT" \
-          --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check - \
-          >"$RESPONSE" 2>/dev/null )
+          --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check \
+          --json --output-last-message "$RESPONSE" - >"$EVENTS" 2>/dev/null )
       RUN_RC=$?
       if [ "$RUN_RC" -eq 124 ] || [ "$RUN_RC" -eq 137 ] || [ "$RUN_RC" -eq 143 ]; then
         MECHANICS=timeout
@@ -122,11 +124,15 @@ for ROUND in $(seq 1 "$ROUNDS"); do
     fi
     T1_MS=$(python3 -c 'import time; print(int(time.time()*1000))')
     ELAPSED_MS=$((T1_MS - T0_MS))
-    METRICS=$(python3 - "$METRICS" "$ELAPSED_MS" <<'PY' 2>/dev/null
+    USAGE=$(python3 "$ROUTER" codex-usage --events "$EVENTS" 2>/dev/null || echo '{}')
+    METRICS=$(python3 - "$METRICS" "$USAGE" "$ELAPSED_MS" <<'PY' 2>/dev/null
 import json,sys
 try: value=json.loads(sys.argv[1])
 except Exception: value={}
-value["elapsedMs"]=int(sys.argv[2])
+try: usage=json.loads(sys.argv[2])
+except Exception: usage={}
+if isinstance(usage,dict): value.update(usage)
+value["elapsedMs"]=int(sys.argv[3])
 print(json.dumps(value,separators=(",",":")))
 PY
 )
@@ -146,8 +152,11 @@ PY
     GROUNDED=$(printf '%s' "$METRICS" | python3 -c \
       'import json,sys; print((json.load(sys.stdin) or {}).get("groundedTitles",0))' \
       2>/dev/null || echo 0)
-    say "$MODEL@$EFFORT round=$ROUND: $((ELAPSED_MS/1000))s mechanics=$MECHANICS quality=$QUALITY grounded=$GROUNDED/5"
-    : > "$RESPONSE"; : > "$TREE"
+    TOKENS=$(printf '%s' "$METRICS" | python3 -c \
+      'import json,sys; print((json.load(sys.stdin) or {}).get("totalTokens","unknown"))' \
+      2>/dev/null || echo unknown)
+    say "$MODEL@$EFFORT round=$ROUND: $((ELAPSED_MS/1000))s tokens=$TOKENS mechanics=$MECHANICS quality=$QUALITY grounded=$GROUNDED/5"
+    : > "$RESPONSE"; : > "$EVENTS"; : > "$TREE"
   done
 done
-say "=== SUMMARY (micro screening only; production routing requires a full_browse suite) ==="
+say "=== SUMMARY (screening only; neither this micro task nor the mutable-feed full smoke test can qualify a persistent route) ==="

@@ -1,4 +1,8 @@
-# /dream — the scheduled private taste pass (runs on the phone)
+# /dream — legacy manual private taste pass (runs on the phone)
+
+This is now an unscheduled compatibility command. The phone scheduler runs one
+daily `/oversee` task instead; invoke `/dream` only when a person explicitly
+requests this legacy taste pass, and never restore it as another daily review.
 
 You are the Evogent DREAMER: the on-device taste critic. Review the recent production feed
 and ask whether it was actually good for this user and what the next cycle should learn.
@@ -16,14 +20,22 @@ phone is self-sufficient — supervisors are optional extras, not load-bearing).
 ## The pass
 1. **Read the feed the way the user sees it** — use
    `${EVOGENT_API_CURL:-curl}` for
-   `GET http://127.0.0.1:${PORT:-3001}/api/feed?limit=50`.
+   `GET http://127.0.0.1:${PORT:-3001}/api/feed?agentEvidence=1&limit=50`.
+   Never read `source = 'phone-notification'` rows directly from SQLite.
+   The current worker shares the server's Unix UID and storage, so this is
+   mandatory policy in addition to API filtering, not an OS sandbox. Never use
+   shell, filesystem, or another endpoint to bypass the filtered evidence path.
    This endpoint applies the user's lens (dislikes and dismissals excluded). Do NOT query the
    feed table directly for judgment; raw display_order can include rows the user never sees.
    Auditing the display model rather than the rendered API can create phantom corrections.
 2. Read the taste corpus: `data/curation-prompt.md`, `data/preference-insights.md`,
    `data/account-tiers.json`, `data/ig-engagement.json` when present, and the last 7 days of
-   `interactions` (dislikes especially — each one is the user telling you the system got
-   something wrong).
+   explicit interactions through
+   `GET http://127.0.0.1:${PORT:-3001}/api/internal/interactions/recent?limit=200`
+   (dislikes especially — each one is the user telling you the system got
+   something wrong). Do not read phone-notification-linked interaction or
+   engagement rows directly from SQLite; the endpoint removes that local-only
+   lane and any retained content snapshot.
 3. **Judge the complete current primary slate as the user**: for each item — would they be
    glad it is here, based on its actual substance now? Look for promotion, stale-without-value
    material, content-free hype, and duplicates without turning age, account, source, or content

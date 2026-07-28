@@ -12,7 +12,14 @@ Check `.claude/skills/*/SKILL.md` when a task matches an installed skill (phone-
 
 ## Anticipation: check what Evogent already has BEFORE you go fetch, then report the outcome
 Evogent's whole job is to have what the user wants ALREADY waiting before they ask. So when the user asks for CONTENT or an ACTION on something Evogent could have anticipated (news/tweets/videos on a topic, "what's happening with X", "find me…", "any updates on…", "book/reply/cancel…"), work in this order — do NOT jump straight to a live browse:
-1. Check the CURRENT FEED first: `GET /api/feed?limit=60`. If items already there match the ask, answer from them and point the user to those cards. This is the best outcome.
+1. Check the CURRENT MODEL-ELIGIBLE FEED first:
+   `GET /api/feed?agentEvidence=1&limit=60`. If items already there match the
+   ask, answer from them and point the user to those cards. Phone-notification
+   cards are excluded from this supported runtime evidence path; never query
+   their title/body from SQLite or another feed path. The current worker shares
+   the server's Unix UID and storage, so this is mandatory policy in addition
+   to API filtering, not an OS sandbox; never bypass it through shell or
+   filesystem access.
 2. If the feed doesn't have it, check the BROWSE CACHE: `GET /api/internal/browse-cache/items?source=<youtube|twitter|substack|gmail>&limit=60` (try the likely source). If a cached item matches, answer from it — the user waited seconds, not minutes.
 3. Only if neither has it, live-browse the app / search the web (the slow path the user waits through).
 

@@ -128,6 +128,61 @@ describe('/api/feed suggestion counts', () => {
     });
   });
 
+  test('agent evidence view excludes phone-notification content while the normal user feed keeps it visible', async () => {
+    const db = getDb();
+    const privateCanary = 'PRIVATE_PHONE_NOTIFICATION_CANARY_4021';
+    db.prepare(`
+      INSERT INTO feed (id, type, source, source_id, title, text, published_at, created_at)
+      VALUES
+        ('phone-notification-private', 'notification', 'phone-notification', 'phone-notification:private', ?, ?, ?, ?),
+        ('system-notification-safe', 'notification', 'system', 'system:status', 'System status', 'Content-free runtime status', ?, ?),
+        ('ordinary-feed-safe', 'article', 'publisher', 'article:safe', 'Ordinary story', 'Ordinary story body', ?, ?)
+    `).run(
+      `Private title ${privateCanary}`,
+      `Private body ${privateCanary}`,
+      '2026-04-25T12:02:00.000Z',
+      '2026-04-25T12:02:00.000Z',
+      '2026-04-25T12:01:00.000Z',
+      '2026-04-25T12:01:00.000Z',
+      '2026-04-25T12:00:00.000Z',
+      '2026-04-25T12:00:00.000Z',
+    );
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, parent_id, relationship,
+        title, text, published_at, created_at
+      ) VALUES (
+        'phone-notification-private-child', 'notification', 'phone-notification',
+        'phone-notification:private-child', 'ordinary-feed-safe', 'related',
+        ?, ?, ?, ?
+      )
+    `).run(
+      `Private child title ${privateCanary}`,
+      `Private child body ${privateCanary}`,
+      '2026-04-25T12:03:00.000Z',
+      '2026-04-25T12:03:00.000Z',
+    );
+
+    const userResponse = await GET(new Request('http://127.0.0.1/api/feed?limit=10'));
+    const userData = await userResponse.json() as FeedListResponse;
+    assert.ok(userData.items.some((item) => item.id === 'phone-notification-private'));
+    assert.match(JSON.stringify(userData), new RegExp(privateCanary));
+    assert.strictEqual(userData.pendingCounts?.notification, 2);
+
+    const evidenceResponse = await GET(new Request(
+      'http://127.0.0.1/api/feed?limit=10',
+      { headers: { Authorization: 'EvogentSession direct-runtime-test-token' } },
+    ));
+    const evidenceData = await evidenceResponse.json() as FeedListResponse;
+    assert.deepStrictEqual(
+      evidenceData.items.map((item) => item.id).sort(),
+      ['ordinary-feed-safe', 'system-notification-safe'],
+    );
+    assert.strictEqual(evidenceData.pendingCounts?.notification, 1);
+    assert.doesNotMatch(JSON.stringify(evidenceData), /phone-notification-private-child/);
+    assert.doesNotMatch(JSON.stringify(evidenceData), new RegExp(privateCanary));
+  });
+
   test('returns stored thread prominence metadata on feed items', async () => {
     const db = getDb();
 

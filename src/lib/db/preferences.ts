@@ -50,6 +50,19 @@ interface PreferenceListDbRow extends PreferenceDbRow {
   feed_text: string | null;
 }
 
+function phoneNotificationEvidenceExclusion(
+  preferenceAlias: string,
+  feedAlias: string,
+): string {
+  return `NOT (
+    (
+      COALESCE(${feedAlias}.type, '') = 'notification'
+      AND COALESCE(${feedAlias}.source, '') = 'phone-notification'
+    )
+    OR COALESCE(${preferenceAlias}.source_id, '') LIKE 'phone-notification:%'
+  )`;
+}
+
 function toPreferenceRow(row: PreferenceDbRow): PreferenceRow {
   return {
     id: row.id,
@@ -269,9 +282,11 @@ export function bulkInsertPreferences(inputs: PreferenceInsert[]): number {
 export function getPreferences(limit = 500): PreferenceRow[] {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT *
-    FROM preferences
-    ORDER BY weight DESC, created_at DESC
+    SELECT p.*
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE ${phoneNotificationEvidenceExclusion('p', 'f')}
+    ORDER BY p.weight DESC, p.created_at DESC
     LIMIT ?
   `).all(limit) as PreferenceDbRow[];
 
@@ -281,10 +296,12 @@ export function getPreferences(limit = 500): PreferenceRow[] {
 export function getPreferencesBySignalType(signalType: string, limit = 500): PreferenceRow[] {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT *
-    FROM preferences
-    WHERE signal_type = ?
-    ORDER BY weight DESC, created_at DESC
+    SELECT p.*
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE p.signal_type = ?
+      AND ${phoneNotificationEvidenceExclusion('p', 'f')}
+    ORDER BY p.weight DESC, p.created_at DESC
     LIMIT ?
   `).all(signalType, limit) as PreferenceDbRow[];
 
@@ -294,10 +311,12 @@ export function getPreferencesBySignalType(signalType: string, limit = 500): Pre
 export function getPositivePreferences(limit = 100): PreferenceRow[] {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT *
-    FROM preferences
-    WHERE signal_type IN ('liked', 'bookmarked', 'explicit')
-    ORDER BY weight DESC, created_at DESC
+    SELECT p.*
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE p.signal_type IN ('liked', 'bookmarked', 'explicit')
+      AND ${phoneNotificationEvidenceExclusion('p', 'f')}
+    ORDER BY p.weight DESC, p.created_at DESC
     LIMIT ?
   `).all(limit) as PreferenceDbRow[];
 
@@ -307,10 +326,12 @@ export function getPositivePreferences(limit = 100): PreferenceRow[] {
 export function getNegativePreferences(limit = 50): PreferenceRow[] {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT *
-    FROM preferences
-    WHERE signal_type IN ('disliked', 'hidden')
-    ORDER BY weight DESC, created_at DESC
+    SELECT p.*
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE p.signal_type IN ('disliked', 'hidden')
+      AND ${phoneNotificationEvidenceExclusion('p', 'f')}
+    ORDER BY p.weight DESC, p.created_at DESC
     LIMIT ?
   `).all(limit) as PreferenceDbRow[];
 
@@ -344,12 +365,14 @@ export function getPreferencesPage(query: PreferencesPageQuery = {}): Preference
 
   let whereSql = `
     WHERE 1 = 1
+      AND ${phoneNotificationEvidenceExclusion('p', 'f')}
   `;
   whereSql = appendSignalTypeFilter(whereSql, params, signalType);
 
   const countRow = db.prepare(`
     SELECT COUNT(*) AS count
     FROM preferences p
+    LEFT JOIN feed f ON f.id = p.feed_item_id
     ${whereSql}
   `).get(...params) as { count: number };
 
@@ -393,37 +416,39 @@ export function getRecentPreferences(query: RecentPreferenceQuery = {}): Prefere
   const params: Array<string | number> = [];
 
   let sql = `
-    SELECT *
-    FROM preferences
+    SELECT p.*
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
     WHERE 1 = 1
+      AND ${phoneNotificationEvidenceExclusion('p', 'f')}
   `;
 
   if (since) {
     sql += `
-      AND datetime(created_at) >= datetime(?)
+      AND datetime(p.created_at) >= datetime(?)
     `;
     params.push(since);
   }
 
   if (onlyWithReason) {
     sql += `
-      AND reason IS NOT NULL
-      AND trim(reason) <> ''
+      AND p.reason IS NOT NULL
+      AND trim(p.reason) <> ''
     `;
   }
 
   if (signalType) {
     if (signalType === 'liked' || signalType === 'positive') {
       sql += `
-      AND signal_type IN ('liked', 'bookmarked', 'explicit')
+      AND p.signal_type IN ('liked', 'bookmarked', 'explicit')
     `;
     } else if (signalType === 'disliked' || signalType === 'negative') {
       sql += `
-      AND signal_type IN ('disliked', 'hidden')
+      AND p.signal_type IN ('disliked', 'hidden')
     `;
     } else {
       sql += `
-      AND signal_type = ?
+      AND p.signal_type = ?
     `;
       params.push(signalType);
     }
@@ -431,9 +456,9 @@ export function getRecentPreferences(query: RecentPreferenceQuery = {}): Prefere
 
   sql += `
     ORDER BY
-      CASE WHEN reason IS NOT NULL AND trim(reason) <> '' THEN 1 ELSE 0 END DESC,
-      datetime(created_at) DESC,
-      weight DESC
+      CASE WHEN p.reason IS NOT NULL AND trim(p.reason) <> '' THEN 1 ELSE 0 END DESC,
+      datetime(p.created_at) DESC,
+      p.weight DESC
     LIMIT ?
   `;
   params.push(limit);
@@ -449,18 +474,27 @@ export function getPreferenceStats(): {
 } {
   const db = getDb();
 
-  const total = db.prepare(`SELECT COUNT(*) AS count FROM preferences`).get() as { count: number };
+  const total = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE ${phoneNotificationEvidenceExclusion('p', 'f')}
+  `).get() as { count: number };
 
   const byTypeRows = db.prepare(`
-    SELECT signal_type, COUNT(*) AS count
-    FROM preferences
-    GROUP BY signal_type
+    SELECT p.signal_type, COUNT(*) AS count
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE ${phoneNotificationEvidenceExclusion('p', 'f')}
+    GROUP BY p.signal_type
   `).all() as Array<{ signal_type: string; count: number }>;
 
   const bySourceRows = db.prepare(`
-    SELECT source, COUNT(*) AS count
-    FROM preferences
-    GROUP BY source
+    SELECT p.source, COUNT(*) AS count
+    FROM preferences AS p
+    LEFT JOIN feed AS f ON f.id = p.feed_item_id
+    WHERE ${phoneNotificationEvidenceExclusion('p', 'f')}
+    GROUP BY p.source
   `).all() as Array<{ source: string; count: number }>;
 
   return {

@@ -196,10 +196,10 @@ run_due_private_tasks_if_committed
   );
   assert.equal(
     (scheduler.match(/^[ \t]*run_due_private_tasks_if_committed$/gm) || []).length,
-    3,
+    5,
   );
   const schedulerLoop = scheduler.slice(
-    scheduler.indexOf('NEXT_MIN=""\nINITIAL_FLOOR_CHECKED=0\nwhile true; do'),
+    scheduler.indexOf('NEXT_MIN=""\nINITIAL_FLOOR_CHECKED=0\n'),
   );
   assert.match(
     schedulerLoop,
@@ -207,7 +207,15 @@ run_due_private_tasks_if_committed
   );
   assert.match(
     schedulerLoop,
-    /if pause_for_release_transaction; then\n    continue\n  fi\n  REQUEST_REASON=""/,
+    /if pause_for_release_transaction; then\n    continue\n  fi[\s\S]*?wait_for_persisted_cycle_failure_backoff\n  REQUEST_REASON=""/,
+  );
+  assert.match(
+    scheduler,
+    /wait_scheduler_seconds\(\) \{[\s\S]*?while \[ "\$remaining" -gt 0 \]; do[\s\S]*?run_due_private_tasks_if_committed[\s\S]*?ensure_watchdog/,
+  );
+  assert.match(
+    scheduler,
+    /wait_for_persisted_cycle_failure_backoff\(\) \{[\s\S]*?--cycle-failure-action remaining[\s\S]*?run_due_private_tasks_if_committed[\s\S]*?ensure_watchdog/,
   );
 });
 
@@ -1451,6 +1459,108 @@ test('installer contract is complete and process-scoped', () => {
       && apkInstall < rollbackAvailabilityGate
       && rollbackAvailabilityGate < runtimeMigration,
   );
+});
+
+test('phone release production config stays SWC-independent on the sealed Android tree', () => {
+  const builder = fs.readFileSync(
+    path.join(root, 'scripts/build-phone-release.sh'),
+    'utf8',
+  );
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+
+  assert.match(
+    builder,
+    /package\.json package-lock\.json next\.config\.js tsconfig\.json/,
+  );
+  assert.doesNotMatch(builder, /next\.config\.ts/);
+  assert.equal(fs.existsSync(path.join(root, 'next.config.ts')), false);
+
+  const omitOptionalAt = installer.indexOf(
+    'npm ci --ignore-scripts --omit=dev --omit=optional',
+  );
+  const sealTreeAt = installer.indexOf(
+    'python3 "$DEPENDENCY_STATE_HELPER" seal',
+  );
+  const boundedPrepareAt = installer.indexOf(
+    'timeout -k 5 120 env NODE_ENV=production node',
+  );
+  const productionPrepareAt = installer.indexOf('app.prepare()');
+  const deterministicCloseAt = installer.indexOf('await app.close()');
+  const prepareCatchAt = installer.indexOf('prepareAndClose().catch');
+  assert.ok(
+    omitOptionalAt !== -1
+      && omitOptionalAt < sealTreeAt
+      && sealTreeAt < boundedPrepareAt
+      && boundedPrepareAt < productionPrepareAt
+      && productionPrepareAt < deterministicCloseAt
+      && deterministicCloseAt < prepareCatchAt,
+    'bounded production preparation must exercise and close the optional-free sealed dependency tree',
+  );
+  assert.match(
+    installer.slice(boundedPrepareAt, prepareCatchAt),
+    /try \{\s+await app\.prepare\(\);\s+\} finally \{\s+await app\.close\(\);\s+\}/,
+  );
+
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-next-config-'));
+  const runtime = path.join(fixture, 'runtime');
+  fs.mkdirSync(runtime);
+  fs.copyFileSync(
+    path.join(root, 'next.config.js'),
+    path.join(runtime, 'next.config.js'),
+  );
+  fs.chmodSync(path.join(runtime, 'next.config.js'), 0o444);
+  fs.chmodSync(runtime, 0o555);
+
+  const probe = String.raw`
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+const runtime = process.argv[1];
+const swcEntry = require.resolve('next/dist/build/swc');
+const originalLoad = Module._load;
+
+Module._load = function guardedLoad(request, parent, isMain) {
+  let resolved = '';
+  try {
+    resolved = Module._resolveFilename(request, parent, isMain);
+  } catch {
+    // Preserve the original resolver's error and stack for non-SWC modules.
+  }
+  if (resolved === swcEntry) {
+    throw new Error('production config attempted to load the omitted SWC compiler');
+  }
+  return Reflect.apply(originalLoad, this, arguments);
+};
+
+const loadConfig = require('next/dist/server/config').default;
+const { PHASE_PRODUCTION_SERVER } = require('next/constants');
+
+loadConfig(PHASE_PRODUCTION_SERVER, runtime, { silent: true })
+  .then((config) => {
+    assert.equal(config.reactStrictMode, false);
+    assert.deepEqual(
+      config.serverExternalPackages,
+      ['better-sqlite3', 'sqlite-vec', 'sqlite-vec-linux-x64'],
+    );
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+`;
+  const env = {
+    ...process.env,
+    NODE_PATH: path.join(root, 'node_modules'),
+  };
+  delete env.__NEXT_NODE_NATIVE_TS_LOADER_ENABLED;
+  const result = spawnSync(
+    process.execPath,
+    ['-e', probe, runtime],
+    { encoding: 'utf8', env },
+  );
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('transaction intent is durable before quiesce and backup readiness is explicit', () => {
@@ -4696,6 +4806,7 @@ INSTALL_LOCK="$1"
 TRANSACTION_JOURNAL="$2"
 TRANSACTION_RECOVERER="$3"
 INSTALL_LOCK_HELD=0
+FORWARD_SUPERSEDE=0
 acquire_install_lock_and_recover_prior_transactions
 test ! -e "$TRANSACTION_JOURNAL"
 test -e "$RECOVERED_MARKER"
@@ -4713,7 +4824,7 @@ release_lock_dir "$INSTALL_LOCK"
     waitForExit(waiter),
   ]);
   assert.equal(ownerExit.signal, 'SIGKILL');
-  assert.equal(waiterExit.status, 0);
+  assert.equal(waiterExit.status, 0, waiterExit.stderr);
   assert.equal(fs.existsSync(recovered), true);
 });
 
@@ -5068,9 +5179,21 @@ test('release archives and private-key transit are owner-only', () => {
   );
   assert.match(builder, /chmod 600 "\$ARCHIVE\.sha256"/);
   assert.match(deploy, /set -euo pipefail\s+umask 077/);
-  assert.match(deploy, /chmod 600 "\$ARCHIVE" "\$ARCHIVE\.sha256"/);
-  assert.match(deploy, /mkdir -p '\$REMOTE_DIR'; chmod 700 '\$REMOTE_DIR'/);
-  assert.match(deploy, /chmod 600 '\$REMOTE_ARCHIVE'/);
+  assert.match(deploy, /nofollow = getattr\(os, "O_NOFOLLOW", 0\)/);
+  assert.match(
+    deploy,
+    /source_fd = os\.open\(\s*source,\s*os\.O_RDONLY \| nofollow \| getattr\(os, "O_CLOEXEC", 0\),\s*\)/,
+  );
+  assert.match(deploy, /os\.fchmod\(source_fd, 0o600\)/);
+  assert.match(deploy, /os\.fchmod\(destination_fd, 0o600\)/);
+  assert.match(
+    deploy,
+    /incoming_fd = open_owned_directory\([\s\S]*?exact_mode=0o700/,
+  );
+  assert.match(
+    deploy,
+    /archive_fd = checked_open\(leaf_fd, archive_name, 0o600\)/,
+  );
 });
 
 test('fresh APK token install is atomic, private, and non-disclosing', () => {
@@ -5297,4 +5420,97 @@ test('legacy partial deploy entrypoints fail closed', () => {
     assert.equal(result.status, 64);
     assert.match(result.stderr, /retired/);
   }
+});
+
+test('rollback-state requires positive proof that the exact rollback was consumed', () => {
+  const command = (dump, mode = 'require-consumed') => spawnSync(
+    'python3',
+    [
+      rollbackStateHelper,
+      mode,
+      'com.example.evogent',
+      '8',
+      '7',
+    ],
+    { encoding: 'utf8', input: dump },
+  );
+  const record = (state) => `
+  123:
+    -state: ${state}
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+`;
+  assert.equal(command(record('committed')).status, 0);
+  assert.equal(command(record('deleted')).status, 0);
+  assert.notEqual(command(record('available')).status, 0);
+  assert.notEqual(
+    command(`${record('committed')}
+  124:
+    -state: available
+    -isStaged: true
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+`).status,
+    0,
+  );
+  assert.notEqual(
+    command(`${record('committed')}
+  125:
+    -state: available
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+      com.example.companion 4 -> 3 [0]
+`).status,
+    0,
+  );
+  assert.notEqual(
+    command(`${record('committed')}
+  126:
+    -state: committed
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+      malformed competing package row
+`).status,
+    0,
+  );
+  const duplicateState = `
+  123:
+    -state: available
+    -state: committed
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+`;
+  assert.notEqual(command(duplicateState).status, 0);
+  const duplicatePackages = `
+  123:
+    -state: committed
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+    -packages:
+`;
+  assert.notEqual(command(duplicatePackages).status, 0);
+  const duplicateRow = `
+  123:
+    -state: committed
+    -isStaged: false
+    -packages:
+      com.example.evogent 8 -> 7 [0]
+      com.example.evogent 8 -> 7 [0]
+`;
+  assert.notEqual(command(duplicateRow).status, 0);
+  assert.notEqual(
+    command(`${record('committed')}${record('deleted')}`).status,
+    0,
+  );
+  assert.equal(
+    command(duplicateState.replace('committed', 'available'), 'check').status,
+    0,
+    'ordinary availability checking retains its existing permissive parser',
+  );
+  assert.notEqual(command('').status, 0);
 });

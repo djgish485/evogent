@@ -50,6 +50,7 @@ SCHED_LOCK_HELD=0
 SCHED_CONTRACT="$TOOLS/.curation-control"
 TASK_QUEUE="$TOOLS/durable_task_queue.py"
 SCHEDULED_TASK_ROOT="$EVO/data/.scheduler-tasks"
+CYCLE_FAILURE_BACKOFF_STATE="$TOOLS/.cycle-failure-backoff.json"
 OVERSEER_STAMP="$TOOLS/.overseer-stamp"
 # One-release migration only: if the old comprehensive reflection already
 # completed today, do not add an overseer pass over the same evidence.
@@ -142,7 +143,9 @@ scheduler_cfg(){ # one-line value under an exact ## heading
 # The daily private overseer is one durable scheduler task, independent of normal
 # browse/curate timing. ensure-nightly writes its record before the configured
 # maintenance hour; claim is atomic once due. Provider, terminal-receipt, or
-# postcondition failures retry with bounded backoff and eventually quarantine.
+# Pre-provider postcondition failures retry with bounded backoff. Once the
+# high-reasoning provider has launched, any failure is terminal for this service
+# day so a provider outage cannot multiply expensive daily reviews.
 maintenance_hour(){
   local raw hour
   raw="${EVOGENT_MAINTENANCE_HOUR:-$(scheduler_cfg 'Maintenance Hour')}"
@@ -185,6 +188,7 @@ scheduled_task_wake_release() {
 run_due_overseer() {
   local ensured claim lease instruction route model effort route_origin prompt rc
   local transition action review_hour insights_before cadence_before output terminal_result
+  local provider_spend provider_spend_action
   review_hour=$(maintenance_hour)
   ensured=$(python3 "$TASK_QUEUE" ensure-nightly --root "$SCHEDULED_TASK_ROOT" \
     --task oversee --hour "$review_hour" \
@@ -269,6 +273,23 @@ $(cat "$instruction")"
     scheduled_task_wake_release
     return 2
   fi
+  # This fsync'd lease mutation is the daily cost linearization point. If the
+  # scheduler, Termux, or phone dies at any later instruction, expiry recovery
+  # quarantines this service date instead of launching the provider twice.
+  provider_spend=$(python3 "$TASK_QUEUE" mark-provider-launch-spent \
+    --root "$SCHEDULED_TASK_ROOT" --lease "$lease" 2>>"$LOG") || provider_spend=""
+  provider_spend_action=$(printf '%s' "$provider_spend" | python3 -c \
+    'import json,sys;print((json.load(sys.stdin) or {}).get("action") or "")' \
+    2>/dev/null)
+  if [ "$provider_spend_action" != "marked" ]; then
+    rm -f "$output"
+    PRIVATE_TASK_OUTPUT=""
+    say "overseer: provider launch was not durably authorized; lease retained"
+    control_status_write overseer - failed provider_spend_guard 0 2 \
+      "provider was not launched; lease retained for safe recovery"
+    scheduled_task_wake_release
+    return 2
+  fi
   say "overseer: starting model route=$route_origin effort=$effort"
   ( cd "$EVO" && run_owned_timeout 1200 30 codex exec --model "$model" \
       -c model_reasoning_effort="$effort" --dangerously-bypass-approvals-and-sandbox \
@@ -303,9 +324,9 @@ $(cat "$instruction")"
     return 0
   fi
   transition=$(python3 "$TASK_QUEUE" finish --root "$SCHEDULED_TASK_ROOT" --lease "$lease" \
-    --result retry --outcome overseer_failure \
+    --result quarantine --outcome overseer_failure \
     --detail "provider/mechanics, exact terminal result, or private-artifact postcondition failed rc=$rc" 2>>"$LOG") || {
-      say "overseer: retry transition failed; lease retained for expiry recovery"
+      say "overseer: terminal transition failed; lease retained for expiry recovery"
       control_status_write overseer - failed ledger_retry_failure 0 "$rc" "lease retained"
       scheduled_task_wake_release
       return 2
@@ -439,6 +460,50 @@ run_due_private_tasks_if_committed() {
   CONTROL_ACTIVE_LOCK="$SCHED_LOCK"
 }
 
+wait_scheduler_seconds() {
+  local remaining="$1" slice
+  while [ "$remaining" -gt 0 ]; do
+    slice=$(( remaining < 60 ? remaining : 60 ))
+    sleep "$slice"
+    remaining=$(( remaining - slice ))
+    control_lock_renew "$SCHED_LOCK" || true
+    run_due_private_tasks_if_committed
+    ensure_watchdog
+  done
+}
+
+wait_for_persisted_cycle_failure_backoff() {
+  local remaining slice announced=0
+  while true; do
+    if ! remaining=$(python3 "$TOOLS/scheduler_timing.py" \
+      --cycle-failure-state "$CYCLE_FAILURE_BACKOFF_STATE" \
+      --cycle-failure-action remaining \
+      --cycle-failure-max-seconds 7200 2>>"$LOG"); then
+      # A missing/broken helper must not turn a process restart into an
+      # immediate expensive retry. One conservative base wait is bounded.
+      say "cycle failure state could not be read; applying one bounded 300s guard"
+      wait_scheduler_seconds 300
+      return 0
+    fi
+    if ! [[ "$remaining" =~ ^[0-9]+$ ]]; then
+      say "cycle failure state returned an invalid delay; applying one bounded 300s guard"
+      wait_scheduler_seconds 300
+      return 0
+    fi
+    [ "$remaining" -gt 7200 ] && remaining=7200
+    [ "$remaining" -gt 0 ] || return 0
+    if [ "$announced" = 0 ]; then
+      say "persisted cycle failure defers provider-capable retry for ${remaining}s"
+      announced=1
+    fi
+    slice=$(( remaining < 60 ? remaining : 60 ))
+    sleep "$slice"
+    control_lock_renew "$SCHED_LOCK" || true
+    run_due_private_tasks_if_committed
+    ensure_watchdog
+  done
+}
+
 NEXT_MIN=""
 INITIAL_FLOOR_CHECKED=0
 while true; do
@@ -490,6 +555,9 @@ while true; do
   if pause_for_release_transaction; then
     continue
   fi
+  # A scheduler/watchdog/Termux restart cannot erase an expensive-cycle failure
+  # deadline. The state contains only bounded counters and epoch seconds.
+  wait_for_persisted_cycle_failure_backoff
   REQUEST_REASON=""
   if control_claim_cycle_request 2>/dev/null; then
     REQUEST_REASON="$CONTROL_CYCLE_REQUEST_REASON"
@@ -511,13 +579,45 @@ while true; do
   CYCLE_RC=$?
   if [ "$CYCLE_RC" -eq 0 ]; then
     [ -n "$CONTROL_CYCLE_CLAIM" ] && control_ack_cycle_claims
+    if ! python3 "$TOOLS/scheduler_timing.py" \
+      --cycle-failure-state "$CYCLE_FAILURE_BACKOFF_STATE" \
+      --cycle-failure-action clear >/dev/null 2>>"$LOG"; then
+      say "cycle succeeded, but durable failure-backoff retirement could not be confirmed"
+    fi
   else
     say "cycle exited non-zero (rc=$CYCLE_RC); request claim retained for retry"
   fi
   control_lock_renew "$SCHED_LOCK" || true
   control_status_write scheduler - running "" "" "" "waiting for next cycle"
   if [ "$CYCLE_RC" -ne 0 ]; then
-    sleep 60
+    # A busy release/cycle lease is cheap mechanics contention. Every other
+    # failure may have launched the expensive curator, so retry it with bounded
+    # persistent exponential backoff instead of spending another model call
+    # every minute or after a scheduler/watchdog/Termux restart.
+    if [ "$CYCLE_RC" -eq 75 ]; then
+      FAILURE_WAIT_SECONDS=60
+      say "cycle retry is deferred for ${FAILURE_WAIT_SECONDS}s after cheap contention rc=75"
+      wait_scheduler_seconds "$FAILURE_WAIT_SECONDS"
+    else
+      CYCLE_BACKOFF_RECORDED=1
+      FAILURE_WAIT_SECONDS=$(python3 "$TOOLS/scheduler_timing.py" \
+        --cycle-failure-state "$CYCLE_FAILURE_BACKOFF_STATE" \
+        --cycle-failure-action record-failure \
+        --cycle-failure-base-seconds 300 \
+        --cycle-failure-max-seconds 7200 2>>"$LOG") || CYCLE_BACKOFF_RECORDED=0
+      if ! [[ "${FAILURE_WAIT_SECONDS:-}" =~ ^[1-9][0-9]*$ ]]; then
+        FAILURE_WAIT_SECONDS=300
+        CYCLE_BACKOFF_RECORDED=0
+      fi
+      [ "$FAILURE_WAIT_SECONDS" -gt 7200 ] && FAILURE_WAIT_SECONDS=7200
+      if [ "$CYCLE_BACKOFF_RECORDED" = 1 ]; then
+        say "cycle retry is durably deferred for ${FAILURE_WAIT_SECONDS}s after rc=$CYCLE_RC"
+        wait_for_persisted_cycle_failure_backoff
+      else
+        say "cycle failure backoff could not be persisted; applying one bounded base wait"
+        wait_scheduler_seconds "$FAILURE_WAIT_SECONDS"
+      fi
+    fi
     continue
   fi
   CYCLE_END=$(date +%s)

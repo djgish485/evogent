@@ -36,13 +36,26 @@ person's routine.
 |---|---|---|
 | Notification capture, redaction, dedup, and digest | Deterministic, local, no model | Preserve the Android original and surface a health receipt |
 | API fetches, timestamps, counts, locks, and validation | Deterministic | Diagnosis agent only after an outcome tripwire |
-| Routine hidden-display browse | Cheapest route that passed the real computer-use benchmark | Current proven route on failure; diagnosis route after repeated anomalous yield |
+| Routine hidden-display browse | Explicit Browse Model, otherwise the existing Codex Model | One-run candidate screening; diagnosis route after repeated anomalous yield |
 | Feed curation | Strong editorial route with a truthful terminal receipt | Higher effort only after a measured quality gain or a difficult exceptional slate |
 | Cross-cycle review | One bounded high-reasoning overseer per service day | Max/Ultra only for an explicitly divisible, quality-first audit |
 
-Notification content never goes to the runtime brain or a model-facing browse
-cache. Only a constant per-source due marker crosses into scheduling. That keeps
-the push path fast, cheap, private, and available when the provider is offline.
+The supported runtime-brain APIs and model-facing browse caches exclude
+notification content. Only a constant per-source due marker is policy-approved
+to cross into scheduling, and the deterministic push path invokes no model.
+Current provider workers share the server's Unix UID, so the exclusion is an
+API-and-instruction boundary rather than OS isolation from adversarial same-UID
+code. Within that stated boundary, the push path stays fast, cheap, private, and
+available when the provider is offline.
+
+Agent chat-reply push is a separate deterministic delivery lane. It starts only
+after the reply is durable and its audit attempt has finished, then runs without
+waiting behind WebSocket publication and without holding the submit response
+open. The external body and network deadline are bounded. Foreground
+suppression reads a process-epoch-bound singleton presence lease ordered by
+page generation and sequence; heartbeats never enter behavioral history, and
+stale or ambiguous presence permits an extra push instead of hiding a needed
+one.
 
 ## Automatic source-diagnosis budget
 
@@ -93,39 +106,25 @@ only eligible top-level rows in bounded chunks.
 `phone-tools/model_routing.py` resolves each task from:
 
 1. an explicit one-run environment override, used by a benchmark;
-2. a private, benchmark-qualified route in `data/model-routing.json`;
-3. the deployment's existing `data/config.md` headings; then
+2. an enabled private, benchmark-qualified route in `data/model-routing.json`;
+3. that task's explicit `data/config.md` headings; then
 4. the public safe fallback in
    `phone-tools/model-routing.default.json`.
 
-Routine private overrides are fail-closed. The route falls back to its existing
-configured baseline unless the referenced phone-local benchmark suite has at
-least three recent paired rounds in which both baseline and candidate passed
-mechanics and quality. A receipt's declared baseline/candidate role must agree
-with the side implied by its exact model and effort; a mismatch or duplicate
-side makes the suite an integrity failure. Any mechanics failure invalidates
-that suite without being counted as a model-quality failure. Old evidence
-expires, so an unrevalidated cheap route cannot silently become permanent after
-the app, provider, or phone changes.
+An explicit `Browse Model` is authoritative. If it is absent, browse preserves
+the deployment's existing `Codex Model`; Terra is only the public model fallback
+when neither heading exists. Browse reasoning remains independently selectable
+through `Browse Reasoning`, with medium as its fallback.
 
-The private route file is mode `0600` and contains no source content:
-
-```json
-{
-  "schemaVersion": 1,
-  "routes": {
-    "browse": {
-      "model": "<candidate-model>",
-      "effort": "low",
-      "qualification": {
-        "suiteId": "<phone-local-benchmark-suite>"
-      }
-    }
-  }
-}
-```
-
-Deleting one route entry immediately restores its configured baseline.
+Persistent overrides for global browse, YouTube browse, and curation are
+disabled in both the policy and the resolver. Existing entries in the private
+mode-`0600` `data/model-routing.json` are ignored for those routes, regardless
+of how many current receipts exist. This is deliberate: none of today's
+computer-use receipt versions binds workload identity to a frozen, blinded
+private-relevance review, and the curator harness cannot yet isolate every
+production side effect. Explicit environment overrides remain one-run only, so
+supervised benchmarks can compare candidates without silently changing routine
+behavior.
 
 ## Benchmark protocol
 
@@ -152,7 +151,8 @@ marked `grounded_micro`: they are a screening gate and can never qualify a
 persistent production browse route, including if the router is rolled back to
 a schema-v1 version that filters receipts by task alone.
 
-Only after the micro-task passes should the full browse benchmark run:
+Only after the micro-task passes is the live full-browse smoke test worth
+running:
 
 ```bash
 EVOGENT_BENCH_ROUNDS=3 \
@@ -178,17 +178,24 @@ receipt after the model exits. Unrelated ambient rows are ignored; a delayed
 row cannot substitute for a missing token-bound receipt. A zero CLI exit, an
 ambient timestamp match, or a self-reported count is never terminal proof.
 
-Only content-free receipts with the exact versioned task/kind pair
-`browse_full_v2` / `full_browse` are eligible to qualify production. The task
-name deliberately differs from the production route: rolling back to the prior
-task-only router makes it ignore evidence whose 80/120 equivalence laws it does
-not understand. Every paired row must carry the verified terminal proof,
-at least one fresh complete row, elapsed time, and a one-way run digest. Within
-each passing pair, candidate fresh yield must be at least 80 percent of the
-baseline and candidate elapsed time must be no more than 120 percent of the
-baseline. A missing or invalid terminal proof is a mechanics failure and
-invalidates the suite; an outcome or latency miss cannot count as a paired
-quality pass. Raw titles, source IDs, and model output never enter the benchmark
+This remains screening evidence. Baseline and candidate drive a live,
+sequential recommendation surface, so they do not see an identical workload;
+successful canonical shares also prove mechanics and completeness, not whether
+the chosen videos fit the private taste model. The exact receipt pair is
+therefore `browse_youtube_smoke_v1` /
+`full_browse_youtube_smoke`, and routing rejects it. Historical
+`browse_youtube_full_v1` / `full_browse_youtube`,
+`browse_full_v2` / `full_browse`, and legacy `browse` rows are likewise not
+current production proof.
+
+Existing `browse_mixed_full_v3` / `full_browse_mixed` rows are also screening
+evidence, not production proof: that receipt version has no frozen, blinded
+private-relevance review binding. A future qualifying harness must introduce a
+new versioned task/kind pair, give both sides the same frozen candidate
+workload, blind route labels during explicit private-relevance review, and bind
+that review to the content-free pair receipt. Driver mechanics, relevance,
+fresh yield, latency, and total token use remain independent gates. Raw titles,
+source IDs, preference evidence, and model output never enter the benchmark
 ledger.
 
 ### Curation
@@ -206,8 +213,8 @@ run a separate private runtime/data/session/control-plane clone on its own
 loopback port, publish nothing to the production feed, and capture exact
 cycle-bound candidate, selection, reason, and terminal-receipt deltas.
 
-The router already reserves the downgrade-safe evidence contract for that
-future isolated runner: the exact versioned receipt pair
+The router retains a dormant, downgrade-safe evidence validator for that future
+isolated runner: the exact versioned receipt pair
 `curator_full_v2` / `full_curation_snapshot`, at least three recent paired
 baseline/candidate rounds, no mechanics or role-integrity failure anywhere in
 the suite, and an explicit private artifact review for each quality label. The
@@ -217,10 +224,11 @@ suite-wide mechanics laws it does not understand. Each passing row must also
 prove a nonempty full candidate snapshot, an exact terminal result, and a
 run-bound digest. Receipts retain only model, effort, status, numeric mechanics,
 review time, and one-way artifact/run digests. Legacy `curator`, browse,
-grounded-micro, mislabeled, expired, unreviewed, or content-bearing rows cannot
-qualify the curator route.
+grounded-micro, mislabeled, expired, unreviewed, or content-bearing rows fail
+that validator. Until the isolated harness exists, neither those receipts nor a
+private route entry can override the configured curator baseline.
 
-For routes with an enabled safe benchmark harness, promote one at a time.
+For routes with an enabled safe qualifying harness, promote one at a time.
 Re-run a representative natural cycle after every promotion and revert
 immediately on degraded yield, bad judgment, excessive latency, or phone
 responsiveness loss.
@@ -236,20 +244,22 @@ the private persistent route file.
 
 The overseer reads user-visible feed state plus aggregate source, cycle,
 notification, latency, benchmark, and interaction receipts. It may atomically
-tune private source cadence, preference synthesis, and a benchmark-qualified
-model route. It never drives an app, edits product code or committed
-instructions, or launches a development agent on the phone. Observable product
-or instruction failures become directional `code_fix` suggestions for host
-review.
+tune private source cadence and preference synthesis. It may report candidate
+model screening results, but it must not write a global-browse, YouTube-browse,
+curator, or overseer route while the qualifying harnesses are unavailable. It
+never drives an app, edits product code or committed instructions, or launches
+a development agent on the phone. Observable product or instruction failures
+become directional `code_fix` suggestions for host review.
 
 The overseer replaces overlapping daily reflection/dream work. Do not run three
 broad reviews over the same evidence.
 
 ## Verification
 
-Before calling a cheaper route production-ready:
+Before enabling any future cheaper persistent override:
 
-1. Prove three paired benchmark passes with no mechanics-failed pair.
+1. Prove three workload-equivalent paired benchmark passes with no
+   mechanics-failed pair and an explicit blinded private-relevance review.
 2. Inspect that receipts contain no source text, account data, or model output.
 3. Run one hint-free full cycle and verify its exact terminal receipt.
 4. Confirm only due or signalled sources ran.
@@ -257,3 +267,9 @@ Before calling a cheaper route production-ready:
 6. Observe one natural scheduled cycle and one natural notification.
 7. Confirm provider failure leaves notifications working and restores the
    previous proven model route.
+
+The grounded micro and live YouTube smoke tests can still compare latency,
+token use, driver reliability, and complete yield. Report those results as
+screening evidence; never turn current `browse_micro`,
+`browse_youtube_smoke_v1`, or `browse_mixed_full_v3` rows into a route
+override.

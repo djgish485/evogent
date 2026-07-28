@@ -2,9 +2,11 @@
 """Private, benchmark-gated model routing for the phone runtime.
 
 The public file describes mechanics and safe fallbacks.  A deployment may write
-``data/model-routing.json`` with a candidate route, but a routine route is used
-only when the phone-local receipt ledger proves enough recent paired passes.
-Receipts contain metrics and digests, never source text or model output.
+``data/model-routing.json`` with a candidate route, but an enabled routine route
+is used only when the phone-local receipt ledger proves enough recent paired
+passes. Global browse, YouTube browse, and curation are additionally pinned to
+their configured baselines until a safe qualifying harness exists. Receipts
+contain metrics and digests, never source text or model output.
 """
 
 from __future__ import annotations
@@ -26,23 +28,44 @@ SCHEMA_VERSION = 1
 ALLOWED_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,159}$")
 BENCHMARK_KIND_BY_TASK = {
-    # Versioned away from production route names on purpose. A rollback to the
-    # schema-v1 task-only router must ignore receipts whose newer equivalence,
-    # terminal-proof, and artifact-review gates it does not understand.
+    # This identity remains parseable for screening and historical ledgers, but
+    # it is not production proof: v3 does not bind a frozen, blinded private-
+    # relevance review. A future qualifier needs a new versioned identity.
+    "browse_mixed_full_v3": "full_browse_mixed",
+    # This live, mutable-feed harness is useful operational evidence, but it
+    # cannot compare relevance on one identical workload. Keep it explicitly
+    # outside production qualification until a frozen, reviewed harness exists.
+    "browse_youtube_smoke_v1": "full_browse_youtube_smoke",
+    "browse_youtube_full_v1": "full_browse_youtube",
+    # Retain the old identity so historical ledgers stay parseable, but no
+    # production route consumes it: that harness covered YouTube while its
+    # receipt could incorrectly qualify the global browse route.
     "browse_full_v2": "full_browse",
     "browse_micro": "grounded_micro",
     "curator_full_v2": "full_curation_snapshot",
 }
-PRODUCTION_RECEIPT_TASK = {
-    "browse": "browse_full_v2",
+QUALIFICATION_RECEIPT_TASK = {
+    "browse": "browse_mixed_full_v3",
     "curator": "curator_full_v2",
 }
-PRODUCTION_BENCHMARK_KIND = {
-    "browse": BENCHMARK_KIND_BY_TASK["browse_full_v2"],
+QUALIFICATION_BENCHMARK_KIND = {
+    "browse": BENCHMARK_KIND_BY_TASK["browse_mixed_full_v3"],
     "curator": BENCHMARK_KIND_BY_TASK["curator_full_v2"],
 }
+# Neither current computer-use receipt contract binds a frozen, blinded
+# private-relevance review, and the curator benchmark cannot yet isolate all
+# production state. Keep their validators parseable for historical ledgers and
+# future harness work, but never let these production routes consume a durable
+# override until a safe qualifying harness is implemented.
+PERSISTENT_OVERRIDE_DISABLED_TASKS = frozenset({
+    "browse",
+    "browse_youtube",
+    "curator",
+})
+FULL_BROWSE_ROUTE_TASKS = frozenset({"browse", "browse_youtube"})
 FULL_BROWSE_MIN_OUTCOME_RATIO = 0.80
 FULL_BROWSE_MAX_ELAPSED_RATIO = 1.20
+FULL_BROWSE_MAX_TOTAL_TOKEN_RATIO = 1.50
 CURATOR_MINIMUM_PAIRED_PASSES = 3
 CURATOR_MECHANICS_STATUSES = frozenset({
     "passed",
@@ -56,6 +79,27 @@ CURATOR_MECHANICS_STATUSES = frozenset({
 RECEIPT_ROLES = frozenset({"baseline", "candidate"})
 QUALITY_STATUSES = frozenset({"passed", "failed", "not_scored"})
 MECHANICS_STATUSES_BY_TASK = {
+    "browse_mixed_full_v3": frozenset({
+        "passed",
+        "failed",
+        "timeout",
+        "runner_failed",
+        "terminal_proof_failed",
+    }),
+    "browse_youtube_smoke_v1": frozenset({
+        "passed",
+        "failed",
+        "timeout",
+        "runner_failed",
+        "terminal_proof_failed",
+    }),
+    "browse_youtube_full_v1": frozenset({
+        "passed",
+        "failed",
+        "timeout",
+        "runner_failed",
+        "terminal_proof_failed",
+    }),
     "browse_full_v2": frozenset({
         "passed",
         "failed",
@@ -283,8 +327,8 @@ def _receipt_key(row: dict[str, Any]) -> tuple[str, str]:
     return (_safe_model(row.get("model")), _safe_effort(row.get("effort"), ""))
 
 
-def _full_browse_terminal_metrics(row: dict[str, Any]) -> tuple[int, int] | None:
-    """Return exact fresh-row and elapsed metrics only for a run-bound terminal proof."""
+def _full_browse_terminal_metrics(row: dict[str, Any]) -> tuple[int, int, int] | None:
+    """Return exact outcome, elapsed, and usage metrics for a run-bound proof."""
 
     metrics = row.get("metrics")
     if not isinstance(metrics, dict) or metrics.get("terminalProof") is not True:
@@ -294,7 +338,15 @@ def _full_browse_terminal_metrics(row: dict[str, Any]) -> tuple[int, int] | None
         return None
 
     values: dict[str, int] = {}
-    for key in ("terminalItems", "freshRows", "completeRows", "elapsedMs"):
+    for key in (
+        "terminalItems",
+        "freshRows",
+        "completeRows",
+        "elapsedMs",
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+    ):
         value = _finite_nonnegative(metrics.get(key))
         if value is None or value < 1 or not value.is_integer():
             return None
@@ -305,7 +357,15 @@ def _full_browse_terminal_metrics(row: dict[str, Any]) -> tuple[int, int] | None
         == values["completeRows"]
     ):
         return None
-    return values["freshRows"], values["elapsedMs"]
+    cached_tokens = _finite_nonnegative(metrics.get("cachedInputTokens"))
+    if (
+        cached_tokens is None
+        or not cached_tokens.is_integer()
+        or cached_tokens > values["inputTokens"]
+        or values["totalTokens"] < values["inputTokens"] + values["outputTokens"]
+    ):
+        return None
+    return values["freshRows"], values["elapsedMs"], values["totalTokens"]
 
 
 def _curator_review_proof(row: dict[str, Any]) -> bool:
@@ -377,11 +437,12 @@ def qualification_decision(
     terminal_proof_failures = 0
     outcome_equivalence_failures = 0
     latency_equivalence_failures = 0
+    token_equivalence_failures = 0
     role_integrity_failure_rounds: set[int] = set()
     ineligible_kind_rows = 0
     ineligible_task_rows = 0
-    required_kind = PRODUCTION_BENCHMARK_KIND.get(task, "")
-    required_receipt_task = PRODUCTION_RECEIPT_TASK.get(task, task)
+    required_kind = QUALIFICATION_BENCHMARK_KIND.get(task, "")
+    required_receipt_task = QUALIFICATION_RECEIPT_TASK.get(task, task)
     for row in receipts:
         if row.get("suiteId") != suite_id:
             continue
@@ -412,7 +473,7 @@ def qualification_decision(
         if row.get("role") != role:
             role_integrity_failure_rounds.add(round_number)
             continue
-        if task == "browse":
+        if task in FULL_BROWSE_ROUTE_TASKS:
             if row.get("mechanicsStatus") != "passed":
                 browse_mechanics_failure_rounds.add(round_number)
             elif _full_browse_terminal_metrics(row) is None:
@@ -437,6 +498,7 @@ def qualification_decision(
     paired_passes = 0
     elapsed_ratios: list[float] = []
     outcome_ratios: list[float] = []
+    total_token_ratios: list[float] = []
     for pair in by_round.values():
         baseline = pair.get("baseline")
         candidate = pair.get("candidate")
@@ -449,7 +511,7 @@ def qualification_decision(
             if task != "curator":
                 mechanics_failures += 1
             continue
-        if task == "browse":
+        if task in FULL_BROWSE_ROUTE_TASKS:
             baseline_terminal = _full_browse_terminal_metrics(baseline)
             candidate_terminal = _full_browse_terminal_metrics(candidate)
             if baseline_terminal is None or candidate_terminal is None:
@@ -469,21 +531,26 @@ def qualification_decision(
         candidate_elapsed = _finite_nonnegative((candidate.get("metrics") or {}).get("elapsedMs"))
         if baseline_elapsed and candidate_elapsed is not None:
             elapsed_ratios.append(candidate_elapsed / baseline_elapsed)
-        if task == "browse":
-            baseline_fresh, baseline_elapsed_exact = baseline_terminal
-            candidate_fresh, candidate_elapsed_exact = candidate_terminal
+        if task in FULL_BROWSE_ROUTE_TASKS:
+            baseline_fresh, baseline_elapsed_exact, baseline_total_tokens = baseline_terminal
+            candidate_fresh, candidate_elapsed_exact, candidate_total_tokens = candidate_terminal
             outcome_ratio = candidate_fresh / baseline_fresh
             elapsed_ratio = candidate_elapsed_exact / baseline_elapsed_exact
+            total_token_ratio = candidate_total_tokens / baseline_total_tokens
             outcome_ratios.append(outcome_ratio)
+            total_token_ratios.append(total_token_ratio)
             if outcome_ratio < FULL_BROWSE_MIN_OUTCOME_RATIO:
                 outcome_equivalence_failures += 1
                 continue
             if elapsed_ratio > FULL_BROWSE_MAX_ELAPSED_RATIO:
                 latency_equivalence_failures += 1
                 continue
+            if total_token_ratio > FULL_BROWSE_MAX_TOTAL_TOKEN_RATIO:
+                token_equivalence_failures += 1
+                continue
         paired_passes += 1
 
-    if task == "browse":
+    if task in FULL_BROWSE_ROUTE_TASKS:
         terminal_proof_failures = len(browse_terminal_failure_rounds)
         mechanics_failures = len(
             browse_mechanics_failure_rounds
@@ -516,6 +583,8 @@ def qualification_decision(
         if outcome_equivalence_failures
         else "latency_equivalence_failure"
         if latency_equivalence_failures
+        else "token_equivalence_failure"
+        if token_equivalence_failures
         else "quality_review_proof_failure"
         if curator_review_proof_failures
         else "insufficient_paired_quality_passes"
@@ -530,13 +599,15 @@ def qualification_decision(
     }
     if task == "curator":
         decision["qualityReviewProofFailedPairs"] = curator_review_proof_failures
-    if task == "browse":
+    if task in FULL_BROWSE_ROUTE_TASKS:
         decision.update({
             "terminalProofFailedPairs": terminal_proof_failures,
             "outcomeEquivalenceFailedPairs": outcome_equivalence_failures,
             "latencyEquivalenceFailedPairs": latency_equivalence_failures,
+            "tokenEquivalenceFailedPairs": token_equivalence_failures,
             "minimumOutcomeRatio": FULL_BROWSE_MIN_OUTCOME_RATIO,
             "maximumElapsedRatio": FULL_BROWSE_MAX_ELAPSED_RATIO,
+            "maximumTotalTokenRatio": FULL_BROWSE_MAX_TOTAL_TOKEN_RATIO,
         })
     if required_kind:
         decision["requiredBenchmarkKind"] = required_kind
@@ -546,6 +617,10 @@ def qualification_decision(
         decision["meanElapsedRatio"] = sum(elapsed_ratios) / len(elapsed_ratios)
     if outcome_ratios:
         decision["meanOutcomeRatio"] = sum(outcome_ratios) / len(outcome_ratios)
+    if total_token_ratios:
+        decision["meanTotalTokenRatio"] = (
+            sum(total_token_ratios) / len(total_token_ratios)
+        )
     return decision
 
 
@@ -582,7 +657,10 @@ def resolve_route(
     if not isinstance(entry, dict):
         return baseline
     route_policy = baseline.get("routePolicy") or {}
-    if route_policy.get("persistentOverrideAllowed") is False:
+    if (
+        task in PERSISTENT_OVERRIDE_DISABLED_TASKS
+        or route_policy.get("persistentOverrideAllowed") is False
+    ):
         return {**baseline, "origin": "baseline_persistent_override_disabled"}
     candidate_model = _safe_model(entry.get("model"))
     candidate_effort = _safe_effort(entry.get("effort"), "")
@@ -665,6 +743,67 @@ def grounded_title_metrics(response_text: str, tree_text: str) -> dict[str, Any]
     }
 
 
+def codex_exec_usage(events_path: Path) -> dict[str, int]:
+    """Extract content-free token usage from a private ``codex exec --json`` log."""
+
+    latest: dict[str, Any] | None = None
+    try:
+        lines = events_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return {}
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "turn.completed":
+            continue
+        usage = event.get("usage")
+        if isinstance(usage, dict):
+            latest = usage
+    if latest is None:
+        return {}
+
+    def exact_nonnegative(*keys: str) -> int | None:
+        for key in keys:
+            value = _finite_nonnegative(latest.get(key))
+            if value is not None and value.is_integer():
+                return int(value)
+        return None
+
+    input_tokens = exact_nonnegative("input_tokens", "inputTokens")
+    cached_tokens = exact_nonnegative("cached_input_tokens", "cachedInputTokens")
+    output_tokens = exact_nonnegative("output_tokens", "outputTokens")
+    if (
+        input_tokens is None
+        or cached_tokens is None
+        or output_tokens is None
+        or input_tokens < 1
+        or output_tokens < 1
+        or cached_tokens > input_tokens
+    ):
+        return {}
+    total_tokens = exact_nonnegative("total_tokens", "totalTokens")
+    minimum_total = input_tokens + output_tokens
+    if total_tokens is None:
+        total_tokens = minimum_total
+    if total_tokens < minimum_total:
+        return {}
+    result = {
+        "inputTokens": input_tokens,
+        "cachedInputTokens": cached_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": total_tokens,
+    }
+    reasoning_tokens = exact_nonnegative(
+        "reasoning_output_tokens",
+        "reasoningOutputTokens",
+    )
+    if reasoning_tokens is not None:
+        result["reasoningOutputTokens"] = reasoning_tokens
+    return result
+
+
 def append_receipt(path: Path, receipt: dict[str, Any]) -> None:
     benchmark_kind = _safe_model(receipt.get("benchmarkKind"))
     receipt_role = receipt.get("role")
@@ -710,7 +849,7 @@ def append_receipt(path: Path, receipt: dict[str, Any]) -> None:
         raise ValueError("invalid benchmark quality status")
     if mechanics_status != "passed" and quality_status != "not_scored":
         raise ValueError("benchmark mechanics failure cannot carry a quality score")
-    if safe["task"] == PRODUCTION_RECEIPT_TASK["curator"]:
+    if safe["task"] == QUALIFICATION_RECEIPT_TASK["curator"]:
         if quality_status in {"passed", "failed"} and not _curator_review_proof(safe):
             raise ValueError("curator quality requires explicit private artifact review")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -741,6 +880,9 @@ def build_parser() -> argparse.ArgumentParser:
     grounded = sub.add_parser("grounded-titles")
     grounded.add_argument("--response", required=True)
     grounded.add_argument("--tree", required=True)
+
+    usage = sub.add_parser("codex-usage")
+    usage.add_argument("--events", required=True)
 
     record = sub.add_parser("record")
     record.add_argument("--ledger", required=True)
@@ -778,6 +920,10 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.response).read_text(encoding="utf-8", errors="replace"),
             Path(args.tree).read_text(encoding="utf-8", errors="replace"),
         )
+        print(json.dumps(result, separators=(",", ":")))
+        return 0
+    if args.command == "codex-usage":
+        result = codex_exec_usage(Path(args.events))
         print(json.dumps(result, separators=(",", ":")))
         return 0
     if args.command == "validate-live":

@@ -1,5 +1,9 @@
 Run one full reflection cycle in this invocation.
 
+This is an unscheduled compatibility command. The phone scheduler runs one
+daily `/oversee` task instead; invoke `/reflect` only when a person explicitly
+requests the legacy manual workflow, and never use it as a second daily review.
+
 Usage: `/reflect [optional focus]`
 
 `$ARGUMENTS` can add extra focus.
@@ -11,7 +15,7 @@ Usage: `/reflect [optional focus]`
 - Submit suggestion items, if any, via the feed submit API. Use feed JSONL only as a last-resort fallback.
 - Do not spawn another agent CLI process.
 - Do not use tmux.
-- This scheduled phone worker is not a software-development agent. Do not inspect git history,
+- This manual compatibility worker is not a software-development agent. Do not inspect git history,
   merge receipts, host-agent memory, or product-code diffs. Do not edit code, scripts, skills,
   tests, or development artifacts. Host development owns implementation review and repair.
 
@@ -33,7 +37,9 @@ Resolve `API_BASE="${MEDIA_AGENT_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-300
 Resolve `API_CURL="${EVOGENT_API_CURL:-curl}"` too, and use
 `"$API_CURL"` for every request to `API_BASE`.
 
-Read `.claude/shared/audit-core.md` and execute it in `reflection` mode. Reflection uses the same audit core as curation; it does not maintain a separate cache-health workflow.
+Read `.claude/shared/audit-core.md` and execute it in `overseer` mode.
+Reflection manually reuses the same cross-cycle core as the daily overseer; it
+does not maintain a separate cache-health workflow or scheduling authority.
 
 Read all of the following before deciding whether to propose any change:
 1. `data/config.md`
@@ -49,7 +55,11 @@ Read all of the following before deciding whether to propose any change:
 
 Also gather:
 
-- recent raw interaction rows from `interactions`, joined to their feed items. Prefer `GET ${API_BASE}/api/internal/interactions/recent?limit=200` when reachable; otherwise query SQLite directly for the last 48 hours of `action`, `created_at`, feed id, title, source, author, and text.
+- recent raw interaction rows from `interactions`, joined to their feed items.
+  Prefer `GET ${API_BASE}/api/internal/interactions/recent?limit=200` when
+  reachable. If SQLite fallback is unavoidable, exclude rows whose joined feed
+  item has `type = 'notification' AND source = 'phone-notification'` before
+  selecting title, text, author, or snapshot fields.
 - recent preferences and reasoned likes/dislikes
 - rejection scorecard
 - `GET ${API_BASE}/api/internal/reflection/upstream-health?hours=168`

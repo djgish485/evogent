@@ -7,23 +7,38 @@ import {
   hydrateFeedItemsForList,
   resolveFeedItemByIdentifier,
 } from '@/lib/db/feed';
+import {
+  filterPhoneNotificationAgentEvidence,
+  isPhoneNotificationFeedItem,
+  isRuntimeAgentEvidenceRequest,
+} from '@/lib/agent-evidence-boundary';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
   const item = resolveFeedItemByIdentifier(id);
+  const agentEvidence = isRuntimeAgentEvidenceRequest(request);
 
-  if (!item) {
+  if (!item || (
+    agentEvidence
+    && isPhoneNotificationFeedItem(item)
+  )) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const children = getFeedChildren(item.id);
-  const hydratedItems = hydrateFeedItemsForList([item, ...children]);
+  const evidenceChildren = agentEvidence
+    ? children.filter((child) => !isPhoneNotificationFeedItem(child))
+    : children;
+  const hydratedItemsRaw = hydrateFeedItemsForList([item, ...evidenceChildren]);
+  const hydratedItems = agentEvidence
+    ? filterPhoneNotificationAgentEvidence(hydratedItemsRaw)
+    : hydratedItemsRaw;
   const hydratedParent = hydratedItems.find((entry) => entry.id === item.id) ?? item;
   const hydratedChildren = hydratedItems.filter((entry) => entry.id !== item.id);
   const interactionStates = getInteractionStates([item.id, ...hydratedChildren.map((child) => child.id)]);

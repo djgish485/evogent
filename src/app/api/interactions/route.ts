@@ -124,6 +124,20 @@ export async function POST(request: Request) {
   if (!item) {
     return NextResponse.json({ error: 'Feed item not found' }, { status: 404 });
   }
+  const isPhoneNotification = item.type === 'notification'
+    && item.source === 'phone-notification';
+
+  if (isPhoneNotification) {
+    // These cards are a deterministic local UI lane, not taste, reflection, or
+    // attention evidence. Dismissal uses /api/internal/notifications/resolve;
+    // every general interaction is acknowledged without writing content or a
+    // content-linked signal into an agent-readable evidence store.
+    return NextResponse.json({
+      ok: true,
+      action,
+      ignoredForAgentEvidence: true,
+    });
+  }
 
   if (action === 'engagement') {
     const rawEngagement = payload.engagement;

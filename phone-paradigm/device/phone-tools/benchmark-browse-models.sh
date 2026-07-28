@@ -3,11 +3,13 @@
 # hidden-display app driving), not just curation text. For each model, run the same YouTube
 # browse prompt (a computer-use task: launch app, navigate, identify videos, share to Evogent)
 # and measure: wall-clock, whether it actually cached items, and how complete those items are.
-# Deterministic scrapers (hn/x-scrape) don't use a brain, so YouTube is the fair computer-use test.
+# Deterministic scrapers (hn/x-scrape) don't use a brain, so YouTube is a useful computer-use
+# smoke test. The live recommendation surface changes between runs and this harness does not
+# judge private relevance, so its receipts are deliberately ineligible for persistent routing.
 #
 # Usage: benchmark-browse-models.sh [model@effort ...]
 #        the first route is the baseline; defaults compare the active route with lower-cost
-#        candidates. Set EVOGENT_BENCH_ROUNDS=3 before using a suite to change routing.
+#        candidates. Three rounds make screening steadier; this suite never changes routing.
 set -u
 EVO="$HOME/evogent"; TOOLS="$HOME/phone-tools"; BASE="http://127.0.0.1:${PORT:-3001}"
 EVO_CURL="$TOOLS/evo-curl"
@@ -28,6 +30,7 @@ control_init_owner browse-benchmark
 BENCH_LOCK="$TOOLS/.cycle.lock"
 BENCH_LOCK_HELD=0
 ACTIVE_RUN_ID=""
+BENCH_TMP=""
 cleanup_benchmark_proof() {
   local run_id="${1:-}"
   [ -n "$run_id" ] || return 0
@@ -43,6 +46,7 @@ bench_cleanup() {
   [ "$BENCH_LOCK_HELD" = 1 ] && control_close_hidden_displays || true
   control_wake_release
   [ "$BENCH_LOCK_HELD" = 1 ] && control_lock_release "$BENCH_LOCK" || true
+  [ -n "$BENCH_TMP" ] && [ -d "$BENCH_TMP" ] && rm -rf -- "$BENCH_TMP"
   control_finish_owner
   exit "$rc"
 }
@@ -59,8 +63,11 @@ if control_release_transaction_pending \
   exit 75
 fi
 control_wake_acquire
+mkdir -p "${TMPDIR:-$HOME/.cache}"
+BENCH_TMP=$(mktemp -d "${TMPDIR:-$HOME/.cache}/evogent-browse-bench.XXXXXX") || exit 70
+chmod 700 "$BENCH_TMP"
 if [ "${#ROUTES[@]}" -eq 0 ]; then
-  CURRENT=$(python3 "$ROUTER" resolve --task browse \
+  CURRENT=$(python3 "$ROUTER" resolve --task browse_youtube \
     --config "$EVO/data/config.md" \
     --policy "$TOOLS/model-routing.default.json" \
     --live "$EVO/data/model-routing.json" \
@@ -77,6 +84,9 @@ for ROUND in $(seq 1 "$ROUNDS"); do
     ROLE=candidate; [ "$MODEL_INDEX" -eq 1 ] && ROLE=baseline
     say "=== $MODEL@$EFFORT round=$ROUND ==="
     RUN_ID="full-browse-${SUITE}-r${ROUND}-${ROLE}-${MODEL_INDEX}"
+    EVENTS="$BENCH_TMP/events-$ROUND-$MODEL_INDEX.jsonl"
+    FINAL_OUTPUT="$BENCH_TMP/final-$ROUND-$MODEL_INDEX.txt"
+    : > "$EVENTS"; : > "$FINAL_OUTPUT"; chmod 600 "$EVENTS" "$FINAL_OUTPUT"
     T0_MS=$(python3 -c 'import time; print(int(time.time()*1000))')
     RUN_DIGEST=$(python3 - "$RUN_ID" <<'PY'
 import hashlib,sys
@@ -117,7 +127,8 @@ FULL_BROWSE BENCHMARK TERMINAL LAW:
       sleep 2
       ( cd "$EVO" && run_owned_timeout 420 30 codex exec --model "$MODEL" \
           -c model_reasoning_effort="$EFFORT" --dangerously-bypass-approvals-and-sandbox \
-          "$RUN_PROMPT" >>"$TOOLS/scheduler.log" 2>&1 )
+          --json --output-last-message "$FINAL_OUTPUT" "$RUN_PROMPT" \
+          >"$EVENTS" 2>>"$TOOLS/scheduler.log" )
       RC=$?
       if [ "$RC" -eq 124 ] || [ "$RC" -eq 137 ] || [ "$RC" -eq 143 ]; then
         MECHANICS=timeout
@@ -131,17 +142,24 @@ FULL_BROWSE BENCHMARK TERMINAL LAW:
       fi
     fi
     T1_MS=$(python3 -c 'import time; print(int(time.time()*1000))')
+    USAGE=$(python3 "$ROUTER" codex-usage --events "$EVENTS" 2>/dev/null || echo '{}')
     if [ "$MECHANICS" = terminal_proof_pending ]; then
       if PROOF=$(python3 "$FINALIZER" --database "$EVO/data/media-agent.db" verify \
           --run-id "$RUN_ID" \
           --started-at-ms "$T0_MS" \
           --max-completed-at-ms "$T1_MS" 2>/dev/null); then
         MECHANICS=passed
-        QUALITY=passed
+        # Canonical shares prove driver mechanics and yield, not whether the
+        # live, mutable recommendations matched the private taste model.
+        QUALITY=not_scored
       else
         MECHANICS=terminal_proof_failed
         QUALITY=not_scored
       fi
+    fi
+    if [ "$MECHANICS" = passed ] && [ "$USAGE" = '{}' ]; then
+      MECHANICS=terminal_proof_failed
+      QUALITY=not_scored
     fi
     if ! cleanup_benchmark_proof "$RUN_ID"; then
       MECHANICS=terminal_proof_failed
@@ -149,11 +167,14 @@ FULL_BROWSE BENCHMARK TERMINAL LAW:
     fi
     ACTIVE_RUN_ID=""
     ELAPSED_MS=$((T1_MS - T0_MS))
-    METRICS=$(python3 - "$PROOF" "$ELAPSED_MS" <<'PY' 2>/dev/null
+    METRICS=$(python3 - "$PROOF" "$USAGE" "$ELAPSED_MS" <<'PY' 2>/dev/null
 import json,sys
 try: value=json.loads(sys.argv[1])
 except Exception: value={}
-value["elapsedMs"]=int(sys.argv[2])
+try: usage=json.loads(sys.argv[2])
+except Exception: usage={}
+if isinstance(usage,dict): value.update(usage)
+value["elapsedMs"]=int(sys.argv[3])
 print(json.dumps(value,separators=(",",":")))
 PY
 )
@@ -161,8 +182,8 @@ PY
       "$MECHANICS" "$QUALITY" "$METRICS" <<'PY'
 import json,sys
 print(json.dumps({
-  "suiteId":sys.argv[1],"round":int(sys.argv[2]),"task":"browse_full_v2","role":sys.argv[3],
-  "benchmarkKind":"full_browse",
+  "suiteId":sys.argv[1],"round":int(sys.argv[2]),"task":"browse_youtube_smoke_v1","role":sys.argv[3],
+  "benchmarkKind":"full_browse_youtube_smoke",
   "model":sys.argv[4],"effort":sys.argv[5],"mechanicsStatus":sys.argv[6],
   "qualityStatus":sys.argv[7],"metrics":json.loads(sys.argv[8]),
 },separators=(",",":")))
@@ -173,10 +194,14 @@ PY
     FRESH=$(printf '%s' "$METRICS" | python3 -c \
       'import json,sys; print(int((json.load(sys.stdin) or {}).get("freshRows") or 0))' \
       2>/dev/null || echo 0)
-    say "$MODEL@$EFFORT round=$ROUND: $((ELAPSED_MS/1000))s mechanics=$MECHANICS quality=$QUALITY exactFresh=$FRESH"
+    TOKENS=$(printf '%s' "$METRICS" | python3 -c \
+      'import json,sys; print((json.load(sys.stdin) or {}).get("totalTokens","unknown"))' \
+      2>/dev/null || echo unknown)
+    say "$MODEL@$EFFORT round=$ROUND: $((ELAPSED_MS/1000))s tokens=$TOKENS mechanics=$MECHANICS quality=$QUALITY exactFresh=$FRESH"
+    : > "$EVENTS"; : > "$FINAL_OUTPUT"
   done
 done
 
 say "=== SUMMARY ==="
 grep -E "mechanics=.*quality=" "$RESULTS" || true
-say "Only paired browse_full_v2/full_browse quality passes can qualify production routing. Timeouts and driver failures are mechanics evidence, never model-quality scores."
+say "This live-feed smoke evidence compares mechanics, yield, latency, and tokens only; quality remains not_scored. It cannot qualify any persistent route because runs see a changing feed and do not receive a blinded private-relevance review. Timeouts, driver failures, and missing usage are mechanics evidence, never model-quality scores."

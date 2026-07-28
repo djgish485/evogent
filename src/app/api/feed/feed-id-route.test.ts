@@ -5,7 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { getDb } from '@/lib/db/client';
 import { insertOrIgnoreFeedItem } from '@/lib/db/feed';
-import { PATCH } from './[id]/route';
+import { GET, PATCH } from './[id]/route';
+import { GET as GET_CHILDREN } from './[id]/children/route';
+import { POST as POST_ENRICH } from './[id]/enrich/route';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -121,5 +123,116 @@ describe('/api/feed/[id] PATCH community notes', () => {
       metadata: string;
     };
     assert.match(quoteRow.metadata, /Quoted tweet note text/);
+  });
+
+  test('direct runtime-agent sessions cannot read or patch phone-notification content by id', async () => {
+    const privateCanary = 'PRIVATE_NOTIFICATION_DETAIL_CANARY_4392';
+    insertOrIgnoreFeedItem({
+      id: 'private-phone-notification-detail',
+      type: 'notification',
+      source: 'phone-notification',
+      sourceId: 'phone-notification:detail-private',
+      title: `Private title ${privateCanary}`,
+      text: `Private body ${privateCanary}`,
+      publishedAt: '2026-07-28T12:00:00.000Z',
+    });
+    const directHeaders = {
+      Authorization: 'EvogentSession direct-runtime-test-token',
+    };
+
+    const agentGet = await GET(
+      new Request(
+        'http://127.0.0.1/api/feed/private-phone-notification-detail',
+        { headers: directHeaders },
+      ),
+      { params: Promise.resolve({ id: 'private-phone-notification-detail' }) },
+    );
+    assert.equal(agentGet.status, 404);
+    assert.doesNotMatch(await agentGet.text(), new RegExp(privateCanary));
+
+    const agentPatch = await PATCH(
+      new Request(
+        'http://127.0.0.1/api/feed/private-phone-notification-detail',
+        {
+          method: 'PATCH',
+          headers: {
+            ...directHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ title: 'Runtime rewrite' }),
+        },
+      ),
+      { params: Promise.resolve({ id: 'private-phone-notification-detail' }) },
+    );
+    assert.equal(agentPatch.status, 404);
+
+    const userGet = await GET(
+      new Request('https://127.0.0.1/api/feed/private-phone-notification-detail'),
+      { params: Promise.resolve({ id: 'private-phone-notification-detail' }) },
+    );
+    assert.equal(userGet.status, 200);
+    assert.match(await userGet.text(), new RegExp(privateCanary));
+
+    const enrichment = await POST_ENRICH(
+      new Request(
+        'https://127.0.0.1/api/feed/private-phone-notification-detail/enrich',
+        { method: 'POST' },
+      ),
+      { params: Promise.resolve({ id: 'private-phone-notification-detail' }) },
+    );
+    assert.equal(enrichment.status, 404);
+    assert.doesNotMatch(await enrichment.text(), new RegExp(privateCanary));
+  });
+
+  test('direct runtime-agent detail and children routes transitively remove phone-notification children', async () => {
+    const privateCanary = 'PRIVATE_NOTIFICATION_CHILD_CANARY_5276';
+    insertOrIgnoreFeedItem({
+      id: 'ordinary-parent',
+      type: 'article',
+      source: 'publisher',
+      sourceId: 'publisher:ordinary-parent',
+      title: 'Ordinary parent',
+      text: 'Ordinary safe body',
+      publishedAt: '2026-07-28T12:00:00.000Z',
+    });
+    insertOrIgnoreFeedItem({
+      id: 'private-notification-child',
+      type: 'notification',
+      source: 'phone-notification',
+      sourceId: 'phone-notification:private-child',
+      parentId: 'ordinary-parent',
+      relationship: 'related',
+      title: `Private child title ${privateCanary}`,
+      text: `Private child body ${privateCanary}`,
+      publishedAt: '2026-07-28T12:01:00.000Z',
+    });
+    const directRequest = () => new Request(
+      'http://127.0.0.1/api/feed/ordinary-parent',
+      { headers: { Authorization: 'EvogentSession direct-runtime-test-token' } },
+    );
+
+    const agentDetail = await GET(
+      directRequest(),
+      { params: Promise.resolve({ id: 'ordinary-parent' }) },
+    );
+    assert.equal(agentDetail.status, 200);
+    const agentDetailText = await agentDetail.text();
+    assert.doesNotMatch(agentDetailText, new RegExp(privateCanary));
+    assert.doesNotMatch(agentDetailText, /private-notification-child/);
+
+    const agentChildren = await GET_CHILDREN(
+      directRequest(),
+      { params: Promise.resolve({ id: 'ordinary-parent' }) },
+    );
+    assert.equal(agentChildren.status, 200);
+    const agentChildrenText = await agentChildren.text();
+    assert.doesNotMatch(agentChildrenText, new RegExp(privateCanary));
+    assert.doesNotMatch(agentChildrenText, /private-notification-child/);
+
+    const userDetail = await GET(
+      new Request('https://127.0.0.1/api/feed/ordinary-parent'),
+      { params: Promise.resolve({ id: 'ordinary-parent' }) },
+    );
+    assert.match(await userDetail.text(), new RegExp(privateCanary));
   });
 });

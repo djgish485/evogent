@@ -166,6 +166,122 @@ describe('preferences-context-runtime', { concurrency: false }, () => {
     assert.doesNotMatch(noReasonLine!, /itemReason=/);
   });
 
+  test('withholds phone-notification preference, attention, and thread evidence while keeping ordinary evidence', async () => {
+    const privateCanary = 'PRIVATE_NOTIFICATION_PREFERENCE_CANARY_6118';
+    const db = new Database(process.env.MEDIA_AGENT_DB_PATH!);
+    try {
+      ensureFeedSchema(db);
+      db.prepare(`
+        INSERT INTO feed (
+          id, type, source, source_id, title, text, published_at
+        ) VALUES
+          (
+            'private-phone-notification', 'notification', 'phone-notification',
+            'phone-notification:private-preference', ?, ?, ?
+          ),
+          (
+            'ordinary-preference-item', 'article', 'publisher',
+            'publisher:ordinary-preference', 'Ordinary evidence title',
+            'Ordinary evidence body', ?
+          )
+      `).run(
+        `Private title ${privateCanary}`,
+        `Private body ${privateCanary}`,
+        '2026-07-28T12:00:00.000Z',
+        '2026-07-28T11:00:00.000Z',
+      );
+      db.prepare(`
+        INSERT INTO preferences (
+          id, feed_item_id, signal_type, source, text, source_id, created_at
+        ) VALUES
+          (
+            'private-linked-preference', 'private-phone-notification',
+            'liked', 'app_thumbsup', ?, NULL, ?
+          ),
+          (
+            'private-orphan-preference', NULL,
+            'liked', 'legacy', ?, 'phone-notification:orphan', ?
+          ),
+          (
+            'ordinary-preference', 'ordinary-preference-item',
+            'liked', 'app_thumbsup', 'Ordinary explicit preference', NULL, ?
+          )
+      `).run(
+        `Private linked preference ${privateCanary}`,
+        '2026-07-28T12:03:00.000Z',
+        `Private orphan preference ${privateCanary}`,
+        '2026-07-28T12:02:00.000Z',
+        '2026-07-28T11:03:00.000Z',
+      );
+      db.prepare(`
+        INSERT INTO feed_engagement_sessions (
+          session_id, feed_item_id, opened_at, last_seen_at, closed_at,
+          active_dwell_ms, max_scroll_depth_pct, user_scrolled, item_snapshot
+        ) VALUES
+          (
+            'private:notification:attention', 'private-phone-notification',
+            ?, ?, ?, 62000, 88, 1, ?
+          ),
+          (
+            'ordinary:evidence:attention', 'ordinary-preference-item',
+            ?, ?, ?, 41000, 65, 1, ?
+          )
+      `).run(
+        '2026-07-28T12:04:00.000Z',
+        '2026-07-28T12:05:00.000Z',
+        '2026-07-28T12:05:00.000Z',
+        JSON.stringify({
+          type: 'notification',
+          source: 'phone-notification',
+          title: `Private title ${privateCanary}`,
+          text: `Private body ${privateCanary}`,
+        }),
+        '2026-07-28T11:04:00.000Z',
+        '2026-07-28T11:05:00.000Z',
+        '2026-07-28T11:05:00.000Z',
+        JSON.stringify({
+          type: 'article',
+          source: 'publisher',
+          title: 'Ordinary evidence title',
+          text: 'Ordinary evidence body',
+        }),
+      );
+      db.prepare(`
+        INSERT INTO thread_feedback (
+          id, thread_id, feed_item_id, vote, thread_title, reason, created_at
+        ) VALUES
+          (
+            'private-notification-feedback', 'private-notification-thread',
+            'private-phone-notification', 'more', ?, ?, ?
+          ),
+          (
+            'ordinary-evidence-feedback', 'ordinary-evidence-thread',
+            'ordinary-preference-item', 'more',
+            'Ordinary evidence thread', 'Ordinary feedback reason', ?
+          )
+      `).run(
+        `Private feedback title ${privateCanary}`,
+        `Private feedback reason ${privateCanary}`,
+        '2026-07-28T12:06:00.000Z',
+        '2026-07-28T11:06:00.000Z',
+      );
+    } finally {
+      db.close();
+    }
+
+    const runtimeModuleUrl = `${pathToFileURL(path.join(originalCwd, 'src/lib/preferences-context-runtime.js')).href}?t=${Date.now()}`;
+    const imported = await import(runtimeModuleUrl);
+    const runtime = ((imported.default as PreferenceContextRuntimeModule | undefined) ?? imported) as PreferenceContextRuntimeModule;
+    const writtenPath = await runtime.regeneratePreferenceContext();
+    const markdown = await fs.promises.readFile(writtenPath, 'utf8');
+
+    assert.doesNotMatch(markdown, new RegExp(privateCanary));
+    assert.match(markdown, /Stats: 1 total \(1 liked/);
+    assert.match(markdown, /Ordinary explicit preference/);
+    assert.match(markdown, /Ordinary evidence title/);
+    assert.match(markdown, /Ordinary evidence thread/);
+  });
+
   test('writes a deterministic bounded private profile while retaining raw evidence in SQLite', async () => {
     const db = new Database(process.env.MEDIA_AGENT_DB_PATH!);
     try {

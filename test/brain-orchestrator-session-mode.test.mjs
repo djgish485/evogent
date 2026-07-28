@@ -44,6 +44,9 @@ function buildOrchestrator({
     getTaskChatMessageId: (task) => task?.metadata?.chatMessageId ?? null,
     getTaskSessionId: (task) => task?.metadata?.sessionId ?? null,
     getTaskProviderSessionId: (task) => task?.metadata?.providerSessionId ?? null,
+    summarizeMessage: (value, maxLength) => (
+      typeof value === 'string' ? value.slice(0, maxLength) : ''
+    ),
     claudeSessionExists,
     getProviderSessionIdForChatSession: (sessionId, providerName) =>
       perSession[`${sessionId}:${providerName}`] ?? null,
@@ -59,13 +62,13 @@ function buildOrchestrator({
 
 const stubProvider = {
   name: 'claude',
-  buildInvocation({ sessionMode }) {
+  buildInvocation({ prompt, sessionMode }) {
     const args = sessionMode.mode === 'resume'
       ? ['--resume', sessionMode.sessionId]
       : sessionMode.mode === 'new'
         ? ['--session-id', sessionMode.sessionId]
         : ['--no-session-persistence'];
-    return { command: 'claude', args, env: {}, sessionMode };
+    return { command: 'claude', args, env: {}, promptViaStdin: prompt, sessionMode };
   },
 };
 
@@ -170,5 +173,66 @@ describe('chat session resume-vs-new decision', () => {
 
     assert.equal(mode.mode, 'new');
     assert.equal(mode.sessionId, danglingProviderSession);
+  });
+
+  test('screen-backed chat forces provider-native ephemeral mode and keeps context out of task history', () => {
+    const privateCanary = 'PRIVATE_SCREEN_SESSION_CANARY_6128';
+    const appSession = randomUUID();
+    const persistedProviderSession = randomUUID();
+    const orchestrator = buildOrchestrator({
+      perSession: { [`${appSession}:claude`]: persistedProviderSession },
+      globalPointer: persistedProviderSession,
+    });
+    const task = chatTask({ sessionId: appSession, providerSessionId: persistedProviderSession });
+    task.metadata.contextKind = 'screen';
+    task.response = `Provider echoed ${privateCanary}`;
+    task.paneTail = `pane ${privateCanary}`;
+    task.error = `error ${privateCanary}`;
+    task.metadata.appendSystemPrompt = `ordinary envelope plus ${privateCanary}`;
+
+    orchestrator._registerTransientScreenContext(
+      task,
+      `Visible screen content:\n${privateCanary}`,
+    );
+
+    const invocation = orchestrator._buildBrainInvocation(
+      task,
+      'user question without private context',
+      orchestrator._buildProviderSystemPrompt('base system', 'chat envelope'),
+      stubProvider,
+    );
+    assert.equal(invocation.sessionMode.mode, 'ephemeral');
+    assert.equal(invocation.sessionMode.sessionId, undefined);
+    assert.match(invocation.promptViaStdin, new RegExp(privateCanary));
+    assert.doesNotMatch(
+      JSON.stringify(orchestrator._serializeTask(task, { includeResponsePreview: true })),
+      new RegExp(privateCanary),
+    );
+
+    orchestrator._recordTaskInHistory(task);
+    const persistedHistory = fs.readFileSync(orchestrator.historyFile, 'utf8');
+    assert.doesNotMatch(persistedHistory, new RegExp(privateCanary));
+    assert.doesNotMatch(JSON.stringify(task), new RegExp(privateCanary));
+  });
+
+  test('screen-backed chat fails closed when a provider invocation lacks native non-persistence', () => {
+    const orchestrator = buildOrchestrator();
+    const task = chatTask({ sessionId: randomUUID() });
+    task.metadata.contextKind = 'screen';
+    orchestrator._registerTransientScreenContext(task, 'private one-shot context');
+
+    assert.throws(() => orchestrator._buildBrainInvocation(
+      task,
+      'user question',
+      'system prompt',
+      {
+        name: 'claude',
+        buildInvocation: ({ sessionMode }) => ({
+          command: 'claude',
+          args: ['--session-id', randomUUID()],
+          sessionMode,
+        }),
+      },
+    ), /cannot safely run transient screen context/i);
   });
 });

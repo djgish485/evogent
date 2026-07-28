@@ -2,7 +2,11 @@
 
 This is the single audit framework for Evogent.
 
-It runs inline during every curation cycle and every reflection cycle. The `pipeline-audit` skill is only a manual entrypoint into this same core. Do not create a third audit path with different rules, outputs, or lifecycle handling.
+It runs inline during every curation cycle and the one scheduler-owned daily
+overseer. The `pipeline-audit` skill and legacy compatibility commands are
+manual entrypoints into this same core, not additional scheduled reviews. Do
+not create another audit path with different rules, outputs, or lifecycle
+handling.
 
 ## Invocation modes
 
@@ -16,11 +20,11 @@ It runs inline during every curation cycle and every reflection cycle. The `pipe
   - current feed-quality problems
   - active incidents that must be surfaced now
 
-### `reflection`
+### `overseer`
 
-- Run this core during every reflection cycle.
+- Run this core during the one daily overseer task.
 - Use the same audit dimensions and routing rules, but evaluate them across multiple cycles.
-- Reflection owns cross-cycle synthesis:
+- The overseer owns cross-cycle synthesis:
   - durable feed-quality patterns
   - durable source-health trends
   - config and prompt recommendations
@@ -30,13 +34,18 @@ It runs inline during every curation cycle and every reflection cycle. The `pipe
 ### `manual`
 
 - `pipeline-audit` uses this mode when the user explicitly asks to run an audit.
-- Use the same evidence, routing, and lifecycle rules as `curation` and `reflection`.
+- The unscheduled `/reflect` compatibility command executes the `overseer`
+  mode manually. `/dream` remains an unscheduled, manually invoked taste-pass
+  compatibility command; neither command creates a second daily owner.
+- Use the same evidence, routing, and lifecycle rules as `curation` and
+  `overseer`.
 
 ## Shared constraints
 
 - Do the work inline in the current invocation. Do not spawn nested orchestration just to audit.
 - Do not add product-code heuristics to compensate for instruction drift. Fix the instructions and diagnostics instead.
-- Scheduled phone curation and oversight are runtime roles, not software-development agents.
+- Scheduled phone curation and the daily overseer are runtime roles, not
+  software-development agents.
   They do not inspect git history, host-agent memory, code diffs, or merge receipts and never
   edit code, scripts, skills, tests, or development artifacts. A manual host audit owns that
   work. Phone workers may surface evidence-backed product observations for host evaluation.
@@ -54,7 +63,10 @@ Gather this evidence once per invocation and reuse it for decisions and output r
 ### 1. Deployment and incident state
 
 - Check `GET /api/status` and inspect deployment state.
-- Check existing feed notifications and suggestions for the same incident or recurring failure pattern before creating anything new.
+- Check existing feed notifications and suggestions through
+  `/api/feed?agentEvidence=1` for the same incident or recurring failure
+  pattern before creating anything new. Phone-notification cards are a local UI
+  lane and must not be read from SQLite or another general feed path.
 
 ### 2. Source health and browsing coverage
 
@@ -70,9 +82,16 @@ Gather this evidence once per invocation and reuse it for decisions and output r
 
 ### 3. Feed quality and persistence
 
-- Inspect recent raw `/api/feed` results to understand continuity, duplication risk, and missing content classes.
+- Inspect recent raw `/api/feed?agentEvidence=1` results to understand
+  continuity, duplication risk, and missing content classes. Never query
+  `source = 'phone-notification'` directly: its title/body/app content is
+  intentionally excluded from the supported runtime-agent evidence APIs.
+  This is mandatory worker policy as well as application filtering, not an OS
+  sandbox: the current provider child shares the server's Unix UID and storage.
+  Never use shell, filesystem, alternate endpoint, or direct SQLite access to
+  bypass the filtered evidence path.
 - Review `data/curation-prompt.md`, `data/preferences-context.md`, and `data/preference-insights.md`.
-- Review `data/curation-candidates.jsonl` when available, plus `/api/internal/reflection/rejection-scorecard` during reflection or manual audits.
+- Review `data/curation-candidates.jsonl` when available, plus `/api/internal/reflection/rejection-scorecard` during overseer or manual audits.
 - Check whether preference context and insights were fresh enough for the cycle you are auditing.
 - Check whether `data/cache-hints.json` was rewritten for the current cycle when curation was responsible for doing so.
 - Inspect curation lifecycle logging, submit and dedup behavior, and recent operational logs when outputs suggest missing data or quality drift.
@@ -80,9 +99,9 @@ Gather this evidence once per invocation and reuse it for decisions and output r
   reacquiring discarded data later. Scheduled phone workers describe the evidence and desired
   boundary; they do not inspect implementation to assign a code-level cause.
 
-### 4. Reflection-only evidence
+### 4. Overseer-only evidence
 
-When running in `reflection` mode, also gather:
+When running in `overseer` mode, also gather:
 
 - config history and curation-prompt history
 - recent chat output from `data/chat-output.jsonl` and/or `GET /api/chat/messages?limit=200`; classify recent user messages yourself as `content_interest`, `product_dev_setup`, or `operational_blob` with one-sentence reasoning
@@ -105,7 +124,7 @@ This includes approved edits to `data/config.md` and `data/curation-prompt.md`.
 
 Keep `metadata.proposedValue` directional. Describe what is broken, why it matters, the desired outcome, and hard constraints. Do not pre-write the exact implementation.
 
-For scheduled phone curation/reflection, this route is a product-observation handoff only:
+For scheduled phone curation/overseer work, this route is a product-observation handoff only:
 describe observable runtime evidence and the desired outcome without reviewing merges,
 prescribing a diff, or claiming a code-level diagnosis. Host development owns triage and repair.
 
@@ -114,5 +133,5 @@ For browser-backed findings, prefer fix directions such as removing infrastructu
 ## Role boundaries
 
 - Curation handles current-cycle operational state and current-cycle evidence.
-- Reflection handles cross-cycle synthesis and durable recommendations.
+- The overseer handles cross-cycle synthesis and durable recommendations.
 - Manual host audit runs the same core and owns software-development inspection.

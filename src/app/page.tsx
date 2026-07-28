@@ -44,6 +44,7 @@ import { appendFeedFilterToFeedQuery, buildBaseFeedFilters, buildDynamicFeedSour
 import { buildSuggestionGroupItems, getSuggestionGroupTitle as buildSuggestionGroupTitle, getSuggestionGroupLatestTimestamp, getSuggestionGroupStatus, isCurrentSuggestionStatus } from '@/lib/feed-groups';
 import { compareFeedItems, countPrimaryFeedItems, createEmptyPendingCounts, getOldestLoadedPrimaryFeedItemTimestamp, getThreadDisplayGroupIdentity, getThreadGroupIdentity, getThreadGroupProminence, isReflectionFeedItem, mergeFeedItemsForPendingReveal, normalizeFeedItems, normalizePendingCounts, readTrimmedMetadataString, shouldIncludeConversationTimelineEntry, shouldRenderFeedEmptyState } from '@/lib/feed-normalize';
 import { isAgentBrowsing } from '@/lib/agent-traffic';
+import { createVisiblePresenceHeartbeat } from '@/lib/visible-presence-heartbeat';
 import { getNotificationGroupTitle, isActiveNotification, isDismissedNotification, isExpiredNotification } from '@/lib/feed-notifications';
 import { compareThreadGroupItems, compareTimelineEntries, countFeedPresentationChanges, hasTruthfulThreadMembers, mergeFeedItemsInServerOrder, shouldStageVisibleFeedReorder, stageFeedArrangementItems, type FeedRenderEntry, type ThreadGroupRenderEntry } from '@/lib/feed-render-entries';
 import { buildSuggestionApplyRequest, getFeedSuggestionAcceptedFeedback, getFeedSuggestionDefaultTitle, getSuggestionApplySuccessMessage, getSuggestionStatusLabel, isCodeFixSuggestion, readSuggestionActionErrorMessage, type SuggestionAction, type SuggestionApplyResponse, wasSuggestionApplySuccessful } from '@/lib/feed-suggestions';
@@ -51,6 +52,7 @@ import { getThreadFeedbackProbe, getThreadSourceItemIds } from '@/lib/feedback-p
 import { buildInlineCodeFixChatMessage, getInlineCodeFixSuggestion, type InlineCodeFixChatSuggestion } from '@/lib/inline-code-fix-messages';
 import { type OrchestratorStatusResponse, type OrchestratorTaskStatus } from '@/lib/orchestrator';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
+import { createOverlayScreenContextHandoff, type OverlayScreenContext, type OverlayScreenContextPreview } from '@/lib/overlay-screen-context';
 import { ACTIVE_CHAT_STATUS_SYNC_INTERVAL_MS, APP_HEADER_HEIGHT_FALLBACK_PX, CHAT_ACTIVITY_STALE_TIMEOUT_MS, CHAT_COMPOSER_GAP_PX, CHAT_COMPOSER_MIN_RESERVED_HEIGHT_PX, CHAT_HISTORY_PAGE_SIZE, CHAT_HISTORY_TOP_LOAD_THRESHOLD_PX, CHAT_INPUT_MAX_HEIGHT_PX, CHAT_SESSION_COMPACTION_STALE_TIMEOUT_MS, COMPACT_FEEDBACK_TIMEOUT_MS, CONVERSATION_SESSION_PAGE_SIZE, CURATION_FEED_POLL_INTERVAL_MS, CURATION_STATUS_POLL_INTERVAL_MS, DEFAULT_FEED_SORT_ORDER, FEED_BANNER_COMPLETED_TASK_TIMEOUT_MS, MAX_RESET_FEED_BATCHES, MIN_PRIMARY_FEED_ITEMS, PAGE_SIZE, POST_CONTEXT_SEPARATOR, RESTART_APPLY_POLL_INTERVAL_MS, RESTART_APPLY_WAIT_TIMEOUT_MS, RESTART_STATUS_POLL_INTERVAL_MS, SELECTED_CHAT_SESSION_AUTOCORRECT_GRACE_MS, SELECTED_CHAT_SESSION_STORAGE_KEY, STATUS_SYNC_INTERVAL_MS, SUGGESTION_PAGE_SIZE } from '@/lib/page-constants';
 import { CLAUDE_REASONING_OPTIONS, CODEX_REASONING_OPTIONS, deriveCodexReasoningEffortFromConfig, formatClaudeReasoningEffortLabel, formatCodexReasoningEffortLabel } from '@/lib/reasoning-effort';
 import { createReconnectingWs } from '@/lib/reconnecting-ws';
@@ -1199,33 +1201,35 @@ function RenameSessionModal({
  * user is looking at. One tap turns that into a durable taste signal in the same `preferences`
  * table the curator reads — "like this" from inside X or Instagram teaches the feed directly.
  */
-function OverlaySignalBar({ onActive }: { onActive?: (active: boolean) => void }) {
-  const [ctx, setCtx] = useState<{ app: string | null; text: string } | null | undefined>(undefined);
+function OverlaySignalBar({
+  preview,
+  takeContext,
+  onActive,
+}: {
+  preview: OverlayScreenContextPreview | null | undefined;
+  takeContext: () => OverlayScreenContext | null;
+  onActive?: (active: boolean) => void;
+}) {
   const [state, setState] = useState<{ kind: 'like' | 'bookmark'; msg: string } | null>(null);
   const [busy, setBusy] = useState<null | 'like' | 'bookmark'>(null);
 
   useEffect(() => {
-    try {
-      const bridge = (window as unknown as { EvogentOverlay?: { getScreenContext?: () => string } }).EvogentOverlay;
-      const raw = bridge?.getScreenContext?.();
-      const parsed = raw ? (JSON.parse(raw) as { app: string | null; text: string }) : null;
-      setCtx(parsed);
-      // Tell the host the bar is showing so the compact panel reserves height for it.
-      onActive?.(Boolean(parsed && parsed.text && parsed.text.trim().length >= 3));
-    } catch {
-      setCtx(null);
-      onActive?.(false);
-    }
-  }, [onActive]);
+    // Tell the host the bar is showing so the compact panel reserves height for it.
+    onActive?.(Boolean(preview || busy || state));
+  }, [busy, onActive, preview, state]);
 
   const send = async (kind: 'like' | 'bookmark') => {
-    if (!ctx || busy) return;
+    if (!preview || busy) return;
+    // Acquire before any async work. Like, Bookmark, and Chat all use this same atomic take,
+    // so even same-tick clicks cannot send the native screen context more than once.
+    const context = takeContext();
+    if (!context) return;
     setBusy(kind);
     try {
       const res = await fetch('/api/internal/preference-signal', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind, app: ctx.app ?? 'phone', text: ctx.text }),
+        body: JSON.stringify({ kind, app: context.app ?? 'phone', text: context.text }),
       });
       const data = (await res.json()) as { message?: string; error?: string };
       setState({ kind, msg: res.ok ? (data.message ?? 'Saved') : (data.error ?? 'Failed') });
@@ -1236,9 +1240,6 @@ function OverlaySignalBar({ onActive }: { onActive?: (active: boolean) => void }
     }
   };
 
-  // Nothing worth capturing (blank screen / Evogent itself) -> render nothing.
-  if (!ctx || !ctx.text || ctx.text.trim().length < 3) return null;
-
   if (state) {
     return (
       <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
@@ -1248,9 +1249,19 @@ function OverlaySignalBar({ onActive }: { onActive?: (active: boolean) => void }
     );
   }
 
-  const label = ctx.app?.includes('instagram') ? 'this Instagram post'
-    : (ctx.app?.includes('twitter') || ctx.app?.includes('.x.')) ? 'this tweet'
-    : 'this screen';
+  if (busy) {
+    return (
+      <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl bg-zinc-800/70 px-3 py-2 text-sm text-zinc-300">
+        <span aria-hidden="true">{busy === 'bookmark' ? '🔖' : '👍'}</span>
+        <span className="truncate">Saving…</span>
+      </div>
+    );
+  }
+
+  // Nothing worth capturing (blank screen / Evogent itself) -> render nothing.
+  if (!preview) return null;
+
+  const { label } = preview;
 
   // Keep the compact action reachable without displacing the primary navigation.
   return (
@@ -2032,19 +2043,40 @@ export default function Home() {
   // Overlay mode: this same page rendered inside the anywhere-composer bottom sheet
   // (the floating bubble's WebView loads /?overlay=1). It shows ONLY the main-session
   // conversation + the normal composer, targets the main session regardless of the
-  // localStorage selection shared with the home-screen instance, and attaches the
-  // captured screen context (via the EvogentOverlay JS bridge) to the first send.
+  // localStorage selection shared with the home-screen instance, and offers captured
+  // screen context (via the EvogentOverlay JS bridge) once to either a signal or Chat.
   const [overlayMode, setOverlayMode] = useState(false);
   // The overlay opens BLANK: no session loaded, just the composer + empty state. The first
   // send mints a fresh session (server-side, titled from the source app) whose id lands here;
   // follow-ups in the same open continue it. Each bubble-tap reloads /?overlay=1 in a fresh
   // WebView, so this resets to null on every open — no stale thread from last time.
   const [overlaySessionId, setOverlaySessionId] = useState<string | null>(null);
-  const overlayScreenContextRef = useRef<{ app: string | null; text: string } | null | undefined>(undefined);
+  const overlayScreenContextHandoffRef = useRef<ReturnType<typeof createOverlayScreenContextHandoff> | null>(null);
+  if (!overlayScreenContextHandoffRef.current) {
+    overlayScreenContextHandoffRef.current = createOverlayScreenContextHandoff();
+  }
+  const [overlayScreenContextPreview, setOverlayScreenContextPreview] = useState<OverlayScreenContextPreview | null | undefined>(undefined);
   const [overlaySignalActive, setOverlaySignalActive] = useState(false);
+  const takeOverlayScreenContext = useCallback(() => {
+    const captured = overlayScreenContextHandoffRef.current?.take() ?? null;
+    // Clear the only UI preview before the caller starts its request. A failed request never
+    // restores the consumed native value.
+    setOverlayScreenContextPreview(null);
+    return captured;
+  }, []);
   useEffect(() => {
     try {
-      if (new URLSearchParams(window.location.search).has('overlay')) setOverlayMode(true);
+      if (!new URLSearchParams(window.location.search).has('overlay')) return;
+      const bridge = (window as unknown as {
+        EvogentOverlay?: { getScreenContext?: () => string };
+      }).EvogentOverlay;
+      const captured = overlayScreenContextHandoffRef.current?.captureOnce(
+        () => bridge?.getScreenContext?.(),
+      ) ?? null;
+      // Raw native text remains owned by the handoff closure. React state receives only a
+      // non-sensitive label so no component can copy or reuse the screen context.
+      setOverlayScreenContextPreview(captured);
+      setOverlayMode(true);
     } catch { /* ignore */ }
   }, []);
 
@@ -3069,6 +3101,26 @@ export default function Home() {
       });
     } catch {
       // best effort activity tracking
+    }
+  }, []);
+
+  const postPresence = useCallback(async (
+    state: 'foreground' | 'background',
+    generationId: string,
+    sequence: number,
+    keepalive = false,
+  ) => {
+    if (isAgentBrowsing()) return;
+    try {
+      await fetch('/api/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, generationId, sequence }),
+        keepalive,
+      });
+    } catch {
+      // Best effort. A missed foreground lease expires at the push suppression window;
+      // a later visible heartbeat repairs it without polluting behavioral history.
     }
   }, []);
 
@@ -5388,17 +5440,51 @@ export default function Home() {
   }, [isLoading, items, selectedFilter, headerMeasuredHeight]);
 
   useEffect(() => {
+    const presenceGenerationId = window.crypto.randomUUID();
+    let presenceSequence = 0;
+    let lastPresenceState: 'foreground' | 'background' | null = null;
+    const reportPresence = (
+      state: 'foreground' | 'background',
+      options: { heartbeat?: boolean; keepalive?: boolean } = {},
+    ) => {
+      if (!options.heartbeat && lastPresenceState === state) return;
+      lastPresenceState = state;
+      presenceSequence += 1;
+      void postPresence(
+        state,
+        presenceGenerationId,
+        presenceSequence,
+        options.keepalive,
+      );
+    };
+
+    if (document.visibilityState === 'visible' && !isAgentBrowsing()) {
+      // Presence is deliberately separate from behavioral activity. It updates one
+      // singleton lease and never runs the adaptive cadence predictor.
+      reportPresence('foreground');
+    }
     void postActivity('app_open', {
       path: window.location.pathname,
       userAgent: navigator.userAgent,
     });
 
+    const foregroundHeartbeat = createVisiblePresenceHeartbeat({
+      isVisible: () => document.visibilityState === 'visible' && !isAgentBrowsing(),
+      onPresenceHeartbeat: () => {
+        reportPresence('foreground', { heartbeat: true });
+      },
+    });
+    foregroundHeartbeat.sync();
+
     const onVisibilityChange = () => {
-      const event: ActivityEvent = document.visibilityState === 'visible' ? 'foreground' : 'background';
+      const visible = document.visibilityState === 'visible';
+      const event: ActivityEvent = visible ? 'foreground' : 'background';
+      reportPresence(visible ? 'foreground' : 'background', { keepalive: !visible });
       void postActivity(event, {
         path: window.location.pathname,
         visibilityState: document.visibilityState,
       });
+      foregroundHeartbeat.sync();
       if (document.visibilityState === 'visible') {
         // Client freshness is a general invariant: whatever changed server-side while this
         // view was backgrounded (dismissals, rearranges, new cycles) reconciles on return.
@@ -5412,15 +5498,20 @@ export default function Home() {
     };
     // pagehide catches navigations visibilitychange doesn't: the manual reload-now banner
     // tap and any in-page navigation still snapshot the resume state first.
-    const onPageHide = () => captureFeedResumeState();
+    const onPageHide = () => {
+      reportPresence('background', { keepalive: true });
+      captureFeedResumeState();
+    };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('pagehide', onPageHide);
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('pagehide', onPageHide);
+      foregroundHeartbeat.dispose();
+      reportPresence('background', { keepalive: true });
     };
-  }, [postActivity, captureFeedResumeState]);
+  }, [postActivity, postPresence, captureFeedResumeState]);
 
   useEffect(() => {
     const dispose = createReconnectingWs(createWsUrl('/ws/feed'), (event) => {
@@ -6171,31 +6262,19 @@ export default function Home() {
     setStreamingChat(null);
     setLastChatActivityAt(null);
 
-    // Overlay mode: attach what the user was looking at (captured by the accessibility
-    // service when they tapped the bubble) to the FIRST send of this overlay open. The
-    // server treats contextKind 'screen' as untrusted data. Follow-ups in the same open
-    // continue the thread without re-attaching.
+    // Overlay mode: if Chat is the first consumer, attach what the user was looking at
+    // (captured by the accessibility service when they tapped the bubble). Like and Bookmark
+    // compete for this same one-shot value. The server treats contextKind 'screen' as
+    // untrusted data; follow-ups in the same open never re-attach it.
     let sendContext: string | null = chatContext;
     let sendContextKind: 'global' | 'screen' = 'global';
     let sendMetadata: Record<string, unknown> | undefined;
     if (overlayMode) {
-      if (overlayScreenContextRef.current === undefined) {
-        try {
-          const bridge = (window as unknown as {
-            EvogentOverlay?: { getScreenContext?: () => string };
-          }).EvogentOverlay;
-          const raw = bridge?.getScreenContext?.();
-          overlayScreenContextRef.current = raw ? JSON.parse(raw) as { app: string | null; text: string } : null;
-        } catch {
-          overlayScreenContextRef.current = null;
-        }
-      }
-      const screenContext = overlayScreenContextRef.current;
-      if (screenContext && screenContext.text) {
+      const screenContext = takeOverlayScreenContext();
+      if (screenContext) {
         sendContext = `The user is currently viewing ${screenContext.app || 'an app'} on their phone. Visible screen content:\n${screenContext.text}`;
         sendContextKind = 'screen';
         sendMetadata = { overlay: true, screenApp: screenContext.app ?? null };
-        overlayScreenContextRef.current = null;
       } else {
         sendMetadata = { overlay: true };
       }
@@ -6399,6 +6478,7 @@ export default function Home() {
     overlayMode,
     rememberLiveActivity,
     refreshConversationSessionSummary,
+    takeOverlayScreenContext,
     targetSessionId,
     updateSelectedChatSession,
   ]);
@@ -7654,7 +7734,11 @@ export default function Home() {
       )}
       {overlayMode ? (
         <div className="pointer-events-auto relative mb-2 mx-auto w-full max-w-3xl">
-          <OverlaySignalBar onActive={setOverlaySignalActive} />
+          <OverlaySignalBar
+            preview={overlayScreenContextPreview}
+            takeContext={takeOverlayScreenContext}
+            onActive={setOverlaySignalActive}
+          />
         </div>
       ) : null}
       <div aria-hidden="true" className="absolute -inset-x-2 bottom-0 top-[-0.5rem] rounded-[2rem] bg-zinc-950/95 blur-xl" />

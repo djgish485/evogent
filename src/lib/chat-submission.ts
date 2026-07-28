@@ -5,6 +5,8 @@ import { getDb } from '@/lib/db/client';
 import { insertChatMessage, updateChatMessageStatus } from '@/lib/db/chat';
 import { ensureChatSession, maybeResetIdleMainSession } from '@/lib/db/chat-sessions';
 import { enqueueOrchestratorMessage } from '@/lib/orchestrator';
+import { POST_CONTEXT_SEPARATOR } from '@/lib/page-constants';
+import { getDurableChatRequestMetadata } from '@/lib/screen-chat-privacy';
 import { checkProviderAvailability } from '@/lib/setup-readiness';
 import type { ChatAttachment, ChatMessage } from '@/types/chat';
 
@@ -57,6 +59,28 @@ function getPersistedUserChatMessageRow(messageId: string): {
   return row ?? null;
 }
 
+function isPhoneNotificationContext(input: SubmitChatMessageInput): boolean {
+  const contextRefId = input.contextRefId?.trim();
+  if (input.contextKind !== 'post' || !contextRefId) return false;
+  return Boolean(getDb().prepare(`
+    SELECT 1
+    FROM feed
+    WHERE id = ?
+      AND type = 'notification'
+      AND source = 'phone-notification'
+    LIMIT 1
+  `).get(contextRefId));
+}
+
+function stripAppendedFeedContext(message: string): string {
+  const separatorIndex = message.indexOf(POST_CONTEXT_SEPARATOR);
+  const userText = (separatorIndex >= 0 ? message.slice(0, separatorIndex) : message)
+    .trim()
+    .replace(/^Chat:\s*/i, '')
+    .trim();
+  return userText || 'Question about a private phone notification';
+}
+
 export async function resolveExistingAttachments(payload: unknown): Promise<ChatAttachment[]> {
   const attachments = Array.isArray(payload) ? payload as ChatAttachment[] : [];
   if (attachments.length === 0) return [];
@@ -89,6 +113,23 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
   );
   const forceFreshChatSession = sessionMessageCount === 0;
   const queueRequestId = input.requestId?.trim() || `chat-queue-${userMessageId}`;
+  const phoneNotificationContext = isPhoneNotificationContext(input);
+  const safeMessage = phoneNotificationContext
+    ? stripAppendedFeedContext(input.message)
+    : input.message;
+  const safeContext = phoneNotificationContext
+    ? 'The selected phone notification is a local, model-free card. Its title and body are intentionally unavailable to runtime agents.'
+    : input.context ?? null;
+  const transientScreenContext = input.contextKind === 'screen'
+    && typeof safeContext === 'string'
+    && safeContext.trim()
+      ? safeContext.trim()
+      : null;
+  const durableContext = input.contextKind === 'screen' ? null : safeContext;
+  const durableRequestMetadata = getDurableChatRequestMetadata(
+    input.contextKind ?? 'global',
+    input.metadata,
+  );
   const providerAvailability = await checkProviderAvailability(session.provider);
   if (!providerAvailability.available) {
     throw new Error(`Install ${providerAvailability.providerDisplayName} before queueing agent work: ${providerAvailability.error ?? 'provider unavailable'}`);
@@ -99,18 +140,24 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
     role: 'user',
     inReplyTo: input.inReplyTo ?? null,
     sessionId: session.id,
-    text: input.message,
-    context: input.context ?? null,
+    text: safeMessage,
+    context: durableContext,
     timestamp,
     status: 'pending',
     metadata: {
-      ...(input.metadata ?? {}),
+      ...durableRequestMetadata,
       endpoint: '/api/chat',
       sessionId: session.id,
       contextKind: input.contextKind ?? 'global',
       contextRefId: input.contextRefId ?? null,
       originView: input.originView ?? 'feed',
       attachments,
+      ...(phoneNotificationContext ? {
+        phoneNotificationContentWithheld: true,
+        phoneNotificationSessionEvidencePurged: true,
+        phoneNotificationAuditEvidencePurged: true,
+        phoneNotificationOrchestratorEvidencePurged: true,
+      } : {}),
     },
   });
 
@@ -135,20 +182,20 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
       : session.workingDirectory;
     const taskInstruction = session.sessionType === 'curator'
       ? buildCuratorChatInstruction({
-          message: input.message,
-          context: input.context ?? null,
+          message: safeMessage,
+          context: durableContext,
           inReplyTo: input.inReplyTo ?? null,
           messageId: userMessageId,
           sessionId: session.id,
           sessionTitle: session.title,
-          automatedCycleId: typeof input.metadata?.curationCycleId === 'string'
-            ? input.metadata.curationCycleId.trim() || null
+          automatedCycleId: typeof durableRequestMetadata.curationCycleId === 'string'
+            ? durableRequestMetadata.curationCycleId.trim() || null
             : null,
           attachmentPaths,
         })
       : buildChatInstruction({
-          message: input.message,
-          context: input.context ?? null,
+          message: safeMessage,
+          context: durableContext,
           inReplyTo: input.inReplyTo ?? null,
           messageId: userMessageId,
           sessionId: session.id,
@@ -161,10 +208,13 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
       priority: input.priority ?? 'user_chat',
       source: input.source ?? 'user_chat',
       metadata: {
-        ...(input.metadata ?? {}),
+        ...durableRequestMetadata,
         endpoint: '/api/chat',
         chatMessageId: userMessageId,
         sessionId: session.id,
+        contextKind: input.contextKind ?? 'global',
+        contextRefId: input.contextRefId ?? null,
+        originView: input.originView ?? 'feed',
         provider: session.provider,
         claudeReasoningEffort: session.claudeReasoningEffort,
         codexReasoningEffort: session.codexReasoningEffort,
@@ -172,7 +222,7 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         // Interactive "do something on my phone now" surfaces run the fast model tier —
         // latency beats depth. That's the durable main session and every overlay session
         // (the anywhere bubble's "ask about this screen" threads).
-        ...((session.sessionType === 'main' || (input.metadata as { overlay?: unknown } | null)?.overlay === true)
+        ...((session.sessionType === 'main' || durableRequestMetadata.overlay === true)
           ? { claudeModel: 'haiku' }
           : {}),
         providerSessionId: session.providerSessionId,
@@ -185,6 +235,7 @@ export async function submitChatMessage(input: SubmitChatMessageInput): Promise<
         sessionType: session.sessionType,
         requiresBrowserTools: session.sessionType === 'curator',
       },
+      ...(transientScreenContext ? { transientScreenContext } : {}),
       requestId: queueRequestId,
     });
 

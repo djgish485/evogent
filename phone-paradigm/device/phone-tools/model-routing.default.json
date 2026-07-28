@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_comment": "Public routing mechanics only. A deployment's selected models, benchmark receipts, source cadence, and usage evidence stay private on the phone. Explicit environment overrides are one-run diagnostics. Persistent cheaper-route overrides require recent paired benchmark proof.",
+  "_comment": "Public routing mechanics only. A deployment's selected models, benchmark receipts, source cadence, and usage evidence stay private on the phone. Explicit environment overrides are one-run diagnostics. Global browse, YouTube browse, and curator persistent overrides remain disabled until their safe qualifying harnesses exist.",
   "minimumPairedPasses": 3,
   "qualificationMaxAgeHours": 720,
   "routes": {
@@ -11,7 +11,18 @@
       "fallbackModel": "gpt-5.6-terra",
       "fallbackEffort": "medium",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
-      "qualificationRequired": true
+      "qualificationRequired": true,
+      "persistentOverrideAllowed": false
+    },
+    "browse_youtube": {
+      "execution": "agent",
+      "modelSections": ["YouTube Browse Model", "Browse Model", "Codex Model"],
+      "effortSections": ["YouTube Browse Reasoning", "Browse Reasoning"],
+      "fallbackModel": "gpt-5.6-terra",
+      "fallbackEffort": "medium",
+      "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "qualificationRequired": true,
+      "persistentOverrideAllowed": false
     },
     "curator": {
       "execution": "agent",
@@ -20,7 +31,8 @@
       "fallbackModel": "gpt-5.6-sol",
       "fallbackEffort": "high",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
-      "qualificationRequired": true
+      "qualificationRequired": true,
+      "persistentOverrideAllowed": false
     },
     "overseer": {
       "execution": "agent",

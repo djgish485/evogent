@@ -10,6 +10,10 @@ import {
 import { getChatSessionSearchMatches } from '@/lib/db/chat-search';
 import { parseLimit, parseOffset, parseSearchQuery, parseSort, parseSourceFilter, parseThreadFilter, parseTypeFilter } from '@/lib/feed-query';
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
+import {
+  filterPhoneNotificationAgentEvidence,
+  isRuntimeAgentEvidenceRequest,
+} from '@/lib/agent-evidence-boundary';
 import { getThreadDisplayGroupKey, normalizeThreadDisplayPart } from '@/lib/thread-display';
 import type { FeedItem, FeedThread } from '@/types/feed';
 
@@ -120,14 +124,27 @@ export async function GET(request: Request) {
   const sort = parseSort(searchParams.get('sort'));
   const search = parseSearchQuery(searchParams.get('q'));
   const threadId = parseThreadFilter(searchParams.get('thread'));
+  const agentEvidence = isRuntimeAgentEvidenceRequest(request);
   const lastArrangeAtMs = getLastArrangeAtMs();
-  const orderFreshness = { lastArrangeAtMs };
+  const orderFreshness = { lastArrangeAtMs, agentEvidence };
 
   const page = getFeedPage({ offset, limit, types, sources, sort, search, threadId }, orderFreshness);
-  const items = await enrichFeedItemsWithNotificationTaskContext(hydrateFeedItemsForList(page.items));
-  const pendingCounts = getPendingFeedCounts();
+  const hydratedItems = await enrichFeedItemsWithNotificationTaskContext(
+    hydrateFeedItemsForList(page.items),
+  );
+  const items = agentEvidence
+    ? filterPhoneNotificationAgentEvidence(hydratedItems)
+    : hydratedItems;
+  const pendingCounts = getPendingFeedCounts({ agentEvidence });
   const suggestionGroup = getSuggestionFeedGroup({ offset, limit, types, sources, sort, search, threadId }, orderFreshness);
-  const chatSessionMatches = search && offset === 0 && types.length === 0 && sources.length === 0
+  const visibleSuggestionGroup = agentEvidence && suggestionGroup
+    ? {
+        ...suggestionGroup,
+        items: filterPhoneNotificationAgentEvidence(suggestionGroup.items),
+      }
+    : suggestionGroup;
+  const chatSessionMatches = !agentEvidence
+    && search && offset === 0 && types.length === 0 && sources.length === 0
     ? getChatSessionSearchMatches(search)
     : [];
   const storedActiveThreads = getActiveFeedThreads();
@@ -145,7 +162,7 @@ export async function GET(request: Request) {
   ));
   const activeThreads = buildFeedThreadNavigation(
     arrangedThreadNavigationItems.length > 0 ? arrangedThreadNavigationItems : threadNavigationPage.items,
-    storedActiveThreads,
+    agentEvidence ? [] : storedActiveThreads,
   );
 
   return NextResponse.json({
@@ -155,7 +172,7 @@ export async function GET(request: Request) {
     limit,
     hasMore: page.hasMore,
     pendingCounts,
-    suggestionGroup,
+    suggestionGroup: visibleSuggestionGroup,
     chatSessionMatches,
     activeThreads,
     lastArrangeAtMs,

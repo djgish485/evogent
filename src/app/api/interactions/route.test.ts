@@ -250,4 +250,82 @@ describe('/api/interactions thread feedback', () => {
     }));
     assert.strictEqual(invalidResponse.status, 400);
   });
+
+  test('acknowledges phone-notification UI interactions without creating agent evidence', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    const privateCanary = 'PRIVATE_NOTIFICATION_INTERACTION_WRITE_CANARY_8372';
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, published_at
+      ) VALUES (
+        'private-phone-notification', 'notification', 'phone-notification',
+        'phone-notification:private-interaction', ?, ?, ?
+      )
+    `).run(
+      `Private title ${privateCanary}`,
+      `Private body ${privateCanary}`,
+      '2026-07-28T12:00:00.000Z',
+    );
+
+    const actions = [
+      'like',
+      'unlike',
+      'thumbsup',
+      'thumbsdown',
+      'undo_thumbsup',
+      'undo_thumbsdown',
+      'accept_suggestion',
+      'dismiss_suggestion',
+      'undo_suggestion',
+      'thread_feedback',
+      'view',
+      'expand',
+      'engagement',
+    ];
+    for (const action of actions) {
+      const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedItemId: 'private-phone-notification',
+          action,
+          reason: privateCanary,
+          engagement: {
+            sessionId: 'private:notification:session',
+            phase: 'close',
+            activeDwellMs: 50_000,
+          },
+          threadFeedback: {
+            threadId: 'private-notification-thread',
+            vote: 'more',
+            reason: privateCanary,
+          },
+        }),
+      }));
+      assert.strictEqual(response.status, 200);
+      assert.deepStrictEqual(await response.json(), {
+        ok: true,
+        action,
+        ignoredForAgentEvidence: true,
+      });
+    }
+
+    for (const tableName of [
+      'interactions',
+      'feed_engagement_sessions',
+      'preferences',
+      'preference_vectors',
+      'thread_feedback',
+    ]) {
+      assert.deepStrictEqual(
+        db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get(),
+        { count: 0 },
+      );
+    }
+    assert.strictEqual(
+      fs.existsSync(path.join(tempDir, 'preferences-context.md')),
+      false,
+    );
+  });
 });

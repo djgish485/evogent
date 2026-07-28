@@ -12,6 +12,11 @@ import {
 import { enrichFeedItemsWithNotificationTaskContext } from '@/lib/notification-task-context';
 import type { FeedItem } from '@/types/feed';
 import { fetchInternal } from '@/lib/internal-request-auth';
+import {
+  filterPhoneNotificationAgentEvidence,
+  isPhoneNotificationFeedItem,
+  isRuntimeAgentEvidenceRequest,
+} from '@/lib/agent-evidence-boundary';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -178,20 +183,30 @@ async function notifyFeedUpdate(item: FeedItem) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
   const item = resolveFeedItemByIdentifier(id);
+  const agentEvidence = isRuntimeAgentEvidenceRequest(request);
 
-  if (!item) {
+  if (!item || (
+    agentEvidence
+    && isPhoneNotificationFeedItem(item)
+  )) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const children = getFeedChildren(item.id);
-  const hydratedDetailItems = await enrichFeedItemsWithNotificationTaskContext(
-    hydrateFeedItemsForList([item, ...children]),
+  const evidenceChildren = agentEvidence
+    ? children.filter((child) => !isPhoneNotificationFeedItem(child))
+    : children;
+  const hydratedDetailItemsRaw = await enrichFeedItemsWithNotificationTaskContext(
+    hydrateFeedItemsForList([item, ...evidenceChildren]),
   );
+  const hydratedDetailItems = agentEvidence
+    ? filterPhoneNotificationAgentEvidence(hydratedDetailItemsRaw)
+    : hydratedDetailItemsRaw;
   const hydratedItem = hydratedDetailItems.find((entry) => entry.id === item.id) ?? item;
   const hydratedChildren = hydratedDetailItems.filter((entry) => entry.id !== item.id);
   const interactionStates = getInteractionStates([item.id, ...hydratedChildren.map((child) => child.id)]);
@@ -227,7 +242,10 @@ export async function PATCH(
   const { id } = await context.params;
   const item = resolveFeedItemByIdentifier(id);
 
-  if (!item) {
+  if (!item || (
+    isRuntimeAgentEvidenceRequest(request)
+    && isPhoneNotificationFeedItem(item)
+  )) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

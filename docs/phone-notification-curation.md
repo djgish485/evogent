@@ -23,7 +23,12 @@ Per-app “always keep original” controls appear as apps are observed. Switchi
 back to Observe prevents subsequent replacement decisions and does not require a
 migration; it cannot recall a key-only cancellation request Android has already
 received. A separate, off-by-default per-app replacement list is explicit and
-reversible.
+reversible. Each settings update synchronizes the temporary file, renames and
+locks the final file to mode `0600`, then synchronizes that final inode and its
+parent directory before reporting success. A returned revocation therefore
+survives a crash after the response. One process-global mutex serializes the
+entire read, authority check, merge, and durable replacement across route
+bundles, so a concurrent unrelated PATCH cannot resurrect revoked authority.
 
 ## Local pipeline
 
@@ -66,13 +71,18 @@ reversible.
 5. The Node route independently validates and reclassifies the event. A light
    deterministic pass creates or updates a notification-lane item with a
    six-hour deduplication bucket, occurrence count, priority, expiry, and
-   preservation reason. No runtime agent or external service receives the
-   notification.
+   preservation reason. Its durable response never waits for best-effort
+   WebSocket publication; clients reconcile from SQLite if that broadcast is
+   late or lost. The supported runtime-agent evidence APIs omit the notification
+   and the deterministic ingest path calls no model or external service. This is
+   an application-path rule, not isolation from a same-UID process that bypasses
+   those APIs.
 6. Content-app events that are neither sensitive nor conversational refresh one
    fixed, content-free marker at
    `data/source-due-signals/<canonical-source>.due`. The filename contains only
    the canonical source name; the file body is a constant marker and contains
    no title, text, subtext, package, app label, event identity, or account data.
+   Reconnect-history events never refresh this marker.
    It never enters the browse cache or another model-facing candidate store.
    The next normal scheduler-owned cycle compares its modification time with a
    separate per-source acknowledgement of the browse-start generation most
@@ -108,8 +118,15 @@ network deadline, or changed active generation preserves the original.
 
 Curated shade never suppresses:
 
-- calls, alarms, emergency, navigation, transport, workout, or
-  location-sharing notifications;
+- anything outside the closed low-stakes category allowlist (`promo`,
+  `recommendation`, and `social`). Missing, unknown, and future category values
+  fail closed to Android;
+- calls, alarms, emergency, navigation, transport, workout, location-sharing,
+  authentication, message (`msg`), email, voicemail, and missed-call
+  notifications;
+- system (`sys`), error (`err`), automotive emergency (`car_emergency`),
+  automotive warning (`car_warning`), and automotive information
+  (`car_information`) notifications;
 - foreground services, ongoing, insistent, non-clearable, or full-screen
   notifications;
 - high-importance notifications or notifications whose ranking is unavailable;
@@ -167,6 +184,59 @@ Public source contains only the generalized policy, tests, docs, and failure
 classes. Android logs state outcomes without titles, bodies, package names,
 notification keys, or response content.
 
+### Supported runtime-agent evidence path
+
+The authenticated WebView and the phone's automation client use different
+application session kinds. A normal WebView request uses its reusable secure
+web-session cookie and continues to receive local notification cards. Every
+ordinary `evo-curl` request uses a fresh `Authorization: EvogentSession …`
+direct session and automatically receives the agent-evidence view; callers do
+not need to remember a privacy query flag.
+
+That routing is defense in depth for normal, cooperative runtime work, not an
+OS confidentiality boundary. Provider children currently run under the same
+Unix UID as the server and have unsandboxed shell and filesystem access. A
+compromised or adversarial provider process could therefore bypass the API and
+open the shared SQLite database directly. Runtime instructions explicitly
+forbid that bypass; the filters below describe the supported evidence path and
+must not be presented as mechanical isolation from same-UID code.
+
+That view removes phone-notification roots and any parent, child, or suggestion
+child introduced by later hydration across feed list, detail, children, and
+thread routes. Search does not expose matching private chat history. General
+feed interactions on these cards are acknowledged without writing interaction,
+attention, thread-feedback, preference, or vector evidence; notification
+dismissal remains a content-free local lifecycle fact. “Chat about this” keeps
+the user's question but replaces the selected card context with a generic
+model-free notice before persistence or queueing. Preference profiles, matching,
+and recent-interaction evidence independently exclude notification-linked
+rows, including content snapshots and legacy source identifiers. Database
+startup removes or replaces local evidence artifacts left by older builds,
+atomically removes affected message IDs from the local chat audit and
+Evogent-owned orchestrator history, durably removes their Evogent task logs,
+and rotates/clears affected provider resume pointers while retaining the
+notification cards themselves for the user. Server and worker perform the
+history cleanup before loading it into memory so a later save cannot restore a
+removed entry. Pointer rotation prevents future resume of the old provider
+context; it does not delete or claim deletion of provider-owned on-disk
+transcript files. If orchestrator history is malformed while this migration is
+pending, it is already unusable as history: startup replaces it with an empty
+valid document and durably clears Evogent-owned task logs rather than retaining
+unclassifiable private evidence or blocking the phone. Provider-owned
+transcripts remain outside that cleanup.
+
+The content-free source-due watermark described above is the only
+policy-approved bridge from an eligible notification into supported later
+runtime work. It can make a canonical source due; it cannot provide a title,
+body, app, account, event identity, or notification count through that path.
+
+Before Evogent can claim mechanical confidentiality against a provider worker,
+notification content must either move to Android app-private, native-only
+storage that the provider UID cannot open, or provider workers must run with
+genuine UID and mount/filesystem isolation from every notification-content
+store. API filtering and instructions remain useful defense in depth, but they
+do not substitute for that hard boundary.
+
 ## Verification
 
 Automated checks must cover:
@@ -186,6 +256,17 @@ Automated checks must cover:
 - persistence and deduplication receipts;
 - content-app source-due continuity, exact marker validation, and proof that
   notification content cannot enter signal storage or browse-cache rows;
+- direct-session feed/detail/children/thread/search requests excluding root and
+  transitively hydrated phone-notification content while the secure WebView
+  still renders the same local cards;
+- the public contract distinguishing supported evidence-path filtering and
+  explicit worker policy from same-UID OS isolation, and naming the storage or
+  worker-isolation requirement for a future hard confidentiality claim;
+- notification interactions, attention snapshots, preference context, vector
+  matching, and contextual chat remaining content-free, including startup
+  cleanup of legacy artifacts;
+- settings grant and revocation synchronizing the temporary file, final inode,
+  and parent directory before success;
 - server failure, digest failure, missing permission, stale receipt, and changed
   generation preserving the original; and
 - accessible controls for modes, lock-screen preview, and per-app preservation.

@@ -1,8 +1,12 @@
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import { generateSessionTitle } from '@/lib/chat-session-title';
+import { scrubChatAuditMessages } from '@/lib/chat-output';
 import { getDataPath } from '@/lib/data-dir';
+import { POST_CONTEXT_SEPARATOR } from '@/lib/page-constants';
 import { pickNextThreadColor, sanitizeThreadColor } from '@/lib/thread-colors';
 import { readBrainConfig } from '../../../lib/brain-config.js';
+import { scrubLegacyPhoneNotificationRuntimeArtifacts } from '../../../lib/phone-notification-chat-artifact-cleanup.js';
 import { ensureConfigApplyTasksTable } from '../config-apply-tasks.js';
 import { compactFeedArrangementRuns } from './feed-arrangement-retention';
 
@@ -810,6 +814,41 @@ const createUserActivityIndexesSql = [
   `CREATE INDEX IF NOT EXISTS idx_user_activity_event_timestamp ON user_activity(event, timestamp DESC);`,
 ];
 
+const purgeLegacyForegroundHeartbeatActivitySql = `
+DELETE FROM user_activity
+WHERE event = 'foreground'
+  AND metadata IS NOT NULL
+  AND json_valid(metadata)
+  AND json_extract(metadata, '$.heartbeat') = 1;
+`;
+
+const createAppPresenceTableSql = `
+CREATE TABLE IF NOT EXISTS app_presence (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  state TEXT NOT NULL CHECK (state IN ('foreground', 'background')),
+  client_id TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  server_epoch TEXT NOT NULL,
+  generation_id TEXT NOT NULL,
+  generation_sequence INTEGER NOT NULL CHECK (generation_sequence > 0),
+  generation_order INTEGER NOT NULL
+);
+`;
+
+const alterAppPresenceTableSql = [
+  `ALTER TABLE app_presence ADD COLUMN server_epoch TEXT;`,
+  `ALTER TABLE app_presence ADD COLUMN generation_id TEXT;`,
+  `ALTER TABLE app_presence ADD COLUMN generation_sequence INTEGER;`,
+  `ALTER TABLE app_presence ADD COLUMN generation_order INTEGER;`,
+];
+
+const createAppPresenceGenerationsTableSql = `
+CREATE TABLE IF NOT EXISTS app_presence_generations (
+  generation_order INTEGER PRIMARY KEY AUTOINCREMENT,
+  generation_id TEXT NOT NULL UNIQUE
+);
+`;
+
 const createCurationLogTableSql = `
 CREATE TABLE IF NOT EXISTS curation_log (
   id INTEGER PRIMARY KEY,
@@ -1093,6 +1132,351 @@ WHERE source_id LIKE 'notif-%'
 DELETE FROM browse_cache_refresh_runs
 WHERE triggered_by = 'phone-notification-listener';
 `;
+
+const PHONE_NOTIFICATION_WITHHELD_CONTEXT =
+  'The selected phone notification is a local, model-free card. Its title and body are intentionally unavailable to runtime agents.';
+const PHONE_NOTIFICATION_DERIVED_REPLY_WITHHELD_TEXT =
+  'This earlier reply was withheld because it may have been derived from local phone-notification content.';
+const PHONE_NOTIFICATION_DERIVED_REPLY_WITHHELD_CONTEXT =
+  'Local phone-notification context and any reply derived from it are unavailable to runtime agents.';
+
+type LegacyPhoneNotificationChatRoot = {
+  message_id: string;
+  session_id: string;
+  message_rowid: number;
+  timestamp: string;
+};
+
+type LegacyPhoneNotificationAffectedSession = {
+  id: string;
+  provider: string | null;
+};
+
+const createLegacyPhoneNotificationChatRootsSql = `
+CREATE TEMP TABLE IF NOT EXISTS legacy_phone_notification_chat_roots (
+  message_id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  message_rowid INTEGER NOT NULL,
+  timestamp TEXT NOT NULL
+);
+`;
+
+function populateLegacyPhoneNotificationChatRoots(
+  db: Database.Database,
+  completedMarker: 'phoneNotificationSessionEvidencePurged' | 'phoneNotificationAuditEvidencePurged',
+): LegacyPhoneNotificationChatRoot[] {
+  db.exec(createLegacyPhoneNotificationChatRootsSql);
+  db.exec(`DELETE FROM legacy_phone_notification_chat_roots;`);
+  db.exec(`
+    INSERT OR IGNORE INTO legacy_phone_notification_chat_roots (
+      message_id,
+      session_id,
+      message_rowid,
+      timestamp
+    )
+    SELECT
+      chat_messages.id,
+      chat_messages.session_id,
+      chat_messages.rowid,
+      chat_messages.timestamp
+    FROM chat_messages
+    WHERE json_valid(chat_messages.metadata)
+      AND json_extract(chat_messages.metadata, '$.contextKind') = 'post'
+      AND COALESCE(
+        json_extract(chat_messages.metadata, '$.${completedMarker}'),
+        0
+      ) != 1
+      AND EXISTS (
+        SELECT 1
+        FROM feed
+        WHERE feed.id = json_extract(chat_messages.metadata, '$.contextRefId')
+          AND feed.type = 'notification'
+          AND feed.source = 'phone-notification'
+      );
+  `);
+
+  return db.prepare(`
+    SELECT message_id, session_id, message_rowid, timestamp
+    FROM legacy_phone_notification_chat_roots
+    ORDER BY message_rowid ASC
+  `).all() as LegacyPhoneNotificationChatRoot[];
+}
+
+function legacyPhoneNotificationDerivedMessageIds(
+  db: Database.Database,
+): string[] {
+  return (
+    db.prepare(`
+      SELECT DISTINCT chat_messages.id
+      FROM chat_messages
+      WHERE chat_messages.role = 'agent'
+        AND EXISTS (
+          SELECT 1
+          FROM legacy_phone_notification_chat_roots AS roots
+          WHERE chat_messages.in_reply_to = roots.message_id
+            OR (
+              COALESCE(TRIM(chat_messages.session_id), '') != ''
+              AND chat_messages.session_id = roots.session_id
+              AND (
+                chat_messages.rowid > roots.message_rowid
+                OR (
+                  julianday(chat_messages.timestamp) IS NOT NULL
+                  AND julianday(roots.timestamp) IS NOT NULL
+                  AND julianday(chat_messages.timestamp) >= julianday(roots.timestamp)
+                )
+              )
+            )
+        )
+      ORDER BY chat_messages.rowid ASC
+    `).all() as Array<{ id: string }>
+  ).map((row) => row.id);
+}
+
+function scrubLegacyPhoneNotificationChatAudit(db: Database.Database): void {
+  const roots = populateLegacyPhoneNotificationChatRoots(
+    db,
+    'phoneNotificationAuditEvidencePurged',
+  );
+  if (roots.length === 0) return;
+
+  const affectedMessageIds = [
+    ...roots.map((root) => root.message_id),
+    ...legacyPhoneNotificationDerivedMessageIds(db),
+  ];
+
+  try {
+    scrubChatAuditMessages(affectedMessageIds);
+  } catch (error) {
+    // The database evidence is already scrubbed. Leave the audit marker unset
+    // so the next startup retries the durable audit rewrite.
+    console.warn(
+      '[db] failed to scrub legacy phone-notification chat audit; will retry on next startup',
+      error,
+    );
+    return;
+  }
+
+  db.exec(`
+    UPDATE chat_messages
+    SET metadata = json_set(
+      CASE WHEN json_valid(metadata) THEN metadata ELSE '{}' END,
+      '$.phoneNotificationAuditEvidencePurged',
+      json('true')
+    )
+    WHERE id IN (
+      SELECT message_id
+      FROM legacy_phone_notification_chat_roots
+    );
+  `);
+}
+
+/**
+ * Remove evidence artifacts written by builds that treated phone-notification
+ * cards like ordinary feed content. The feed rows themselves remain intact for
+ * the deterministic user UI. A notification dismissal is also retained because
+ * it contains no notification text and is the UI's local lifecycle state.
+ */
+function purgeLegacyPhoneNotificationAgentEvidence(db: Database.Database): void {
+  scrubLegacyPhoneNotificationRuntimeArtifacts({
+    db,
+    dataDir: getDataPath(),
+  });
+
+  const hasPreferenceVectorTable = Boolean(db.prepare(`
+    SELECT 1
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'pref_vec'
+    LIMIT 1
+  `).get());
+  const preferencesHaveSourceId = (
+    db.prepare(`PRAGMA table_info(preferences)`).all() as Array<{ name: string }>
+  ).some((column) => column.name === 'source_id');
+  const phonePreferencePredicate = `
+    (
+      feed.type = 'notification'
+      AND feed.source = 'phone-notification'
+    )
+    ${preferencesHaveSourceId
+    ? `OR COALESCE(preferences.source_id, '') LIKE 'phone-notification:%'`
+    : ''}
+  `;
+
+  db.transaction(() => {
+    if (hasPreferenceVectorTable) {
+      db.exec(`
+        DELETE FROM pref_vec
+        WHERE id IN (
+          SELECT preferences.id
+          FROM preferences
+          LEFT JOIN feed ON feed.id = preferences.feed_item_id
+          WHERE ${phonePreferencePredicate}
+        );
+      `);
+    }
+
+    db.exec(`
+      DELETE FROM preference_vectors
+      WHERE id IN (
+        SELECT preferences.id
+        FROM preferences
+        LEFT JOIN feed ON feed.id = preferences.feed_item_id
+        WHERE ${phonePreferencePredicate}
+      );
+
+      DELETE FROM preferences
+      WHERE id IN (
+        SELECT preferences.id
+        FROM preferences
+        LEFT JOIN feed ON feed.id = preferences.feed_item_id
+        WHERE ${phonePreferencePredicate}
+      );
+
+      DELETE FROM thread_feedback
+      WHERE feed_item_id IN (
+        SELECT id
+        FROM feed
+        WHERE type = 'notification'
+          AND source = 'phone-notification'
+      )
+      OR (
+        json_valid(source_item_ids)
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(thread_feedback.source_item_ids) AS source_item
+          JOIN feed ON feed.id = source_item.value
+          WHERE feed.type = 'notification'
+            AND feed.source = 'phone-notification'
+        )
+      );
+
+      DELETE FROM feed_engagement_sessions
+      WHERE feed_item_id IN (
+        SELECT id
+        FROM feed
+        WHERE type = 'notification'
+          AND source = 'phone-notification'
+      )
+      OR (
+        json_valid(item_snapshot)
+        AND json_extract(item_snapshot, '$.type') = 'notification'
+        AND json_extract(item_snapshot, '$.source') = 'phone-notification'
+      );
+
+      DELETE FROM interactions
+      WHERE action != 'suggestion_dismissed'
+        AND feed_item_id IN (
+          SELECT id
+          FROM feed
+          WHERE type = 'notification'
+            AND source = 'phone-notification'
+        );
+    `);
+
+    const roots = populateLegacyPhoneNotificationChatRoots(
+      db,
+      'phoneNotificationSessionEvidencePurged',
+    );
+    const affectedSessions = roots.length > 0
+      ? db.prepare(`
+          SELECT DISTINCT chat_sessions.id, chat_sessions.provider
+          FROM chat_sessions
+          INNER JOIN legacy_phone_notification_chat_roots AS roots
+            ON roots.session_id = chat_sessions.id
+          ORDER BY chat_sessions.id ASC
+        `).all() as LegacyPhoneNotificationAffectedSession[]
+      : [];
+
+    // Rotate every future resume pointer before removing local derived evidence.
+    // Claude accepts a fresh client-chosen UUID; Codex rollout IDs are
+    // server-assigned, so both of its stored pointers must be cleared. This
+    // intentionally does not claim to delete provider-owned transcript files.
+    const rotateSession = db.prepare(`
+      UPDATE chat_sessions
+      SET
+        provider_session_id = ?,
+        claude_session_id = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    for (const session of affectedSessions) {
+      const provider = session.provider?.trim().toLowerCase() || 'claude';
+      const nextProviderSessionId = provider === 'claude' ? randomUUID() : '';
+      rotateSession.run(
+        nextProviderSessionId,
+        provider === 'claude' ? nextProviderSessionId : '',
+        session.id,
+      );
+    }
+
+    if (roots.length === 0) return;
+
+    db.prepare(`
+      UPDATE chat_messages
+      SET
+        text = @derived_text,
+        context = @derived_context,
+        suggestions = NULL,
+        metadata = json_object(
+          'phoneNotificationDerivedContentWithheld',
+          json('true')
+        )
+      WHERE role = 'agent'
+        AND EXISTS (
+          SELECT 1
+          FROM legacy_phone_notification_chat_roots AS roots
+          WHERE chat_messages.in_reply_to = roots.message_id
+            OR (
+              COALESCE(TRIM(chat_messages.session_id), '') != ''
+              AND chat_messages.session_id = roots.session_id
+              AND (
+                chat_messages.rowid > roots.message_rowid
+                OR (
+                  julianday(chat_messages.timestamp) IS NOT NULL
+                  AND julianday(roots.timestamp) IS NOT NULL
+                  AND julianday(chat_messages.timestamp) >= julianday(roots.timestamp)
+                )
+              )
+            )
+        )
+    `).run({
+      derived_text: PHONE_NOTIFICATION_DERIVED_REPLY_WITHHELD_TEXT,
+      derived_context: PHONE_NOTIFICATION_DERIVED_REPLY_WITHHELD_CONTEXT,
+    });
+
+    db.prepare(`
+      UPDATE chat_messages
+      SET
+        text = CASE
+          WHEN instr(text, @separator) > 0
+            THEN trim(substr(text, 1, instr(text, @separator) - 1))
+          ELSE text
+        END,
+        context = @withheld_context,
+        suggestions = NULL,
+        metadata = json_object(
+          'contextKind',
+          'post',
+          'contextRefId',
+          json_extract(metadata, '$.contextRefId'),
+          'phoneNotificationContentWithheld',
+          json('true'),
+          'phoneNotificationSessionEvidencePurged',
+          json('true'),
+          'phoneNotificationOrchestratorEvidencePurged',
+          json('true')
+        )
+      WHERE id IN (
+        SELECT message_id
+        FROM legacy_phone_notification_chat_roots
+      )
+    `).run({
+      separator: POST_CONTEXT_SEPARATOR,
+      withheld_context: PHONE_NOTIFICATION_WITHHELD_CONTEXT,
+    });
+  })();
+
+  scrubLegacyPhoneNotificationChatAudit(db);
+}
 
 const repairPrefixedTwitterBrowseCacheSourceIdsSql = `
 DELETE FROM browse_cache_items
@@ -1793,6 +2177,19 @@ export function ensureFeedSchema(db: Database.Database): void {
   for (const stmt of createUserActivityIndexesSql) {
     db.exec(stmt);
   }
+  // Older builds appended a synthetic foreground row every 75 seconds. Those
+  // transport heartbeats are presence, not behavioral evidence, and otherwise
+  // crowd real opens/pulls out of the adaptive-cadence history window.
+  db.exec(purgeLegacyForegroundHeartbeatActivitySql);
+  db.exec(createAppPresenceTableSql);
+  for (const stmt of alterAppPresenceTableSql) {
+    try {
+      db.exec(stmt);
+    } catch {
+      // SQLite throws if the column already exists.
+    }
+  }
+  db.exec(createAppPresenceGenerationsTableSql);
   db.exec(createCurationLogTableSql);
   for (const stmt of alterCurationLogTableSql) {
     try {
@@ -1855,6 +2252,7 @@ export function ensureFeedSchema(db: Database.Database): void {
     db.exec(stmt);
   }
   db.exec(createSetupReadinessStateTableSql);
+  purgeLegacyPhoneNotificationAgentEvidence(db);
   db.exec(purgeLegacyNotificationBrowseSignalsSql);
   db.exec(repairImpossibleBrowseCacheRefreshRunTimestampsSql);
   db.exec(repairPrefixedTwitterBrowseCacheSourceIdsSql);

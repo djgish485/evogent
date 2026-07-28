@@ -542,5 +542,5 @@ test('the benchmark lifecycle retains its exclusive lock and requires per-share 
     benchmarkScript,
     /env EVOGENT_TASK_OWNER="\$CONTROL_OWNER_ID" EVOGENT_CONTROL_ROOT="\$CONTROL_ROOT"[\s\S]*?python3 "\$FINALIZER" cleanup/,
   );
-  assert.match(benchmarkScript, /"task":"browse_full_v2"/);
+  assert.match(benchmarkScript, /"task":"browse_youtube_smoke_v1"/);
 });

@@ -7,6 +7,10 @@ The queue intentionally contains no editorial policy.  It only provides mechanic
                         -> queued (bounded retry)
                         -> quarantined
 
+A daily overseer lease has one additional cost guard: immediately before its
+provider call it is atomically marked spent. A marked lease can acknowledge or
+quarantine, but it can never return to the launchable queue.
+
 Queue files live directly under ``root`` for compatibility with the original
 ``data/phone-sources/.queue/*.json`` producers.  Leases, receipts, and quarantined
 requests live in private subdirectories.  Every transition is an fsync'd atomic
@@ -35,6 +39,7 @@ DEFAULT_LEASE_MS = 30 * 60 * 1000
 BASE_BACKOFF_MS = 5 * 60 * 1000
 MAX_BACKOFF_MS = 6 * 60 * 60 * 1000
 TASK_ID_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+PROVIDER_LAUNCH_SPENT_FIELD = "providerLaunchSpent"
 
 
 class TaskQueueError(RuntimeError):
@@ -151,6 +156,17 @@ def _request_is_valid(request: dict[str, Any]) -> tuple[bool, str]:
         if not str(request.get(field) or "").strip():
             return False, f"missing required field {field}"
     return True, ""
+
+
+def _provider_launch_spent(request: dict[str, Any]) -> bool:
+    """Fail closed when an overseer record carries any provider-spend marker.
+
+    ``atomic_write_json`` means a normal marker is either wholly absent or wholly
+    present. Treating even a malformed marker as spent prevents corruption from
+    turning into a second high-cost provider launch for the same service day.
+    """
+
+    return request.get("kind") == "oversee" and PROVIDER_LAUNCH_SPENT_FIELD in request
 
 
 def _receipt_path(root: Path, request: dict[str, Any], transition: str, stamp: int) -> Path:
@@ -286,6 +302,19 @@ def _recover_expired_leases_locked(root: Path, stamp: int) -> None:
         expires = int(lease.get("expiresAtMs") or 0)
         if expires > stamp:
             continue
+        if _provider_launch_spent(request):
+            _quarantine_locked(
+                root,
+                lease_path,
+                request,
+                outcome="provider_launch_spent_lease_expired",
+                detail=(
+                    "the daily provider launch was durably spent before the worker "
+                    "stopped; this service date will not be relaunched"
+                ),
+                stamp=stamp,
+            )
+            continue
         attempt = max(0, int(request.get("attempt") or 0))
         max_attempts = max(1, int(request.get("maxAttempts") or DEFAULT_MAX_ATTEMPTS))
         if attempt >= max_attempts:
@@ -376,6 +405,19 @@ def claim_task(
                     stamp=stamp,
                 )
                 continue
+            if _provider_launch_spent(request):
+                _quarantine_locked(
+                    root,
+                    path,
+                    request,
+                    outcome="provider_launch_already_spent",
+                    detail=(
+                        "a queued daily overseer record retained a provider-spend "
+                        "marker and cannot be launched again"
+                    ),
+                    stamp=stamp,
+                )
+                continue
             if kind and request.get("kind") != kind:
                 continue
             task_id = safe_task_id(request.get("taskId") or path.stem)
@@ -412,6 +454,64 @@ def claim_task(
         )
         atomic_write_json(lease_path, leased)
         return {**leased, "leasePath": str(lease_path)}
+
+
+def mark_provider_launch_spent(
+    root: Path | str,
+    lease_path: Path | str,
+    *,
+    stamp: int | None = None,
+) -> dict[str, Any]:
+    """Durably spend one daily overseer provider launch before invoking it.
+
+    The leased request is the authority: the marker is fsync'd into that request
+    before this function reports ``marked``. A repeated call never reports
+    ``marked`` and therefore cannot authorize a second provider invocation.
+    """
+
+    root = Path(root)
+    lease_path = Path(lease_path)
+    stamp = now_ms() if stamp is None else int(stamp)
+    with queue_lock(root):
+        expected_parent = _paths(root)["leased"].resolve()
+        try:
+            resolved = lease_path.resolve(strict=True)
+        except FileNotFoundError as error:
+            raise TaskQueueError("lease no longer exists") from error
+        if resolved.parent != expected_parent:
+            raise TaskQueueError("lease path is outside this queue")
+        request = read_json(resolved)
+        lease = request.get("lease")
+        if request.get("state") != "leased" or not isinstance(lease, dict):
+            raise TaskQueueError("request is not an active lease")
+        if request.get("kind") != "oversee":
+            raise TaskQueueError("only a daily overseer lease can spend a provider launch")
+        if PROVIDER_LAUNCH_SPENT_FIELD in request:
+            return {
+                "action": "already_spent",
+                "leasePath": str(resolved),
+                "taskId": safe_task_id(request.get("taskId") or resolved.stem),
+            }
+        lease_id = str(lease.get("id") or "")
+        if not lease_id:
+            raise TaskQueueError("active lease is missing its identity")
+        leased_at = int(lease.get("leasedAtMs") or 0)
+        expires_at = int(lease.get("expiresAtMs") or 0)
+        if stamp < leased_at or stamp >= expires_at:
+            raise TaskQueueError("daily overseer lease is outside its provider-launch window")
+        marked = dict(request)
+        marked[PROVIDER_LAUNCH_SPENT_FIELD] = {
+            "version": 1,
+            "spentAtMs": stamp,
+            "leaseId": lease_id[:100],
+        }
+        marked["updatedAtMs"] = stamp
+        atomic_write_json(resolved, marked)
+        return {
+            "action": "marked",
+            "leasePath": str(resolved),
+            "taskId": safe_task_id(marked.get("taskId") or resolved.stem),
+        }
 
 
 def finish_task(
@@ -467,6 +567,18 @@ def finish_task(
             )
             resolved.unlink(missing_ok=True)
             return {"action": "ack", "path": str(final_path), "task": acknowledged}
+        if result == "retry" and _provider_launch_spent(request):
+            return _quarantine_locked(
+                root,
+                resolved,
+                request,
+                outcome="provider_launch_already_spent",
+                detail=(
+                    "retry was refused because the daily provider launch was "
+                    "already durably spent"
+                ),
+                stamp=stamp,
+            )
         if result == "quarantine" or attempt >= max_attempts:
             return _quarantine_locked(
                 root,
@@ -674,6 +786,11 @@ def build_parser() -> argparse.ArgumentParser:
     finish.add_argument("--detail", default="")
     finish.add_argument("--now-ms", type=int)
 
+    provider_spent = sub.add_parser("mark-provider-launch-spent")
+    provider_spent.add_argument("--root", required=True)
+    provider_spent.add_argument("--lease", required=True)
+    provider_spent.add_argument("--now-ms", type=int)
+
     ack_queued = sub.add_parser("ack-queued")
     ack_queued.add_argument("--root", required=True)
     ack_queued.add_argument("--task-id", required=True)
@@ -737,6 +854,14 @@ def main(argv: list[str] | None = None) -> int:
                     result=args.result,
                     outcome=args.outcome,
                     detail=args.detail,
+                    stamp=args.now_ms,
+                )
+            )
+        elif args.command == "mark-provider-launch-spent":
+            _json_print(
+                mark_provider_launch_spent(
+                    args.root,
+                    args.lease,
                     stamp=args.now_ms,
                 )
             )
