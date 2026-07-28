@@ -23,6 +23,9 @@ TOOLS="$HOME/phone-tools"
 A11Y_LISTENER_PID=""
 A11Y_REQUEST_DIR=""
 A11Y_LAST_REPLY=""
+PHONE_COMMAND_LOCK_HELD=0
+PHONE_COMMAND_OWNER_CREATED=0
+PHONE_COMMAND_LOCK="$TOOLS/.cycle.lock"
 
 stop_a11y_listener() {
   if [[ "$A11Y_LISTENER_PID" =~ ^[0-9]+$ ]]; then
@@ -41,6 +44,9 @@ phone_cleanup() {
   local rc=$?
   trap - EXIT INT TERM HUP
   stop_a11y_listener
+  [ "$PHONE_COMMAND_LOCK_HELD" = 1 ] \
+    && control_lock_release "$PHONE_COMMAND_LOCK" || true
+  [ "$PHONE_COMMAND_OWNER_CREATED" = 1 ] && control_finish_owner || true
   exit "$rc"
 }
 trap phone_cleanup EXIT
@@ -48,14 +54,33 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-# The scheduler's cycle lease protects the single hidden display. A server/user agent may still
-# use phone.sh while the scheduler is idle, but it cannot tap, read, or replace a live cycle's
-# display unless it inherited that exact cycle owner token.
-assert_display_lease() {
-  local lock="$TOOLS/.cycle.lock" owner caller="${EVOGENT_TASK_OWNER:-}"
-  control_lock_live "$lock" || return 0
-  owner=$(control_lock_owner_id "$lock")
-  if [ -z "$caller" ] || [ "$caller" != "$owner" ]; then
+# Every mechanics invocation either proves that it inherited the live cycle
+# owner or takes the same lease itself. The post-acquire journal check closes
+# both release and scheduler TOCTOU windows; an already-admitted command is
+# short and the installer waits for its lease before switching state.
+acquire_display_lease() {
+  local owner caller="${EVOGENT_TASK_OWNER:-}"
+  if control_lock_live "$PHONE_COMMAND_LOCK"; then
+    owner=$(control_lock_owner_id "$PHONE_COMMAND_LOCK")
+    if [ -z "$caller" ] || [ "$caller" != "$owner" ]; then
+      echo "ERROR: hidden display is leased by another live Evogent task"
+      exit 75
+    fi
+  else
+    control_init_owner phone-command || exit 70
+    PHONE_COMMAND_OWNER_CREATED=1
+    if ! control_lock_acquire "$PHONE_COMMAND_LOCK" phone-command; then
+      echo "ERROR: hidden display lease changed before this command"
+      exit 75
+    fi
+    PHONE_COMMAND_LOCK_HELD=1
+  fi
+  if control_release_transaction_pending \
+      "${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"; then
+    echo "ERROR: durable release transaction owns hidden-display mechanics"
+    exit 75
+  fi
+  if ! control_lock_live "$PHONE_COMMAND_LOCK"; then
     echo "ERROR: hidden display is leased by another live Evogent task"
     exit 75
   fi
@@ -200,7 +225,7 @@ display_size() {
 }
 
 case "${1:-}" in
-  launch|see|tap|scroll|swipe|swipe-rel|shot|clip|paste|shotnode|stop|close) assert_display_lease ;;
+  launch|see|tap|scroll|swipe|swipe-rel|shot|clip|paste|shotnode|stop|close) acquire_display_lease ;;
 esac
 
 case "${1:-}" in

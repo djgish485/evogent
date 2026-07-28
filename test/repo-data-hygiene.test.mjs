@@ -34,6 +34,7 @@ const generatedDataPathPatterns = [
   /^data\/.*\.sqlite(?:$|[.-])/,
   /^data\/.*\.sqlite3(?:$|[.-])/,
   /^data\/push-notifications\.json$/,
+  /^data\/phone-notification-curation\.json$/,
   /^data\/restart-state\.json$/,
   /^data\/pending-restart\.json$/,
   /^data\/orchestrator-chat-session\.json$/,

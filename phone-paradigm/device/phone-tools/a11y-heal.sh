@@ -22,12 +22,6 @@ fi
 echo "[a11y-heal] a11y service not answering — re-arming via rish" >&2
 control_rish_bounded \
   "settings put secure enabled_accessibility_services $SVC; settings put secure accessibility_enabled 1" 2>/dev/null
-# Overlay permission rides along: every APK reinstall silently resets SYSTEM_ALERT_WINDOW,
-# which kills the anywhere-bubble (back-to-Evogent + chat-about-screen) without an explicit
-# error. The a11y service starts OverlayService on connect, so re-granting here restores the
-# whole overlay system.
-control_rish_bounded \
-  "appops set net.dangish.evogent SYSTEM_ALERT_WINDOW allow" 2>/dev/null
 sleep 5
 if [ -n "$(probe)" ]; then
   echo "[a11y-heal] re-armed OK" >&2

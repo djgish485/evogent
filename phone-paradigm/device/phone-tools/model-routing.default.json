@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Public routing mechanics only. A deployment's selected models, benchmark receipts, source cadence, and usage evidence stay private on the phone. Explicit environment overrides are one-run diagnostics. Persistent cheaper-route overrides require recent paired benchmark proof.",
+  "minimumPairedPasses": 3,
+  "qualificationMaxAgeHours": 720,
+  "routes": {
+    "browse": {
+      "execution": "agent",
+      "modelSections": ["Browse Model", "Codex Model"],
+      "effortSections": ["Browse Reasoning"],
+      "fallbackModel": "gpt-5.6-terra",
+      "fallbackEffort": "medium",
+      "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "qualificationRequired": true
+    },
+    "curator": {
+      "execution": "agent",
+      "modelSections": ["Codex Model"],
+      "effortSections": ["Curator Reasoning", "Codex Reasoning Effort"],
+      "fallbackModel": "gpt-5.6-sol",
+      "fallbackEffort": "high",
+      "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "qualificationRequired": true
+    },
+    "overseer": {
+      "execution": "agent",
+      "modelSections": ["Overseer Model"],
+      "effortSections": ["Overseer Reasoning"],
+      "fallbackModel": "gpt-5.6-sol",
+      "fallbackEffort": "high",
+      "allowedEfforts": ["high", "xhigh", "max", "ultra"],
+      "qualificationRequired": false,
+      "persistentOverrideAllowed": false,
+      "maximumRunsPerServiceDay": 1
+    },
+    "diagnosis": {
+      "execution": "agent",
+      "modelSections": ["Overseer Model", "Codex Model"],
+      "effortSections": ["Overseer Reasoning"],
+      "fallbackModel": "gpt-5.6-sol",
+      "fallbackEffort": "high",
+      "allowedEfforts": ["medium", "high", "xhigh", "max"],
+      "qualificationRequired": false
+    },
+    "notification": {
+      "execution": "deterministic"
+    }
+  }
+}

@@ -32,6 +32,10 @@ const scripts = [
   'phone-paradigm/device/phone-tools/evogent-boot.sh',
   'phone-paradigm/device/phone-tools/evogent-scheduler.sh',
   'phone-paradigm/device/phone-tools/evogent-watchdog.sh',
+  'phone-paradigm/device/phone-tools/source-discovery.sh',
+  'phone-paradigm/device/phone-tools/phone.sh',
+  'phone-paradigm/device/phone-tools/benchmark-browse-models.sh',
+  'phone-paradigm/device/phone-tools/benchmark-cu-micro.sh',
   'phone-paradigm/device/phone-tools/benchmark-curation.sh',
 ];
 
@@ -98,6 +102,767 @@ function createReleaseBuilderFixture() {
 
 test('phone release shell entrypoints parse', () => {
   execFileSync('bash', ['-n', ...scripts], { cwd: root, stdio: 'pipe' });
+});
+
+test('scheduler gates every private-task and cycle dispatch behind release commit', () => {
+  const scheduler = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-scheduler.sh'),
+    'utf8',
+  );
+  const helpers = [
+    'release_transaction_pending',
+    'run_due_private_tasks_if_committed',
+  ].map((name) => shellFunction(scheduler, name)).join('\n');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-scheduler-gate-'));
+  const trace = path.join(fixture, 'trace');
+  const harness = `
+set -u
+${helpers}
+control_release_transaction_pending() { return "$TRANSACTION_RESULT"; }
+control_lock_acquire() {
+  printf 'acquire\\n' >> "$TRACE"
+  [ "\${ACQUIRE_PUBLISHES_JOURNAL:-0}" = 1 ] && TRANSACTION_RESULT=0
+  return 0
+}
+control_lock_release() { printf 'release\\n' >> "$TRACE"; }
+run_due_overseer() {
+  printf 'overseer\\n'
+  [ "\${OVERSEER_PUBLISHES_JOURNAL:-0}" = 1 ] && TRANSACTION_RESULT=0
+  return 0
+}
+RELEASE_ROOT="$1"
+SCHEDULED_TASK_GATE="/cycle.lock"
+SCHEDULED_TASK_GATE_HELD=0
+SCHED_LOCK="/scheduler.lock"
+CONTROL_ACTIVE_LOCK="$SCHED_LOCK"
+TRACE="$2"
+run_due_private_tasks_if_committed
+`;
+  let result = spawnSync(
+    'bash',
+    ['-c', harness, 'scheduler-gate', '/release-root', trace],
+    { encoding: 'utf8', env: { ...process.env, TRANSACTION_RESULT: '0' } },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'acquire\nrelease\n');
+  fs.rmSync(trace);
+  result = spawnSync(
+    'bash',
+    ['-c', harness, 'scheduler-gate', '/release-root', trace],
+    { encoding: 'utf8', env: { ...process.env, TRANSACTION_RESULT: '1' } },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'overseer\n');
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'acquire\nrelease\n');
+  fs.rmSync(trace);
+  result = spawnSync(
+    'bash',
+    ['-c', harness, 'scheduler-gate', '/release-root', trace],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TRANSACTION_RESULT: '1',
+        ACQUIRE_PUBLISHES_JOURNAL: '1',
+      },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+  fs.rmSync(trace);
+  result = spawnSync(
+    'bash',
+    ['-c', harness, 'scheduler-gate', '/release-root', trace],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TRANSACTION_RESULT: '1',
+        OVERSEER_PUBLISHES_JOURNAL: '1',
+      },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'overseer\n');
+
+  assert.equal(
+    (scheduler.match(/^[ \t]*run_due_overseer \|\| true$/gm) || []).length,
+    1,
+  );
+  assert.equal(
+    (scheduler.match(/run_due_(?:dream|reflection) \|\| true/g) || []).length,
+    0,
+  );
+  assert.equal(
+    (scheduler.match(/^[ \t]*run_due_private_tasks_if_committed$/gm) || []).length,
+    3,
+  );
+  const schedulerLoop = scheduler.slice(
+    scheduler.indexOf('NEXT_MIN=""\nINITIAL_FLOOR_CHECKED=0\nwhile true; do'),
+  );
+  assert.match(
+    schedulerLoop,
+    /while true; do\n  if pause_for_release_transaction; then\n    continue\n  fi\n  ensure_watchdog/,
+  );
+  assert.match(
+    schedulerLoop,
+    /if pause_for_release_transaction; then\n    continue\n  fi\n  REQUEST_REASON=""/,
+  );
+});
+
+test('durable journal, not a preflight installer lease, gates the control plane', () => {
+  const controlPlane = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/control-plane.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(controlPlane, 'control_release_transaction_pending');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-transaction-gate-'));
+  const transaction = path.join(fixture, 'install-transaction');
+  const harness = `
+set -u
+${helper}
+control_release_transaction_pending "$1"
+`;
+  const pending = () => spawnSync(
+    'bash',
+    ['-c', harness, 'transaction-gate', fixture],
+    { encoding: 'utf8' },
+  );
+
+  assert.equal(pending().status, 0);
+  fs.mkdirSync(transaction);
+  assert.equal(pending().status, 1);
+  fs.mkdirSync(path.join(fixture, 'install.lock'));
+  assert.equal(pending().status, 1);
+  fs.writeFileSync(path.join(transaction, 'journal.json'), '{}\n');
+  assert.equal(pending().status, 0);
+  fs.unlinkSync(path.join(transaction, 'journal.json'));
+  fs.symlinkSync('missing-journal', path.join(transaction, 'journal.json'));
+  assert.equal(pending().status, 0);
+
+  const mutationHelper = shellFunction(
+    controlPlane,
+    'control_release_mutation_gate_acquire',
+  );
+  const mutationRelease = shellFunction(
+    controlPlane,
+    'control_release_mutation_gate_release',
+  );
+  const mutationHarness = `
+set -u
+${mutationHelper}
+${mutationRelease}
+control_lock_acquire() {
+  CONTROL_ACTIVE_LOCK="$1"
+  printf 'acquire\\n' >> "$TRACE"
+  [ "\${PUBLISH_DURING_ACQUIRE:-0}" = 1 ] && TRANSACTION_RESULT=0
+  return 0
+}
+control_lock_release() { printf 'release\\n' >> "$TRACE"; CONTROL_ACTIVE_LOCK=""; }
+control_release_transaction_pending() { return "$TRANSACTION_RESULT"; }
+HOME="$1"
+TRACE="$2"
+CONTROL_ACTIVE_LOCK="/prior.lock"
+CONTROL_RELEASE_MUTATION_GATE=""
+CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK=""
+if control_release_mutation_gate_acquire "$HOME" test-mutation; then
+  printf 'admitted:%s\\n' "$CONTROL_ACTIVE_LOCK"
+  control_release_mutation_gate_release
+  printf 'restored:%s\\n' "$CONTROL_ACTIVE_LOCK"
+else
+  printf 'blocked:%s\\n' "$?"
+fi
+`;
+  const mutationTrace = path.join(fixture, 'mutation-trace');
+  let mutationResult = spawnSync(
+    'bash',
+    ['-c', mutationHarness, 'mutation', fixture, mutationTrace],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TRANSACTION_RESULT: '1',
+        PUBLISH_DURING_ACQUIRE: '1',
+      },
+    },
+  );
+  assert.equal(mutationResult.status, 0, mutationResult.stderr);
+  assert.equal(mutationResult.stdout, 'blocked:75\n');
+  assert.equal(fs.readFileSync(mutationTrace, 'utf8'), 'acquire\nrelease\n');
+  fs.rmSync(mutationTrace);
+  mutationResult = spawnSync(
+    'bash',
+    ['-c', mutationHarness, 'mutation', fixture, mutationTrace],
+    { encoding: 'utf8', env: { ...process.env, TRANSACTION_RESULT: '1' } },
+  );
+  assert.equal(mutationResult.status, 0, mutationResult.stderr);
+  assert.equal(
+    mutationResult.stdout,
+    `admitted:${fixture}/control-plane-mutation.lock\nrestored:/prior.lock\n`,
+  );
+
+  const watchdog = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-watchdog.sh'),
+    'utf8',
+  );
+  const boot = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-boot.sh'),
+    'utf8',
+  );
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const cycle = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-cycle.sh'),
+    'utf8',
+  );
+  assert.match(watchdog, /control_release_transaction_pending "\$RELEASE_ROOT"/);
+  assert.match(boot, /control_release_transaction_pending "\$RELEASE_ROOT"/);
+  const barrierAcquire = installer.indexOf(
+    'acquire_lock_dir "$CONTROL_MUTATION_GATE" release-install-control-barrier',
+  );
+  const journalPublish = installer.indexOf(
+    'write_transaction_journal quiesce_pending',
+    barrierAcquire,
+  );
+  const barrierRelease = installer.indexOf(
+    'release_lock_dir "$CONTROL_MUTATION_GATE"',
+    journalPublish,
+  );
+  const cycleAcquire = installer.indexOf(
+    'acquire_lock_dir "$CYCLE_GATE" release-install-cycle-gate',
+    barrierRelease,
+  );
+  assert.ok(
+    barrierAcquire !== -1
+      && barrierAcquire < journalPublish
+      && journalPublish < barrierRelease
+      && barrierRelease < cycleAcquire,
+  );
+  assert.ok(
+    boot.indexOf('control_release_mutation_gate_acquire "$RELEASE_ROOT" boot-bringup')
+      < boot.indexOf('DB integrity gate'),
+  );
+  assert.ok(
+    watchdog.indexOf('control_release_mutation_gate_acquire')
+      < watchdog.indexOf('tmux new-session -d -s evo-sched'),
+  );
+  assert.ok(
+    cycle.indexOf('CYCLE_LOCK_HELD=1')
+      < cycle.indexOf('control_release_transaction_pending'),
+  );
+  assert.ok(
+    cycle.indexOf('control_release_transaction_pending')
+      < cycle.indexOf('control_wake_acquire'),
+  );
+});
+
+test('claimed overseer work holds a scoped wake reference on every exit', () => {
+  const scheduler = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-scheduler.sh'),
+    'utf8',
+  );
+  const body = shellFunction(scheduler, 'run_due_overseer');
+  const acquiredAt = body.indexOf('scheduled_task_wake_acquire overseer || true');
+  assert.ok(acquiredAt > body.indexOf('[ -n "$lease" ] || return 0'));
+  const claimedBody = body.slice(acquiredAt);
+  const returns = [...claimedBody.matchAll(/^[ \t]*return [02]$/gm)];
+  assert.ok(returns.length >= 3);
+  for (const match of returns) {
+    const priorLines = claimedBody.slice(0, match.index).trimEnd().split('\n');
+    assert.equal(priorLines.at(-1).trim(), 'scheduled_task_wake_release');
+  }
+  const cleanup = shellFunction(scheduler, 'scheduler_cleanup');
+  assert.match(
+    cleanup,
+    /for attempt in 1 2 3; do[\s\S]*?\[ "\$SCHEDULED_WAKE_HELD" = 1 \] \|\| break[\s\S]*?scheduled_task_wake_release && break/,
+  );
+  const releaseHarness = `
+set -euo pipefail
+${shellFunction(scheduler, 'scheduled_task_wake_release')}
+attempts=0
+SCHEDULED_WAKE_HELD=1
+control_wake_release() {
+  attempts=$((attempts + 1))
+  [ "$attempts" -ge 2 ]
+}
+say() { :; }
+sleep() { :; }
+scheduled_task_wake_release
+test "$attempts" = 2
+test "$SCHEDULED_WAKE_HELD" = 0
+`;
+  const releaseResult = spawnSync(
+    'bash',
+    ['-c', releaseHarness, 'wake-release'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(releaseResult.status, 0, releaseResult.stderr);
+});
+
+test('wake acquire refuses an undedicated Termux without touching its global lock', () => {
+  const controlPlane = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/control-plane.sh'),
+    'utf8',
+  );
+  const helpers = [
+    'control_dedicated_termux_wake_enabled',
+    'control_wake_acquire',
+  ].map((name) => shellFunction(controlPlane, name)).join('\n');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-wake-policy-'));
+  const fakeBin = path.join(fixture, 'bin');
+  const trace = path.join(fixture, 'wake-trace');
+  fs.mkdirSync(fakeBin);
+  for (const binary of ['termux-wake-lock', 'termux-wake-unlock']) {
+    fs.writeFileSync(
+      path.join(fakeBin, binary),
+      '#!/bin/sh\nprintf "%s\\n" "${0##*/}" >> "$TRACE"\n',
+      { mode: 0o700 },
+    );
+  }
+  const harness = `
+set -euo pipefail
+${helpers}
+CONTROL_ROOT="$HOME/phone-tools/.control"
+CONTROL_OWNER_ID=""
+CONTROL_WAKE_HELD=0
+status=0
+control_wake_acquire || status=$?
+test "$status" = 125
+test "$CONTROL_WAKE_HELD" = 0
+test ! -e "$TRACE"
+`;
+  const env = {
+    ...process.env,
+    HOME: fixture,
+    PATH: `${fakeBin}:${process.env.PATH}`,
+    TRACE: trace,
+  };
+  delete env.EVOGENT_DEDICATED_TERMUX_WAKE;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'wake-policy'],
+    { encoding: 'utf8', env },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(trace), false);
+});
+
+test('wake registry serializes global lock transitions and preserves live owners', async () => {
+  const controlPlane = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/control-plane.sh'),
+    'utf8',
+  );
+  const registryHelpers = [
+    'control_wake_registry_acquire',
+    'control_wake_registry_release',
+  ].map((name) => shellFunction(controlPlane, name)).join('\n');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-wake-registry-'));
+  const registryTrace = path.join(fixture, 'registry-trace');
+  const registryHarness = `
+set -u
+${registryHelpers}
+control_lock_acquire() {
+  if mkdir "$1" 2>/dev/null; then
+    CONTROL_ACTIVE_LOCK="$1"
+    return 0
+  fi
+  return 1
+}
+control_lock_release() { rmdir "$1"; CONTROL_ACTIVE_LOCK=""; }
+CONTROL_ROOT="$1"
+CONTROL_ACTIVE_LOCK="/prior.lock"
+CONTROL_WAKE_REGISTRY_HELD=0
+CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK=""
+control_wake_registry_acquire
+printf 'enter-%s\\n' "$2" >> "$3"
+sleep "$4"
+printf 'leave-%s\\n' "$2" >> "$3"
+control_wake_registry_release
+test "$CONTROL_ACTIVE_LOCK" = /prior.lock
+`;
+  const first = spawn(
+    'bash',
+    ['-c', registryHarness, 'wake-registry', fixture, 'first', registryTrace, '0.2'],
+  );
+  const firstExitPromise = waitForExit(first);
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (
+      fs.existsSync(registryTrace)
+      && fs.readFileSync(registryTrace, 'utf8').includes('enter-first')
+    ) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const second = spawn(
+    'bash',
+    ['-c', registryHarness, 'wake-registry', fixture, 'second', registryTrace, '0'],
+  );
+  const [firstExit, secondExit] = await Promise.all([
+    firstExitPromise,
+    waitForExit(second),
+  ]);
+  assert.equal(firstExit.status, 0, firstExit.stderr);
+  assert.equal(secondExit.status, 0, secondExit.stderr);
+  assert.deepEqual(fs.readFileSync(registryTrace, 'utf8').trim().split('\n'), [
+    'enter-first',
+    'leave-first',
+    'enter-second',
+    'leave-second',
+  ]);
+
+  const fakeBin = path.join(fixture, 'bin');
+  const unlockTrace = path.join(fixture, 'unlock-trace');
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(
+    path.join(fakeBin, 'termux-wake-unlock'),
+    '#!/bin/sh\nprintf "unlock\\n" >> "$TRACE"\n',
+    { mode: 0o700 },
+  );
+  const wakeHelpers = [
+    'control_wake_command',
+    'control_dedicated_termux_wake_enabled',
+    'control_wake_marker_state',
+    'control_wake_marker_write_locked',
+    'control_wake_establish_locked',
+    'control_wake_registry_acquire',
+    'control_wake_registry_release',
+    'control_wake_prune_locked',
+    'control_wake_release',
+    'control_release_legacy_wake_if_idle',
+  ].map((name) => shellFunction(controlPlane, name)).join('\n');
+  const ownerHarness = `
+set -euo pipefail
+${wakeHelpers}
+control_lock_acquire() { mkdir "$1"; CONTROL_ACTIVE_LOCK="$1"; }
+control_lock_release() { rmdir "$1"; CONTROL_ACTIVE_LOCK=""; }
+control_meta_field() { sed -n "s/^\${2}=//p" "$1" | head -1; }
+control_pid_matches() { return "$LIVE_RESULT"; }
+# This harness exercises wake-reference serialization, not GNU timeout portability.
+# Keep the device implementation's bounded wrapper covered by the assertions below.
+control_wake_command() { command "$1"; }
+CONTROL_ROOT="$1"
+CONTROL_OWNER_ID=A
+CONTROL_ACTIVE_LOCK="/worker.lock"
+CONTROL_WAKE_HELD=1
+CONTROL_WAKE_REGISTRY_HELD=0
+CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK=""
+mkdir -p "$CONTROL_ROOT/wake/A" "$CONTROL_ROOT/wake/B"
+printf 'pid=1\\nstart=1\\n' > "$CONTROL_ROOT/wake/A/owner"
+printf 'pid=2\\nstart=2\\n' > "$CONTROL_ROOT/wake/B/owner"
+printf 'held\\n' > "$CONTROL_ROOT/wake/.evogent-held"
+LIVE_RESULT=0
+control_wake_release
+test -d "$CONTROL_ROOT/wake/B"
+test ! -e "$TRACE"
+LIVE_RESULT=1
+control_release_legacy_wake_if_idle
+test ! -d "$CONTROL_ROOT/wake/B"
+test ! -e "$CONTROL_ROOT/wake/.evogent-held"
+`;
+  const ownerResult = spawnSync(
+    'bash',
+    ['-c', ownerHarness, 'wake-owner', fixture],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        TRACE: unlockTrace,
+        EVOGENT_DEDICATED_TERMUX_WAKE: '1',
+      },
+    },
+  );
+  assert.equal(ownerResult.status, 0, ownerResult.stderr);
+  assert.equal(fs.readFileSync(unlockTrace, 'utf8'), 'unlock\n');
+
+  const failedWakeRoot = path.join(fixture, 'failed-wake');
+  const failedWakeTrace = path.join(fixture, 'failed-wake-trace');
+  const failedWakeHelpers = [
+    'control_dedicated_termux_wake_enabled',
+    'control_wake_marker_state',
+    'control_wake_marker_write_locked',
+    'control_wake_establish_locked',
+    'control_wake_registry_acquire',
+    'control_wake_registry_release',
+    'control_wake_prune_locked',
+    'control_wake_acquire',
+    'control_wake_release',
+  ].map((name) => shellFunction(controlPlane, name)).join('\n');
+  const failedWakeHarness = `
+set -euo pipefail
+${failedWakeHelpers}
+control_lock_acquire() { mkdir "$1"; CONTROL_ACTIVE_LOCK="$1"; }
+control_lock_release() { rmdir "$1"; CONTROL_ACTIVE_LOCK=""; }
+control_meta_field() { sed -n "s/^\${2}=//p" "$1" | head -1; }
+control_pid_matches() { return 0; }
+control_wake_command() {
+  printf '%s\\n' "$1" >> "$TRACE"
+  [ "$1" != termux-wake-lock ]
+}
+CONTROL_ROOT="$1"
+CONTROL_OWNER_ID=A
+CONTROL_SELF_START=1
+CONTROL_ACTIVE_LOCK=""
+CONTROL_WAKE_HELD=0
+CONTROL_WAKE_REGISTRY_HELD=0
+CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK=""
+if control_wake_acquire; then exit 1; fi
+test "$CONTROL_WAKE_HELD" = 1
+if control_wake_release; then exit 1; fi
+test "$CONTROL_WAKE_HELD" = 1
+test -d "$CONTROL_ROOT/wake/A"
+test "$(cat "$CONTROL_ROOT/wake/.evogent-held")" = uncertain
+! grep -q termux-wake-unlock "$TRACE"
+`;
+  const failedWake = spawnSync(
+    'bash',
+    ['-c', failedWakeHarness, 'failed-wake', failedWakeRoot],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TRACE: failedWakeTrace,
+        EVOGENT_DEDICATED_TERMUX_WAKE: '1',
+      },
+    },
+  );
+  assert.equal(failedWake.status, 0, failedWake.stderr);
+  assert.deepEqual(
+    fs.readFileSync(failedWakeTrace, 'utf8').trim().split('\n'),
+    ['termux-wake-lock', 'termux-wake-lock', 'termux-wake-lock'],
+  );
+
+  const acquire = shellFunction(controlPlane, 'control_wake_acquire');
+  assert.ok(
+    acquire.indexOf('control_wake_marker_write_locked acquiring')
+      < acquire.indexOf('control_wake_establish_locked'),
+  );
+  const boundedWake = shellFunction(controlPlane, 'control_wake_command');
+  assert.match(boundedWake, /CONTROL_WAKE_COMMAND_SECONDS:-8/);
+  assert.match(boundedWake, /timeout -k 2 "\$budget" "\$binary"/);
+  assert.match(boundedWake, /<\/dev\/null/);
+  assert.match(
+    shellFunction(controlPlane, 'control_dedicated_termux_wake_enabled'),
+    /EVOGENT_DEDICATED_TERMUX_WAKE_V1/,
+  );
+});
+
+test('control lock reaper accepts dead legacy modes but defers a live legacy owner', () => {
+  const controlPlane = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/control-plane.sh'),
+    'utf8',
+  );
+  const operation = shellFunction(
+    controlPlane,
+    'control_lock_directory_operation',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-control-lock-legacy-'),
+  );
+  const lock = path.join(fixture, 'scheduler.lock');
+  const stale = path.join(fixture, 'scheduler.lock.stale');
+  const writeLegacyLock = (pid) => {
+    fs.mkdirSync(lock, { mode: 0o755 });
+    fs.writeFileSync(
+      path.join(lock, 'owner'),
+      `owner=legacy\npid=${pid}\nstart=1\nlabel=scheduler\nacquired=1\n`,
+      { mode: 0o644 },
+    );
+    fs.writeFileSync(path.join(lock, 'heartbeat'), '', { mode: 0o644 });
+  };
+
+  writeLegacyLock(999_999_999);
+  const dead = spawnSync(
+    'bash',
+    [
+      '-c',
+      `set -euo pipefail
+${operation}
+control_lock_directory_operation reap "$1" "$2"
+`,
+      'dead-legacy',
+      lock,
+      stale,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(dead.status, 0, dead.stderr);
+  assert.equal(fs.existsSync(lock), false);
+  assert.equal(fs.statSync(stale).isDirectory(), true);
+  fs.rmSync(stale, { recursive: true });
+
+  writeLegacyLock(process.pid);
+  const live = spawnSync(
+    'bash',
+    [
+      '-c',
+      `set -uo pipefail
+${operation}
+status=0
+control_lock_directory_operation reap "$1" "$2" || status=$?
+test "$status" = 75
+test -d "$1"
+`,
+      'live-legacy',
+      lock,
+      stale,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(live.status, 0, live.stderr);
+});
+
+test('installer creates its private tree with no-follow component walks', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const prepare = shellFunction(
+    installer,
+    'prepare_private_release_directories',
+  );
+  const fixture = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-private-tree-')),
+  );
+  const home = path.join(fixture, 'home');
+  fs.mkdirSync(home);
+  const harness = `
+set -euo pipefail
+${prepare}
+HOME="$1"
+ROOT="$2"
+RELEASES="$ROOT/releases"
+STATE="$ROOT/state"
+DEPENDENCIES="$STATE/dependencies"
+DEPENDENCY_BUILDS="$STATE/dependency-builds"
+DEPENDENCY_QUARANTINE="$STATE/dependency-quarantine"
+RELEASE_CANDIDATES="$STATE/release-candidates"
+STAGING_ROOT="$ROOT/staging"
+BACKUPS="$ROOT/backups"
+MIGRATIONS="$ROOT/migrations"
+LOGS="$ROOT/logs"
+TRANSACTION_DIR="$ROOT/install-transaction"
+prepare_private_release_directories
+`;
+  const prepareTree = (releaseRoot) => spawnSync(
+    'bash',
+    ['-c', harness, 'prepare', home, releaseRoot],
+    { encoding: 'utf8' },
+  );
+
+  const deepRoot = path.join(fixture, 'custom/deep/release-root');
+  let prepared = prepareTree(deepRoot);
+  assert.equal(prepared.status, 0, prepared.stderr);
+  assert.equal(
+    fs.lstatSync(path.join(deepRoot, 'state/dependencies')).isDirectory(),
+    true,
+  );
+  assert.equal(
+    fs.lstatSync(path.join(deepRoot, 'install-transaction')).mode & 0o777,
+    0o700,
+  );
+
+  const attacker = path.join(fixture, 'attacker');
+  fs.mkdirSync(attacker);
+  const pivot = path.join(fixture, 'pivot');
+  fs.symlinkSync(attacker, pivot);
+  prepared = prepareTree(path.join(pivot, 'nested/release-root'));
+  assert.notEqual(prepared.status, 0);
+  assert.equal(fs.existsSync(path.join(attacker, 'nested')), false);
+
+  const leafRoot = path.join(fixture, 'leaf-root');
+  fs.mkdirSync(leafRoot);
+  fs.symlinkSync(attacker, path.join(leafRoot, 'releases'));
+  prepared = prepareTree(leafRoot);
+  assert.notEqual(prepared.status, 0);
+  assert.equal(fs.existsSync(path.join(leafRoot, 'state')), false);
+  assert.equal(fs.readdirSync(attacker).length, 0);
+
+  const transactionRoot = path.join(fixture, 'transaction-root');
+  fs.mkdirSync(transactionRoot);
+  fs.chmodSync(attacker, 0o755);
+  fs.symlinkSync(attacker, path.join(transactionRoot, 'install-transaction'));
+  prepared = prepareTree(transactionRoot);
+  assert.notEqual(prepared.status, 0);
+  assert.equal(fs.lstatSync(attacker).mode & 0o777, 0o755);
+
+  const alternateRoot = path.join(fixture, 'unsupported-production-root');
+  const rejectedArchive = path.join(fixture, 'rejected-release.tar.gz');
+  fs.writeFileSync(rejectedArchive, 'untouched archive\n', { mode: 0o644 });
+  const rejectedProductionRoot = spawnSync(
+    'bash',
+    [
+      path.join(root, 'phone-paradigm/device/install-release.sh'),
+      rejectedArchive,
+      '0'.repeat(64),
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EVOGENT_RELEASE_ROOT: alternateRoot,
+        HOME: home,
+      },
+    },
+  );
+  assert.equal(rejectedProductionRoot.status, 65);
+  assert.match(rejectedProductionRoot.stderr, /not reboot-safe/);
+  assert.equal(fs.existsSync(alternateRoot), false);
+  assert.equal(fs.lstatSync(rejectedArchive).mode & 0o777, 0o644);
+
+  assert.match(prepare, /getattr\(os, "O_PATH", os\.O_RDONLY\)/);
+  assert.match(prepare, /os\.open\(component, walk_flags, dir_fd=descriptor\)/);
+  assert.match(prepare, /os\.mkdir\(component, 0o700, dir_fd=descriptor\)/);
+  assert.match(prepare, /sync_walked_directory\(child, mode=0o700\)/);
+  assert.match(prepare, /sync_walked_directory\(descriptor\)/);
+});
+
+test('versioned state preparation rejects symlinked canonical components', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'prepare_versioned_state_directories');
+  const harness = `
+set -u
+${helper}
+STATE="$1"
+prepare_versioned_state_directories release-fixture
+`;
+  const prepare = (state) => spawnSync(
+    'bash',
+    ['-c', harness, 'state-prepare', state],
+    { encoding: 'utf8' },
+  );
+
+  const clean = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-state-clean-'));
+  const cleanState = path.join(clean, 'state');
+  fs.mkdirSync(cleanState);
+  let result = prepare(cleanState);
+  assert.equal(result.status, 0, result.stderr);
+  for (const relative of [
+    'data',
+    'config',
+    'next-cache',
+    'next-cache/release-fixture',
+    'phone-tools',
+  ]) {
+    assert.equal(fs.lstatSync(path.join(cleanState, relative)).isDirectory(), true);
+  }
+
+  for (const component of ['data', 'config', 'next-cache', 'phone-tools']) {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-state-link-'));
+    const state = path.join(fixture, 'state');
+    const attacker = path.join(fixture, 'attacker');
+    fs.mkdirSync(state);
+    fs.mkdirSync(attacker);
+    fs.symlinkSync(attacker, path.join(state, component));
+    result = prepare(state);
+    assert.notEqual(result.status, 0, `${component} symlink was accepted`);
+    assert.deepEqual(fs.readdirSync(attacker), []);
+  }
 });
 
 test('Android releases use one external signer across v1, v2, and v3', () => {
@@ -268,9 +1033,14 @@ test('checkout build lock serializes concurrent host builds', async () => {
 set -euo pipefail
 ${shellFunction(source, 'acquire_build_lock')}
 ${shellFunction(source, 'release_build_lock')}
+${shellFunction(source, 'move_proven_build_lock')}
+${shellFunction(source, 'discard_build_lock_candidate')}
+${shellFunction(source, 'build_process_start')}
 BUILD_LOCK="$1"
 BUILD_LOCK_WAIT_SECONDS=10
 BUILD_LOCK_HELD=0
+BUILD_LOCK_CANDIDATE=""
+BUILD_LOCK_SELF_START="$(build_process_start "$$")"
 trap release_build_lock EXIT
 acquire_build_lock
 printf 'acquired-%s\\n' "$2" >> "$3"
@@ -297,6 +1067,235 @@ release_build_lock
   ]);
 });
 
+test('build lock publishes fully owned and reaps malformed or PID-reused stale holders', async () => {
+  const source = fs.readFileSync(
+    path.join(root, 'scripts/build-phone-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-build-lock-publication-'),
+  );
+  const lock = path.join(fixture, 'checkout.lock');
+  const trace = path.join(fixture, 'trace');
+  const helpers = [
+    'acquire_build_lock',
+    'release_build_lock',
+    'move_proven_build_lock',
+    'discard_build_lock_candidate',
+    'build_process_start',
+  ].map((name) => shellFunction(source, name)).join('\n');
+  const setup = `
+${helpers}
+BUILD_LOCK="$1"
+BUILD_LOCK_WAIT_SECONDS=10
+BUILD_LOCK_HELD=0
+BUILD_LOCK_CANDIDATE=""
+BUILD_LOCK_SELF_START="$(build_process_start "$$")"
+trap release_build_lock EXIT
+`;
+  const pausedPublisher = `
+set -euo pipefail
+${setup}
+BUILD_LOCK_CANDIDATE="$(mktemp -d "$BUILD_LOCK.pending.XXXXXXXX")"
+chmod 700 "$BUILD_LOCK_CANDIDATE"
+printf 'pid=%s\\nstart=%s\\n' "$$" "$BUILD_LOCK_SELF_START" \
+  > "$BUILD_LOCK_CANDIDATE/owner"
+chmod 600 "$BUILD_LOCK_CANDIDATE/owner"
+printf 'prepared-first\\n' >> "$2"
+sleep 2.2
+status=0
+move_proven_build_lock publish "$BUILD_LOCK_CANDIDATE" "$BUILD_LOCK" \
+  "$$" "$BUILD_LOCK_SELF_START" || status=$?
+if [ "$status" = 0 ]; then
+  BUILD_LOCK_CANDIDATE=""
+  BUILD_LOCK_HELD=1
+else
+  test "$status" = 75
+  discard_build_lock_candidate
+  acquire_build_lock
+fi
+printf 'acquired-first\\n' >> "$2"
+printf 'released-first\\n' >> "$2"
+release_build_lock
+`;
+  const normalPublisher = `
+set -euo pipefail
+${setup}
+acquire_build_lock
+printf 'acquired-%s\\n' "$2" >> "$3"
+sleep "$4"
+printf 'released-%s\\n' "$2" >> "$3"
+release_build_lock
+`;
+  const first = spawn(
+    'bash',
+    ['-c', pausedPublisher, 'paused', lock, trace],
+  );
+  const firstExitPromise = waitForExit(first);
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (
+      fs.existsSync(trace)
+      && fs.readFileSync(trace, 'utf8').includes('prepared-first')
+    ) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const second = spawn(
+    'bash',
+    ['-c', normalPublisher, 'normal', lock, 'second', trace, '3'],
+  );
+  const [firstExit, secondExit] = await Promise.all([
+    firstExitPromise,
+    waitForExit(second),
+  ]);
+  assert.equal(firstExit.status, 0, firstExit.stderr);
+  assert.equal(secondExit.status, 0, secondExit.stderr);
+  assert.deepEqual(fs.readFileSync(trace, 'utf8').trim().split('\n'), [
+    'prepared-first',
+    'acquired-second',
+    'released-second',
+    'acquired-first',
+    'released-first',
+  ]);
+
+  const staleTime = new Date(Date.now() - 10_000);
+  fs.mkdirSync(lock, { mode: 0o700 });
+  fs.writeFileSync(
+    path.join(lock, 'owner'),
+    `pid=${process.pid}\nstart=${'0'.repeat(64)}\n`,
+    { mode: 0o600 },
+  );
+  fs.utimesSync(lock, staleTime, staleTime);
+  const reusedPid = spawnSync(
+    'bash',
+    ['-c', normalPublisher, 'reused', lock, 'reused', trace, '0'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(reusedPid.status, 0, reusedPid.stderr);
+  assert.equal(fs.existsSync(lock), false);
+
+  fs.mkdirSync(lock, { mode: 0o700 });
+  fs.writeFileSync(path.join(lock, 'owner'), 'malformed\n', { mode: 0o600 });
+  fs.utimesSync(lock, staleTime, staleTime);
+  const malformed = spawnSync(
+    'bash',
+    ['-c', normalPublisher, 'malformed', lock, 'malformed', trace, '0'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(malformed.status, 0, malformed.stderr);
+  assert.equal(fs.existsSync(lock), false);
+
+  fs.mkdirSync(lock, { mode: 0o700 });
+  fs.writeFileSync(
+    path.join(lock, 'owner'),
+    `pid=${process.pid}\n`,
+    { mode: 0o600 },
+  );
+  fs.utimesSync(lock, staleTime, staleTime);
+  const liveLegacy = spawnSync(
+    'bash',
+    [
+      '-c',
+      `set -uo pipefail
+${helpers}
+BUILD_LOCK_SELF_START="$(build_process_start "$$")"
+status=0
+move_proven_build_lock reap "$1" "$1.legacy-stale" \
+  "$$" "$BUILD_LOCK_SELF_START" || status=$?
+test "$status" = 75
+test -d "$1"
+`,
+      'legacy',
+      lock,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(liveLegacy.status, 0, liveLegacy.stderr);
+  fs.rmSync(lock, { recursive: true });
+
+  const acquire = shellFunction(source, 'acquire_build_lock');
+  assert.match(acquire, /mktemp -d[\s\S]*move_proven_build_lock publish/);
+  assert.doesNotMatch(acquire, /mkdir "\$BUILD_LOCK"/);
+});
+
+test('stale lock reaping serializes contenders and preserves a replacement lease', async () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-lock-reap-'));
+  const lock = path.join(fixture, 'install.lock');
+  fs.mkdirSync(lock);
+  fs.writeFileSync(
+    path.join(lock, 'owner'),
+    'pid=999999999\nstart=1\nlabel=stale\n',
+    { mode: 0o600 },
+  );
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'reap_dead_lock_dir')}
+if reap_dead_lock_dir "$1" "$2"; then
+  printf 'reaped\\n'
+else
+  printf 'deferred:%s\\n' "$?"
+fi
+`;
+  const first = spawn(
+    'bash',
+    ['-c', harness, 'reap', lock, `${lock}.stale.first`],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  const second = spawn(
+    'bash',
+    ['-c', harness, 'reap', lock, `${lock}.stale.second`],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  const results = await Promise.all([waitForExit(first), waitForExit(second)]);
+  assert.deepEqual(
+    results.map((result) => result.stdout.trim()).sort(),
+    ['deferred:75', 'reaped'],
+  );
+  assert.equal(fs.existsSync(lock), false);
+
+  // An ownerless but recent replacement is the publication window of legacy
+  // code and must not be confused with the stale inode just reaped.
+  fs.mkdirSync(lock);
+  const replacement = spawnSync(
+    'bash',
+    ['-c', harness, 'reap', lock, `${lock}.stale.replacement`],
+    { encoding: 'utf8' },
+  );
+  assert.equal(replacement.status, 0, replacement.stderr);
+  assert.equal(replacement.stdout, 'deferred:75\n');
+  assert.equal(fs.statSync(lock).isDirectory(), true);
+});
+
+test('owned lock retirement removes the live path before recursive cleanup', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-lock-retire-'));
+  const lock = path.join(fixture, '.cycle.lock');
+  const quarantine = path.join(fixture, '.cycle.lock.released.fixture');
+  fs.mkdirSync(lock);
+  fs.writeFileSync(path.join(lock, 'owner'), 'pid=123\nstart=456\n', {
+    mode: 0o600,
+  });
+  const harness = `
+set -euo pipefail
+${shellFunction(installer, 'retire_owned_lock_dir')}
+retire_owned_lock_dir "$1" "$2" 123 456
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'retire', lock, quarantine],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(lock), false);
+  assert.equal(fs.statSync(quarantine).isDirectory(), true);
+});
+
 test('installer contract is complete and process-scoped', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -309,7 +1308,7 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /backup_database/);
   assert.match(
     installer,
-    /rish_command\(\)[\s\S]*setsid -f -w env RISH_APPLICATION_ID=com\.termux[\s\S]*<\/dev\/null/,
+    /rish_command\(\)[\s\S]*setsid -f -w timeout -k 5 "\$budget" env RISH_APPLICATION_ID=com\.termux[\s\S]*<\/dev\/null/,
   );
   assert.match(installer, /backup_installed_apk/);
   assert.match(
@@ -347,7 +1346,7 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /"controlTokenBridge": control_token_bridge/);
   assert.match(
     installer,
-    /if \[ "\$APK_INSTALL_ATTEMPTED" = 1 \] \|\| \[ -n "\$CONTROL_TOKEN_BRIDGE" \]; then/,
+    /if \[ "\$TRANSACTION_PHASE" = committed \] \\\n      \|\| \[ "\$APK_INSTALL_ATTEMPTED" = 1 \] \\\n      \|\| \[ -n "\$CONTROL_TOKEN_BRIDGE" \]; then/,
   );
   assert.match(installer, /changed APK requires a strictly higher Android version code/);
   assert.match(installer, /wait_for_apk_rollback_availability/);
@@ -497,6 +1496,7 @@ PREVIOUS_TARGET="$2/releases/release-0"
 BACKUP_DIR="$2/backups/backup-1"
 DB_BACKUP="$2/backups/backup-1/database.db"
 DB_BACKUP_READY=0
+DB_EXISTED=0
 APK_BACKUP="$2/backups/backup-1/app.apk"
 APK_BACKUP_READY=1
 APK_CHANGED=1
@@ -505,6 +1505,10 @@ PACKAGE_OPERATION=""
 PREVIOUS_APK_CODE=7
 PREVIOUS_APK_SIGNER=signer
 INITIAL_MIGRATION=0
+LEGACY_RUNTIME_EXPECTED=0
+LEGACY_CONTROL_PLANE_EXPECTED=0
+LEGACY_SNAPSHOT_READY=0
+LEGACY_PLAN_SHA256=""
 MIGRATION_STARTED=0
 SWITCH_STARTED=0
 MIGRATION_DIR="$2/migrations/migration-1"
@@ -514,6 +1518,13 @@ CONTROL_TOKEN_BACKUP="$2/backups/backup-1/control-token.txt"
 CONTROL_TOKEN_EXISTED=1
 CONTROL_TOKEN_BACKUP_READY=1
 CONTROL_TOKEN_BRIDGE=""
+ANDROID_ROLE_BACKUP="$2/backups/backup-1/android-role-holders.json"
+ANDROID_ROLE_BACKUP_READY=0
+ANDROID_ROLE_BACKUP_SHA256=""
+ANDROID_ROLE_USER_ID=""
+ANDROID_ROLE_RESTORE_REQUIRED=0
+ANDROID_ROLE_MUTATION_ATTEMPTED=0
+ANDROID_ROLES_APPLIED=0
 TRANSACTION_JOURNAL_WRITTEN=0
 write_transaction_journal quiesce_pending
 `;
@@ -523,11 +1534,95 @@ write_transaction_journal quiesce_pending
   assert.equal(writer.status, 0, writer.stderr);
   const payload = JSON.parse(fs.readFileSync(journal, 'utf8'));
   assert.equal(payload.dbBackupReady, 0);
+  assert.equal(payload.dbExisted, 0);
   assert.equal(payload.apkBackupReady, 1);
   assert.equal(payload.controlTokenBackupReady, 1);
   assert.equal(payload.controlTokenBridge, '');
   assert.equal(payload.packageOperation, '');
   assert.equal(payload.switchStarted, 0);
+  assert.equal(payload.legacyRuntimeExpected, 0);
+  assert.equal(payload.legacyControlPlaneExpected, 0);
+  assert.equal(payload.legacySnapshotReady, 0);
+  assert.equal(payload.legacyPlanSha256, '');
+  assert.equal(payload.androidRoleBackupReady, 0);
+  assert.equal(payload.androidRoleUserId, -1);
+  assert.equal(payload.schema, 'evogent.phone.install-transaction.v3');
+});
+
+test('durable committed decisions can never fall back into rollback', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const commit = shellFunction(installer, 'commit_new_release_decision');
+  const harness = `
+set -u
+${commit}
+canonicalize_cycle_gate_for_commit() { CYCLE_GATE="/state/.cycle.lock"; }
+write_transaction_journal() {
+  if [ "$WRITER_STATUS" = 0 ] || [ "$WRITER_STATUS" = 76 ]; then
+    TRANSACTION_PHASE="$1"
+  fi
+  return "$WRITER_STATUS"
+}
+TRANSACTION_PHASE=health_pending
+SWITCH_STARTED=1
+MIGRATION_STARTED=0
+INITIAL_MIGRATION=0
+ANDROID_ROLE_BACKUP_READY=1
+ANDROID_ROLES_APPLIED=1
+COMMITTED=0
+CYCLE_GATE="/synthetic-home/.cycle.lock"
+WRITER_STATUS="$1"
+commit_new_release_decision
+rc=$?
+printf 'rc=%s committed=%s phase=%s gate=%s\\n' \
+  "$rc" "$COMMITTED" "$TRANSACTION_PHASE" "$CYCLE_GATE"
+`;
+  const run = (status) => spawnSync(
+    'bash',
+    ['-c', harness, 'commit', String(status)],
+    { encoding: 'utf8' },
+  );
+  let result = run(0);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /rc=0 committed=1 phase=committed gate=\/state\/\.cycle\.lock/,
+  );
+  result = run(76);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=76 committed=1 phase=committed/);
+  result = run(1);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 committed=0 phase=health_pending/);
+
+  const recovery = shellFunction(installer, 'recover_interrupted_transaction');
+  const phaseLoaded = recovery.indexOf(
+    'TRANSACTION_PHASE="$(journal_field "$journal" phase)"',
+  );
+  const committedInMemory = recovery.indexOf('COMMITTED=1', phaseLoaded);
+  const releaseLoaded = recovery.indexOf(
+    'RELEASE_ID="$(journal_field "$journal" releaseId)"',
+  );
+  const committedBranch = recovery.indexOf(
+    'if [ "$TRANSACTION_PHASE" = committed ]; then',
+    releaseLoaded,
+  );
+  const rollback = recovery.indexOf('rollback_release || true', committedBranch);
+  assert.ok(phaseLoaded >= 0);
+  assert.ok(phaseLoaded < committedInMemory);
+  assert.ok(committedInMemory < releaseLoaded);
+  assert.ok(releaseLoaded < committedBranch);
+  assert.ok(committedBranch < rollback);
+  assert.match(
+    recovery.slice(committedBranch, rollback),
+    /verify_committed_release_state[\s\S]*finalize_committed_transaction_state[\s\S]*clear_transaction_journal/,
+  );
+  assert.match(
+    shellFunction(installer, 'write_transaction_journal'),
+    /raise SystemExit\(76\)/,
+  );
 });
 
 test('partial database backup is never restored without durable readiness proof', () => {
@@ -565,6 +1660,267 @@ restore_database "$4"
   );
   assert.notEqual(result.status, 0);
   assert.equal(fs.readFileSync(target, 'utf8'), 'original database bytes');
+
+  fs.chmodSync(partial, 0o600);
+  result = spawnSync(
+    'bash',
+    ['-c', harness, 'harness', fixture, partial, '1', target],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'original database bytes');
+});
+
+test('rollback removes a candidate database when durable pre-state was absent', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-db-absent-'));
+  const home = path.join(fixture, 'home');
+  const state = path.join(fixture, 'state');
+  const backup = path.join(fixture, 'backups/install-fixture');
+  const migration = path.join(fixture, 'migrations/install-fixture');
+  const target = path.join(state, 'data/media-agent.db');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(backup, { recursive: true });
+  fs.mkdirSync(migration, { recursive: true });
+  fs.writeFileSync(path.join(backup, 'media-agent.absent'), '', {
+    mode: 0o600,
+  });
+  const helpers = [
+    'transaction_rollback_temp_path',
+    'remove_transaction_rollback_temp',
+    'reap_transaction_rollback_temps',
+    'restore_database',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const harness = `
+set -euo pipefail
+${helpers}
+say() { :; }
+fsync_directory() { :; }
+stat() {
+  if [ "$1" = -c ] && [ "$2" = %a ]; then
+    python3 - "$3" <<'PY'
+import os
+import stat
+import sys
+print(oct(stat.S_IMODE(os.lstat(sys.argv[1]).st_mode))[2:])
+PY
+  else
+    command stat "$@"
+  fi
+}
+HOME="$1"
+STATE="$2"
+BACKUP_DIR="$3"
+MIGRATION_DIR="$4"
+DB_BACKUP="$BACKUP_DIR/media-agent.db"
+DB_BACKUP_READY=1
+DB_EXISTED=0
+target="$5"
+temporary="$(transaction_rollback_temp_path "$target" database)"
+printf 'orphaned secret copy\\n' > "$temporary"
+chmod 600 "$temporary"
+printf 'candidate database\\n' > "$target"
+printf 'candidate wal\\n' > "$target-wal"
+printf 'candidate shm\\n' > "$target-shm"
+restore_database "$target"
+restore_database "$target"
+test ! -e "$temporary"
+test ! -e "$target"
+test ! -e "$target-wal"
+test ! -e "$target-shm"
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'rollback', home, state, backup, migration, target],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('seeded-default rollback consumes intent before state namespace moves', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-defaults-'));
+  const state = path.join(fixture, 'state');
+  const backup = path.join(fixture, 'backups/install-fixture');
+  const source = path.join(fixture, 'default.txt');
+  fs.mkdirSync(path.join(state, 'data'), { recursive: true });
+  fs.mkdirSync(backup, { recursive: true });
+  fs.writeFileSync(source, 'public default\n', { mode: 0o644 });
+  const helpers = [
+    'record_default_seed_intent',
+    'publish_recorded_default_seed',
+    'rollback_seeded_defaults',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const harness = `
+set -euo pipefail
+${helpers}
+STATE="$1"
+BACKUP_DIR="$2"
+source="$3"
+fixture="$4"
+record_default_seed_intent "$source" nested/default.txt >/dev/null
+publish_recorded_default_seed "$source" nested/default.txt
+# Model a crash after the durable no-clobber rename but before the final phase
+# update: prepared generation proof must authenticate the new target.
+python3 - "$BACKUP_DIR/seeded-defaults" <<'PY'
+import json
+import pathlib
+import sys
+marker = next(pathlib.Path(sys.argv[1]).glob("*.json"))
+payload = json.loads(marker.read_text())
+payload["phase"] = "prepared"
+marker.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\\n")
+marker.chmod(0o600)
+PY
+rollback_seeded_defaults
+test ! -e "$STATE/data/nested/default.txt"
+test -d "$STATE/data/nested"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+record_default_seed_intent "$source" nested/promoted-update.txt >/dev/null
+python3 - "$BACKUP_DIR/seeded-defaults" <<'PY'
+import pathlib
+import sys
+intents = pathlib.Path(sys.argv[1])
+marker = next(intents.glob("*.json"))
+update = marker.with_suffix(".json.new")
+update.write_bytes(marker.read_bytes())
+update.chmod(0o600)
+PY
+rollback_seeded_defaults
+test ! -e "$BACKUP_DIR/seeded-defaults/"*.json.new
+temporary="$(record_default_seed_intent "$source" nested/partial.txt)"
+mkdir -p "$STATE/data/nested"
+printf 'partial' > "$STATE/data/$temporary"
+python3 - "$BACKUP_DIR/seeded-defaults" "$STATE/data/$temporary" \
+    "$STATE/data/nested" <<'PY'
+import json
+import os
+import pathlib
+import sys
+intents, temporary, parent = map(pathlib.Path, sys.argv[1:])
+marker = next(intents.glob("*.json"))
+payload = json.loads(marker.read_text())
+temporary_stat = os.lstat(temporary)
+parent_stat = os.lstat(parent)
+payload["phase"] = "copying"
+payload["temporaryIdentity"] = {
+    "device": temporary_stat.st_dev,
+    "inode": temporary_stat.st_ino,
+}
+payload["createdParents"] = [{
+    "relative": "nested",
+    "device": parent_stat.st_dev,
+    "inode": parent_stat.st_ino,
+}]
+marker.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\\n")
+PY
+rollback_seeded_defaults
+test ! -e "$STATE/data/$temporary"
+test -d "$STATE/data/nested"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+record_default_seed_intent "$source" nested/unrelated.txt >/dev/null
+mkdir -p "$STATE/data/nested"
+cp "$source" "$STATE/data/nested/unrelated.txt"
+rollback_seeded_defaults
+cmp -s "$source" "$STATE/data/nested/unrelated.txt"
+test -d "$STATE/data/nested"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+rm "$STATE/data/nested/unrelated.txt"
+rmdir "$STATE/data/nested"
+record_default_seed_intent "$source" unrelated-parent/default.txt >/dev/null
+mkdir "$STATE/data/unrelated-parent"
+rollback_seeded_defaults
+test -d "$STATE/data/unrelated-parent"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+rmdir "$STATE/data/unrelated-parent"
+record_default_seed_intent "$source" nested/replaced.txt >/dev/null
+publish_recorded_default_seed "$source" nested/replaced.txt
+cp "$source" "$fixture/replacement.txt"
+mv -f "$fixture/replacement.txt" "$STATE/data/nested/replaced.txt"
+rollback_seeded_defaults
+cmp -s "$source" "$STATE/data/nested/replaced.txt"
+test -d "$STATE/data/nested"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+rm "$STATE/data/nested/replaced.txt"
+rmdir "$STATE/data/nested"
+record_default_seed_intent "$source" nested/preserved.txt >/dev/null
+publish_recorded_default_seed "$source" nested/preserved.txt
+printf 'private change\\n' > "$STATE/data/nested/preserved.txt"
+rollback_seeded_defaults
+test "$(cat "$STATE/data/nested/preserved.txt")" = "private change"
+test -d "$STATE/data/nested"
+test -d "$BACKUP_DIR/seeded-defaults/rollback-quarantine"
+mv "$STATE/data" "$fixture/moved-data"
+rollback_seeded_defaults
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'rollback', state, backup, source, fixture],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const rollback = shellFunction(installer, 'rollback_seeded_defaults');
+  assert.match(
+    rollback,
+    /os\.rename\([\s\S]*?src_dir_fd=intents_descriptor[\s\S]*?dst_dir_fd=intents_descriptor/,
+  );
+  assert.doesNotMatch(
+    rollback,
+    /os\.replace\([\s\S]*?src_dir_fd=intents_descriptor/,
+  );
+});
+
+test('seeded-default rollback refuses a swapped parent without crossing it', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-seed-swap-'));
+  const state = path.join(fixture, 'state');
+  const backup = path.join(fixture, 'backups/install-fixture');
+  const source = path.join(fixture, 'default.txt');
+  const attacker = path.join(fixture, 'attacker');
+  const original = path.join(fixture, 'original-parent');
+  fs.mkdirSync(path.join(state, 'data'), { recursive: true });
+  fs.mkdirSync(backup, { recursive: true });
+  fs.mkdirSync(attacker);
+  fs.writeFileSync(source, 'public default\n', { mode: 0o644 });
+  fs.writeFileSync(path.join(attacker, 'default.txt'), 'outside sentinel\n');
+  const helpers = [
+    'record_default_seed_intent',
+    'publish_recorded_default_seed',
+    'rollback_seeded_defaults',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const harness = `
+set -euo pipefail
+${helpers}
+STATE="$1"
+BACKUP_DIR="$2"
+source="$3"
+attacker="$4"
+original="$5"
+record_default_seed_intent "$source" nested/default.txt >/dev/null
+publish_recorded_default_seed "$source" nested/default.txt
+mv "$STATE/data/nested" "$original"
+ln -s "$attacker" "$STATE/data/nested"
+rollback_seeded_defaults
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'rollback-swap', state, backup, source, attacker, original],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.readFileSync(path.join(attacker, 'default.txt'), 'utf8'), 'outside sentinel\n');
+  assert.equal(fs.readFileSync(path.join(original, 'default.txt'), 'utf8'), 'public default\n');
+  assert.equal(fs.lstatSync(path.join(state, 'data/nested')).isSymbolicLink(), true);
+  assert.equal(fs.existsSync(path.join(backup, 'seeded-defaults')), true);
 });
 
 test('recovery normalizes only the exact pre-switch dangling legacy predecessor', () => {
@@ -789,6 +2145,7 @@ RELEASES="$ROOT/releases"
 BACKUPS="$ROOT/backups"
 MIGRATIONS="$ROOT/migrations"
 PHONE_STATE="$ROOT/state/phone-tools"
+TRANSACTION_DIR="$ROOT/install-transaction"
 CONTROL_TOKEN="$ROOT/state/data/control-token.txt"
 validate_transaction_journal "$3"
 `;
@@ -802,6 +2159,12 @@ validate_transaction_journal "$3"
   fs.writeFileSync(journal, JSON.stringify(payload));
   let result = validate();
   assert.equal(result.status, 0, result.stderr);
+
+  payload.phase = 'committed';
+  fs.writeFileSync(journal, JSON.stringify(payload));
+  result = validate();
+  assert.notEqual(result.status, 0);
+  payload.phase = 'apk_install_pending';
 
   payload.switchStarted = 1;
   fs.writeFileSync(journal, JSON.stringify(payload));
@@ -823,6 +2186,230 @@ validate_transaction_journal "$3"
   fs.writeFileSync(journal, JSON.stringify(payload));
   result = validate();
   assert.notEqual(result.status, 0);
+});
+
+test('v2 journal validation binds exact legacy intent and rollback snapshots', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'validate_transaction_journal');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-v2-journal-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const releases = path.join(releaseRoot, 'releases');
+  const backups = path.join(releaseRoot, 'backups');
+  const migrations = path.join(releaseRoot, 'migrations');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  let migration = path.join(migrations, 'install-fixture');
+  const backup = path.join(backups, 'backup');
+  const journal = path.join(fixture, 'journal.json');
+  for (const directory of [
+    releases,
+    backups,
+    backup,
+    migration,
+    path.join(releases, 'release-new'),
+    path.join(releases, 'release-old'),
+    phoneState,
+    path.join(releaseRoot, 'state/data'),
+    path.join(home, 'phone-tools'),
+  ]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+  const payload = {
+    apkBackup: path.join(backup, 'evogent.apk'),
+    apkBackupReady: 1,
+    apkChanged: 0,
+    apkInstallAttempted: 0,
+    backupDir: backup,
+    controlToken: path.join(releaseRoot, 'state/data/control-token.txt'),
+    controlTokenBackup: path.join(backup, 'control-token.txt'),
+    controlTokenBackupReady: 1,
+    controlTokenBridge: '',
+    controlTokenExisted: 1,
+    cycleGate: path.join(home, 'phone-tools/.cycle.lock'),
+    dbBackup: path.join(backup, 'media-agent.db'),
+    dbBackupReady: 1,
+    dbExisted: 1,
+    initialMigration: 0,
+    legacyControlPlaneExpected: 0,
+    legacyPlanSha256: '',
+    legacyRuntimeExpected: 0,
+    legacySnapshotReady: 0,
+    migrationDir: migration,
+    migrationStarted: 0,
+    newRelease: path.join(releases, 'release-new'),
+    packageOperation: '',
+    phase: 'prepared',
+    previousApkCode: '1',
+    previousApkSigner: 'signer',
+    previousTarget: path.join(releases, 'release-old'),
+    releaseId: 'release-new',
+    root: releaseRoot,
+    schema: 'evogent.phone.install-transaction.v2',
+    switchStarted: 0,
+  };
+  fs.writeFileSync(
+    path.join(backup, 'previous-release'),
+    `${payload.previousTarget}\n`,
+    { mode: 0o600 },
+  );
+  const harness = `
+set -euo pipefail
+${helper}
+HOME="$1"
+ROOT="$2"
+RELEASES="$ROOT/releases"
+BACKUPS="$ROOT/backups"
+MIGRATIONS="$ROOT/migrations"
+PHONE_STATE="$ROOT/state/phone-tools"
+TRANSACTION_DIR="$ROOT/install-transaction"
+CONTROL_TOKEN="$ROOT/state/data/control-token.txt"
+validate_transaction_journal "$3"
+`;
+  function validate() {
+    fs.writeFileSync(journal, `${JSON.stringify(payload)}\n`);
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'journal', home, releaseRoot, journal],
+      { encoding: 'utf8' },
+    );
+  }
+  assert.equal(validate().status, 0);
+
+  payload.cycleGate = path.join(
+    releaseRoot,
+    'install-transaction/recovery-cycle.lock',
+  );
+  assert.equal(validate().status, 0);
+  payload.cycleGate = path.join(
+    releaseRoot,
+    'install-transaction/unbound-cycle.lock',
+  );
+  assert.notEqual(validate().status, 0);
+  payload.cycleGate = path.join(home, 'phone-tools/.cycle.lock');
+
+  payload.dbBackup = path.join(backup, 'other.db');
+  assert.notEqual(validate().status, 0);
+  payload.dbBackup = path.join(backup, 'media-agent.db');
+  fs.writeFileSync(path.join(backup, 'previous-release'), 'wrong\n', {
+    mode: 0o600,
+  });
+  assert.notEqual(validate().status, 0);
+  fs.writeFileSync(
+    path.join(backup, 'previous-release'),
+    `${payload.previousTarget}\n`,
+    { mode: 0o600 },
+  );
+  payload.newRelease = path.join(releases, 'other-release');
+  assert.notEqual(validate().status, 0);
+  payload.newRelease = path.join(releases, payload.releaseId);
+
+  const current = path.join(releaseRoot, 'current');
+  fs.symlinkSync(`releases/${payload.releaseId}`, current);
+  payload.phase = 'committed';
+  payload.switchStarted = 1;
+  payload.cycleGate = path.join(phoneState, '.cycle.lock');
+  assert.equal(validate().status, 0);
+  payload.packageOperation = '/data/local/tmp/evogent-package-op.'
+    + 'a'.repeat(32);
+  payload.apkChanged = 1;
+  payload.apkInstallAttempted = 1;
+  assert.notEqual(validate().status, 0);
+  payload.packageOperation = '';
+  payload.apkChanged = 0;
+  payload.apkInstallAttempted = 0;
+  payload.controlTokenBackupReady = 0;
+  assert.notEqual(validate().status, 0);
+  payload.controlTokenBackupReady = 1;
+  fs.renameSync(migration, `${migration}.held`);
+  assert.equal(validate().status, 0);
+  fs.renameSync(`${migration}.held`, migration);
+  fs.unlinkSync(current);
+  payload.phase = 'prepared';
+  payload.switchStarted = 0;
+  payload.cycleGate = path.join(home, 'phone-tools/.cycle.lock');
+
+  payload.previousTarget = '';
+  fs.writeFileSync(path.join(backup, 'previous-release'), '\n', {
+    mode: 0o600,
+  });
+  assert.notEqual(validate().status, 0);
+  payload.previousTarget = path.join(releases, 'release-old');
+  fs.writeFileSync(
+    path.join(backup, 'previous-release'),
+    `${payload.previousTarget}\n`,
+    { mode: 0o600 },
+  );
+
+  payload.legacyRuntimeExpected = true;
+  assert.notEqual(validate().status, 0);
+  payload.legacyRuntimeExpected = 1;
+  assert.notEqual(validate().status, 0);
+
+  payload.initialMigration = 1;
+  payload.previousTarget = '';
+  migration = path.join(migrations, 'legacy-fixture');
+  fs.mkdirSync(migration);
+  payload.migrationDir = migration;
+  fs.writeFileSync(path.join(backup, 'previous-release'), '\n', {
+    mode: 0o600,
+  });
+  const planPath = path.join(migration, 'rollback-plan.json');
+  const plan = {
+    entries: {},
+    generatedMarker: 'a'.repeat(64),
+    home,
+    legacyControlPlaneExpected: 0,
+    legacyRuntimeExpected: 1,
+    migrationDir: migration,
+    phoneState,
+    rearmProgram: 'start-prod.sh',
+    releaseId: payload.releaseId,
+    root: releaseRoot,
+    schema: 'evogent.phone.legacy-rollback-plan.v1',
+    snapshotReady: 0,
+    snapshots: {},
+    state: path.join(releaseRoot, 'state'),
+  };
+  fs.writeFileSync(planPath, `${JSON.stringify(plan)}\n`, { mode: 0o600 });
+  fs.chmodSync(planPath, 0o600);
+  assert.equal(validate().status, 0);
+
+  payload.previousTarget = path.join(releases, 'release-old');
+  fs.writeFileSync(
+    path.join(backup, 'previous-release'),
+    `${payload.previousTarget}\n`,
+    { mode: 0o600 },
+  );
+  assert.notEqual(validate().status, 0);
+  payload.previousTarget = '';
+  fs.writeFileSync(path.join(backup, 'previous-release'), '\n', {
+    mode: 0o600,
+  });
+
+  payload.migrationStarted = 1;
+  assert.notEqual(validate().status, 0);
+  payload.migrationStarted = 0;
+
+  plan.snapshotReady = 1;
+  fs.writeFileSync(planPath, `${JSON.stringify(plan)}\n`, { mode: 0o600 });
+  fs.chmodSync(planPath, 0o600);
+  payload.legacySnapshotReady = 1;
+  payload.legacyPlanSha256 = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(planPath))
+    .digest('hex');
+  assert.equal(validate().status, 0);
+
+  plan.releaseId = 'different-release';
+  fs.writeFileSync(planPath, `${JSON.stringify(plan)}\n`, { mode: 0o600 });
+  fs.chmodSync(planPath, 0o600);
+  assert.notEqual(validate().status, 0);
+
+  fs.rmSync(planPath);
+  assert.notEqual(validate().status, 0);
 });
 
 test('package install result parser accepts only one bounded versioned status', () => {
@@ -939,7 +2526,7 @@ copy_published_shell_file "$1" "$2" 1
   assert.notEqual(result.status, 0);
 });
 
-test('rollback routes an exact dangling predecessor through intact legacy state', () => {
+test('rollback routes an exact dangling predecessor to inert legacy state before durable rearm', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
     'utf8',
@@ -966,13 +2553,20 @@ ${rollback}
 record() { printf '%s\\n' "$1" >> "$TRACE"; }
 say() { :; }
 quiesce_control_plane() { return 0; }
-stop_and_prove_runtime() { return 0; }
+stop_and_prove_runtime() { RUNTIME_PROVEN_STOPPED=1; return 0; }
+reap_abandoned_control_workers_and_prove_absent() { return 0; }
 rollback_phone_dispatch_changes() { record dispatch; }
+rollback_seeded_defaults() { :; }
 atomic_link() { record pointer; }
 restore_database() { record database; }
 rollback_apk_native() { record apk; }
+restore_android_roles() { record roles; }
 restore_control_token() { record token; }
 rollback_initial_migration() { record migration; }
+legacy_runtime_topology() { printf 'present\\n'; }
+legacy_control_plane_stopped() { return 0; }
+commit_rolled_back_decision() { record decision; return 0; }
+resolve_legacy_compat_expectation() { :; }
 reap_recorded_package_operation() { :; }
 reap_recorded_control_token_bridge() { :; }
 rish_command() { record rish; }
@@ -987,13 +2581,20 @@ PHONE_STATE="$STATE/phone-tools"
 APK_CHANGED=0
 APK_INSTALL_ATTEMPTED=1
 PACKAGE_OPERATION=""
+CONTROL_TOKEN_BRIDGE=""
+ANDROID_ROLE_RESTORE_REQUIRED=0
 INITIAL_MIGRATION=0
 MIGRATION_STARTED=0
 QUIESCED=0
 REARM_PRIOR_CONTROL_PLANE=0
 ROLLBACK_ATTEMPTED=0
 ROLLBACK_FAILED=0
+LEGACY_RUNTIME_EXPECTED=1
+LEGACY_CONTROL_PLANE_EXPECTED=1
+LEGACY_EXPECTATION_COMPAT=0
+RESTORED_LEGACY_CONTROL_PLANE=0
 SWITCH_STARTED=0
+RUNTIME_PROVEN_STOPPED=0
 if rollback_release; then rc=0; else rc=$?; fi
 printf 'rc=%s previous=%s initial=%s\\n' "$rc" "$PREVIOUS_TARGET" "$INITIAL_MIGRATION"
 `;
@@ -1004,11 +2605,1155 @@ printf 'rc=%s previous=%s initial=%s\\n' "$rc" "$PREVIOUS_TARGET" "$INITIAL_MIGR
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /rc=0 previous= initial=1/);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'token\nmigration\ndatabase\n');
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'migration\ndatabase\ntoken\ndecision\n',
+  );
   assert.throws(
     () => fs.lstatSync(current),
     (error) => error?.code === 'ENOENT',
   );
+});
+
+test('legacy recovery starts a real fallback program and proves all owners live', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const safeProgram = shellFunction(installer, 'safe_private_program');
+  const controlPlaneLive = shellFunction(
+    installer,
+    'legacy_control_plane_live',
+  );
+  const abortRearm = shellFunction(installer, 'abort_partial_legacy_rearm');
+  const serverHelper = shellFunction(installer, 'rearm_legacy_server');
+  const controlHelper = shellFunction(installer, 'rearm_legacy_control_plane');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-legacy-rearm-'));
+  const home = path.join(fixture, 'home');
+  const tools = path.join(home, 'phone-tools');
+  const primary = path.join(home, 'start-prod.sh');
+  const fallback = path.join(home, 'start-prod-sub.sh');
+  const boot = path.join(tools, 'evogent-boot.sh');
+  const trace = path.join(fixture, 'trace');
+  fs.mkdirSync(tools, { recursive: true });
+  const harness = `
+set -uo pipefail
+${safeProgram}
+${controlPlaneLive}
+${abortRearm}
+${serverHelper}
+${controlHelper}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+sleep() { :; }
+fsync_directory() { return "$FSYNC_RESULT"; }
+stop_tmux_session() { record stop; return "$STOP_RESULT"; }
+legacy_server_owner_live() { return "$SERVER_RESULT"; }
+restored_background_control_stopped() { return "$BACKGROUND_RESULT"; }
+scheduler_owner_live() { return "$SCHEDULER_RESULT"; }
+watchdog_owner_live() { return "$WATCHDOG_RESULT"; }
+quiesce_control_plane() { record quiesce; return 0; }
+stop_and_prove_runtime() { record stop-runtime; return 0; }
+tmux() {
+  case "$1" in
+    new-session)
+      case "$*" in
+        *start-prod-sub.sh*) record start-fallback ;;
+        *) record wrong-start ;;
+      esac
+      return "$TMUX_START_RESULT"
+      ;;
+    *) return 64 ;;
+  esac
+}
+bash() {
+  case "$1" in
+    */phone-tools/evogent-boot.sh) record boot ;;
+    *) record wrong-boot ;;
+  esac
+  return "$BOOT_RESULT"
+}
+HOME="$1"
+TRACE="$2"
+RUNTIME_PROVEN_STOPPED=1
+LEGACY_RECOVERY_LAUNCH_ID=""
+LEGACY_SNAPSHOT_READY=0
+if rearm_legacy_server && rearm_legacy_control_plane; then rc=0; else rc=$?; fi
+printf 'rc=%s\\n' "$rc"
+`;
+  function writePrograms({
+    bootMode = 0o600,
+    fallbackMode = 0o600,
+    fallbackSymlink = false,
+  } = {}) {
+    fs.rmSync(primary, { force: true });
+    fs.rmSync(fallback, { force: true });
+    fs.rmSync(boot, { force: true });
+    if (fallbackSymlink) {
+      fs.symlinkSync(path.join(fixture, 'outside-start.sh'), fallback);
+    } else {
+      fs.writeFileSync(fallback, 'legacy start fixture\n', {
+        mode: fallbackMode,
+      });
+      fs.chmodSync(fallback, fallbackMode);
+    }
+    fs.writeFileSync(boot, 'legacy boot fixture\n', { mode: bootMode });
+    fs.chmodSync(boot, bootMode);
+  }
+  function runRearm(overrides = {}, programs = {}) {
+    fs.rmSync(trace, { force: true });
+    writePrograms(programs);
+    return spawnSync('bash', ['-c', harness, 'harness', home, trace], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        BOOT_RESULT: '0',
+        BACKGROUND_RESULT: '0',
+        FSYNC_RESULT: '0',
+        SCHEDULER_RESULT: '0',
+        SERVER_RESULT: '0',
+        STOP_RESULT: '0',
+        TMUX_START_RESULT: '0',
+        WATCHDOG_RESULT: '0',
+        ...overrides,
+      },
+    });
+  }
+
+  let result = runRearm();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0/);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'stop\nstart-fallback\nboot\n');
+  assert.equal(fs.existsSync(primary), false);
+
+  result = runRearm({ FSYNC_RESULT: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1/);
+  assert.equal(fs.existsSync(primary), false);
+
+  fs.rmSync(trace, { force: true });
+  result = spawnSync('bash', ['-c', harness, 'harness', home, trace], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      BOOT_RESULT: '0',
+      BACKGROUND_RESULT: '0',
+      FSYNC_RESULT: '0',
+      SCHEDULER_RESULT: '0',
+      SERVER_RESULT: '0',
+      STOP_RESULT: '0',
+      TMUX_START_RESULT: '0',
+      WATCHDOG_RESULT: '0',
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0/);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'stop\nstart-fallback\nboot\n');
+
+  for (const overrides of [
+    { SERVER_RESULT: '1' },
+    { BACKGROUND_RESULT: '1' },
+    { SCHEDULER_RESULT: '1' },
+    { WATCHDOG_RESULT: '1' },
+    { BOOT_RESULT: '1' },
+    { TMUX_START_RESULT: '1' },
+  ]) {
+    result = runRearm(overrides);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /rc=1/);
+    assert.match(fs.readFileSync(trace, 'utf8'), /quiesce\nstop-runtime\n$/);
+  }
+
+  for (const programs of [
+    { fallbackMode: 0o666 },
+    { fallbackMode: 0o000 },
+    { fallbackSymlink: true },
+    { bootMode: 0o666 },
+  ]) {
+    result = runRearm({}, programs);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /rc=1/);
+    assert.equal(fs.existsSync(trace), false);
+  }
+
+  assert.match(
+    installer,
+    /EVOGENT_CONTROL_RELEASE_ROOT="\$PREVIOUS_TARGET"[\s\S]*bash "\$HOME\/phone-tools\/evogent-boot\.sh"[\s\S]*wait_for_authenticated_release_control_plane "\$PREVIOUS_TARGET"/,
+  );
+  assert.match(
+    installer,
+    /recover_interrupted_transaction\(\)[\s\S]*legacy_control_plane_stopped \|\| \{[\s\S]*REARM_PRIOR_CONTROL_PLANE=1/,
+  );
+});
+
+test('v2 legacy rollback is inode-bound and idempotent across every forward move', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const planHarness = `
+set -euo pipefail
+${shellFunction(installer, 'fsync_tree')}
+${shellFunction(installer, 'copy_legacy_home_snapshots')}
+${shellFunction(installer, 'prepare_legacy_rollback_plan')}
+${shellFunction(installer, 'finalize_legacy_rollback_plan')}
+sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+HOME="$1"
+ROOT="$2"
+STATE="$ROOT/state"
+PHONE_STATE="$STATE/phone-tools"
+MIGRATION_DIR="$ROOT/migrations/legacy-fixture"
+RELEASE_ID=release-1
+LEGACY_RUNTIME_EXPECTED=1
+LEGACY_CONTROL_PLANE_EXPECTED=1
+LEGACY_SNAPSHOT_READY=0
+LEGACY_PLAN_SHA256=""
+prepare_legacy_rollback_plan
+cp -a "$HOME/phone-tools" "$MIGRATION_DIR/phone-tools"
+rm -rf -- "$MIGRATION_DIR/phone-tools/.cycle.lock" \
+  "$MIGRATION_DIR/phone-tools/.scheduler.lock" \
+  "$MIGRATION_DIR/phone-tools/.watchdog.lock"
+rm -f -- "$MIGRATION_DIR/phone-tools/.watchdog.pid"
+fsync_tree "$MIGRATION_DIR/phone-tools"
+HOME_SNAPSHOT_SOURCES=()
+for name in start-prod.sh start-prod-sub.sh restart-evo.sh deploy-next.sh \
+    install-evogent-release.sh; do
+  if [ -e "$HOME/$name" ] || [ -L "$HOME/$name" ]; then
+    HOME_SNAPSHOT_SOURCES+=("$HOME/$name")
+  fi
+done
+if [ "\${#HOME_SNAPSHOT_SOURCES[@]}" -gt 0 ]; then
+  copy_legacy_home_snapshots \
+    "$MIGRATION_DIR/home" "\${HOME_SNAPSHOT_SOURCES[@]}"
+fi
+fsync_tree "$MIGRATION_DIR/home"
+finalize_legacy_rollback_plan
+printf '%s\\n' "$LEGACY_PLAN_SHA256"
+`;
+  const rollbackFunctions = [
+    'legacy_plan_entry_location',
+    'legacy_plan_snapshot_location',
+    'legacy_plan_original_type',
+    'legacy_plan_generated_marker',
+    'remove_exact_generated_symlink',
+    'remove_candidate_current_pointer',
+    'generated_home_target',
+    'remove_generated_home_entry',
+    'quarantine_real_directory',
+    'generated_directory_owned',
+    'quarantine_generated_directory',
+    'rename_no_copy',
+    'restore_planned_runtime_component',
+    'fsync_real_directory_if_present',
+    'rollback_initial_namespace_barrier',
+    'restore_planned_phone_tools',
+    'restore_planned_home_entry',
+    'reconcile_planned_home_link_groups',
+    'rollback_fresh_initial_install',
+    'rollback_initial_migration',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const rollbackHarness = `
+set -euo pipefail
+${rollbackFunctions}
+say() { :; }
+sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+fsync_directory() { :; }
+cycle_gate_owned_by_current() { [ -d "$1" ]; }
+acquire_lock_dir() { mkdir -p "$1"; }
+release_lock_dir() { rm -rf -- "$1"; }
+HOME="$1"
+ROOT="$2"
+STATE="$ROOT/state"
+PHONE_STATE="$STATE/phone-tools"
+CURRENT="$ROOT/current"
+MIGRATION_DIR="$ROOT/migrations/legacy-fixture"
+RELEASE_ID=release-1
+INITIAL_MIGRATION=1
+MIGRATION_STARTED=1
+LEGACY_RUNTIME_EXPECTED=1
+LEGACY_CONTROL_PLANE_EXPECTED=1
+LEGACY_EXPECTATION_COMPAT=0
+LEGACY_SNAPSHOT_READY=1
+LEGACY_PLAN_SHA256="$3"
+CYCLE_GATE="$4"
+CYCLE_GATE_HELD=1
+rollback_initial_migration
+printf 'post-first\\n'
+printf 'runtime update\\n' >> "$HOME/phone-tools/runtime.log"
+if [ ! -e "$HOME/start-prod.sh" ] && [ -f "$HOME/start-prod-sub.sh" ]; then
+  ln "$HOME/start-prod-sub.sh" "$HOME/start-prod.sh"
+fi
+rollback_initial_migration
+printf 'post-second\\n'
+`;
+
+  for (let forwardStep = 0; forwardStep <= 4; forwardStep += 1) {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-v2-retry-'));
+    const home = path.join(fixture, 'home');
+    const releaseRoot = path.join(home, '.local/share/evogent');
+    const state = path.join(releaseRoot, 'state');
+    const migrations = path.join(releaseRoot, 'migrations');
+    const migration = path.join(migrations, 'legacy-fixture');
+    const runtime = path.join(home, 'evogent');
+    const data = path.join(runtime, 'data');
+    const modules = path.join(runtime, 'node_modules');
+    const tools = path.join(home, 'phone-tools');
+    fs.mkdirSync(path.join(modules, 'nested'), { recursive: true });
+    fs.mkdirSync(data, { recursive: true });
+    fs.mkdirSync(path.join(tools, '.cycle.lock'), { recursive: true });
+    fs.mkdirSync(path.join(tools, '.scheduler.lock'));
+    fs.mkdirSync(path.join(tools, '.watchdog.lock'));
+    fs.mkdirSync(path.join(migration, 'home'), { recursive: true });
+    fs.mkdirSync(state, { recursive: true });
+    fs.mkdirSync(path.join(releaseRoot, 'releases/release-1'), { recursive: true });
+    fs.writeFileSync(path.join(runtime, 'server.js'), 'legacy runtime\n');
+    fs.writeFileSync(path.join(data, 'media-agent.db'), 'database bytes\n');
+    fs.writeFileSync(path.join(modules, 'nested/package'), 'native tree\n');
+    fs.writeFileSync(path.join(runtime, '.env.local'), 'PRIVATE=value\n', {
+      mode: 0o600,
+    });
+    for (const name of [
+      'control-plane.sh',
+      'evogent-boot.sh',
+      'evogent-scheduler.sh',
+      'evogent-watchdog.sh',
+    ]) {
+      fs.writeFileSync(path.join(tools, name), `${name}\n`, { mode: 0o600 });
+    }
+    fs.writeFileSync(path.join(tools, '.watchdog.pid'), '123\n', { mode: 0o600 });
+    fs.writeFileSync(path.join(home, 'start-prod-sub.sh'), 'start\n', {
+      mode: 0o600,
+    });
+    fs.writeFileSync(path.join(home, 'restart-evo.sh'), 'restart\n', {
+      mode: 0o700,
+    });
+    fs.symlinkSync('start-prod-sub.sh', path.join(home, 'deploy-next.sh'));
+
+    const originalInodes = {
+      data: fs.statSync(data).ino,
+      modules: fs.statSync(modules).ino,
+      runtime: fs.statSync(runtime).ino,
+      tools: fs.statSync(tools).ino,
+    };
+    const planned = spawnSync(
+      'bash',
+      ['-c', planHarness, 'plan', home, releaseRoot],
+      { encoding: 'utf8' },
+    );
+    assert.equal(planned.status, 0, planned.stderr);
+    const planDigest = planned.stdout.trim();
+    assert.match(planDigest, /^[0-9a-f]{64}$/);
+    const plan = JSON.parse(
+      fs.readFileSync(path.join(migration, 'rollback-plan.json'), 'utf8'),
+    );
+    assert.equal(plan.snapshotReady, 1);
+    assert.equal(plan.snapshots.phoneTools.type, 'directory');
+    assert.notEqual(plan.snapshots.phoneTools.ino, originalInodes.tools);
+    for (const transient of [
+      '.scheduler.lock',
+      '.watchdog.lock',
+      '.watchdog.pid',
+    ]) {
+      fs.rmSync(path.join(tools, transient), { recursive: true, force: true });
+    }
+
+    if (forwardStep >= 1) {
+      fs.renameSync(runtime, path.join(migration, 'evogent'));
+    }
+    if (forwardStep >= 2) {
+      const moved = path.join(migration, 'evogent');
+      fs.renameSync(path.join(moved, 'data'), path.join(state, 'data'));
+      fs.renameSync(path.join(moved, 'node_modules'), path.join(state, 'node_modules'));
+      fs.mkdirSync(path.join(state, 'config'));
+      fs.writeFileSync(
+        path.join(state, 'config/.evogent-install-owner'),
+        `${plan.generatedMarker}\n`,
+        { mode: 0o600 },
+      );
+      fs.renameSync(
+        path.join(moved, '.env.local'),
+        path.join(state, 'config/.env.local'),
+      );
+    }
+    let gate = path.join(home, 'phone-tools/.cycle.lock');
+    if (forwardStep >= 3) {
+      fs.renameSync(tools, path.join(state, 'phone-tools'));
+      gate = path.join(state, 'phone-tools/.cycle.lock');
+    }
+    if (forwardStep >= 4) {
+      for (const name of [
+        'start-prod-sub.sh',
+        'restart-evo.sh',
+        'deploy-next.sh',
+      ]) {
+        try {
+          fs.unlinkSync(path.join(home, name));
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error;
+        }
+      }
+      fs.symlinkSync(
+        `${releaseRoot}/current/runtime`,
+        path.join(home, 'evogent'),
+      );
+      fs.symlinkSync(path.join(state, 'phone-tools'), path.join(home, 'phone-tools'));
+      fs.symlinkSync(
+        `${releaseRoot}/current/device/start-prod.sh`,
+        path.join(home, 'start-prod.sh'),
+      );
+      fs.symlinkSync(
+        `${releaseRoot}/current/device/restart-evo.sh`,
+        path.join(home, 'restart-evo.sh'),
+      );
+      fs.symlinkSync(
+        `${releaseRoot}/current/phone-tools/deploy-next.sh`,
+        path.join(home, 'deploy-next.sh'),
+      );
+      fs.symlinkSync(
+        `${releaseRoot}/current/device/install-release.sh`,
+        path.join(home, 'install-evogent-release.sh'),
+      );
+      fs.symlinkSync('releases/release-1', path.join(releaseRoot, 'current'));
+      fs.mkdirSync(path.join(state, 'next-cache/release-1'), { recursive: true });
+      fs.writeFileSync(
+        path.join(
+          state,
+          'next-cache/release-1/.evogent-install-owner',
+        ),
+        `${plan.generatedMarker}\n`,
+        { mode: 0o600 },
+      );
+    }
+
+    const rolledBack = spawnSync(
+      'bash',
+      ['-c', rollbackHarness, 'rollback', home, releaseRoot, planDigest, gate],
+      { encoding: 'utf8' },
+    );
+    assert.equal(
+      rolledBack.status,
+      0,
+      `forward step ${forwardStep}: ${rolledBack.stderr}`,
+    );
+    assert.equal(rolledBack.stdout, 'post-first\npost-second\n');
+    assert.equal(fs.statSync(path.join(home, 'evogent')).ino, originalInodes.runtime);
+    assert.equal(fs.statSync(path.join(home, 'evogent/data')).ino, originalInodes.data);
+    assert.equal(
+      fs.statSync(path.join(home, 'evogent/node_modules')).ino,
+      originalInodes.modules,
+    );
+    const expectedToolsInode = forwardStep >= 3
+      ? plan.snapshots.phoneTools.ino
+      : originalInodes.tools;
+    assert.equal(fs.statSync(path.join(home, 'phone-tools')).ino, expectedToolsInode);
+    assert.equal(fs.existsSync(path.join(home, 'start-prod.sh')), false);
+    assert.equal(fs.existsSync(path.join(releaseRoot, 'current')), false);
+    if (forwardStep >= 3) {
+      assert.equal(
+        fs.statSync(path.join(migration, 'rolled-back-phone-state')).ino,
+        originalInodes.tools,
+      );
+    }
+  }
+});
+
+test('legacy HOME hard-link topology fails closed before snapshot mutation', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-home-links-'));
+  const home = path.join(fixture, 'home');
+  const snapshotHome = path.join(fixture, 'snapshot');
+  fs.mkdirSync(home);
+  fs.mkdirSync(snapshotHome, { recursive: true });
+
+  const primary = path.join(home, 'start-prod-sub.sh');
+  const sibling = path.join(home, 'restart-evo.sh');
+  fs.writeFileSync(primary, 'legacy start\n', { mode: 0o700 });
+  fs.linkSync(primary, sibling);
+
+  const copySnapshots = shellFunction(
+    installer,
+    'copy_legacy_home_snapshots',
+  );
+  const rejected = spawnSync(
+    'bash',
+    [
+      '-c',
+      `set -euo pipefail
+${copySnapshots}
+copy_legacy_home_snapshots "$1" "$2" "$3"
+`,
+      'reject-hard-links',
+      snapshotHome,
+      primary,
+      sibling,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(rejected.status, 0);
+  assert.match(
+    rejected.stderr,
+    /legacy HOME hard-link topology cannot be preserved on Android/,
+  );
+  assert.deepEqual(fs.readdirSync(snapshotHome), []);
+  assert.equal(fs.readFileSync(primary, 'utf8'), 'legacy start\n');
+  assert.equal(fs.statSync(primary).ino, fs.statSync(sibling).ino);
+  assert.match(
+    shellFunction(installer, 'prepare_legacy_rollback_plan'),
+    /legacy hard-link topology cannot be preserved on Android/,
+  );
+  assert.match(
+    shellFunction(installer, 'reconcile_planned_home_link_groups'),
+    /legacy HOME hard-link topology cannot be recovered on Android/,
+  );
+});
+
+test('v2 fresh-install rollback never invents a legacy control plane', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-v2-fresh-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const state = path.join(releaseRoot, 'state');
+  const migration = path.join(releaseRoot, 'migrations/legacy-fixture');
+  fs.mkdirSync(path.join(migration, 'home'), { recursive: true });
+  fs.mkdirSync(path.join(releaseRoot, 'releases/release-1'), { recursive: true });
+  fs.mkdirSync(state, { recursive: true });
+  const prepare = `
+set -euo pipefail
+${shellFunction(installer, 'prepare_legacy_rollback_plan')}
+${shellFunction(installer, 'finalize_legacy_rollback_plan')}
+sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+HOME="$1"; ROOT="$2"; STATE="$ROOT/state"; PHONE_STATE="$STATE/phone-tools"
+MIGRATION_DIR="$ROOT/migrations/legacy-fixture"; RELEASE_ID=release-1
+LEGACY_RUNTIME_EXPECTED=0; LEGACY_CONTROL_PLANE_EXPECTED=0
+LEGACY_SNAPSHOT_READY=0; LEGACY_PLAN_SHA256=""
+prepare_legacy_rollback_plan
+finalize_legacy_rollback_plan
+printf '%s\\n' "$LEGACY_PLAN_SHA256"
+`;
+  const planned = spawnSync('bash', ['-c', prepare, 'plan', home, releaseRoot], {
+    encoding: 'utf8',
+  });
+  assert.equal(planned.status, 0, planned.stderr);
+  const planDigest = planned.stdout.trim();
+  const freshPlan = JSON.parse(
+    fs.readFileSync(path.join(migration, 'rollback-plan.json'), 'utf8'),
+  );
+
+  fs.mkdirSync(path.join(state, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(state, 'config'));
+  fs.mkdirSync(path.join(state, 'next-cache/release-1'), { recursive: true });
+  fs.mkdirSync(path.join(state, 'phone-tools/.cycle.lock'), { recursive: true });
+  fs.writeFileSync(path.join(state, 'data/generated'), 'candidate state\n');
+  for (const directory of [
+    path.join(state, 'data'),
+    path.join(state, 'config'),
+    path.join(state, 'next-cache/release-1'),
+    path.join(state, 'phone-tools'),
+  ]) {
+    fs.writeFileSync(
+      path.join(directory, '.evogent-install-owner'),
+      `${freshPlan.generatedMarker}\n`,
+      { mode: 0o600 },
+    );
+  }
+  fs.symlinkSync(`${releaseRoot}/current/runtime`, path.join(home, 'evogent'));
+  fs.symlinkSync(path.join(state, 'phone-tools'), path.join(home, 'phone-tools'));
+  for (const [name, target] of [
+    ['start-prod.sh', `${releaseRoot}/current/device/start-prod.sh`],
+    ['restart-evo.sh', `${releaseRoot}/current/device/restart-evo.sh`],
+    ['deploy-next.sh', `${releaseRoot}/current/phone-tools/deploy-next.sh`],
+    [
+      'install-evogent-release.sh',
+      `${releaseRoot}/current/device/install-release.sh`,
+    ],
+  ]) {
+    fs.symlinkSync(target, path.join(home, name));
+  }
+  fs.symlinkSync('releases/release-1', path.join(releaseRoot, 'current'));
+
+  const functions = [
+    'legacy_plan_entry_location',
+    'legacy_plan_snapshot_location',
+    'legacy_plan_original_type',
+    'legacy_plan_generated_marker',
+    'remove_exact_generated_symlink',
+    'remove_candidate_current_pointer',
+    'generated_home_target',
+    'remove_generated_home_entry',
+    'quarantine_real_directory',
+    'generated_directory_owned',
+    'quarantine_generated_directory',
+    'rename_no_copy',
+    'restore_planned_runtime_component',
+    'fsync_real_directory_if_present',
+    'rollback_initial_namespace_barrier',
+    'restore_planned_phone_tools',
+    'restore_planned_home_entry',
+    'rollback_fresh_initial_install',
+    'rollback_initial_migration',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const rollback = `
+set -euo pipefail
+${functions}
+say() { :; }
+sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+fsync_directory() { :; }
+cycle_gate_owned_by_current() { [ -d "$1" ]; }
+acquire_lock_dir() { mkdir -p "$1"; }
+release_lock_dir() { rm -rf -- "$1"; }
+HOME="$1"; ROOT="$2"; STATE="$ROOT/state"; PHONE_STATE="$STATE/phone-tools"
+CURRENT="$ROOT/current"; MIGRATION_DIR="$ROOT/migrations/legacy-fixture"
+RELEASE_ID=release-1; INITIAL_MIGRATION=1; MIGRATION_STARTED=1
+LEGACY_RUNTIME_EXPECTED=0; LEGACY_CONTROL_PLANE_EXPECTED=0
+LEGACY_EXPECTATION_COMPAT=0; LEGACY_SNAPSHOT_READY=1
+LEGACY_PLAN_SHA256="$3"; CYCLE_GATE="$PHONE_STATE/.cycle.lock"; CYCLE_GATE_HELD=1
+rollback_initial_migration
+rollback_initial_migration
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', rollback, 'rollback', home, releaseRoot, planDigest],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  for (const name of [
+    'evogent',
+    'phone-tools',
+    'start-prod.sh',
+    'start-prod-sub.sh',
+    'restart-evo.sh',
+    'deploy-next.sh',
+    'install-evogent-release.sh',
+  ]) {
+    assert.equal(fs.existsSync(path.join(home, name)), false);
+    assert.throws(
+      () => fs.lstatSync(path.join(home, name)),
+      (error) => error?.code === 'ENOENT',
+    );
+  }
+  assert.equal(fs.existsSync(path.join(releaseRoot, 'current')), false);
+  assert.equal(
+    fs.readFileSync(path.join(migration, 'rolled-back-state-data/generated'), 'utf8'),
+    'candidate state\n',
+  );
+  assert.equal(
+    fs.existsSync(path.join(migration, 'rolled-back-phone-state')),
+    true,
+  );
+});
+
+test('scheduler and watchdog recovery proofs bind exact owners and programs', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const safeProgram = shellFunction(installer, 'safe_private_program');
+  const scheduler = shellFunction(installer, 'scheduler_owner_live');
+  const watchdog = shellFunction(installer, 'watchdog_owner_live');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-owner-proof-'));
+  const home = path.join(fixture, 'home');
+  const tools = path.join(home, 'phone-tools');
+  const schedulerLock = path.join(tools, '.scheduler.lock');
+  const watchdogLock = path.join(tools, '.watchdog.lock');
+  const watchdogPid = path.join(tools, '.watchdog.pid');
+  fs.mkdirSync(tools, { recursive: true });
+  fs.writeFileSync(watchdogPid, '456\n', { mode: 0o600 });
+  const harness = `
+set -uo pipefail
+${safeProgram}
+${scheduler}
+${watchdog}
+single_tmux_pane_pid() {
+  [ "$1" = evo-sched ] || return 1
+  printf '%s\\n' "$PANE_PID"
+}
+process_has_exact_script() {
+  case "$MODE:$2" in
+    scheduler:"$HOME/phone-tools/evogent-scheduler.sh") ;;
+    watchdog:"$HOME/phone-tools/evogent-watchdog.sh") ;;
+    *) return 1 ;;
+  esac
+  return "$SCRIPT_RESULT"
+}
+meta_field() {
+  case "$2" in
+    pid) printf '%s\\n' "$OWNER_PID" ;;
+    start) printf '%s\\n' "$OWNER_START" ;;
+    label) printf '%s\\n' "$OWNER_LABEL" ;;
+    *) return 1 ;;
+  esac
+}
+pid_matches() {
+  [ "$1" = "$OWNER_PID" ] && [ "$2" = "$OWNER_START" ] \
+    && return "$PID_RESULT"
+  return 1
+}
+kill() { return "$KILL_RESULT"; }
+HOME="$1"
+case "$MODE" in
+  scheduler) scheduler_owner_live ;;
+  watchdog) watchdog_owner_live ;;
+  *) exit 64 ;;
+esac
+`;
+  function clearLock(directory) {
+    fs.rmSync(directory, { force: true, recursive: true });
+  }
+  function writeOwner(directory) {
+    clearLock(directory);
+    fs.mkdirSync(directory);
+    fs.writeFileSync(path.join(directory, 'owner'), 'fixture\n', {
+      mode: 0o600,
+    });
+  }
+  function prove(mode, overrides = {}) {
+    return spawnSync('bash', ['-c', harness, 'proof', home], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        KILL_RESULT: '0',
+        MODE: mode,
+        OWNER_LABEL: mode,
+        OWNER_PID: mode === 'scheduler' ? '123' : '456',
+        OWNER_START: '789',
+        PANE_PID: '123',
+        PID_RESULT: '0',
+        SCRIPT_RESULT: '0',
+        ...overrides,
+      },
+    });
+  }
+
+  clearLock(schedulerLock);
+  assert.equal(prove('scheduler').status, 0);
+  assert.notEqual(prove('scheduler', { SCRIPT_RESULT: '1' }).status, 0);
+  writeOwner(schedulerLock);
+  assert.equal(prove('scheduler').status, 0);
+  assert.notEqual(
+    prove('scheduler', { OWNER_LABEL: 'watchdog' }).status,
+    0,
+  );
+  assert.notEqual(prove('scheduler', { OWNER_PID: '999' }).status, 0);
+  assert.notEqual(prove('scheduler', { PID_RESULT: '1' }).status, 0);
+
+  clearLock(watchdogLock);
+  assert.equal(prove('watchdog').status, 0);
+  assert.notEqual(prove('watchdog', { SCRIPT_RESULT: '1' }).status, 0);
+  assert.notEqual(prove('watchdog', { KILL_RESULT: '1' }).status, 0);
+  writeOwner(watchdogLock);
+  assert.equal(prove('watchdog').status, 0);
+  assert.notEqual(
+    prove('watchdog', { OWNER_LABEL: 'scheduler' }).status,
+    0,
+  );
+  assert.notEqual(prove('watchdog', { PID_RESULT: '1' }).status, 0);
+});
+
+test('release dispatch proof covers every artifact and rejects stale or direct links', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-dispatch-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const target = path.join(releaseRoot, 'releases/release-1');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  const current = path.join(releaseRoot, 'current');
+  fs.mkdirSync(path.join(target, 'runtime'), { recursive: true });
+  fs.mkdirSync(path.join(target, 'phone-tools/tests'), { recursive: true });
+  fs.mkdirSync(path.join(target, 'device'), { recursive: true });
+  fs.mkdirSync(phoneState, { recursive: true });
+  fs.writeFileSync(path.join(target, 'phone-tools/helper.py'), 'pass\n');
+  fs.writeFileSync(path.join(target, 'phone-tools/deploy-next.sh'), ':\n');
+  for (const name of [
+    'start-prod.sh',
+    'restart-evo.sh',
+    'install-release.sh',
+  ]) {
+    fs.writeFileSync(path.join(target, 'device', name), ':\n');
+  }
+  fs.symlinkSync('releases/release-1', current);
+  fs.symlinkSync(`${releaseRoot}/current/runtime`, path.join(home, 'evogent'));
+  fs.symlinkSync(phoneState, path.join(home, 'phone-tools'));
+  const homeLinks = {
+    'start-prod.sh': `${releaseRoot}/current/device/start-prod.sh`,
+    'restart-evo.sh': `${releaseRoot}/current/device/restart-evo.sh`,
+    'deploy-next.sh': `${releaseRoot}/current/phone-tools/deploy-next.sh`,
+    'install-evogent-release.sh':
+      `${releaseRoot}/current/device/install-release.sh`,
+  };
+  for (const [name, destination] of Object.entries(homeLinks)) {
+    fs.symlinkSync(destination, path.join(home, name));
+  }
+  for (const name of ['helper.py', 'deploy-next.sh', 'tests']) {
+    fs.symlinkSync(
+      `${releaseRoot}/current/phone-tools/${name}`,
+      path.join(phoneState, name),
+    );
+  }
+  fs.symlinkSync(
+    `${releaseRoot}/current/device/install-release.sh`,
+    path.join(phoneState, 'install-release.sh'),
+  );
+  const harness = `
+set -euo pipefail
+${shellFunction(installer, 'release_dispatch_matches_target')}
+HOME="$1"
+CURRENT="$2"
+PHONE_STATE="$3"
+release_dispatch_matches_target "$4"
+`;
+  const prove = () => spawnSync(
+    'bash',
+    ['-c', harness, 'dispatch', home, current, phoneState, target],
+    { encoding: 'utf8' },
+  );
+  assert.equal(prove().status, 0);
+
+  fs.unlinkSync(path.join(phoneState, 'helper.py'));
+  fs.symlinkSync(
+    path.join(target, 'phone-tools/helper.py'),
+    path.join(phoneState, 'helper.py'),
+  );
+  assert.notEqual(prove().status, 0);
+
+  fs.unlinkSync(path.join(phoneState, 'helper.py'));
+  fs.symlinkSync(
+    `${releaseRoot}/current/phone-tools/helper.py`,
+    path.join(phoneState, 'helper.py'),
+  );
+  fs.symlinkSync(
+    `${releaseRoot}/current/phone-tools/removed.py`,
+    path.join(phoneState, 'removed.py'),
+  );
+  assert.notEqual(prove().status, 0);
+});
+
+test('obsolete release dispatch is removed transactionally and restored on rollback', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-obsolete-'));
+  const releaseRoot = path.join(fixture, 'root');
+  const previous = path.join(releaseRoot, 'releases/release-old');
+  const candidate = path.join(releaseRoot, 'releases/release-new');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  const migration = path.join(releaseRoot, 'migrations/install-fixture');
+  fs.mkdirSync(path.join(previous, 'phone-tools'), { recursive: true });
+  fs.mkdirSync(path.join(candidate, 'phone-tools'), { recursive: true });
+  fs.mkdirSync(phoneState, { recursive: true });
+  fs.mkdirSync(migration, { recursive: true });
+  fs.writeFileSync(path.join(previous, 'phone-tools/.removed.sh'), ':\n');
+  fs.symlinkSync('releases/release-old', path.join(releaseRoot, 'current'));
+  const stable = `${releaseRoot}/current/phone-tools/.removed.sh`;
+  fs.symlinkSync(stable, path.join(phoneState, '.removed.sh'));
+  const helpers = [
+    'phone_dispatch_target',
+    'fsync_copied_entry',
+    'phone_dispatch_entries_equivalent',
+    'rename_no_copy',
+    'record_phone_dispatch_predecessor',
+    'remove_obsolete_phone_dispatch_links',
+    'remove_exact_generated_symlink',
+    'restore_phone_dispatch_backup',
+    'rollback_phone_dispatch_changes',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const harness = `
+set -euo pipefail
+${helpers}
+fsync_directory() { :; }
+fsync_regular_file_and_parent() { :; }
+fsync_tree() { :; }
+ROOT="$1"
+PHONE_STATE="$2"
+MIGRATION_DIR="$3"
+PREVIOUS_TARGET="$4"
+INITIAL_MIGRATION=0
+remove_obsolete_phone_dispatch_links "$5"
+remove_obsolete_phone_dispatch_links "$5"
+test ! -e "$PHONE_STATE/.removed.sh"
+test ! -L "$PHONE_STATE/.removed.sh"
+rollback_phone_dispatch_changes
+rollback_phone_dispatch_changes
+`;
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      harness,
+      'dispatch',
+      releaseRoot,
+      phoneState,
+      migration,
+      previous,
+      candidate,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readlinkSync(path.join(phoneState, '.removed.sh')), stable);
+});
+
+test('versioned dispatch refuses mutable state while initial conversion can retire it', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-dispatch-move-'));
+  const releaseRoot = path.join(fixture, 'root');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  const migration = path.join(releaseRoot, 'migrations/install-fixture');
+  const predecessor = path.join(phoneState, 'helper.py');
+  const backup = path.join(migration, 'replaced-phone-tools/helper.py');
+  fs.mkdirSync(path.join(predecessor, 'nested'), { recursive: true });
+  fs.mkdirSync(migration, { recursive: true });
+  fs.writeFileSync(path.join(predecessor, 'nested/state'), 'private state\n');
+  const helpers = [
+    'phone_dispatch_target',
+    'fsync_copied_entry',
+    'phone_dispatch_entries_equivalent',
+    'rename_no_copy',
+    'record_phone_dispatch_predecessor',
+    'publish_phone_dispatch_link',
+    'remove_exact_generated_symlink',
+    'restore_phone_dispatch_backup',
+    'rollback_phone_dispatch_changes',
+  ].map((name) => shellFunction(installer, name)).join('\n');
+  const harness = `
+set -euo pipefail
+${helpers}
+fsync_directory() { :; }
+fsync_regular_file_and_parent() { :; }
+fsync_tree() { :; }
+ROOT="$1"
+PHONE_STATE="$2"
+MIGRATION_DIR="$3"
+PREVIOUS_TARGET=""
+INITIAL_MIGRATION=0
+if publish_phone_dispatch_link helper.py; then
+  exit 1
+fi
+test -d "$PHONE_STATE/helper.py"
+test "$(cat "$PHONE_STATE/helper.py/nested/state")" = "private state"
+test ! -e "$MIGRATION_DIR/replaced-phone-tools/helper.py"
+INITIAL_MIGRATION=1
+before="$(python3 - "$PHONE_STATE/helper.py" <<'PY'
+import os
+import sys
+print(os.lstat(sys.argv[1]).st_ino)
+PY
+)"
+publish_phone_dispatch_link helper.py
+test -L "$PHONE_STATE/helper.py"
+test "$(readlink "$PHONE_STATE/helper.py")" \
+  = "$ROOT/current/phone-tools/helper.py"
+after="$(python3 - "$MIGRATION_DIR/replaced-phone-tools/helper.py" <<'PY'
+import os
+import sys
+print(os.lstat(sys.argv[1]).st_ino)
+PY
+)"
+test "$before" = "$after"
+INITIAL_MIGRATION=0
+rollback_phone_dispatch_changes
+test -d "$PHONE_STATE/helper.py"
+test "$(cat "$PHONE_STATE/helper.py/nested/state")" = "private state"
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'dispatch', releaseRoot, phoneState, migration],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.lstatSync(backup).isDirectory(), true);
+  const publish = shellFunction(installer, 'publish_phone_dispatch_link');
+  assert.doesNotMatch(publish, /rm\s+-r/);
+});
+
+test('recovery program checks remain fail-closed under optimized Python', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-optimize-'));
+  const program = path.join(fixture, 'program.sh');
+  const commandLine = path.join(fixture, 'cmdline');
+  fs.writeFileSync(program, 'fixture\n', { mode: 0o600 });
+  fs.writeFileSync(
+    commandLine,
+    Buffer.from(`/bin/bash\0${program}\0`, 'utf8'),
+    { mode: 0o600 },
+  );
+  const harness = `
+set -euo pipefail
+${shellFunction(installer, 'safe_private_program')}
+${shellFunction(installer, 'process_has_exact_script')}
+safe_private_program "$1"
+process_has_exact_script 123 "$1" "$2"
+`;
+  function check(target = program) {
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'optimized-check', target, commandLine],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, PYTHONOPTIMIZE: '2' },
+      },
+    );
+  }
+  assert.equal(check().status, 0);
+
+  fs.appendFileSync(commandLine, Buffer.from('spoof\0', 'utf8'));
+  assert.notEqual(check().status, 0);
+
+  fs.writeFileSync(
+    commandLine,
+    Buffer.from(`/bin/bash\0${fixture}\0`, 'utf8'),
+  );
+  assert.notEqual(check(fixture).status, 0);
+  assert.match(
+    installer,
+    /unset PYTHONOPTIMIZE PYTHONPATH PYTHONHOME PYTHONUSERBASE/,
+  );
+});
+
+test('server ownership proof correlates two accepts with one exact process', async () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-accept-proof-'));
+  const runtime = path.join(fixture, 'runtime');
+  const proc = path.join(fixture, 'proc');
+  const ready = path.join(fixture, 'ready');
+  const serverFd = path.join(proc, '101/fd');
+  fs.mkdirSync(runtime);
+  fs.mkdirSync(path.join(proc, '100/fd'), { recursive: true });
+  fs.mkdirSync(serverFd, { recursive: true });
+
+  function writeProcess(pid, parent, start, command, environment) {
+    const directory = path.join(proc, String(pid));
+    fs.mkdirSync(path.join(directory, 'fd'), { recursive: true });
+    const fields = ['S', String(parent), ...Array(17).fill('0'), String(start)];
+    fs.writeFileSync(
+      path.join(directory, 'stat'),
+      `${pid} (fixture) ${fields.join(' ')}\n`,
+    );
+    fs.writeFileSync(
+      path.join(directory, 'cmdline'),
+      Buffer.from(`${command.join('\0')}\0`, 'utf8'),
+    );
+    fs.writeFileSync(
+      path.join(directory, 'environ'),
+      Buffer.from(
+        `${Object.entries(environment)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\0')}\0`,
+        'utf8',
+      ),
+    );
+    fs.symlinkSync(runtime, path.join(directory, 'cwd'));
+  }
+
+  const childCode = `
+const fs = require('node:fs');
+const net = require('node:net');
+const path = require('node:path');
+const fd = process.argv[1];
+const ready = process.argv[2];
+const log = ready + '.log';
+let next = 1000;
+const server = net.createServer((socket) => {
+  const name = 'accepted-' + next;
+  const descriptor = path.join(fd, name);
+  fs.symlinkSync('socket:[' + next + ']', descriptor);
+  fs.appendFileSync(log, 'accepted ' + name + '\\n');
+  next += 1;
+  socket.resume();
+  socket.on('error', (error) => {
+    fs.appendFileSync(log, 'error ' + name + ' ' + error.code + '\\n');
+  });
+  socket.on('end', () => {
+    fs.appendFileSync(log, 'end ' + name + '\\n');
+    socket.destroy();
+  });
+  socket.on('close', () => {
+    fs.appendFileSync(log, 'close ' + name + '\\n');
+    try {
+      fs.unlinkSync(descriptor);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  });
+});
+server.listen(0, '127.0.0.1', () => {
+  fs.writeFileSync(ready, String(server.address().port));
+});
+`;
+  const child = spawn(process.execPath, ['-e', childCode, serverFd, ready], {
+    stdio: 'ignore',
+  });
+  try {
+    for (let attempt = 0; attempt < 200 && !fs.existsSync(ready); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(fs.existsSync(ready), true);
+    const port = fs.readFileSync(ready, 'utf8');
+    writeProcess(100, 1, 111, ['/bin/tmux'], {});
+    writeProcess(
+      101,
+      100,
+      222,
+      ['/usr/bin/node', 'server.js'],
+      { HOST: '127.0.0.1', NODE_ENV: 'production', PORT: port },
+    );
+    fs.symlinkSync('socket:[900]', path.join(serverFd, 'baseline'));
+    const ownerProof = shellFunction(
+      installer,
+      'phone_server_owner_fingerprint',
+    ).replace("<<'PY' 2>/dev/null", "<<'PY'");
+    const harness = `
+set -euo pipefail
+${ownerProof}
+phone_server_owner_fingerprint 100 "$1" "$2" "" "$2" "$3"
+`;
+    function prove() {
+      return spawnSync(
+        'bash',
+        ['-c', harness, 'owner-proof', runtime, port, proc],
+        { encoding: 'utf8' },
+      );
+    }
+    let result = prove();
+    assert.equal(
+      result.status,
+      0,
+      result.stderr + fs.readFileSync(`${ready}.log`, 'utf8'),
+    );
+    assert.equal(result.stdout.trim(), '101:222');
+
+    writeProcess(
+      102,
+      1,
+      333,
+      ['/usr/bin/node', 'server.js'],
+      { HOST: '127.0.0.1', NODE_ENV: 'production', PORT: port },
+    );
+    fs.symlinkSync('socket:[901]', path.join(proc, '102/fd/baseline'));
+    result = prove();
+    assert.notEqual(result.status, 0);
+  } finally {
+    child.kill('SIGTERM');
+    await waitForExit(child);
+  }
 });
 
 test('package install trusts a complete private marker, not rish transport output', () => {
@@ -1348,10 +4093,12 @@ printf 'rc=%s failed=%s rearm=%s\\n' "$rc" "$ROLLBACK_FAILED" "$REARM_PRIOR_CONT
     installer,
     /rollback_release\(\)[\s\S]*if ! stop_and_prove_runtime; then[\s\S]*return 1/,
   );
-  const releaseInstallLock = installer.indexOf(
-    '[ "$INSTALL_LOCK_HELD" = 1 ] && release_lock_dir "$INSTALL_LOCK"',
+  const cleanup = shellFunction(installer, 'cleanup');
+  const releaseInstallLock = cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"');
+  const rearm = cleanup.indexOf(
+    'if [ "$REARM_PRIOR_CONTROL_PLANE" = 1 ]',
+    releaseInstallLock,
   );
-  const rearm = installer.indexOf('if [ "$REARM_PRIOR_CONTROL_PLANE" = 1 ]', releaseInstallLock);
   assert.ok(releaseInstallLock !== -1 && releaseInstallLock < rearm);
 });
 
@@ -1383,7 +4130,7 @@ printf 'rc=%s calls=%s\\n' "$rc" "$PORT_CALLS"
     env: { ...process.env, PORT_RESULT: '1' },
   });
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /rc=0 calls=1/);
+  assert.match(result.stdout, /rc=0 calls=3/);
 });
 
 test('a waiter rechecks and recovers a durable journal after the owner is SIGKILLed', async () => {
@@ -1720,16 +4467,50 @@ test('legacy node_modules is reclaimed only once a versioned release is current'
     path.join(root, 'phone-paradigm/device/install-release.sh'),
     'utf8',
   );
-  const committed = installer.indexOf(
-    'clear_transaction_journal\nrelease_lock_dir "$CYCLE_GATE"',
+  const journalCommit = installer.lastIndexOf('\ncommit_new_release_decision ');
+  const finalized = installer.indexOf(
+    'finalize_committed_transaction_state',
+    journalCommit,
   );
-  const reclaimed = installer.indexOf('reclaim-legacy', committed);
-  assert.notEqual(committed, -1);
-  assert.notEqual(reclaimed, -1);
-  assert.ok(committed < reclaimed);
+  const journalCleared = installer.indexOf(
+    'clear_transaction_journal',
+    finalized,
+  );
+  const gateReleased = installer.indexOf(
+    'release_lock_dir "$CYCLE_GATE"',
+    journalCleared,
+  );
+  assert.notEqual(journalCommit, -1);
+  assert.notEqual(finalized, -1);
+  assert.notEqual(journalCleared, -1);
+  assert.notEqual(gateReleased, -1);
+  assert.ok(journalCommit < finalized);
+  assert.ok(finalized < journalCleared);
+  assert.ok(journalCleared < gateReleased);
+  const transactionCommit = shellFunction(
+    installer,
+    'commit_new_release_decision',
+  );
+  const signalsMasked = transactionCommit.indexOf("trap '' INT TERM HUP");
+  const journalPublished = transactionCommit.indexOf(
+    'write_transaction_journal committed',
+  );
+  const committed = transactionCommit.indexOf('COMMITTED=1');
+  const signalsRestored = transactionCommit.indexOf("trap 'exit 130' INT");
+  assert.ok(signalsMasked >= 0);
+  assert.ok(signalsMasked < journalPublished);
+  assert.ok(journalPublished < committed);
+  assert.ok(committed < signalsRestored);
+  const committedFinalizer = shellFunction(
+    installer,
+    'finalize_committed_transaction_state',
+  );
+  assert.match(committedFinalizer, /reclaim-legacy/);
+  assert.match(committedFinalizer, /candidate-clear/);
+  assert.match(committedFinalizer, /prune_committed_migration/);
   assert.match(
     installer,
-    /rollback_initial_migration\(\)[\s\S]*mv "\$STATE\/node_modules" "\$MIGRATION_DIR\/evogent\/node_modules"/,
+    /restore_planned_runtime_component \\\n    nodeModules "\$holder" node_modules "\$STATE\/node_modules"/,
   );
 });
 
@@ -1827,6 +4608,72 @@ test('authenticated phone HTTP client ships executable in every release', () => 
   }
 });
 
+test('release packages every device helper referenced by the installer', () => {
+  const builder = fs.readFileSync(
+    path.join(root, 'scripts/build-phone-release.sh'),
+    'utf8',
+  );
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const referencedHelpers = new Set(
+    Array.from(
+      installer.matchAll(
+        /\$(?:EXTRACTED|NEW_RELEASE)\/device\/([A-Za-z0-9][A-Za-z0-9._-]*)/g,
+      ),
+      (match) => match[1],
+    ),
+  );
+  assert.ok(referencedHelpers.has('android-role-state.py'));
+
+  const deviceArchive = builder.match(
+    /git archive "\$SOURCE_COMMIT":phone-paradigm\/device\/phone-tools \\\n  \| tar -xf - -C "\$RELEASE\/phone-tools"\ngit archive "\$SOURCE_COMMIT" \\\n([\s\S]*?)  \| tar --strip-components=2 -xf - -C "\$RELEASE\/device"/,
+  );
+  assert.ok(deviceArchive, 'missing committed device archive allowlist');
+  const archivedHelpers = new Set(
+    Array.from(
+      deviceArchive[1].matchAll(/phone-paradigm\/device\/([A-Za-z0-9][A-Za-z0-9._-]*)/g),
+      (match) => match[1],
+    ),
+  );
+
+  const requiredPaths = builder.match(
+    /"requiredPaths": \[([\s\S]*?)\n    \],/,
+  );
+  assert.ok(requiredPaths, 'missing release manifest requiredPaths');
+  const requiredHelpers = new Set(
+    Array.from(
+      requiredPaths[1].matchAll(/"device\/([A-Za-z0-9][A-Za-z0-9._-]*)"/g),
+      (match) => match[1],
+    ),
+  );
+
+  for (const helper of referencedHelpers) {
+    assert.ok(archivedHelpers.has(helper), `${helper} is absent from the device archive`);
+    assert.ok(requiredHelpers.has(helper), `${helper} is absent from requiredPaths`);
+  }
+});
+
+test('boot recovery preserves the recovered contract and binds tmux release identity', () => {
+  const boot = fs.readFileSync(
+    path.join(
+      root,
+      'phone-paradigm/device/phone-tools/evogent-boot.sh',
+    ),
+    'utf8',
+  );
+  assert.match(
+    boot,
+    /bash "\$INSTALL_RECOVERER" --recover[\s\S]*?# The pinned recoverer[\s\S]*?exit 0\s+fi/,
+  );
+  const identity = boot.indexOf(
+    'tmux set-environment -g EVOGENT_CONTROL_RELEASE_ROOT',
+  );
+  const scheduler = boot.indexOf('tmux new -d -s evo-sched');
+  assert.ok(identity !== -1 && identity < scheduler);
+});
+
 test('watchdog reaps abandoned scoped wake-lock owners', () => {
   const watchdog = fs.readFileSync(
     path.join(
@@ -1861,6 +4708,14 @@ test('release builder strips host identity and excludes historical personal evid
   assert.match(builder, /pure\.parts\[0\] != "release"/);
   assert.match(builder, /phone release: unsafe archive member/);
   assert.match(builder, /EVOGENT_RELEASE_PRIVATE_MARKERS_FILE/);
+  assert.match(
+    builder,
+    /git archive "\$SOURCE_COMMIT":phone-paradigm\/device\/phone-tools/,
+  );
+  assert.doesNotMatch(
+    builder,
+    /cp -R "\$ROOT\/phone-paradigm\/device\/phone-tools/,
+  );
   assert.match(builder, /\.intent\/contracts\.jsonl/);
   assert.match(builder, /\.intent\/failure-modes\.jsonl/);
   assert.doesNotMatch(builder, /\.intent\/backlog\.jsonl/);

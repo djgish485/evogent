@@ -2,6 +2,12 @@
 
 This is a living document for how evogent should evolve its curation and preference-learning systems. It is intentionally practical and decision-focused. The goal is not to mirror the research literature in full, but to record what we learned, what we decided, and what is worth building next.
 
+Phone-runtime update: the scheduler now consolidates the reflection and dream
+roles described below into one bounded daily private overseer. The evidence-first
+evolution philosophy remains the same; the consolidation removes duplicate
+model work and adds cadence, latency, mechanics, and benchmark review. Historical
+uses of “reflection” below describe that lineage, not a second scheduled agent.
+
 The complete research output that informed this summary lives at:
 
 `/root/.clawdbot/logs/research/research-evolving-curation/output.txt`

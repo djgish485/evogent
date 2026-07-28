@@ -21,11 +21,14 @@ try:
     response = json.load(sys.stdin)
     identity = json.load(open(identity_path, encoding="utf-8"))
     running = response["running"]
-    assert isinstance(running, dict)
-    assert running["releaseFormat"] == identity["releaseFormat"]
-    assert running["releaseId"] == identity["releaseId"]
-    assert running["buildId"] == identity["buildId"]
-    assert running["commitFull"] == identity["sourceCommit"]
+    if not (
+        isinstance(running, dict)
+        and running["releaseFormat"] == identity["releaseFormat"]
+        and running["releaseId"] == identity["releaseId"]
+        and running["buildId"] == identity["buildId"]
+        and running["commitFull"] == identity["sourceCommit"]
+    ):
+        raise ValueError("running release identity mismatch")
 except Exception:
     raise SystemExit(1)
 ' "$IDENTITY" >/dev/null 2>&1

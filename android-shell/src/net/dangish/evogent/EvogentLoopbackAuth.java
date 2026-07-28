@@ -223,6 +223,43 @@ final class EvogentLoopbackAuth {
             String json,
             int connectTimeoutMs,
             int readTimeoutMs) throws Exception {
+        return postJsonDirectResponse(
+                context,
+                targetUrl,
+                json,
+                connectTimeoutMs,
+                readTimeoutMs).status;
+    }
+
+    /**
+     * Authenticated direct POST whose small JSON response is itself part of the safety protocol.
+     * Notification replacement uses this to bind cancellation to the exact event the server
+     * durably persisted; callers must still validate every echoed field.
+     */
+    static JSONObject postJsonDirectForJson(
+            Context context,
+            String targetUrl,
+            String json,
+            int connectTimeoutMs,
+            int readTimeoutMs) throws Exception {
+        DirectResponse response = postJsonDirectResponse(
+                context,
+                targetUrl,
+                json,
+                connectTimeoutMs,
+                readTimeoutMs);
+        if (response.status != HttpURLConnection.HTTP_OK || response.body == null) {
+            throw new AuthException("direct_http_error", response.status);
+        }
+        return new JSONObject(response.body);
+    }
+
+    private static DirectResponse postJsonDirectResponse(
+            Context context,
+            String targetUrl,
+            String json,
+            int connectTimeoutMs,
+            int readTimeoutMs) throws Exception {
         if (targetUrl == null
                 || !EvogentSecurityPolicy.isTrustedWebUrl(targetUrl)
                 || json == null) {
@@ -237,7 +274,7 @@ final class EvogentLoopbackAuth {
                     session.sessionToken,
                     connectTimeoutMs,
                     readTimeoutMs);
-            if (!response.phoneSessionRequired || attempt == 1) return response.status;
+            if (!response.phoneSessionRequired || attempt == 1) return response;
         }
         throw new AuthException("direct_request_failed", -1);
     }
@@ -426,8 +463,16 @@ final class EvogentLoopbackAuth {
                     status == HttpURLConnection.HTTP_UNAUTHORIZED
                     && "EvogentPhoneSession".equals(
                             connection.getHeaderField("WWW-Authenticate"));
-            drain(connection, status);
-            return new DirectResponse(status, phoneSessionRequired);
+            String responseBody = null;
+            if (status >= 200 && status < 300) {
+                InputStream input = connection.getInputStream();
+                if (input != null) {
+                    responseBody = readBounded(input);
+                }
+            } else {
+                drain(connection, status);
+            }
+            return new DirectResponse(status, phoneSessionRequired, responseBody);
         } finally {
             connection.disconnect();
         }
@@ -545,10 +590,12 @@ final class EvogentLoopbackAuth {
     private static final class DirectResponse {
         final int status;
         final boolean phoneSessionRequired;
+        final String body;
 
-        DirectResponse(int status, boolean phoneSessionRequired) {
+        DirectResponse(int status, boolean phoneSessionRequired, String body) {
             this.status = status;
             this.phoneSessionRequired = phoneSessionRequired;
+            this.body = body;
         }
     }
 

@@ -247,7 +247,7 @@ class DurableQueueTests(unittest.TestCase):
         after_due = dt.datetime.combine(service_date, dt.time(4, 0), tzinfo=zone)
         ensured = ensure_nightly_task(
             self.root,
-            task="dream",
+            task="oversee",
             hour=3,
             stamp=int(before_due.timestamp() * 1000),
         )
@@ -256,30 +256,65 @@ class DurableQueueTests(unittest.TestCase):
             claim_task(
                 self.root,
                 owner="scheduler",
-                kind="dream",
+                kind="oversee",
                 stamp=int(before_due.timestamp() * 1000),
             )
         )
         lease = claim_task(
             self.root,
             owner="scheduler",
-            kind="dream",
+            kind="oversee",
             stamp=int(after_due.timestamp() * 1000),
         )
         self.assertEqual(lease["serviceDate"], service_date.isoformat())
 
-    def test_reflection_and_dream_have_independent_daily_receipts(self) -> None:
+    def test_overseer_has_one_idempotent_daily_receipt(self) -> None:
         zone = dt.datetime.now().astimezone().tzinfo
         service_date = dt.date(2035, 5, 8)
         after_due = dt.datetime.combine(service_date, dt.time(4, 0), tzinfo=zone)
         stamp = int(after_due.timestamp() * 1000)
-        ensure_nightly_task(self.root, task="dream", hour=3, stamp=stamp)
-        ensure_nightly_task(self.root, task="reflect", hour=3, stamp=stamp)
+        first = ensure_nightly_task(self.root, task="oversee", hour=3, stamp=stamp)
+        second = ensure_nightly_task(self.root, task="oversee", hour=3, stamp=stamp)
+        self.assertTrue(first["created"])
+        self.assertFalse(second["created"])
 
-        dream = claim_task(self.root, owner="scheduler", kind="dream", stamp=stamp)
-        reflect = claim_task(self.root, owner="scheduler", kind="reflect", stamp=stamp)
-        self.assertEqual(dream["taskId"], f"dream-{service_date.isoformat()}")
-        self.assertEqual(reflect["taskId"], f"reflect-{service_date.isoformat()}")
+        lease = claim_task(self.root, owner="scheduler", kind="oversee", stamp=stamp)
+        self.assertEqual(lease["taskId"], f"oversee-{service_date.isoformat()}")
+        finish_task(
+            self.root,
+            lease["leasePath"],
+            result="ack",
+            outcome="overseer_completed",
+            stamp=stamp + 1,
+        )
+        ensure_nightly_task(self.root, task="oversee", hour=3, stamp=stamp + 2)
+        self.assertIsNone(
+            claim_task(self.root, owner="scheduler", kind="oversee", stamp=stamp + 2)
+        )
+
+    def test_legacy_reflection_stamp_prevents_a_duplicate_migration_day_review(self) -> None:
+        zone = dt.datetime.now().astimezone().tzinfo
+        service_date = dt.date(2035, 5, 9)
+        due = dt.datetime.combine(service_date, dt.time(3, 0), tzinfo=zone)
+        completed = dt.datetime.combine(service_date, dt.time(3, 30), tzinfo=zone)
+        stamp = int(completed.timestamp() * 1000)
+        legacy = Path(self.temporary.name) / "last-reflect"
+        legacy.write_text(str(int(completed.timestamp())), encoding="utf-8")
+
+        ensured = ensure_nightly_task(
+            self.root,
+            task="oversee",
+            hour=3,
+            stamp=stamp,
+            legacy_stamp=[Path(self.temporary.name) / "missing", legacy],
+        )
+        self.assertFalse(ensured["created"])
+        self.assertEqual(ensured["dueAtMs"], int(due.timestamp() * 1000))
+        final = self.root / ".receipts" / f"oversee-{service_date.isoformat()}-final.json"
+        self.assertEqual(
+            json.loads(final.read_text(encoding="utf-8"))["outcome"],
+            "legacy_completion_migrated",
+        )
 
 
 class SourceCadenceTests(unittest.TestCase):

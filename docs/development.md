@@ -55,7 +55,7 @@ software-development agents.
 
 - `data/feed-output.jsonl` is the curated feed item and background analysis fallback output.
 - `data/chat-output.jsonl` is an audit log for chat replies already persisted through `/api/internal/chat/submit`.
-- `data/preference-insights.md` stores synthesized preference patterns maintained by reflection.
+- `data/preference-insights.md` stores synthesized preference patterns maintained by the daily private overseer.
 - `data/tracked-events.json` stores current event tracking lifecycle data.
 
 These are deployment-private instances. Commit general mechanisms and

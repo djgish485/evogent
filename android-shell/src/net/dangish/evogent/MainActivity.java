@@ -1,17 +1,24 @@
 package net.dangish.evogent;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -46,12 +53,24 @@ import java.util.regex.Pattern;
  */
 public class MainActivity extends Activity {
     private static final String FEED_URL = EvogentSecurityPolicy.LOOPBACK_ORIGIN;
+    static final String ACTION_OPEN_EVOGENT_HOME =
+            "net.dangish.evogent.action.OPEN_EVOGENT_HOME";
+    private static final String HOME_CHOICE_PREFERENCES = "evogent_home_choice";
+    private static final String HOME_CHOICE_KEY = "last_explicit_surface";
+    private static final String NOTIFICATION_PERMISSION_PREFERENCES =
+            "evogent_notification_permission";
+    private static final String NOTIFICATION_PERMISSION_ASKED_KEY =
+            "post_notifications_asked";
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 0x4556;
+    private static final String LEGACY_OVERLAY_CHANNEL = "evogent_overlay";
+    private static final int LEGACY_OVERLAY_NOTIFICATION_ID = 42;
     private static final String PAGE_BACK_SCRIPT =
             "(function(){'use strict';try{"
             + "if(typeof window.evogentHandleBack!=='function')return 'missing';"
             + "return window.evogentHandleBack()===true?'handled':'unhandled';"
             + "}catch(e){return 'error';}})();";
     private static final String SHELL_PROMPT_MARKER = "__EVOGENT_SHELL_V2__";
+    private static final String ASSISTANT_PROMPT_MARKER = "__EVOGENT_ASSISTANT_V1__";
     private static final String SHELL_FACADE_SCRIPT =
             "(function(){'use strict';"
             + "if(window.top!==window||window.EvogentShell)return;"
@@ -64,6 +83,20 @@ public class MainActivity extends Activity {
             + "openAndroidHome:function(){return call('openAndroidHome',[]);}"
             + "}),writable:false,configurable:false});"
             + "})();";
+    private static final String ASSISTANT_COMPOSER_FACADE_SCRIPT =
+            "(function(){'use strict';"
+            + "if(window.top!==window||window.EvogentOverlay)return;"
+            + "var nativePrompt=window.prompt.bind(window);"
+            + "function call(method,args){return nativePrompt('" + ASSISTANT_PROMPT_MARKER
+            + "',JSON.stringify({method:method,args:args||[]}));}"
+            + "Object.defineProperty(window,'EvogentOverlay',{"
+            + "value:Object.freeze({"
+            + "getScreenContext:function(){return call('getScreenContext',[]);},"
+            + "setHeight:function(px){return call('setHeight',[Number(px)]);},"
+            + "close:function(){return call('close',[]);},"
+            + "openApp:function(){return call('openApp',[]);}"
+            + "}),writable:false,configurable:false});"
+            + "})();";
     private static final String YT_PACKAGE = "com.google.android.youtube";
     private static final String IG_PACKAGE = "com.instagram.android";
     private static final String X_PACKAGE = "com.twitter.android";
@@ -72,6 +105,7 @@ public class MainActivity extends Activity {
     private static final long FOREGROUND_REFRESH_AFTER_MS = 30 * 1000L;
     private static final long PERIODIC_REFRESH_MS = 4 * 60 * 1000L;
     private static final long AUTH_RETRY_MS = 2000L;
+    private static final long RUNTIME_REVIVE_DEBOUNCE_MS = 2000L;
     private static final Pattern YT_ID = Pattern.compile(
             "(?:v=|/shorts/|youtu\\.be/|/embed/)([A-Za-z0-9_-]{11})");
     private WebView webView;
@@ -98,6 +132,8 @@ public class MainActivity extends Activity {
     private boolean authInFlight;
     private boolean backInFlight;
     private boolean pendingBackPress;
+    private long lastRuntimeReviveRequestMs;
+    private SharedPreferences homeChoicePreferences;
     private boolean destroyed;
     private final Runnable periodicProofRefresh = new Runnable() {
         @Override public void run() {
@@ -118,9 +154,96 @@ public class MainActivity extends Activity {
      */
     private boolean resumed = false;
 
+    /** Root document for this hardened WebView host. The assistant overrides only this URL. */
+    protected String rootDocumentUrl() {
+        return FEED_URL;
+    }
+
+    /** True only for the role-holding launcher Activity, never the assistant-layer Activity. */
+    protected boolean isHomeSurface() {
+        return true;
+    }
+
+    /** The assistant subclass opts into the narrow EvogentOverlay composer bridge. */
+    protected boolean supportsAssistantComposerBridge() {
+        return false;
+    }
+
+    protected EvogentAssistantContextStore.ContextData consumeAssistantContext() {
+        return new EvogentAssistantContextStore.ContextData(null, "");
+    }
+
+    protected void closeAssistantComposer() {
+        // Main HOME never exposes the assistant composer bridge.
+    }
+
+    protected int recoveryEscapeLabelResource() {
+        return R.string.home_recovery_apps;
+    }
+
+    protected void handleRecoveryEscape() {
+        openAndroidHomeOrApps();
+    }
+
+    private String nativeFacadeScript() {
+        return supportsAssistantComposerBridge()
+                ? ASSISTANT_COMPOSER_FACADE_SCRIPT
+                : SHELL_FACADE_SCRIPT;
+    }
+
+    /**
+     * Classify launcher intents before touching WebView state.
+     *
+     * MAIN+LAUNCHER and the explicit return action choose Evogent. MAIN+HOME consults, but never
+     * mutates, the remembered choice. Null, unknown-action, and ambiguous-category intents simply
+     * stay in Evogent. If the stock launcher cannot be resolved/launched, the stale Android choice
+     * is cleared before continuing here so a broken component can never create a HOME loop.
+     */
+    private boolean routeHomeIntent(Intent intent) {
+        if (intent == null) return false;
+        boolean isMain = Intent.ACTION_MAIN.equals(intent.getAction());
+        boolean hasLauncher = intent.hasCategory(Intent.CATEGORY_LAUNCHER);
+        boolean hasHome = intent.hasCategory(Intent.CATEGORY_HOME);
+        boolean explicitReturn = ACTION_OPEN_EVOGENT_HOME.equals(intent.getAction());
+        if (EvogentHomeChoicePolicy.explicitlyChoosesEvogent(
+                isMain, hasLauncher, hasHome, explicitReturn)) {
+            rememberHomeChoice(EvogentHomeChoicePolicy.Choice.EVOGENT);
+            return false;
+        }
+        if (!EvogentHomeChoicePolicy.shouldRouteSystemHomeToAndroid(
+                isMain, hasHome, hasLauncher, rememberedHomeChoice())) {
+            return false;
+        }
+        if (launchStockAndroidHome()) return true;
+        rememberHomeChoice(
+                EvogentHomeChoicePolicy.choiceAfterAndroidLaunchAttempt(false));
+        Log.w("EvogentMain", "remembered Android HOME unavailable; staying in Evogent");
+        return false;
+    }
+
+    private EvogentHomeChoicePolicy.Choice rememberedHomeChoice() {
+        return EvogentHomeChoicePolicy.decode(homeChoicePreferences()
+                .getString(HOME_CHOICE_KEY, EvogentHomeChoicePolicy.VALUE_EVOGENT));
+    }
+
+    private void rememberHomeChoice(EvogentHomeChoicePolicy.Choice choice) {
+        homeChoicePreferences().edit()
+                .putString(HOME_CHOICE_KEY, EvogentHomeChoicePolicy.encode(choice))
+                .apply();
+    }
+
+    private SharedPreferences homeChoicePreferences() {
+        if (homeChoicePreferences == null) {
+            homeChoicePreferences = getSharedPreferences(
+                    HOME_CHOICE_PREFERENCES, Context.MODE_PRIVATE);
+        }
+        return homeChoicePreferences;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        maybeRequestNotificationPermissionOnce();
         resumed = true;
         main.removeCallbacks(periodicProofRefresh);
         main.postDelayed(periodicProofRefresh, PERIODIC_REFRESH_MS);
@@ -129,6 +252,41 @@ public class MainActivity extends Activity {
                 && !authInFlight) {
             refreshCurrentDocumentAuthentication(null);
         }
+    }
+
+    /**
+     * Android 13+ requires a second grant before Evogent can publish its replacement digest.
+     * Ask only after notification-listener access proves the user enabled this integration,
+     * only on the HOME surface, and at most once. A denial is respected; without the permission
+     * the listener's fail-safe keeps every Android original.
+     */
+    private void maybeRequestNotificationPermissionOnce() {
+        if (!isHomeSurface()
+                || webView == null
+                || Build.VERSION.SDK_INT < 33
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        NotificationManager notifications =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notifications == null
+                || !notifications.isNotificationListenerAccessGranted(
+                        new ComponentName(
+                                this,
+                                EvogentNotificationListenerService.class))) return;
+        SharedPreferences preferences = getSharedPreferences(
+                NOTIFICATION_PERMISSION_PREFERENCES,
+                Context.MODE_PRIVATE);
+        if (preferences.getBoolean(NOTIFICATION_PERMISSION_ASKED_KEY, false)) return;
+        if (!preferences.edit()
+                .putBoolean(NOTIFICATION_PERMISSION_ASKED_KEY, true)
+                .commit()) {
+            return;
+        }
+        requestPermissions(
+                new String[] { Manifest.permission.POST_NOTIFICATIONS },
+                NOTIFICATION_PERMISSION_REQUEST_CODE);
     }
 
     @Override
@@ -141,6 +299,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
+        if (isHomeSurface() && routeHomeIntent(intent)) return;
         if (intent == null || !Intent.ACTION_MAIN.equals(intent.getAction())
                 || !intent.hasCategory(Intent.CATEGORY_HOME) || webView == null) {
             return;
@@ -183,6 +343,14 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         // An update from the legacy APK may leave its repeating browse PendingIntent behind.
         BrowseAlarmReceiver.cancelLegacySchedule(this);
+        retireLegacyOverlayArtifacts();
+        if (isHomeSurface() && routeHomeIntent(getIntent())) {
+            // This was a cold system-HOME invocation while Android HOME was remembered. There
+            // is no Evogent document state to preserve, so do not create an invisible WebView
+            // task behind the stock launcher.
+            finish();
+            return;
+        }
 
         webView = new WebView(this);
         WebSettings s = webView.getSettings();
@@ -208,7 +376,7 @@ public class MainActivity extends Activity {
         // addJavascriptInterface, this exposes no Java object to subframes. The exact-origin
         // document-start rule and per-call onJsPrompt frame URL check are both required.
         shellDocumentStartInstalled =
-                NativeWebBridge.installAtDocumentStart(webView, SHELL_FACADE_SCRIPT);
+                NativeWebBridge.installAtDocumentStart(webView, nativeFacadeScript());
 
         // Direct navigations to an external site (a plain link) route out.
         webView.setWebViewClient(new WebViewClient() {
@@ -359,10 +527,11 @@ public class MainActivity extends Activity {
                     String message,
                     String defaultValue,
                     JsPromptResult result) {
-                if (!SHELL_PROMPT_MARKER.equals(message)) {
+                if (!SHELL_PROMPT_MARKER.equals(message)
+                        && !ASSISTANT_PROMPT_MARKER.equals(message)) {
                     return super.onJsPrompt(view, url, message, defaultValue, result);
                 }
-                handleShellPrompt(url, defaultValue, result);
+                handleShellPrompt(message, url, defaultValue, result);
                 return true;
             }
         });
@@ -386,6 +555,21 @@ public class MainActivity extends Activity {
         shizuku = new ShizukuController(this);
         registerReceiver(shizukuReceiver, new IntentFilter("net.dangish.evogent.SHIZUKU"),
                 Context.RECEIVER_EXPORTED);
+    }
+
+    /** Remove the old bubble service's orphaned ongoing notification/channel after upgrade. */
+    private void retireLegacyOverlayArtifacts() {
+        try {
+            NotificationManager notifications =
+                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notifications == null) return;
+            notifications.cancel(LEGACY_OVERLAY_NOTIFICATION_ID);
+            if (Build.VERSION.SDK_INT >= 26) {
+                notifications.deleteNotificationChannel(LEGACY_OVERLAY_CHANNEL);
+            }
+        } catch (Throwable error) {
+            Log.w("EvogentMain", "legacy overlay notification cleanup failed");
+        }
     }
 
     /**
@@ -472,7 +656,7 @@ public class MainActivity extends Activity {
         actions.addView(recoveryRetry, retryParams);
 
         Button apps = new Button(this);
-        apps.setText(R.string.home_recovery_apps);
+        apps.setText(recoveryEscapeLabelResource());
         apps.setAllCaps(false);
         apps.setTextColor(Color.rgb(244, 244, 245));
         apps.setBackgroundTintList(
@@ -480,7 +664,7 @@ public class MainActivity extends Activity {
         apps.setMinHeight(dp(48));
         apps.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View ignored) {
-                openAndroidHomeOrApps();
+                handleRecoveryEscape();
             }
         });
         LinearLayout.LayoutParams appsParams =
@@ -542,6 +726,12 @@ public class MainActivity extends Activity {
 
     private void retryFeedFromRecovery() {
         if (destroyed || webView == null) return;
+        long now = SystemClock.elapsedRealtime();
+        if (lastRuntimeReviveRequestMs == 0
+                || now - lastRuntimeReviveRequestMs >= RUNTIME_REVIVE_DEBOUNCE_MS) {
+            lastRuntimeReviveRequestMs = now;
+            BootReceiver.dispatchRecoveryOrBoot(this);
+        }
         ++authRequestId;
         authInFlight = false;
         ++backRequestId;
@@ -549,7 +739,7 @@ public class MainActivity extends Activity {
         revokeDocumentTrust();
         showRecoveryStarting();
         webView.stopLoading();
-        authenticateAndLoad(FEED_URL, 0);
+        authenticateAndLoad(rootDocumentUrl(), 0);
     }
 
     private ShizukuController shizuku;
@@ -634,7 +824,7 @@ public class MainActivity extends Activity {
 
     private void loadFeedRoot() {
         showRecoveryStarting();
-        authenticateAndLoad(FEED_URL, 0);
+        authenticateAndLoad(rootDocumentUrl(), 0);
     }
 
     /**
@@ -716,7 +906,7 @@ public class MainActivity extends Activity {
                                 previousSession.serverInstanceId)) {
                     revokeDocumentTrust();
                     showRecoveryError();
-                    authenticateAndLoad(FEED_URL, AUTH_RETRY_MS);
+                    authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
                     return;
                 }
                 activeWebSession = session;
@@ -736,7 +926,7 @@ public class MainActivity extends Activity {
         if (authInFlight) return;
         String retryUrl = EvogentSecurityPolicy.isTrustedWebUrl(failedUrl)
                 ? failedUrl
-                : FEED_URL;
+                : rootDocumentUrl();
         authenticateAndLoad(retryUrl, AUTH_RETRY_MS);
     }
 
@@ -770,7 +960,7 @@ public class MainActivity extends Activity {
             revokeDocumentTrust();
             showRecoveryError();
             if (!authInFlight) {
-                authenticateAndLoad(FEED_URL, AUTH_RETRY_MS);
+                authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
             }
             return;
         }
@@ -811,7 +1001,7 @@ public class MainActivity extends Activity {
                         // Compatibility fallback is injected only after the loaded document has
                         // proved the same server process that authorized its navigation.
                         if (!shellDocumentStartInstalled) {
-                            webView.evaluateJavascript(SHELL_FACADE_SCRIPT, null);
+                            webView.evaluateJavascript(nativeFacadeScript(), null);
                         }
                     }
                 });
@@ -836,7 +1026,7 @@ public class MainActivity extends Activity {
                     if (!destroyed) {
                         revokeDocumentTrust();
                         showRecoveryError();
-                        authenticateAndLoad(FEED_URL, AUTH_RETRY_MS);
+                        authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
                     }
                 }
             });
@@ -848,7 +1038,11 @@ public class MainActivity extends Activity {
      * Handle the shell's synchronous prompt protocol. onJsPrompt supplies the URL of the frame
      * that called prompt, so a sandboxed/cross-origin iframe cannot inherit top-frame authority.
      */
-    private void handleShellPrompt(String callerUrl, String payload, JsPromptResult result) {
+    private void handleShellPrompt(
+            String marker,
+            String callerUrl,
+            String payload,
+            JsPromptResult result) {
         if (!EvogentSecurityPolicy.isTrustedWebUrl(callerUrl)
                 || !isCurrentFeedDocumentAuthenticated()
                 || payload == null
@@ -861,9 +1055,32 @@ public class MainActivity extends Activity {
             JSONObject request = new JSONObject(payload);
             String method = request.optString("method", "");
             JSONArray args = request.optJSONArray("args");
+            boolean shellPrompt = SHELL_PROMPT_MARKER.equals(marker);
+            boolean assistantPrompt = ASSISTANT_PROMPT_MARKER.equals(marker)
+                    && supportsAssistantComposerBridge();
             boolean validOperation =
-                    ("openExternal".equals(method) && args != null && args.length() == 1)
-                    || ("openAndroidHome".equals(method)
+                    (shellPrompt
+                            && "openExternal".equals(method)
+                            && args != null
+                            && args.length() == 1)
+                    || (shellPrompt
+                            && "openAndroidHome".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (assistantPrompt
+                            && "getScreenContext".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (assistantPrompt
+                            && "setHeight".equals(method)
+                            && args != null
+                            && args.length() == 1)
+                    || (assistantPrompt
+                            && "close".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (assistantPrompt
+                            && "openApp".equals(method)
                             && args != null
                             && args.length() == 0);
             if (!validOperation || !authorizeCurrentDocumentForNativeAction()) {
@@ -880,6 +1097,46 @@ public class MainActivity extends Activity {
                     && args != null
                     && args.length() == 0) {
                 openAndroidHome();
+            } else if ("getScreenContext".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && supportsAssistantComposerBridge()) {
+                EvogentAssistantContextStore.ContextData context =
+                        consumeAssistantContext();
+                JSONObject response = new JSONObject();
+                response.put("app", context.app == null ? JSONObject.NULL : context.app);
+                response.put("text", context.text);
+                result.confirm(response.toString());
+                return;
+            } else if ("setHeight".equals(method)
+                    && args != null
+                    && args.length() == 1
+                    && supportsAssistantComposerBridge()) {
+                // The assistant Activity already occupies its system-managed layer. Validate the
+                // existing overlay page's sizing call, then intentionally leave Activity sizing
+                // to Android.
+                double height = args.optDouble(0, Double.NaN);
+                if (Double.isNaN(height)
+                        || Double.isInfinite(height)
+                        || height <= 0
+                        || height > 100000) {
+                    throw new IllegalArgumentException("invalid composer height");
+                }
+            } else if ("close".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && supportsAssistantComposerBridge()) {
+                closeAssistantComposer();
+            } else if ("openApp".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && supportsAssistantComposerBridge()) {
+                Intent openHome = new Intent(this, MainActivity.class)
+                        .setAction(ACTION_OPEN_EVOGENT_HOME)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(openHome);
+                closeAssistantComposer();
             } else {
                 throw new IllegalArgumentException("unknown shell operation");
             }
@@ -1001,10 +1258,9 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Open the STOCK launcher's home screen (widgets, app drawer, everything users already know)
-     * as a one-off — Evogent stays the default HOME. Because Evogent itself resolves
-     * ACTION_MAIN/CATEGORY_HOME, an implicit intent would just come back here; resolve the
-     * non-Evogent home handler and target it explicitly. Fallback: the built-in app drawer.
+     * Explicitly choose the stock launcher. Evogent remains Android's sole HOME role holder, but
+     * subsequent HOME gestures proxy back to this remembered surface until the user explicitly
+     * opens Evogent again.
      */
     private void openAndroidHome() {
         if (!isCurrentFeedDocumentTrusted()) return;
@@ -1016,6 +1272,20 @@ public class MainActivity extends Activity {
      * directly; the shell prompt still goes through openAndroidHome() and a fresh process proof.
      */
     private void openAndroidHomeOrApps() {
+        boolean launched = launchStockAndroidHome();
+        rememberHomeChoice(
+                EvogentHomeChoicePolicy.choiceAfterAndroidLaunchAttempt(launched));
+        if (launched) return;
+        // Do not remember a launcher that does not exist. The native drawer remains a safe escape
+        // while the next HOME gesture stays in a usable Evogent launcher.
+        startActivity(new Intent(MainActivity.this, AppDrawerActivity.class));
+    }
+
+    /**
+     * Target a non-Evogent HOME component explicitly. An implicit HOME Intent would resolve right
+     * back to Evogent because Android permits only one default HOME holder.
+     */
+    private boolean launchStockAndroidHome() {
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         android.content.pm.ResolveInfo pick = null;
         for (android.content.pm.ResolveInfo ri
@@ -1038,12 +1308,12 @@ public class MainActivity extends Activity {
                         .addCategory(Intent.CATEGORY_HOME)
                         .setClassName(pick.activityInfo.packageName, pick.activityInfo.name)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                return;
+                return true;
             } catch (Throwable ignored) {
-                // The package changed between query and launch; use our native drawer below.
+                // The package changed between query and launch. Caller stays in Evogent.
             }
         }
-        startActivity(new Intent(MainActivity.this, AppDrawerActivity.class));
+        return false;
     }
 
     @Override
@@ -1207,7 +1477,7 @@ public class MainActivity extends Activity {
                 if (session == null || error != null || !historyUnchanged) {
                     backInFlight = false;
                     showRecoveryError();
-                    authenticateAndLoad(FEED_URL, AUTH_RETRY_MS);
+                    authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
                     return;
                 }
 

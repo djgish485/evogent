@@ -27,7 +27,7 @@ import secrets
 import sys
 import time
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 
 DEFAULT_MAX_ATTEMPTS = 4
@@ -143,7 +143,7 @@ def _request_is_valid(request: dict[str, Any]) -> tuple[bool, str]:
         required = ("pkg", "name", "source")
     elif kind == "research":
         required = ("pkg",)
-    elif kind in {"dream", "reflect"}:
+    elif kind in {"dream", "reflect", "oversee"}:
         required = ("serviceDate",)
     else:
         return False, f"unsupported kind {kind!r}"
@@ -328,7 +328,7 @@ def _priority(request: dict[str, Any], path: Path) -> tuple[float, float, str]:
             return (0, float(request.get("installedDaysAgo")), path.name)
         except (TypeError, ValueError):
             return (0, float("inf"), path.name)
-    if request.get("kind") in {"dream", "reflect"}:
+    if request.get("kind") in {"dream", "reflect", "oversee"}:
         return (1, float(request.get("notBeforeMs") or 0), path.name)
     return (2, float(request.get("createdAtMs") or 0), path.name)
 
@@ -573,7 +573,7 @@ def ensure_nightly_task(
     task: str,
     hour: int,
     stamp: int | None = None,
-    legacy_stamp: Path | str | None = None,
+    legacy_stamp: Path | str | Iterable[Path | str] | None = None,
 ) -> dict[str, Any]:
     """Ensure today's named nightly task exists, even before it becomes due."""
 
@@ -585,8 +585,13 @@ def ensure_nightly_task(
     due_ms = int(due.timestamp() * 1000)
     task_id = safe_task_id(f"{task}-{service_date.isoformat()}")
 
-    if legacy_stamp:
-        legacy_path = Path(legacy_stamp)
+    legacy_stamps: Iterable[Path | str]
+    if isinstance(legacy_stamp, (str, Path)):
+        legacy_stamps = (legacy_stamp,)
+    else:
+        legacy_stamps = legacy_stamp or ()
+    for legacy_value in legacy_stamps:
+        legacy_path = Path(legacy_value)
         try:
             raw = legacy_path.read_text(encoding="utf-8").strip()
             legacy_ms = int(raw) * 1000 if raw.isdigit() else int(legacy_path.stat().st_mtime * 1000)
@@ -609,7 +614,7 @@ def ensure_nightly_task(
                         }
                         atomic_write_json(final_path, migrated)
         except (OSError, ValueError):
-            pass
+            continue
 
     result = enqueue_task(
         root,
@@ -639,7 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
     enqueue.add_argument(
         "--kind",
         required=True,
-        choices=("discovery", "research", "dream", "reflect"),
+        choices=("discovery", "research", "dream", "reflect", "oversee"),
     )
     enqueue.add_argument("--task-id")
     enqueue.add_argument("--pkg")
@@ -654,7 +659,10 @@ def build_parser() -> argparse.ArgumentParser:
     claim = sub.add_parser("claim")
     claim.add_argument("--root", required=True)
     claim.add_argument("--owner", required=True)
-    claim.add_argument("--kind", choices=("discovery", "research", "dream", "reflect"))
+    claim.add_argument(
+        "--kind",
+        choices=("discovery", "research", "dream", "reflect", "oversee"),
+    )
     claim.add_argument("--lease-ms", type=int, default=DEFAULT_LEASE_MS)
     claim.add_argument("--now-ms", type=int)
 
@@ -675,9 +683,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     nightly = sub.add_parser("ensure-nightly")
     nightly.add_argument("--root", required=True)
-    nightly.add_argument("--task", default="dream", choices=("dream", "reflect"))
+    nightly.add_argument(
+        "--task",
+        default="oversee",
+        choices=("dream", "reflect", "oversee"),
+    )
     nightly.add_argument("--hour", type=int, default=0)
-    nightly.add_argument("--legacy-stamp")
+    nightly.add_argument("--legacy-stamp", action="append")
     nightly.add_argument("--now-ms", type=int)
     return parser
 

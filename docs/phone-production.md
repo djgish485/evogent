@@ -38,15 +38,18 @@ There is one scheduling authority on the phone:
    cycle at a time.
 4. App research, source discovery, and standing-interest work use durable
    queued/leased/acknowledged requests with bounded retry and quarantine.
-   Nightly reflection/dream work is a scheduler-owned due task, not an
-   opportunistic side effect of whichever cycle happens to cross a clock window.
+   One daily private overseer is a scheduler-owned due task, not an opportunistic
+   side effect of whichever cycle happens to cross a clock window.
 5. An independent watchdog checks that the scheduler, server, and cycle outcomes
    remain live. It wakes the owner; it does not become a second scheduler.
 
-The Android shell owns launcher mechanics, the WebView, native-app routing,
-accessibility/overlay surfaces, boot signaling, and the per-install control-token
-boundary. It does not choose content, run editorial policy, or accept arbitrary
-external commands. Until a successful main-frame page proves the authenticated
+The Android shell owns preference-aware launcher mechanics, the WebView, native-app routing,
+the system-assistant composer, local notification observation/replacement mechanics,
+accessibility mechanics, boot signaling, and the per-install control-token boundary. The
+notification stream enters a deterministic local light-curation lane; no notification content is
+sent to a runtime agent, and urgent/system/safety originals remain Android-owned. It does not
+choose primary-feed content, run editorial policy, or accept arbitrary external commands. Until a
+successful main-frame page proves the authenticated
 server process and an HTTP-success document, the WebView stays invisible behind
 an opaque native Starting/Error surface with Retry and stock-app escape actions.
 Android Back first unwinds one React layer, then traverses only reauthenticated
@@ -202,6 +205,7 @@ scroll; initial viewport depth and restored/programmatic position do not qualify
 - `phone-paradigm/device/DEV-LOOP.md` — host-to-phone development workflow
 - `phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md` — private-data-safe migration
 - `phone-paradigm/pixel-real-device-setup.md` — technical-user stock-device setup
+- `docs/phone-notification-curation.md` — local notification and lock-screen digest contract
 - `docs/development.md` — repository development commands and profiles
 
 The VM documents remain useful for the public demo and legacy self-hosting, but

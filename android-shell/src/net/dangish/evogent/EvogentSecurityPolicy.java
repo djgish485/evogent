@@ -16,6 +16,8 @@ final class EvogentSecurityPolicy {
     static final String LOOPBACK_ORIGIN = "https://127.0.0.1:3443";
     static final String BROWSE_CACHE_SUBMIT_URL =
             LOOPBACK_ORIGIN + "/api/internal/browse-cache/submit";
+    static final String PHONE_NOTIFICATION_INGEST_URL =
+            LOOPBACK_ORIGIN + "/api/internal/phone-notifications/ingest";
     static final int MAX_NATIVE_PROMPT_CHARS = 16 * 1024;
     static final int MAX_EXTERNAL_URL_CHARS = 8 * 1024;
     static final int MAX_SHARE_TEXT_CHARS = 16 * 1024;

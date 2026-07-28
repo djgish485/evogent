@@ -11,6 +11,10 @@ CONTROL_OWNER_DIR="${CONTROL_OWNER_DIR:-}"
 CONTROL_SELF_START="${CONTROL_SELF_START:-}"
 CONTROL_ACTIVE_LOCK="${CONTROL_ACTIVE_LOCK:-}"
 CONTROL_WAKE_HELD="${CONTROL_WAKE_HELD:-0}"
+CONTROL_WAKE_REGISTRY_HELD="${CONTROL_WAKE_REGISTRY_HELD:-0}"
+CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK="${CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK:-}"
+CONTROL_RELEASE_MUTATION_GATE="${CONTROL_RELEASE_MUTATION_GATE:-}"
+CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK="${CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK:-}"
 CONTROL_CYCLE_CLAIM="${CONTROL_CYCLE_CLAIM:-}"
 CONTROL_CYCLE_REQUEST_REASON="${CONTROL_CYCLE_REQUEST_REASON:-}"
 
@@ -188,33 +192,317 @@ control_lock_live() {
   [ -n "$(find "$lock" -maxdepth 0 -mmin -2 2>/dev/null)" ]
 }
 
+# The durable journal, rather than the installer process lease, is the runtime
+# mutation barrier. A live install lock with no journal is only preflight/build
+# work, during which the current production stack intentionally keeps running.
+# Once the journal exists, all dispatch/revival remains frozen through either a
+# proved rollback or committed finalization—even if the installer is SIGKILLed.
+control_release_transaction_pending() {
+  local root="${1:-$HOME/.local/share/evogent}"
+  local transaction="$root/install-transaction"
+  local journal="$transaction/journal.json"
+  [ -d "$transaction" ] && [ ! -L "$transaction" ] || return 0
+  [ -e "$journal" ] || [ -L "$journal" ]
+}
+
+control_release_mutation_gate_acquire() {
+  local root="${1:-$HOME/.local/share/evogent}"
+  local label="${2:-control-plane-mutation}"
+  local gate="$root/control-plane-mutation.lock"
+  [ -z "$CONTROL_RELEASE_MUTATION_GATE" ] || return 1
+  CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK="$CONTROL_ACTIVE_LOCK"
+  if ! control_lock_acquire "$gate" "$label"; then
+    CONTROL_ACTIVE_LOCK="$CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK"
+    CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK=""
+    return 1
+  fi
+  CONTROL_RELEASE_MUTATION_GATE="$gate"
+  if control_release_transaction_pending "$root"; then
+    # Never forget an inode we may still own. A caller seeing a non-empty gate
+    # after failure must exit through cleanup, which retries retirement; if the
+    # process dies, PID+start ownership makes the lease safely reapable.
+    control_lock_release "$gate" || return 70
+    CONTROL_RELEASE_MUTATION_GATE=""
+    CONTROL_ACTIVE_LOCK="$CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK"
+    CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK=""
+    return 75
+  fi
+  return 0
+}
+
+control_release_mutation_gate_release() {
+  local gate="$CONTROL_RELEASE_MUTATION_GATE"
+  [ -n "$gate" ] || return 0
+  control_lock_release "$gate" || return 1
+  CONTROL_RELEASE_MUTATION_GATE=""
+  CONTROL_ACTIVE_LOCK="$CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK"
+  CONTROL_RELEASE_MUTATION_PREVIOUS_ACTIVE_LOCK=""
+}
+
 control_lock_owner_id() {
   control_meta_field "$1/owner" owner
 }
 
+control_lock_directory_operation() {
+  python3 - "$@" <<'PY'
+import ctypes
+import errno
+import fcntl
+import os
+import pathlib
+import re
+import stat
+import sys
+import time
+
+operation = sys.argv[1]
+source = pathlib.Path(sys.argv[2])
+destination = pathlib.Path(sys.argv[3])
+directory_flags = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+
+def rename_noreplace(old, new):
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is not None:
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            -100,
+            os.fsencode(old),
+            -100,
+            os.fsencode(new),
+            1,
+        )
+    else:
+        renamex = getattr(libc, "renamex_np", None)
+        if renamex is None:
+            raise SystemExit("no atomic no-clobber rename primitive")
+        renamex.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex.restype = ctypes.c_int
+        result = renamex(os.fsencode(old), os.fsencode(new), 0x00000004)
+    if result != 0:
+        error = ctypes.get_errno()
+        if error in {errno.ENOENT, errno.EEXIST, errno.ENOTEMPTY}:
+            raise SystemExit(75)
+        raise OSError(error, os.strerror(error), str(new))
+
+def read_owner(descriptor, allow_legacy_mode=False):
+    try:
+        owner_descriptor = os.open(
+            "owner",
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=descriptor,
+        )
+    except FileNotFoundError:
+        return None
+    try:
+        metadata = os.fstat(owner_descriptor)
+        owner_mode = stat.S_IMODE(metadata.st_mode)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or (
+                owner_mode != 0o600
+                and not (allow_legacy_mode and owner_mode == 0o644)
+            )
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_size > 4096
+        ):
+            raise SystemExit(75)
+        payload = os.read(owner_descriptor, 4097).decode("utf-8", "strict")
+    finally:
+        os.close(owner_descriptor)
+    values = {}
+    for line in payload.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+def owner_live(owner):
+    if owner is None:
+        return False
+    pid = owner.get("pid", "")
+    start = owner.get("start", "")
+    if (
+        re.fullmatch(r"[1-9][0-9]*", pid or "") is None
+        or re.fullmatch(r"[0-9]+", start or "") is None
+    ):
+        raise SystemExit(75)
+    try:
+        process_stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
+    except (FileNotFoundError, ProcessLookupError):
+        if sys.platform == "darwin":
+            try:
+                os.kill(int(pid), 0)
+            except (ProcessLookupError, PermissionError):
+                return False
+            return True
+        return False
+    fields = process_stat.rsplit(") ", 1)
+    return (
+        len(fields) == 2
+        and len(fields[1].split()) >= 20
+        and fields[1].split()[19] == start
+    )
+
+def same_live_name(path, observed):
+    try:
+        current = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return (
+        stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and (current.st_dev, current.st_ino)
+        == (observed.st_dev, observed.st_ino)
+    )
+
+def fsync_parent(path):
+    parent = os.open(path.parent, directory_flags)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+
+if source.parent != destination.parent:
+    raise SystemExit("lock operation crossed directories")
+
+if operation == "publish":
+    descriptor = os.open(source, directory_flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or metadata.st_uid != os.geteuid()
+        ):
+            raise SystemExit("prepared lock directory is unsafe")
+        owner = read_owner(descriptor)
+        if owner is None:
+            raise SystemExit("prepared lock owner is missing")
+        for name in ("owner", "heartbeat"):
+            child = os.open(
+                name,
+                os.O_RDONLY
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+            try:
+                child_metadata = os.fstat(child)
+                if not stat.S_ISREG(child_metadata.st_mode):
+                    raise SystemExit("prepared lock metadata is unsafe")
+                os.fsync(child)
+            finally:
+                os.close(child)
+        os.fsync(descriptor)
+        if not same_live_name(source, metadata):
+            raise SystemExit(75)
+        rename_noreplace(source, destination)
+        os.fsync(descriptor)
+        fsync_parent(destination)
+    finally:
+        os.close(descriptor)
+    raise SystemExit(0)
+
+descriptor = os.open(source, directory_flags)
+try:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit(75)
+    observed = os.fstat(descriptor)
+    owner = read_owner(descriptor, allow_legacy_mode=operation == "reap")
+    if operation == "reap":
+        if owner_live(owner):
+            raise SystemExit(75)
+        if owner is None and time.time() - observed.st_mtime < 120:
+            raise SystemExit(75)
+    elif operation == "retire":
+        if len(sys.argv) != 7:
+            raise SystemExit("lock retirement arguments are incomplete")
+        expected_owner, expected_pid, expected_start = sys.argv[4:]
+        if owner is None or (
+            owner.get("owner") != expected_owner
+            or owner.get("pid") != expected_pid
+            or owner.get("start") != expected_start
+        ):
+            raise SystemExit(75)
+        if not owner_live(owner):
+            raise SystemExit(75)
+    else:
+        raise SystemExit("unknown lock directory operation")
+    if not same_live_name(source, observed):
+        raise SystemExit(75)
+    rename_noreplace(source, destination)
+    os.fsync(descriptor)
+    fsync_parent(destination)
+finally:
+    os.close(descriptor)
+PY
+}
+
 control_lock_acquire() {
-  local lock="$1" label="${2:-lock}" stale="$1.stale.$$"
+  local lock="$1" label="${2:-lock}" stale candidate status
   [ -n "$CONTROL_OWNER_ID" ] || control_init_owner "$label"
   mkdir -p "$(dirname "$lock")"
-  if ! mkdir "$lock" 2>/dev/null; then
-    control_lock_live "$lock" && return 1
-    # Atomically rename the proved-dead lock. Only one contender can win the rename; a live
-    # owner is never age-stolen, and no broad/path-pattern delete is involved.
-    mv "$lock" "$stale" 2>/dev/null || return 1
-    rm -rf -- "$stale"
-    if ! mkdir "$lock" 2>/dev/null; then
-      return 1
-    fi
-  fi
+  candidate="$(mktemp -d "${lock}.pending.XXXXXXXX")" || return 1
+  chmod 700 "$candidate" || {
+    rm -rf -- "$candidate"
+    return 1
+  }
   {
     printf 'owner=%s\n' "$CONTROL_OWNER_ID"
     printf 'pid=%s\n' "$$"
     printf 'start=%s\n' "$CONTROL_SELF_START"
     printf 'label=%s\n' "$label"
     printf 'acquired=%s\n' "$(date +%s)"
-  } > "$lock/owner.tmp"
-  mv "$lock/owner.tmp" "$lock/owner"
-  touch "$lock/heartbeat"
+  } > "$candidate/owner"
+  chmod 600 "$candidate/owner" || {
+    rm -rf -- "$candidate"
+    return 1
+  }
+  : > "$candidate/heartbeat"
+  chmod 600 "$candidate/heartbeat" || {
+    rm -rf -- "$candidate"
+    return 1
+  }
+  status=0
+  control_lock_directory_operation publish "$candidate" "$lock" || status=$?
+  if [ "$status" = 75 ]; then
+    if control_lock_live "$lock"; then
+      rm -rf -- "$candidate"
+      return 1
+    fi
+    stale="$lock.stale.$$.${CONTROL_SELF_START}.${RANDOM}"
+    status=0
+    control_lock_directory_operation reap "$lock" "$stale" || status=$?
+    if [ "$status" = 0 ]; then
+      rm -rf -- "$stale" || {
+        rm -rf -- "$candidate"
+        return 1
+      }
+      status=0
+      control_lock_directory_operation publish "$candidate" "$lock" || status=$?
+    fi
+  fi
+  if [ "$status" != 0 ]; then
+    rm -rf -- "$candidate"
+    return 1
+  fi
   CONTROL_ACTIVE_LOCK="$lock"
 }
 
@@ -228,11 +516,15 @@ control_lock_renew() {
 }
 
 control_lock_release() {
-  local lock="${1:-}" owner
+  local lock="${1:-}" owner quarantine status=0
   [ -n "$lock" ] && [ -d "$lock" ] || return 0
   owner=$(control_lock_owner_id "$lock")
   [ "$owner" = "$CONTROL_OWNER_ID" ] || return 1
-  rm -rf -- "$lock"
+  quarantine="$lock.released.$$.${CONTROL_SELF_START}.${RANDOM}"
+  control_lock_directory_operation retire "$lock" "$quarantine" \
+    "$CONTROL_OWNER_ID" "$$" "$CONTROL_SELF_START" || status=$?
+  [ "$status" = 0 ] || return 1
+  rm -rf -- "$quarantine" || return 1
   [ "$CONTROL_ACTIVE_LOCK" = "$lock" ] && CONTROL_ACTIVE_LOCK=""
 }
 
@@ -455,7 +747,87 @@ control_cleanup_tracked_packages() {
   done
 }
 
-control_wake_prune() {
+control_wake_command() {
+  local binary="$1" budget="${CONTROL_WAKE_COMMAND_SECONDS:-8}"
+  case "$budget" in
+    ''|*[!0-9]*) budget=8 ;;
+  esac
+  [ "$budget" -ge 1 ] 2>/dev/null || budget=8
+  [ "$budget" -le 15 ] 2>/dev/null || budget=15
+  command -v "$binary" >/dev/null 2>&1 || return 127
+  if command -v setsid >/dev/null 2>&1; then
+    setsid -f -w timeout -k 2 "$budget" "$binary" </dev/null \
+      >/dev/null 2>&1
+  else
+    timeout --foreground -k 2 "$budget" "$binary" </dev/null \
+      >/dev/null 2>&1
+  fi
+}
+
+control_dedicated_termux_wake_enabled() {
+  local marker="$HOME/phone-tools/.dedicated-termux-wake"
+  [ "${EVOGENT_DEDICATED_TERMUX_WAKE:-0}" = 1 ] && return 0
+  [ -f "$marker" ] && [ ! -L "$marker" ] \
+    && [ "$(stat -c '%a' "$marker" 2>/dev/null || true)" = 600 ] \
+    && [ "$(stat -c '%u' "$marker" 2>/dev/null || true)" = "$(id -u)" ] \
+    && [ "$(cat "$marker" 2>/dev/null)" = EVOGENT_DEDICATED_TERMUX_WAKE_V1 ]
+}
+
+control_wake_marker_state() {
+  local marker="$CONTROL_ROOT/wake/.evogent-held" state
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
+  state=$(head -n 1 "$marker" 2>/dev/null || true)
+  case "$state" in
+    ""|held) printf 'held\n' ;;
+    acquiring|uncertain) printf 'uncertain\n' ;;
+    *) return 2 ;;
+  esac
+}
+
+control_wake_marker_write_locked() {
+  local state="$1" marker="$CONTROL_ROOT/wake/.evogent-held"
+  local temporary="$marker.tmp.$$"
+  case "$state" in held|acquiring|uncertain) ;; *) return 1 ;; esac
+  printf '%s\n' "$state" > "$temporary" || return 1
+  chmod 600 "$temporary" 2>/dev/null || true
+  mv "$temporary" "$marker"
+}
+
+# Turn an ambiguous prior launch into the explicitly dedicated Termux wake state
+# before any unlock is permitted. Termux exposes one app-global singleton, so
+# this is safe only after the device owner declares this Termux installation
+# dedicated to Evogent.
+control_wake_establish_locked() {
+  control_wake_command termux-wake-lock || return $?
+  control_wake_marker_write_locked held
+}
+
+control_wake_registry_acquire() {
+  local attempt gate="$CONTROL_ROOT/wake-registry.lock"
+  [ "$CONTROL_WAKE_REGISTRY_HELD" = 0 ] || return 0
+  CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK="$CONTROL_ACTIVE_LOCK"
+  for attempt in $(seq 1 200); do
+    if control_lock_acquire "$gate" wake-registry; then
+      CONTROL_WAKE_REGISTRY_HELD=1
+      return 0
+    fi
+    sleep 0.05
+  done
+  CONTROL_ACTIVE_LOCK="$CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK"
+  CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK=""
+  return 1
+}
+
+control_wake_registry_release() {
+  local gate="$CONTROL_ROOT/wake-registry.lock"
+  [ "$CONTROL_WAKE_REGISTRY_HELD" = 1 ] || return 0
+  control_lock_release "$gate" || return 1
+  CONTROL_WAKE_REGISTRY_HELD=0
+  CONTROL_ACTIVE_LOCK="$CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK"
+  CONTROL_WAKE_PREVIOUS_ACTIVE_LOCK=""
+}
+
+control_wake_prune_locked() {
   local dir pid start
   mkdir -p "$CONTROL_ROOT/wake"
   for dir in "$CONTROL_ROOT"/wake/*; do
@@ -474,8 +846,17 @@ control_wake_prune() {
 
 control_wake_acquire() {
   local dir marker="$CONTROL_ROOT/wake/.evogent-held"
+  local marker_state="" attempt status=0
+  control_dedicated_termux_wake_enabled || return 125
   [ -n "$CONTROL_OWNER_ID" ] || control_init_owner wake
-  control_wake_prune
+  control_wake_registry_acquire || return 1
+  control_wake_prune_locked
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    marker_state="$(control_wake_marker_state)" || {
+      control_wake_registry_release || true
+      return 1
+    }
+  fi
   dir="$CONTROL_ROOT/wake/$CONTROL_OWNER_ID"
   mkdir -p "$dir"
   {
@@ -483,51 +864,115 @@ control_wake_acquire() {
     printf 'start=%s\n' "$CONTROL_SELF_START"
   } > "$dir/owner.tmp"
   mv "$dir/owner.tmp" "$dir/owner"
-  if ! command -v termux-wake-lock >/dev/null 2>&1 \
-      || ! termux-wake-lock >/dev/null 2>&1; then
+  if [ "$marker_state" = held ]; then
+    CONTROL_WAKE_HELD=1
+    control_wake_registry_release || return 1
+    return 0
+  fi
+  # Publish cleanup intent before the global Android wake operation. SIGKILL
+  # after this barrier leaves both a dead owner reference and an explicit
+  # uncertain marker. Cleanup must establish Evogent ownership before unlock.
+  [ "$marker_state" = uncertain ] \
+    || control_wake_marker_write_locked acquiring || {
     rm -rf -- "$dir"
     CONTROL_WAKE_HELD=0
+    control_wake_registry_release || true
+    return 1
+  }
+  for attempt in 1 2; do
+    status=0
+    control_wake_establish_locked || status=$?
+    if [ "$status" = 0 ]; then
+      CONTROL_WAKE_HELD=1
+      control_wake_registry_release || return 1
+      return 0
+    fi
+    [ "$status" = 127 ] && break
+  done
+  if [ "$status" = 127 ] && [ -z "$marker_state" ]; then
+    # command -v failed before any global wake operation was possible.
+    rm -rf -- "$dir"
+    rm -f "$marker"
+    CONTROL_WAKE_HELD=0
+    control_wake_registry_release || true
     return 1
   fi
-  : > "$marker"
-  chmod 600 "$marker" 2>/dev/null || true
+  control_wake_marker_write_locked uncertain || true
+  # Keep the owner reference live so cleanup/watchdog can retry establishment.
+  # Callers inspect this flag even when acquisition returns nonzero.
   CONTROL_WAKE_HELD=1
+  control_wake_registry_release || true
+  return 1
 }
 
 control_wake_release() {
-  local marker="$CONTROL_ROOT/wake/.evogent-held"
-  [ -n "$CONTROL_OWNER_ID" ] && rm -rf -- "$CONTROL_ROOT/wake/$CONTROL_OWNER_ID"
-  control_wake_prune
+  local marker="$CONTROL_ROOT/wake/.evogent-held" marker_state=""
+  control_dedicated_termux_wake_enabled || return 125
+  control_wake_registry_acquire || return 1
+  control_wake_prune_locked
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    marker_state="$(control_wake_marker_state)" || {
+      control_wake_registry_release || true
+      return 1
+    }
+  fi
+  if [ -n "$CONTROL_OWNER_ID" ] \
+      && [ -d "$CONTROL_ROOT/wake/$CONTROL_OWNER_ID" ]; then
+    if [ "$marker_state" != held ]; then
+      if ! control_wake_establish_locked; then
+        CONTROL_WAKE_HELD=1
+        control_wake_registry_release || true
+        return 1
+      fi
+      marker_state=held
+    fi
+    rm -rf -- "$CONTROL_ROOT/wake/$CONTROL_OWNER_ID"
+  fi
+  control_wake_prune_locked
   if ! find "$CONTROL_ROOT/wake" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
       grep -q . && [ -f "$marker" ]; then
-    if command -v termux-wake-unlock >/dev/null 2>&1 \
-        && termux-wake-unlock >/dev/null 2>&1; then
+    if control_wake_command termux-wake-unlock; then
       rm -f "$marker"
+    else
+      CONTROL_WAKE_HELD=1
+      control_wake_registry_release || true
+      return 1
     fi
   fi
   CONTROL_WAKE_HELD=0
+  control_wake_registry_release
 }
 
 control_release_legacy_wake_if_idle() {
-  local marker="$CONTROL_ROOT/wake/.evogent-held"
+  local marker="$CONTROL_ROOT/wake/.evogent-held" marker_state=""
   local legacy_retired="$CONTROL_ROOT/wake/.legacy-release-attempted"
-  control_wake_prune
+  control_dedicated_termux_wake_enabled || return 0
+  control_wake_registry_acquire || return 1
+  control_wake_prune_locked
   if ! find "$CONTROL_ROOT/wake" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
       grep -q .; then
     if [ -f "$marker" ]; then
-      if command -v termux-wake-unlock >/dev/null 2>&1 \
-          && termux-wake-unlock >/dev/null 2>&1; then
+      marker_state="$(control_wake_marker_state)" || {
+        control_wake_registry_release || true
+        return 1
+      }
+      if [ "$marker_state" != held ] \
+          && ! control_wake_establish_locked; then
+        control_wake_registry_release || true
+        return 1
+      fi
+      if control_wake_command termux-wake-unlock; then
         rm -f "$marker"
       fi
     elif [ ! -f "$legacy_retired" ] \
-        && command -v termux-wake-unlock >/dev/null 2>&1 \
-        && termux-wake-unlock >/dev/null 2>&1; then
+        && control_wake_command termux-wake-unlock; then
       # One blind release retires the pre-reference-counted Evogent lock during upgrade.
       # Thereafter the marker above prevents the watchdog from releasing unrelated Termux work.
       : > "$legacy_retired"
       chmod 600 "$legacy_retired" 2>/dev/null || true
     fi
   fi
+  control_wake_registry_release
 }
 
 control_request_cycle() {

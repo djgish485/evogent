@@ -54,6 +54,44 @@ low|medium|high
 
 Do not ask for this separately during install. Derive it from Usage Level: Low -> `low`, Medium -> `medium`, High -> `high`.
 
+## Phone task routing
+
+The canonical phone profile may split the Codex route by workload without
+changing the model used by ordinary chat:
+
+```markdown
+## Codex Model
+<curator baseline>
+
+## Curator Reasoning
+low|medium|high|xhigh
+
+## Browse Model
+<computer-use baseline>
+
+## Browse Reasoning
+low|medium|high|xhigh
+
+## Overseer Model
+<daily review model>
+
+## Overseer Reasoning
+high|xhigh|max|ultra
+```
+
+These are private deployment choices, not setup-time public defaults. Use the
+lowest route that passes the representative workload. Persistent cheaper
+overrides live in mode-`0600` `data/model-routing.json` and are accepted only
+with recent paired benchmark proof; see
+[`phone-efficiency-and-model-routing.md`](phone-efficiency-and-model-routing.md).
+The daily overseer defaults to one bounded Sol/high run. Max or Ultra is an
+explicit operator setting only and belongs on a measured, quality-first review
+that benefits from it; the overseer cannot escalate its own route.
+Re-check the
+[current OpenAI model-selection guidance](https://developers.openai.com/api/docs/guides/latest-model.md)
+when release defaults change; benchmark results from the actual phone remain
+the authority for this workload.
+
 ## Agent Name
 
 Every completed setup should leave an agent name in config.
@@ -84,7 +122,7 @@ deployment's chosen hours.
 
 | Heading | Meaning | Environment override |
 |---|---|---|
-| `## Maintenance Hour` | Hour when the scheduler makes the daily durable reflection/dream task due. An absent or invalid value uses the neutral product fallback. | `EVOGENT_MAINTENANCE_HOUR` |
+| `## Maintenance Hour` | Hour when the scheduler makes the daily durable private review due. An absent or invalid value uses the neutral product fallback. | `EVOGENT_MAINTENANCE_HOUR` |
 | `## Quiet Start Hour` | Inclusive start of an optional lower-activity window. | `EVOGENT_QUIET_START` |
 | `## Quiet End Hour` | Exclusive end of the optional lower-activity window. | `EVOGENT_QUIET_END` |
 

@@ -364,12 +364,14 @@ def _rish(cmd):
     except Exception:
         return ''
 _manifest = [
-    ('feature-overlay-permission', 'appops get net.dangish.evogent SYSTEM_ALERT_WINDOW', 'allow',
-     'anywhere-bubble dead: SYSTEM_ALERT_WINDOW not granted (reinstall resets it; a11y-heal re-grants)'),
     ('feature-home-role', 'cmd role get-role-holders --user 0 android.app.role.HOME', 'net.dangish.evogent',
-     'Evogent is not the HOME app (reinstall drops the role; cmd role add-role-holder)'),
+     'Evogent is not the HOME app — release provisioning must repair HOME and ASSISTANT together '
+     '(Android role UI is initial/fallback only)'),
+    ('feature-assistant-role', 'cmd role get-role-holders --user 0 android.app.role.ASSISTANT', 'net.dangish.evogent',
+     'Evogent is not the assistant app — release provisioning must repair HOME and ASSISTANT '
+     'together (the assistant gesture will not open Add Message)'),
     ('feature-a11y-service', 'settings get secure enabled_accessibility_services', 'evogent',
-     'accessibility service disabled — every browse and the overlay driver are dead'),
+     'accessibility service disabled — authenticated phone computer-use is unavailable'),
 ]
 for _name, _probe, _want, _why in _manifest:
     _out = _rish(_probe)

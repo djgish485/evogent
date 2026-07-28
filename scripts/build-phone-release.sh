@@ -32,6 +32,7 @@ require_command python3
 require_command tar
 require_command unzip
 require_command openssl
+require_command ps
 
 OUTPUT_DIR="$(python3 - "$OUTPUT_DIR" "$ROOT" <<'PY'
 import pathlib
@@ -73,26 +74,263 @@ PY
 )"
 BUILD_LOCK="$BUILD_LOCK_PARENT/$BUILD_LOCK_KEY.lock"
 BUILD_LOCK_HELD=0
+BUILD_LOCK_CANDIDATE=""
+
+build_process_start() {
+  python3 - "$1" <<'PY'
+import hashlib
+import os
+import subprocess
+import sys
+
+pid = sys.argv[1]
+result = subprocess.run(
+    ["ps", "-o", "lstart=", "-p", pid],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
+    env={**os.environ, "LC_ALL": "C", "TZ": "UTC"},
+    check=False,
+)
+normalized = b" ".join(result.stdout.split())
+if result.returncode != 0 or not normalized:
+    raise SystemExit(1)
+print(hashlib.sha256(normalized).hexdigest())
+PY
+}
+
+BUILD_LOCK_SELF_START="$(build_process_start "$$")" || {
+  echo "phone release: could not identify the build-lock owner process" >&2
+  exit 69
+}
+[[ "$BUILD_LOCK_SELF_START" =~ ^[0-9a-f]{64}$ ]] || {
+  echo "phone release: build-lock owner identity is invalid" >&2
+  exit 69
+}
+
+move_proven_build_lock() {
+  python3 - "$@" <<'PY'
+import ctypes
+import errno
+import fcntl
+import hashlib
+import os
+import pathlib
+import re
+import stat
+import subprocess
+import sys
+import time
+
+operation, raw_source, raw_destination, expected_pid, expected_start = sys.argv[1:]
+source = pathlib.Path(raw_source)
+destination = pathlib.Path(raw_destination)
+if source.parent != destination.parent:
+    raise SystemExit("build lock move crossed directories")
+flags = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+descriptor = os.open(source, flags)
+try:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit(75)
+    observed = os.fstat(descriptor)
+    owner_descriptor = None
+    try:
+        owner_descriptor = os.open(
+            "owner",
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=descriptor,
+        )
+    except OSError as error:
+        if error.errno not in {errno.ENOENT, errno.ELOOP, errno.EISDIR}:
+            raise
+    owner_pid = ""
+    owner_valid = False
+    owner_legacy = False
+    if owner_descriptor is not None:
+        try:
+            owner_metadata = os.fstat(owner_descriptor)
+            if (
+                stat.S_ISREG(owner_metadata.st_mode)
+                and stat.S_IMODE(owner_metadata.st_mode) == 0o600
+                and owner_metadata.st_uid == os.geteuid()
+                and owner_metadata.st_size <= 256
+            ):
+                try:
+                    payload = os.read(owner_descriptor, 129).decode(
+                        "ascii", "strict"
+                    )
+                except UnicodeDecodeError:
+                    payload = ""
+                match = re.fullmatch(
+                    r"pid=([1-9][0-9]*)\nstart=([0-9a-f]{64})\n",
+                    payload,
+                )
+                if match is not None:
+                    owner_pid = match.group(1)
+                    owner_start = match.group(2)
+                    owner_valid = True
+                    if operation == "publish":
+                        os.fsync(owner_descriptor)
+                else:
+                    legacy_match = re.fullmatch(
+                        r"pid=([1-9][0-9]*)\n",
+                        payload,
+                    )
+                    if legacy_match is not None:
+                        owner_pid = legacy_match.group(1)
+                        owner_legacy = True
+        finally:
+            os.close(owner_descriptor)
+    def process_start(pid):
+        result = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", pid],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env={**os.environ, "LC_ALL": "C", "TZ": "UTC"},
+            check=False,
+        )
+        normalized = b" ".join(result.stdout.split())
+        if result.returncode != 0 or not normalized:
+            return None
+        return hashlib.sha256(normalized).hexdigest()
+
+    if operation == "reap":
+        if owner_valid:
+            if process_start(owner_pid) == owner_start:
+                raise SystemExit(75)
+        elif owner_legacy:
+            # Rollout compatibility only: a builder that acquired the previous
+            # pid-only format may still be live while this script is updated.
+            # Never accept that weaker format for a new publish or retirement.
+            try:
+                os.kill(int(owner_pid), 0)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                raise SystemExit(75)
+            else:
+                raise SystemExit(75)
+        elif time.time() - observed.st_mtime < 2:
+            raise SystemExit(75)
+    elif operation == "retire":
+        if (
+            not owner_valid
+            or owner_pid != expected_pid
+            or owner_start != expected_start
+        ):
+            raise SystemExit(75)
+    elif operation == "publish":
+        if (
+            not owner_valid
+            or owner_pid != expected_pid
+            or owner_start != expected_start
+        ):
+            raise SystemExit(75)
+        os.fsync(descriptor)
+    else:
+        raise SystemExit("unknown build lock move")
+    current = os.lstat(source)
+    if (
+        not stat.S_ISDIR(current.st_mode)
+        or (current.st_dev, current.st_ino) != (observed.st_dev, observed.st_ino)
+    ):
+        raise SystemExit(75)
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is not None:
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            -100,
+            os.fsencode(source),
+            -100,
+            os.fsencode(destination),
+            1,
+        )
+    else:
+        renamex = getattr(libc, "renamex_np", None)
+        if renamex is None:
+            raise SystemExit("no atomic no-clobber rename primitive")
+        renamex.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex.restype = ctypes.c_int
+        result = renamex(
+            os.fsencode(source),
+            os.fsencode(destination),
+            0x00000004,
+        )
+    if result != 0:
+        error = ctypes.get_errno()
+        if error in {errno.ENOENT, errno.EEXIST, errno.ENOTEMPTY}:
+            raise SystemExit(75)
+        raise OSError(error, os.strerror(error), str(destination))
+    parent = os.open(source.parent, flags)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+finally:
+    os.close(descriptor)
+PY
+}
+
+discard_build_lock_candidate() {
+  local candidate="${BUILD_LOCK_CANDIDATE:-}" quarantine status=0
+  [ -n "$candidate" ] || return 0
+  quarantine="${candidate}.discarded.${RANDOM}"
+  move_proven_build_lock retire "$candidate" "$quarantine" \
+    "$$" "$BUILD_LOCK_SELF_START" \
+    || status=$?
+  if [ "$status" = 0 ]; then
+    rm -rf -- "$quarantine"
+    BUILD_LOCK_CANDIDATE=""
+    return 0
+  fi
+  return "$status"
+}
 
 acquire_build_lock() {
   local deadline=$(( $(date +%s) + BUILD_LOCK_WAIT_SECONDS ))
-  local owner stale="$BUILD_LOCK.stale.$$"
-  while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
-    owner="$(sed -n 's/^pid=//p' "$BUILD_LOCK/owner" 2>/dev/null | head -1)"
-    if ! [[ "$owner" =~ ^[0-9]+$ ]] || ! kill -0 "$owner" 2>/dev/null; then
-      if python3 - "$BUILD_LOCK" <<'PY'
-import pathlib
-import sys
-import time
-path = pathlib.Path(sys.argv[1])
-raise SystemExit(0 if time.time() - path.stat().st_mtime >= 2 else 1)
-PY
-      then
-        if mv "$BUILD_LOCK" "$stale" 2>/dev/null; then
-          rm -rf -- "$stale"
-          continue
-        fi
-      fi
+  local stale status
+  while true; do
+    BUILD_LOCK_CANDIDATE="$(mktemp -d \
+      "${BUILD_LOCK}.pending.XXXXXXXX")" || return 1
+    chmod 700 "$BUILD_LOCK_CANDIDATE"
+    printf 'pid=%s\nstart=%s\n' "$$" "$BUILD_LOCK_SELF_START" \
+      > "$BUILD_LOCK_CANDIDATE/owner"
+    chmod 600 "$BUILD_LOCK_CANDIDATE/owner"
+    status=0
+    move_proven_build_lock publish \
+      "$BUILD_LOCK_CANDIDATE" "$BUILD_LOCK" \
+      "$$" "$BUILD_LOCK_SELF_START" || status=$?
+    if [ "$status" = 0 ]; then
+      BUILD_LOCK_CANDIDATE=""
+      BUILD_LOCK_HELD=1
+      return 0
+    fi
+    discard_build_lock_candidate || return 1
+    [ "$status" = 75 ] || return "$status"
+
+    stale="$BUILD_LOCK.stale.$$.${RANDOM}"
+    status=0
+    move_proven_build_lock reap "$BUILD_LOCK" "$stale" \
+      "$$" "$BUILD_LOCK_SELF_START" || status=$?
+    if [ "$status" = 0 ]; then
+      rm -rf -- "$stale"
+      continue
     fi
     if [ "$(date +%s)" -ge "$deadline" ]; then
       echo "phone release: timed out waiting for the checkout build lock" >&2
@@ -100,18 +338,18 @@ PY
     fi
     sleep 1
   done
-  printf 'pid=%s\n' "$$" > "$BUILD_LOCK/owner"
-  BUILD_LOCK_HELD=1
 }
 
 release_build_lock() {
-  local owner
-  [ "$BUILD_LOCK_HELD" = 1 ] || return 0
-  owner="$(sed -n 's/^pid=//p' "$BUILD_LOCK/owner" 2>/dev/null | head -1)"
-  if [ "$owner" = "$$" ]; then
-    rm -rf -- "$BUILD_LOCK"
-  fi
+  local quarantine status=0
+  discard_build_lock_candidate || status=$?
+  [ "$BUILD_LOCK_HELD" = 1 ] || return "$status"
+  quarantine="$BUILD_LOCK.released.$$.${RANDOM}"
+  move_proven_build_lock retire "$BUILD_LOCK" "$quarantine" \
+    "$$" "$BUILD_LOCK_SELF_START" || status=$?
+  [ "$status" = 0 ] && rm -rf -- "$quarantine"
   BUILD_LOCK_HELD=0
+  return "$status"
 }
 
 trap release_build_lock EXIT
@@ -154,6 +392,12 @@ PY
 assert_clean_source
 SOURCE_COMMIT="$(git rev-parse HEAD)"
 SOURCE_SHORT="$(git rev-parse --short=12 HEAD)"
+assert_source_commit_unchanged() {
+  [ "$(git rev-parse HEAD)" = "$SOURCE_COMMIT" ] || {
+    echo "phone release: source commit changed while the build was running" >&2
+    exit 65
+  }
+}
 ANDROID_VERSION_STATE_FILE="${EVOGENT_ANDROID_VERSION_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/evogent/android-version-code}"
 ANDROID_VERSION_ARGUMENTS=(
   --state-file "$ANDROID_VERSION_STATE_FILE"
@@ -174,6 +418,7 @@ bash android-shell/build.sh
 
 # A build script must not be able to quietly edit the source it claims to represent.
 assert_clean_source
+assert_source_commit_unchanged
 
 BUILD_ID="$(tr -d '\r\n' < .next/BUILD_ID)"
 [ -n "$BUILD_ID" ] || {
@@ -295,7 +540,7 @@ mkdir -p "$RUNTIME" "$RELEASE/phone-tools" "$RELEASE/device" "$RELEASE/apk" \
 
 # The clean tree equals HEAD, but archive from Git anyway: ignored build caches,
 # local secrets, worktrees, and private data can never enter a release by accident.
-git archive HEAD \
+git archive "$SOURCE_COMMIT" \
   server.js worker.js package.json package-lock.json next.config.ts tsconfig.json \
   CLAUDE.md AGENTS.md LICENSE lib src scripts .claude \
   .intent/contracts.jsonl .intent/failure-modes.jsonl skills-library data \
@@ -342,15 +587,42 @@ cp "$TLS_CERT" "$RELEASE/tls/server-cert.pem"
 cp "$TLS_KEY" "$RELEASE/tls/server-key.pem"
 chmod 644 "$RELEASE/tls/server-cert.pem"
 chmod 600 "$RELEASE/tls/server-key.pem"
-cp -R "$ROOT/phone-paradigm/device/phone-tools/." "$RELEASE/phone-tools/"
-cp "$ROOT/phone-paradigm/device/start-prod.sh" \
-  "$ROOT/phone-paradigm/device/restart-evo.sh" \
-  "$ROOT/phone-paradigm/device/install-release.sh" \
-  "$ROOT/phone-paradigm/device/dependency-tree-state.py" \
-  "$ROOT/phone-paradigm/device/rollback-state.py" \
-  "$ROOT/phone-paradigm/device/write-control-token.py" \
-  "$RELEASE/device/"
-cp -R "$ROOT/phone-paradigm/device/bin" "$RELEASE/device/bin"
+COPIED_APK_SHA256="$(python3 - "$RELEASE/apk/evogent.apk" <<'PY'
+import hashlib
+import sys
+print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())
+PY
+)"
+COPIED_TLS_CERT_DER_SHA256="$(
+  openssl x509 -in "$RELEASE/tls/server-cert.pem" -outform DER \
+    | openssl dgst -sha256 -r | awk '{print $1}'
+)"
+openssl x509 -in "$RELEASE/tls/server-cert.pem" -pubkey -noout \
+  | openssl pkey -pubin -outform DER > "$WORK_DIR/copied-server-cert.pub"
+openssl pkey -in "$RELEASE/tls/server-key.pem" -pubout -outform DER \
+  > "$WORK_DIR/copied-server-key.pub"
+[ "$COPIED_APK_SHA256" = "$APK_SHA256" ] \
+  && [ "$COPIED_TLS_CERT_DER_SHA256" = "$TLS_CERT_DER_SHA256" ] \
+  && cmp -s "$WORK_DIR/copied-server-cert.pub" "$WORK_DIR/copied-server-key.pub" || {
+    echo "phone release: verified APK/TLS artifacts changed before packaging" >&2
+    exit 66
+  }
+# Archive only committed control-plane sources. Ignored bytecode, local test
+# caches, and any untracked operator artifact can never enter a phone release.
+git archive "$SOURCE_COMMIT":phone-paradigm/device/phone-tools \
+  | tar -xf - -C "$RELEASE/phone-tools"
+git archive "$SOURCE_COMMIT" \
+  phone-paradigm/device/start-prod.sh \
+  phone-paradigm/device/restart-evo.sh \
+  phone-paradigm/device/install-release.sh \
+  phone-paradigm/device/android-role-state.py \
+  phone-paradigm/device/dependency-tree-state.py \
+  phone-paradigm/device/rollback-state.py \
+  phone-paradigm/device/write-control-token.py \
+  | tar --strip-components=2 -xf - -C "$RELEASE/device"
+mkdir -p "$RELEASE/device/bin"
+git archive "$SOURCE_COMMIT":phone-paradigm/device/bin \
+  | tar -xf - -C "$RELEASE/device/bin"
 
 # Mutable paths are linked by the installer only after extraction. Keeping them
 # out of the archive makes traversal validation and the immutable boundary clear.
@@ -405,7 +677,7 @@ for path in release.rglob("*"):
 PY
 
 BUILT_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-PACKAGE_LOCK_SHA256="$(python3 - "$ROOT/package-lock.json" <<'PY'
+PACKAGE_LOCK_SHA256="$(python3 - "$RUNTIME/package-lock.json" <<'PY'
 import hashlib, sys
 print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())
 PY
@@ -550,6 +822,7 @@ manifest = {
         "device/start-prod.sh",
         "device/restart-evo.sh",
         "device/install-release.sh",
+        "device/android-role-state.py",
         "device/dependency-tree-state.py",
         "device/rollback-state.py",
         "device/write-control-token.py",
@@ -565,6 +838,8 @@ PY
 
 mkdir -p "$OUTPUT_DIR"
 ARCHIVE="$OUTPUT_DIR/evogent-phone-${RELEASE_ID}.tar.gz"
+assert_clean_source
+assert_source_commit_unchanged
 tar -czf "$ARCHIVE" -C "$WORK_DIR" release
 chmod 600 "$ARCHIVE"
 python3 - "$ARCHIVE" <<'PY'

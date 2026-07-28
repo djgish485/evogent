@@ -5,9 +5,9 @@
     android:versionName="0.3.0">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Needed only for Evogent's replacement digest on Android 13+. MainActivity asks once,
+         after notification-listener access exists; denial always leaves originals untouched. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -27,8 +27,10 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false">
 
         <activity
@@ -48,6 +50,50 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- The Pixel's assistant gesture replaces Gemini with Evogent's authenticated Add
+             Message form. Release provisioning assigns and verifies HOME and ASSISTANT
+             transactionally after proving the APK, and restores prior holders on rollback;
+             no hotword or microphone permission is requested. -->
+        <activity
+            android:name=".EvogentAssistantActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".EvogentVoiceInteractionService"
+            android:exported="true"
+            android:label="@string/assistant_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+        </service>
+
+        <service
+            android:name=".EvogentVoiceInteractionSessionService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <!-- Required as a concrete metadata target even though Android 12+ ignores the
+             recognitionService field for this text-first assistant flow. -->
+        <service
+            android:name=".EvogentRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".AppDrawerActivity"
@@ -71,13 +117,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Real-time content signal: read allowlisted content-app notifications (Gmail
-             sender/subject/snippet etc.) into the browse cache so the feed can react without
-             a full browse. BIND_NOTIFICATION_LISTENER_SERVICE is system-enforced; access is
-             granted out-of-band via `cmd notification allow_listener` over the Shizuku shell. -->
+        <!-- Local notification curation. BIND_NOTIFICATION_LISTENER_SERVICE is system-enforced;
+             the service ignores its own digest, strips known secrets before authenticated
+             loopback ingestion, and never changes an original without an exact durable receipt.
+             Listener access is granted during device setup. -->
         <service
             android:name=".EvogentNotificationListenerService"
             android:exported="true"
+            android:label="Evogent notification curation"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
@@ -118,15 +165,6 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <service
-            android:name=".OverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="anywhere_message_overlay" />
         </service>
 
     </application>

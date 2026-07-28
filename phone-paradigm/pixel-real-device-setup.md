@@ -14,7 +14,7 @@ device observations in the uncommitted host notes file.
 
 The current stock-device path requires:
 
-- the Evogent shell APK, selected for the Android HOME role;
+- the Evogent shell APK, selected for the Android HOME and ASSISTANT roles;
 - Termux with Node, SQLite, Python, tmux, the configured brain CLI, and the
   on-phone release;
 - Shizuku for shell-uid hidden-display capabilities;
@@ -28,24 +28,34 @@ versioned component set and restore compatible private data separately.
 ## Bring-up sequence
 
 1. Install and open Termux and Shizuku from trusted sources.
-2. Install the current Evogent APK, launch it once, and assign the HOME role.
+2. Install the current Evogent APK and launch it once. During initial bootstrap
+   before the versioned installer is available, select Evogent as both the Home
+   app and digital assistant through Android's role UI.
 3. Enable the accessibility service, notification access, and any restricted
-   settings Android requires for a sideloaded accessibility tool.
+   settings Android requires for a sideloaded accessibility tool. On Android
+   13+, return to the Evogent HOME surface after notification access is enabled:
+   Evogent asks once for permission to post its own curated digest. Denial is
+   respected and leaves every original notification untouched.
 4. Pair/start Shizuku and authorize Evogent.
 5. Enable the Android windowing capabilities required by the current OS build for
    an app launched onto a shell-created virtual display to render. Verify this
    with a harmless app; a created display ID alone is not proof.
-6. Install the current phone release in Termux and start it through
-   `device/start-prod.sh`.
+6. Install the current phone release with the versioned bundle installer. It
+   privately snapshots both prior role holders, proves the APK, assigns and
+   verifies HOME and ASSISTANT, and restores both prior holders on rollback.
+   The installed runtime starts through the canonical `device/start-prod.sh`
+   path.
 7. Synchronize the control token minted by this APK installation. A token copied
    from another device or install fails closed.
 8. Select and authenticate a brain provider on the device.
 9. Request one scheduler-owned cycle, then inspect the rendered result on display
    0.
 
-After any APK reinstall, expect Android to clear or restrict some grants. Launch
-the package once, re-check the HOME role and accessibility service, and verify
-the control token before debugging higher layers.
+After any APK reinstall, expect Android to clear or restrict some grants. The
+supported release installer re-checks both roles transactionally; use Android's
+role UI only for initial setup or fallback. Launch the package once, re-check
+the accessibility service, and verify the control token before debugging higher
+layers.
 
 ## Hidden-display verification
 
@@ -88,14 +98,39 @@ cycle. A tmux session name alone is not proof.
 
 ## Power behavior
 
-Android may block hidden-display launch in deep Doze. The runtime can take a
-scoped wake lock or request an idle exit immediately before due app browsing, but
-it must release that state in cleanup after success, empty yield, timeout,
-signal, or error.
+Android may block hidden-display launch or suspend long-running private-learning
+work in deep Doze. The runtime can take a scoped wake lock for an active browse
+or bounded scheduled task, or request an idle exit immediately before due app
+browsing, but it must release that state in cleanup after success, empty yield,
+timeout, signal, or error.
+
+Termux exposes one app-global wake lock, not independently owned locks per
+script. Evogent therefore refuses to touch it by default. On a phone where the
+Termux installation is dedicated to Evogent, the owner may create the private
+mode-0600 marker `~/phone-tools/.dedicated-termux-wake` containing exactly
+`EVOGENT_DEDICATED_TERMUX_WAKE_V1`. Never enable this on a shared Termux
+installation: an unlock would affect its other work.
 
 Do not use a permanent wake lock as the default production fix. Record the
 attempted source, power action, elapsed time, yield, and cleanup outcome so the
 private cadence model can balance freshness and battery use.
+
+## Notification and lock-screen curation
+
+Notification access is device-wide, not per-app. Evogent therefore enforces its
+own local safety boundary, defaults to Observe, and exposes mode, private/detailed
+lock-screen preview, and per-app preservation controls under Settings → Phone
+Alerts. Curated shade replaces only eligible ordinary notifications after an
+exact durable receipt and an active replacement digest. Calls, alarms,
+navigation, foreground services, high-importance, system/safety, secret, and
+group-summary originals remain.
+
+`NotificationListenerService` runs after Android posts a notification. It cannot
+replace Android's lock screen, At a Glance, media, alarm, call, authentication,
+emergency, or other System UI. Use the capability and failure drills in
+[`docs/phone-notification-curation.md`](../docs/phone-notification-curation.md);
+never describe the listener as pre-display interception or full lock-screen
+control.
 
 ## Server behavior on the phone
 
@@ -129,8 +164,8 @@ They must not be required after release installation. Do not commit their real
 values.
 
 Some operations require Android shell privilege through ADB or Shizuku, such as
-APK installation, HOME/service repair, and device-level diagnostics. Normal
-source browsing and curation run on-device without the host.
+APK installation, HOME/ASSISTANT/service repair, and device-level diagnostics.
+Normal source browsing and curation run on-device without the host.
 
 ## Consumer path
 

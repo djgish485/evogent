@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy launcher icon for API 24-25 and launchers that do not render adaptive icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#6D28D9"
+        android:pathData="M54,4 A50,50 0 1,0 54,104 A50,50 0 1,0 54,4" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 L59.3,35.2 L70.5,40.5 L59.3,45.8 L54,57 L48.7,45.8 L37.5,40.5 L48.7,35.2 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37,64 H71 A4,4 0 0,1 71,72 H37 A4,4 0 0,1 37,64 Z" />
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M37,77 H59 A3.5,3.5 0 0,1 59,84 H37 A3.5,3.5 0 0,1 37,77 Z" />
+</vector>

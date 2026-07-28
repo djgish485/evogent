@@ -1,15 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# benchmark-curation.sh <modelA> <modelB> — A/B two codex models on the SAME browse cache and
+# benchmark-curation.sh <modelA[@effort]> <modelB[@effort]> — A/B two Codex routes on the SAME browse cache and
 # compare their output shape and elapsed time on-device.
 #
 # Method: snapshot the feed, run a full /curate with modelA, measure, RESTORE the feed snapshot,
 # run /curate with modelB, measure, restore again. Same cache both times = a fair comparison.
 # Measures per model: items shipped, real multi-member threads, truthful singleton shipments,
 # average items per thread, and wall-clock. Counts are diagnostic, not quality targets: inspect
-# the resulting judgments and reasons before preferring a model.
+# the resulting judgments and reasons before preferring a model. This diagnostic
+# never qualifies a cheaper route by itself: counts and latency are not editorial quality.
 set -euo pipefail
-A="${1:?usage: benchmark-curation.sh <modelA> <modelB> (e.g. gpt-5.5 gpt-5.6)}"
-B="${2:?usage: benchmark-curation.sh <modelA> <modelB>}"
+A="${1:?usage: benchmark-curation.sh <modelA[@effort]> <modelB[@effort]>}"
+B="${2:?usage: benchmark-curation.sh <modelA[@effort]> <modelB[@effort]>}"
 EVO="$HOME/evogent"; TOOLS="$HOME/phone-tools"; BASE="http://127.0.0.1:3001"
 DB="$EVO/data/media-agent.db"
 say(){ echo "[benchmark] $*" >&2; }
@@ -62,12 +63,18 @@ trap 'exit 129' HUP
 
 # Run one full curation with a given model, on the current (snapshot) cache. Returns metrics.
 measure(){
-  local model="$1"; local t0 t1
+  local route="$1" model effort t0 t1
+  model="${route%@*}"
+  effort="${route##*@}"
+  [ "$model" = "$effort" ] && effort=""
   # Reset cache seen-flags so both models see the identical unshipped pool.
   node_q "const db=require('./node_modules/better-sqlite3')('data/media-agent.db');db.prepare('UPDATE browse_cache_items SET seen_by_curation_at_ms=NULL').run();"
   local before; before=$(node_q "const db=require('./node_modules/better-sqlite3')('data/media-agent.db');console.log(db.prepare(\"SELECT COUNT(*) n FROM feed WHERE type IN ('tweet','article','analysis')\").get().n);")
   t0=$(date +%s)
-  EVOGENT_CODEX_MODEL="$model" EVOGENT_MIN_INTERVAL_MIN=0 EVOGENT_MAX_INTERVAL_MIN=0 \
+  # The cycle now carries this model into the exact curator task metadata. Disable
+  # source browsing so both restored snapshots expose the same candidate cache.
+  EVOGENT_CODEX_MODEL="$model" EVOGENT_CURATOR_REASONING="$effort" \
+    EVOGENT_BACKGROUND_SOURCE_BROWSING=Off \
     bash "$TOOLS/evogent-cycle.sh" >>"$TOOLS/scheduler.log" 2>&1
   t1=$(date +%s)
   node_q "

@@ -54,10 +54,16 @@ These steps require the device owner:
 4. Pair/start Shizuku and authorize the capabilities required by the Evogent
    shell.
 5. Enable the Evogent accessibility service and notification access in Settings.
+   On Android 13+, return to Evogent and answer its one-time permission request
+   for the private curated digest. A denial leaves every original notification
+   in Android; it never authorizes silent suppression.
 6. Complete brain-provider sign-in if transferred credentials do not work.
 7. Choose the battery policy appropriate for this device. Runtime scripts may
-   take a scoped wake lock while actively browsing; they must release it after
-   the cycle.
+   take a scoped wake lock while actively browsing or running a bounded
+   scheduled private-learning task; they must release it after the work. Because
+   Termux has one app-global wake lock, enable the documented private
+   `.dedicated-termux-wake` marker only when that Termux installation has no
+   unrelated workloads.
 
 Evogent must never attempt to bypass Android's owner confirmation, first-unlock
 requirement, account login, restricted-settings warning, or debugging prompt.
@@ -68,20 +74,31 @@ Install one internally consistent release built from the host checkout. The
 release must include the web build, server/runtime libraries, skills,
 phone-tools, and APK with one manifest.
 
-Until the versioned bundle installer replaces the transitional scripts, perform
-the equivalent checks manually:
+Use the versioned bundle installer rather than assembling a release in place. It
+performs these checks and changes as one recoverable transaction:
 
 1. Stage the current release in a new directory; do not merge files into the old
    tree in place.
 2. Verify its hashes, Next.js build ID, APK version, source commit, required
    runtime files, and schema compatibility.
-3. Install the APK from a package-manager-readable temporary path.
-4. Launch it once after installation so Android clears the package's stopped
-   state.
-5. Select Evogent as the HOME role and re-enable any service grants Android
-   clears during reinstall.
-6. Ensure Termux has the supported external-command setting required by the APK's
-   boot signal.
+3. Privately snapshot the exact current HOME and ASSISTANT role holders before
+   installing or upgrading the APK.
+4. Install the APK from a package-manager-readable temporary path and prove its
+   exact bytes, version, signer, and rollback availability.
+5. Assign and stably verify both Evogent roles only after the APK qualifies. A
+   failed transaction restores and verifies both prior role holders together
+   with the previous APK and runtime.
+
+On initial bootstrap before the supported installer can use its shell boundary,
+or as a fallback when automated role provisioning is unavailable, select
+Evogent as both the Home app and digital assistant through Android's role UI.
+Manual role selection is not a routine reinstall step. Re-enable any service
+grants Android clears during installation separately. Also ensure Termux has the
+supported external-command setting required by the APK's boot signal.
+
+After installation, open Settings → Phone Alerts in Evogent. New deployments
+begin in Observe with a private lock-screen preview. Curated shade is an
+explicit, reversible owner choice after Observe behavior is verified.
 
 The Android APK must not contain a periodic browse scheduler. It starts or wakes
 the Termux control plane; the Termux scheduler remains the sole cycle owner.

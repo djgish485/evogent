@@ -1,8 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Grant Evogent's NotificationListenerService access WITHOUT any Settings dialog, via the
 # Shizuku shell uid (same channel that grants the hidden-display / a11y capabilities). The
-# listener reads ONLY allowlisted content-app notifications (privacy enforced in the service
-# itself). Idempotent: appends to enabled_notification_listeners only if absent.
+# listener applies local redaction/protection policy before authenticated loopback ingestion and
+# defaults to Observe (no Android changes). Idempotent: appends to enabled_notification_listeners
+# only if absent.
 set -u
 COMP="net.dangish.evogent/net.dangish.evogent.EvogentNotificationListenerService"
 TOOLS="$HOME/phone-tools"

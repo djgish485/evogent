@@ -86,9 +86,15 @@ until control_lock_acquire "$LOCKDIR" source-discovery; do
   sleep 30; WAITED=$(( WAITED + 30 ))
 done
 DISC_LOCK_HELD=1
+if control_release_transaction_pending \
+    "${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"; then
+  say "durable release transaction is pending; discovery remains queued"
+  exit 75
+fi
 if control_wake_acquire; then
   DISC_WAKE_HELD=1
 else
+  [ "$CONTROL_WAKE_HELD" = 1 ] && DISC_WAKE_HELD=1
   say "scoped CPU wake lock unavailable — continuing, but discovery is not power-protected"
 fi
 control_status_write sources "$SRC" running discovery "" "" "source discovery"

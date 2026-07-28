@@ -136,14 +136,6 @@ public class EvogentAccessibilityService extends AccessibilityService {
                                      i.getIntExtra("x1", 540), i.getIntExtra("y1", 1700),
                                      i.getIntExtra("x2", 540), i.getIntExtra("y2", 500),
                                      i.getIntExtra("ms", 250)); break;
-                case "overlay": {
-                    OverlayComposer o = OverlayService.overlay();
-                    if (o != null) {
-                        if (i.getIntExtra("probe", 0) != 0) o.probe();
-                        else o.setEnabled(i.getIntExtra("on", 1) != 0);
-                    }
-                    break;
-                }
             }
         }
     };
@@ -191,68 +183,13 @@ public class EvogentAccessibilityService extends AccessibilityService {
         }
     }
 
-    // The a11y service is the only thing that can READ the screen (for the overlay's context
-    // capture), so the overlay's OverlayComposer calls back here via this static instance.
-    static EvogentAccessibilityService instance;
-
     @Override protected void onServiceConnected() {
         super.onServiceConnected();
         Log.i(TAG, "connected; registering command receiver");
-        instance = this;
         loadOrCreateControlToken();
         IntentFilter f = new IntentFilter(ACTION);
         // Exported so adb (chat agent) and in-process callers reach it; gated by control token.
         registerReceiver(cmd, f, Context.RECEIVER_EXPORTED);
-        // The floating bubble lives in a FOREGROUND SERVICE, not here: an AccessibilityService
-        // cannot get a drawable application-overlay surface on Android 16 (the window attaches but
-        // SurfaceFlinger never composites it). The service owns the overlay; we just drive it.
-        startService(new Intent(this, OverlayService.class));
-        OverlayComposer o = OverlayService.overlay();
-        if (o != null) o.onForegroundPackage(currentActivePackage());
-    }
-
-    /** Package of the focused (display-0) window, or null. */
-    private CharSequence currentActivePackage() {
-        try {
-            AccessibilityNodeInfo r = getRootInActiveWindow();
-            return r == null ? null : r.getPackageName();
-        } catch (Throwable t) { return null; }
-    }
-
-    /**
-     * The foreground display-0 app for the overlay: its package + visible node text, read from
-     * the WINDOW LIST rather than getRootInActiveWindow(). getRootInActiveWindow() returns null
-     * right when the overlay bubble is tapped (the tap perturbs the "active window"), which left
-     * the agent with no screen context. getWindows() lists display-0 windows stably; we take the
-     * topmost application window that isn't Evogent's own (that also excludes our overlay).
-     * Returns [package, text]; package is null / text is "" if nothing suitable was found.
-     */
-    String[] captureForegroundContext(int maxChars) {
-        try {
-            List<AccessibilityWindowInfo> ws = getWindows();
-            if (ws != null) {
-                for (int i = ws.size() - 1; i >= 0; i--) {
-                    AccessibilityWindowInfo w = ws.get(i);
-                    // Display 0 only: the overlay captures what the USER sees, not an app a
-                    // background browse is driving on a hidden virtual display.
-                    if (w.getDisplayId() != Display.DEFAULT_DISPLAY) continue;
-                    if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-                    AccessibilityNodeInfo r = w.getRoot();
-                    if (r == null) continue;
-                    CharSequence pkg = r.getPackageName();
-                    if (pkg == null) continue;
-                    String p = pkg.toString();
-                    if (p.equals(getPackageName())) continue; // skip Evogent feed + our overlay
-                    StringBuilder sb = new StringBuilder();
-                    walk(r, 0, sb, new int[]{0}, 400);
-                    String text = sb.length() > maxChars ? sb.substring(0, maxChars) : sb.toString();
-                    return new String[]{ p, text };
-                }
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "captureForegroundContext", t);
-        }
-        return new String[]{ null, "" };
     }
 
     /** Per-install secret gating the control channel. Stored in Evogent's scoped external dir. */
@@ -300,118 +237,14 @@ public class EvogentAccessibilityService extends AccessibilityService {
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
-        // Track the display-0 foreground app so the bubble hides while Evogent itself is up.
-        OverlayComposer overlay = OverlayService.overlay();
-        if (event == null || overlay == null) return;
-        // WINDOWS_CHANGED fires when the window LIST changes — notably keyboard show/hide,
-        // which never produces a WINDOW_STATE_CHANGED. Without it the FAB only repositioned on
-        // app switches and sat on the IME's Enter key until the next app change.
-        int t = event.getEventType();
-        if (t != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                && t != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return;
-        // ONLY physical-display (display 0) transitions decide bubble visibility. Background
-        // browse drives apps on hidden virtual displays that OWN THEIR FOCUS, so their window
-        // events (and getRootInActiveWindow during a browse) name the hidden app — reacting to
-        // those wrongly flips the bubble ON over the user's Evogent feed. Use the event's own
-        // package (the display-0 window that changed), not the globally-focused window.
-        if (event.getDisplayId() != Display.DEFAULT_DISPLAY) return;
-        // Do NOT trust event.getPackageName(): our OWN overlay bubble is an Evogent window, and
-        // when it appears it fires a display-0 window-state event with package=evogent — which
-        // read naively flips foregroundIsEvogent true and the bubble instantly removes itself
-        // (self-defeating loop). Instead compute the real foreground from the top APPLICATION
-        // window, which excludes our TYPE_APPLICATION_OVERLAY bubble, the IME, and system chrome.
-        overlay.onForegroundPackage(topAppPackage());
-    }
-
-    /** Package of the topmost real application window on display 0 (excludes overlays/IME/system),
-     *  so our own overlay bubble never counts as "Evogent foreground". Scoped to display 0:
-     *  getWindows() can include TYPE_APPLICATION windows from leaked hidden virtual displays (every
-     *  background browse cycle creates one, and they OWN THEIR FOCUS so they sort topmost) — without
-     *  the display filter, topAppPackage could return a hidden-display app and the bubble would flip
-     *  wrongly over the user's real foreground app. This is the reported "no bubble over X" fragility. */
-    private String topAppPackage() {
-        try {
-            List<AccessibilityWindowInfo> ws = getWindows();
-            if (ws != null) {
-                for (int i = ws.size() - 1; i >= 0; i--) {
-                    AccessibilityWindowInfo w = ws.get(i);
-                    if (w.getDisplayId() != Display.DEFAULT_DISPLAY) continue;
-                    if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-                    AccessibilityNodeInfo r = w.getRoot();
-                    if (r != null && r.getPackageName() != null) return r.getPackageName().toString();
-                }
-            }
-        } catch (Throwable ignored) {}
-        return null;
-    }
-    /**
-     * Screen-space bounds of every interactive (clickable/long-clickable/editable/scrollable)
-     * node in the top app window on the PHYSICAL display. The overlay uses this to place the
-     * compose FAB where it doesn't cover anything tappable in the app underneath.
-     */
-    /** Height in px of the on-screen keyboard (IME) window on display 0, or 0 when hidden. The
-     *  overlay uses this to keep the compose FAB above the keyboard's keys. */
-    int imeHeightOnDefaultDisplay() {
-        try {
-            List<AccessibilityWindowInfo> ws = getWindows();
-            if (ws == null) return 0;
-            for (int i = ws.size() - 1; i >= 0; i--) {
-                AccessibilityWindowInfo w = ws.get(i);
-                if (w.getDisplayId() != Display.DEFAULT_DISPLAY) continue;
-                if (w.getType() != AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
-                android.graphics.Rect r = new android.graphics.Rect();
-                w.getBoundsInScreen(r);
-                if (!r.isEmpty()) return r.height();
-            }
-        } catch (Throwable ignored) {}
-        return 0;
-    }
-
-    java.util.List<android.graphics.Rect> interactiveBoundsOnDefaultDisplay() {
-        java.util.List<android.graphics.Rect> out = new java.util.ArrayList<android.graphics.Rect>();
-        try {
-            List<AccessibilityWindowInfo> ws = getWindows();
-            if (ws == null) return out;
-            boolean appDone = false;
-            for (int i = ws.size() - 1; i >= 0; i--) {
-                AccessibilityWindowInfo w = ws.get(i);
-                if (w.getDisplayId() != Display.DEFAULT_DISPLAY) continue;
-                // Include input-method windows when they are part of the captured context.
-                if (w.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) {
-                    android.graphics.Rect ime = new android.graphics.Rect();
-                    w.getBoundsInScreen(ime);
-                    if (!ime.isEmpty()) out.add(ime);
-                    continue;
-                }
-                if (appDone || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-                collectInteractive(w.getRoot(), out, new int[]{0});
-                appDone = true; // top app window only; keep scanning for the IME window
-            }
-        } catch (Throwable ignored) {}
-        return out;
-    }
-
-    private void collectInteractive(AccessibilityNodeInfo n, java.util.List<android.graphics.Rect> out, int[] count) {
-        if (n == null || count[0] > 600) return;
-        count[0]++;
-        try {
-            if (n.isClickable() || n.isLongClickable() || n.isEditable() || n.isScrollable()) {
-                android.graphics.Rect r = new android.graphics.Rect();
-                n.getBoundsInScreen(r);
-                if (!r.isEmpty()) out.add(r);
-            }
-            for (int c = 0; c < n.getChildCount(); c++) {
-                collectInteractive(n.getChild(c), out, count);
-            }
-        } catch (Throwable ignored) {}
+        // Event delivery keeps the service ready for authenticated on-device control operations.
+        // Persistent display-0 UI was intentionally removed; no event may create an overlay.
     }
 
     @Override public void onInterrupt() { Log.i(TAG, "interrupted"); }
 
     @Override public void onDestroy() {
         try { unregisterReceiver(cmd); } catch (Exception ignored) {}
-        if (instance == this) instance = null;
-        try { stopService(new Intent(this, OverlayService.class)); } catch (Throwable ignored) {}
         super.onDestroy();
     }
 

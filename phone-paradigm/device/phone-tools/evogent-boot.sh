@@ -8,15 +8,24 @@
 set -u
 TOOLS="$HOME/phone-tools"
 LOG="$HOME/evogent-boot.log"
+RELEASE_ROOT="${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"
 export EVOGENT_API_CURL="$TOOLS/evo-curl"
 say(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
+BOOT_SOURCE="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+BOOT_RELEASE="$(dirname "$(dirname "$BOOT_SOURCE")")"
+if [ -n "$BOOT_SOURCE" ] \
+    && [ "$(dirname "$BOOT_RELEASE")" = "$RELEASE_ROOT/releases" ]; then
+  export EVOGENT_CONTROL_RELEASE_ROOT="$BOOT_RELEASE"
+else
+  unset EVOGENT_CONTROL_RELEASE_ROOT
+fi
+
 # SIGKILL and reboot bypass the installer's EXIT trap.  Before any component is
-# allowed to start, finish the durable transaction policy by rolling an
-# uncommitted release back through the private recovery copy written before the
-# first switch.  The installer's own restart path sets the bypass to avoid
-# recursively recovering while it is already performing that rollback.
-RELEASE_ROOT="${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"
+# allowed to start, finish the durable transaction policy through the private
+# recovery copy written before the first switch: pre-decision work rolls back,
+# while a verified committed decision is re-proven and finalized in place. The
+# installer's own restart path sets the bypass to avoid recursive recovery.
 INSTALL_JOURNAL="$RELEASE_ROOT/install-transaction/journal.json"
 INSTALL_RECOVERER="$RELEASE_ROOT/install-transaction/install-release.sh"
 if [ "${EVOGENT_RELEASE_RECOVERY:-0}" != 1 ] \
@@ -31,9 +40,32 @@ if [ "${EVOGENT_RELEASE_RECOVERY:-0}" != 1 ] \
     say "CRITICAL: interrupted release recovery failed; control plane remains stopped"
     exit 70
   }
+  # The pinned recoverer has already restored or finalized the durable
+  # live/stopped/absent contract. This candidate boot must not reinterpret it.
+  exit 0
 fi
 
 . "$TOOLS/control-plane.sh"
+control_init_owner boot || exit 70
+BOOT_MUTATION_GATE_HELD=0
+boot_cleanup() {
+  local rc=$? attempt
+  trap - EXIT INT TERM HUP
+  for attempt in 1 2 3; do
+    [ "$BOOT_MUTATION_GATE_HELD" = 1 ] || break
+    if control_release_mutation_gate_release; then
+      BOOT_MUTATION_GATE_HELD=0
+      break
+    fi
+    sleep 1
+  done
+  control_finish_owner
+  exit "$rc"
+}
+trap boot_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 server_code() {
   if "$TOOLS/evo-health"; then
@@ -46,13 +78,30 @@ server_code() {
 exec >>"$LOG" 2>&1
 say "=== evogent-boot start (pid $$) ==="
 
-# A release transaction owns server/scheduler/watchdog ordering. An unrelated
-# boot signal must not resurrect an old component halfway through the switch;
-# the installer invokes this script with the explicit internal bypass.
-INSTALL_LOCK="$RELEASE_ROOT/install.lock"
-if [ "${EVOGENT_RELEASE_BOOT:-0}" != 1 ] && control_lock_live "$INSTALL_LOCK"; then
-  say "release install owns the control plane — boot bringup deferred"
+# A durable release transaction owns server/scheduler/watchdog ordering. A live
+# installer lease without a journal is only preflight/build, when production is
+# intentionally still allowed to heal. The installer invokes candidate boot
+# with the explicit internal bypass while its journal is pending.
+if [ "${EVOGENT_RELEASE_BOOT:-0}" != 1 ] \
+    && control_release_transaction_pending "$RELEASE_ROOT"; then
+  say "durable release transaction owns the control plane — boot bringup deferred"
   exit 0
+fi
+
+# Serialize every normal-boot mutation, including wake reconciliation and
+# Shizuku/appops/settings repair, with durable journal publication. The acquire
+# helper rechecks the journal while holding the same stable gate.
+if [ "${EVOGENT_RELEASE_BOOT:-0}" != 1 ]; then
+  if ! control_release_mutation_gate_acquire "$RELEASE_ROOT" boot-bringup; then
+    if [ -n "$CONTROL_RELEASE_MUTATION_GATE" ]; then
+      BOOT_MUTATION_GATE_HELD=1
+      say "CRITICAL: boot mutation barrier retirement failed; exiting through cleanup"
+      exit 70
+    fi
+    say "release control-plane mutation barrier is busy or pending — boot bringup deferred"
+    exit 0
+  fi
+  BOOT_MUTATION_GATE_HELD=1
 fi
 
 # Retire the old permanent Termux wakelock. Cycles/discoveries now acquire a reference-counted
@@ -136,12 +185,25 @@ for i in $(seq 1 30); do
 done
 say "authenticated server http $(server_code)"
 
+# tmux sessions inherit the server's global environment, not necessarily this
+# boot client's custom variables. Bind every newly launched control process to
+# the exact resolved release even when the tmux server predates this boot.
+if [ -n "${EVOGENT_CONTROL_RELEASE_ROOT:-}" ]; then
+  tmux set-environment -g EVOGENT_CONTROL_RELEASE_ROOT \
+    "$EVOGENT_CONTROL_RELEASE_ROOT" || {
+      say "CRITICAL: tmux release identity could not be bound"
+      exit 70
+    }
+else
+  tmux set-environment -gu EVOGENT_CONTROL_RELEASE_ROOT 2>/dev/null || true
+fi
+
 # Start the on-device periodic scheduler (source browse + curation). Must come AFTER the server.
 if control_lock_live "$TOOLS/.scheduler.lock"; then
   say "scheduler already running"
 else
   tmux kill-session -t evo-sched 2>/dev/null || true
-  tmux new -d -s evo-sched "bash $TOOLS/evogent-scheduler.sh"
+  tmux new -d -s evo-sched "exec bash '$TOOLS/evogent-scheduler.sh'"
   say "scheduler started"
 fi
 

@@ -219,23 +219,29 @@ mkdir -p build/test
     src/net/dangish/evogent/EvogentLoopbackAuthProtocol.java \
     src/net/dangish/evogent/EvogentDocumentAuthority.java \
     src/net/dangish/evogent/EvogentHomeNavigationPolicy.java \
-    src/net/dangish/evogent/EvogentOverlayVisibilityPolicy.java \
+    src/net/dangish/evogent/EvogentHomeChoicePolicy.java \
+    src/net/dangish/evogent/EvogentAssistantContextStore.java \
     src/net/dangish/evogent/EvogentAccessibilityActionPolicy.java \
     src/net/dangish/evogent/EvogentPhysicalDisplayPolicy.java \
+    src/net/dangish/evogent/EvogentNotificationPolicy.java \
     tests/EvogentSecurityPolicyTest.java \
     tests/EvogentLoopbackAuthProtocolTest.java \
     tests/EvogentDocumentAuthorityTest.java \
     tests/EvogentHomeNavigationPolicyTest.java \
-    tests/EvogentOverlayVisibilityPolicyTest.java \
+    tests/EvogentHomeChoicePolicyTest.java \
+    tests/EvogentAssistantContextStoreTest.java \
     tests/EvogentAccessibilityActionPolicyTest.java \
-    tests/EvogentPhysicalDisplayPolicyTest.java
+    tests/EvogentPhysicalDisplayPolicyTest.java \
+    tests/EvogentNotificationPolicyTest.java
 "$JAVA" -cp build/test net.dangish.evogent.EvogentSecurityPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentLoopbackAuthProtocolTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentDocumentAuthorityTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeNavigationPolicyTest
-"$JAVA" -cp build/test net.dangish.evogent.EvogentOverlayVisibilityPolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentHomeChoicePolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantContextStoreTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAccessibilityActionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentPhysicalDisplayPolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationPolicyTest
 
 "$BTN/aapt2" compile --dir "$PACKAGE_RES" -o build/res.zip
 
@@ -328,7 +334,7 @@ if grep -Fq addJavascriptInterface build/classes.strings; then
     exit 1
 fi
 if ! grep -Fq '__EVOGENT_SHELL_V2__' build/classes.strings \
-        || ! grep -Fq '__EVOGENT_OVERLAY_V2__' build/classes.strings \
+        || ! grep -Fq '__EVOGENT_ASSISTANT_V1__' build/classes.strings \
         || ! grep -Fq 'DOCUMENT_START_SCRIPT:1' build/classes.strings; then
     echo "BUILD CHECK FAILED: exact-origin prompt facades missing from classes.dex" >&2
     exit 1
@@ -361,16 +367,12 @@ if grep -Fq 'webView.loadUrl(FEED_URL)' \
         src/net/dangish/evogent/MainActivity.java \
         || ! grep -Fq 'EvogentLoopbackAuth.authenticateWeb' \
             src/net/dangish/evogent/MainActivity.java \
-        || ! grep -Fq 'EvogentLoopbackAuth.authenticateWeb' \
-            src/net/dangish/evogent/OverlayComposer.java \
         || ! grep -Fq 'setAcceptThirdPartyCookies(webView, false)' \
             src/net/dangish/evogent/EvogentLoopbackAuth.java; then
     echo "BUILD CHECK FAILED: privileged WebView authentication ordering is missing" >&2
     exit 1
 fi
-for bridge_source in \
-    src/net/dangish/evogent/MainActivity.java \
-    src/net/dangish/evogent/OverlayComposer.java; do
+for bridge_source in src/net/dangish/evogent/MainActivity.java; do
     if ! grep -Fq 'EvogentLoopbackAuth.verifyServerAsync' "$bridge_source" \
             || ! grep -Fq 'EvogentLoopbackAuth.verifyServerBlocking' "$bridge_source" \
             || ! grep -Fq 'EvogentDocumentAuthority' "$bridge_source"; then
@@ -390,8 +392,7 @@ if ! grep -Fq 'EVOGENT_A11Y_V1' build/classes.strings \
     exit 1
 fi
 if grep -Eq '8[7]90' \
-        src/net/dangish/evogent/EvogentAccessibilityService.java \
-        src/net/dangish/evogent/OverlayComposer.java; then
+        src/net/dangish/evogent/EvogentAccessibilityService.java; then
     echo "BUILD CHECK FAILED: fixed unauthenticated accessibility reply port remains" >&2
     exit 1
 fi
@@ -405,6 +406,43 @@ if grep -Fq '.BrowseService' build/manifest.txt \
         || grep -Fq 'android.permission.SCHEDULE_EXACT_ALARM' build/manifest.txt \
         || grep -Fq 'LOCKED_BOOT_COMPLETED' build/manifest.txt; then
     echo "BUILD CHECK FAILED: packaged manifest contains the legacy browse scheduler" >&2
+    exit 1
+fi
+if grep -Eq 'SYSTEM_ALERT_WINDOW|FOREGROUND_SERVICE_SPECIAL_USE|[.]OverlayService|anywhere_message_overlay' \
+        AndroidManifest.xml build/manifest.txt build/classes.strings \
+        || grep -R -Eq 'class (OverlayService|OverlayComposer)' \
+            src/net/dangish/evogent; then
+    echo "BUILD CHECK FAILED: persistent cross-app overlay capability remains" >&2
+    exit 1
+fi
+if ! grep -Fq '.EvogentVoiceInteractionService' AndroidManifest.xml \
+        || ! grep -Fq 'android.permission.BIND_VOICE_INTERACTION' AndroidManifest.xml \
+        || ! grep -Fq '.EvogentAssistantActivity' AndroidManifest.xml \
+        || ! grep -Fq 'android:supportsAssist="true"' \
+            res/xml/voice_interaction_service.xml \
+        || ! grep -Fq 'android:supportsLaunchVoiceAssistFromKeyguard="false"' \
+            res/xml/voice_interaction_service.xml \
+        || ! grep -Fq 'EvogentVoiceInteractionService' build/manifest.txt \
+        || ! grep -Fq 'EvogentAssistantActivity' build/manifest.txt \
+        || ! grep -Fq 'startAssistantActivity' build/classes.strings \
+        || ! grep -Fq 'last_explicit_surface' build/classes.strings \
+        || ! grep -Fq '/?overlay=1' build/classes.strings; then
+    echo "BUILD CHECK FAILED: HOME memory or system-assistant composer integration is missing" >&2
+    exit 1
+fi
+if ! awk '
+    /android:name="[.]EvogentAssistantActivity"/ { in_assistant = 1; next }
+    in_assistant && /android:exported="false"/ { found = 1; exit }
+    in_assistant && /\/>/ { exit }
+    END { exit(found ? 0 : 1) }
+' AndroidManifest.xml \
+        || ! awk '
+    /name.*="[.]EvogentAssistantActivity"/ { in_assistant = 1; next }
+    in_assistant && /exported.*=false/ { found = 1; exit }
+    in_assistant && /E:/ { exit }
+    END { exit(found ? 0 : 1) }
+' build/manifest.txt; then
+    echo "BUILD CHECK FAILED: assistant Activity is externally launchable" >&2
     exit 1
 fi
 if ! grep -Fq 'allowBackup(0x01010280)=false' build/manifest.txt; then

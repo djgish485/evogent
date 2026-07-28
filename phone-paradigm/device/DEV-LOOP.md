@@ -122,6 +122,12 @@ signed APK, and passes local health. It rolls back the release, database, APK,
 and compatible dependency reference together on failure. Re-presenting the same
 healthy release is a no-op.
 
+The durable transaction journal—not the installer PID or its preflight lock—is
+the control-plane mutation barrier. A live install lock without a journal may be
+building or verifying dependencies while production continues. Once the journal
+exists, scheduler dispatch and watchdog revival stay gated until rollback or
+committed finalization removes it; boot invokes the pinned recovery copy first.
+
 `deploy-next.sh` is a fail-closed compatibility tombstone. Do not revive partial
 `.next`, APK-only, skill-only, or direct-copy production paths.
 
@@ -177,8 +183,12 @@ banners can move hit targets.
   process tree owned by the current task.
 - A stale hidden-display file is not proof that a display is live; validate the
   recorded owner lease.
-- Deep Doze can prevent hidden-display launch. Power handling must be scoped to
-  active browse work and released afterward, with a measured outcome.
+- Deep Doze can prevent hidden-display launch and suspend bounded scheduled
+  private-learning work. Power handling must be scoped to the active browse or
+  scheduled task and released afterward, with a measured outcome. Termux's wake
+  lock is app-global, so Evogent touches it only when the owner has installed
+  the exact private dedicated-Termux marker documented in
+  `pixel-real-device-setup.md`.
 - A deploy must not inherit its lock into the restarted server or scheduler.
 - A response printed only on stderr is an error transcript, not a delivered agent
   reply.

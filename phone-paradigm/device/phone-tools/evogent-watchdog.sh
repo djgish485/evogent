@@ -6,6 +6,22 @@
 set -u
 TOOLS="$HOME/phone-tools"
 LOG="$HOME/evogent-watchdog.log"
+RELEASE_ROOT="${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"
+WATCHDOG_SOURCE="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+WATCHDOG_RELEASE="$(dirname "$(dirname "$WATCHDOG_SOURCE")")"
+if [ -n "$WATCHDOG_SOURCE" ] \
+    && [ "$(dirname "$WATCHDOG_RELEASE")" = "$RELEASE_ROOT/releases" ]; then
+  if [ -n "${EVOGENT_CONTROL_RELEASE_ROOT:-}" ] \
+      && [ "$EVOGENT_CONTROL_RELEASE_ROOT" != "$WATCHDOG_RELEASE" ]; then
+    exit 70
+  fi
+  if [ "${EVOGENT_CONTROL_RELEASE_ROOT:-}" != "$WATCHDOG_RELEASE" ]; then
+    exec env EVOGENT_CONTROL_RELEASE_ROOT="$WATCHDOG_RELEASE" \
+      bash "$TOOLS/evogent-watchdog.sh" "$@"
+  fi
+else
+  unset EVOGENT_CONTROL_RELEASE_ROOT
+fi
 BASE="http://127.0.0.1:${PORT:-3001}"
 EVO_CURL="$TOOLS/evo-curl"
 export EVOGENT_API_CURL="$EVO_CURL"
@@ -56,13 +72,30 @@ max_cycle_interval_min() {
 control_init_owner watchdog
 WATCHDOG_LOCK="$TOOLS/.watchdog.lock"
 WATCHDOG_LOCK_HELD=0
+WATCHDOG_MUTATION_GATE_HELD=0
+watchdog_release_mutation_gate() {
+  [ "$WATCHDOG_MUTATION_GATE_HELD" = 1 ] || return 0
+  control_release_mutation_gate_release || {
+    say "CRITICAL: watchdog mutation lease could not be retired"
+    exit 70
+  }
+  WATCHDOG_MUTATION_GATE_HELD=0
+}
 watchdog_cleanup() {
-  local rc=$?
+  local rc=$? attempt
   trap - EXIT INT TERM HUP
   # A duplicate process that failed to acquire the lock owns no status.  Letting its EXIT trap
   # write "stopped" would clobber the real watchdog's heartbeat with the duplicate's PID.
   [ "$WATCHDOG_LOCK_HELD" = 1 ] &&
     control_status_write watchdog - stopped "" "" "$rc" "watchdog exit"
+  for attempt in 1 2 3; do
+    [ "$WATCHDOG_MUTATION_GATE_HELD" = 1 ] || break
+    if control_release_mutation_gate_release; then
+      WATCHDOG_MUTATION_GATE_HELD=0
+      break
+    fi
+    sleep 1
+  done
   [ "$WATCHDOG_LOCK_HELD" = 1 ] && control_lock_release "$WATCHDOG_LOCK" || true
   control_finish_owner
   exit "$rc"
@@ -92,13 +125,24 @@ while true; do
   # silently become a permanent battery drain after an abnormal exit. Live
   # cycle/discovery owners keep their reference and are never unlocked here.
   control_release_legacy_wake_if_idle
-  # The release installer owns restart ordering while its PID+start lease is
-  # live. Stay alive for post-switch supervision, but do not revive the server
-  # or scheduler from a half-switched release.
-  if control_lock_live "${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}/install.lock"; then
+  # The durable release journal owns restart ordering from quiesce through a
+  # proved rollback or committed finalization. Its presence survives SIGKILL;
+  # an install lease without a journal is only non-disruptive preflight/build.
+  if control_release_transaction_pending "$RELEASE_ROOT"; then
     fails=0
     continue
   fi
+  if ! control_release_mutation_gate_acquire \
+      "$RELEASE_ROOT" watchdog-control-tick; then
+    if [ -n "$CONTROL_RELEASE_MUTATION_GATE" ]; then
+      WATCHDOG_MUTATION_GATE_HELD=1
+      say "CRITICAL: watchdog mutation barrier retirement failed"
+      exit 70
+    fi
+    fails=0
+    continue
+  fi
+  WATCHDOG_MUTATION_GATE_HELD=1
   # GUARD THE GUARDS: every flow-health check (barren tripwire, sources-flowing, verify-intents)
   # runs INSIDE the cycle — if the scheduler dies, all of them die with it and the system is
   # blind. A cycle advances .last-successful-cycle only after every required phase succeeds; if
@@ -109,7 +153,8 @@ while true; do
   if ! control_lock_live "$TOOLS/.scheduler.lock"; then
     say "scheduler-liveness: evo-sched session is GONE — restarting now"
     tmux kill-session -t evo-sched 2>/dev/null || true
-    tmux new-session -d -s evo-sched "bash $TOOLS/evogent-scheduler.sh >> $HOME/evo-sched.log 2>&1"
+    tmux new-session -d -s evo-sched \
+      "exec bash '$TOOLS/evogent-scheduler.sh' >> '$HOME/evo-sched.log' 2>&1"
   fi
   STAMP="$TOOLS/.last-successful-cycle"
   NO_SUCCESS_BASELINE="$TOOLS/.no-success-cycle-baseline"
@@ -168,6 +213,7 @@ while true; do
   fi
   if [ "$code" = "200" ]; then
     fails=0
+    watchdog_release_mutation_gate
     continue
   fi
   # Don't fight a browse/curate cycle that's mid-run (it can briefly load the server); only act
@@ -185,11 +231,14 @@ while true; do
     else
       say "server $code but a cycle holds the lock — one more check before scoped revive"
     fi
+    watchdog_release_mutation_gate
     continue
   fi
   if [ "$fails" -ge 2 ]; then
     say "server down ($code) for 2 checks — restarting stack via evogent-boot.sh"
+    watchdog_release_mutation_gate
     bash "$TOOLS/evogent-boot.sh" >/dev/null 2>&1
     fails=0
   fi
+  watchdog_release_mutation_gate
 done

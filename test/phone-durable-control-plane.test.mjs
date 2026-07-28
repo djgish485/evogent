@@ -330,43 +330,45 @@ test('phone scheduler acknowledges a request only after the exact validated cura
   assert.doesNotMatch(cycle, /completion_status\s*=\s*['"]success['"][\s\S]*COUNT\(\*\).*feed/s);
 });
 
-test('daily dream and reflection are scheduler-owned durable due tasks, not cycle-time windows', () => {
+test('one daily overseer replaces dream and reflection as the durable private due task', () => {
   const scheduler = read('evogent-scheduler.sh');
   const cycle = read('evogent-cycle.sh');
   assert.match(scheduler, /ensure-nightly --root "\$SCHEDULED_TASK_ROOT"/);
-  assert.match(scheduler, /--task dream/);
-  assert.match(scheduler, /--task reflect/);
+  assert.match(scheduler, /--task oversee/);
+  assert.match(scheduler, /--kind oversee/);
   assert.match(scheduler, /claim --root "\$SCHEDULED_TASK_ROOT"/);
-  assert.match(scheduler, /run_due_dream \|\| true/);
-  assert.match(scheduler, /run_due_reflection \|\| true/);
+  assert.match(scheduler, /run_due_overseer \|\| true/);
+  assert.doesNotMatch(scheduler, /run_due_(?:dream|reflection)|--task (?:dream|reflect)/);
   assert.match(scheduler, /finish --root "\$SCHEDULED_TASK_ROOT".*--result ack/s);
+  assert.match(scheduler, /\[ "\$terminal_result" = "OVERSEER_RESULT completed" \]/);
+  assert.match(scheduler, /resolve[\s\\]*\n[\s\S]{0,120}--task overseer/);
   assert.doesNotMatch(cycle, /DREAM_AGE|HOUR=.*date \+%H|overnight taste pass/);
   assert.doesNotMatch(cycle, /\.last-reflect|\/reflect\b|reflection age|opportunistic reflection/i);
 });
 
-test('phone-native preference memory is canonical and legacy mirrors cannot fail reflection', () => {
+test('phone-native preference memory is canonical and overseer postconditions are bounded', () => {
   const cycle = read('evogent-cycle.sh');
   const scheduler = read('evogent-scheduler.sh');
-  const reflect = fs.readFileSync(path.join(root, '.claude', 'commands', 'reflect.md'), 'utf8');
-  const dream = fs.readFileSync(path.join(root, '.claude', 'commands', 'dream.md'), 'utf8');
-  for (const source of [cycle, scheduler, reflect, dream]) {
+  const oversee = fs.readFileSync(path.join(root, '.claude', 'commands', 'oversee.md'), 'utf8');
+  for (const source of [cycle, scheduler, oversee]) {
     assert.doesNotMatch(source, /\.openclaw\/agents\/curator\/USER\.md/);
   }
   assert.doesNotMatch(cycle, /preference_insights_valid|private_artifact\.py/);
   assert.match(scheduler, /private_artifact\.py" snapshot[\s\S]*preference-insights\.md/);
   assert.match(scheduler, /private_artifact\.py" verify[\s\S]*--kind preference/);
   assert.match(scheduler, /source-cadence\.json[\s\S]*--kind cadence/);
-  assert.match(reflect, /canonical phone-native state at `data\/preference-insights\.md`/);
-  assert.match(dream, /canonical phone-native state at\s+`data\/preference-insights\.md`/);
+  assert.match(oversee, /atomically rewrite both `data\/preference-insights\.md` and/);
+  assert.match(oversee, /`data\/source-cadence\.json` even when their values remain unchanged/);
 });
 
-test('scheduled phone reflection learns runtime state without doing host development review', () => {
-  const reflect = fs.readFileSync(path.join(root, '.claude', 'commands', 'reflect.md'), 'utf8');
+test('scheduled phone overseer reviews runtime state without doing host development work', () => {
+  const oversee = fs.readFileSync(path.join(root, '.claude', 'commands', 'oversee.md'), 'utf8');
   const auditCore = fs.readFileSync(path.join(root, '.claude', 'shared', 'audit-core.md'), 'utf8');
-  assert.match(reflect, /not a software-development agent/);
-  assert.doesNotMatch(reflect, /Recent-merge audit|git show|data\/agent-receipts\.jsonl|\/root\/\.claude/);
-  assert.doesNotMatch(reflect, /Code Audit Patterns/);
-  assert.match(auditCore, /Scheduled phone curation and reflection are runtime roles/);
+  assert.match(oversee, /Do not edit product code/);
+  assert.match(oversee, /Do not inspect git history or host-agent state/);
+  assert.doesNotMatch(oversee, /Recent-merge audit|git show|data\/agent-receipts\.jsonl|\/root\/\.claude/);
+  assert.doesNotMatch(oversee, /Code Audit Patterns/);
+  assert.match(auditCore, /Scheduled phone curation and oversight are runtime roles/);
   assert.match(auditCore, /Only a manual host audit may add product-code inspection/);
 });
 

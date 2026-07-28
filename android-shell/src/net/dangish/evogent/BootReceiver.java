@@ -19,22 +19,29 @@ import android.util.Log;
  */
 public class BootReceiver extends BroadcastReceiver {
     private static final String TAG = "EvoBoot";
-    private static final String BOOT_COMMAND =
+    private static final String RECOVERY_PREFIX =
             "ROOT=\"$HOME/.local/share/evogent\"; "
             + "J=\"$ROOT/install-transaction/journal.json\"; "
-            + "R=\"$ROOT/install-transaction/install-release.sh\"; "
-            + "if [ -e \"$J\" ] || [ -L \"$J\" ]; then "
+            + "R=\"$ROOT/install-transaction/install-release.sh\"; ";
+    private static final String RECOVER_IF_PENDING =
+            "if [ -e \"$J\" ] || [ -L \"$J\" ]; then "
             + "  [ -f \"$J\" ] && [ ! -L \"$J\" ] "
             + "    && [ -f \"$R\" ] && [ ! -L \"$R\" ] "
-            + "    && bash \"$R\" --recover \"$J\" || exit 70; "
-            + "fi; "
+            + "    || exit 70; "
+            + "  exec bash \"$R\" --recover \"$J\"; "
+            + "fi; ";
+    private static final String BOOT_COMMAND =
+            RECOVERY_PREFIX + RECOVER_IF_PENDING
             + "exec bash \"$HOME/phone-tools/evogent-boot.sh\"";
+    private static final String RECOVERY_ONLY_COMMAND =
+            RECOVERY_PREFIX + RECOVER_IF_PENDING + "exit 0";
 
     @Override public void onReceive(Context ctx, Intent intent) {
         if (intent == null || intent.getAction() == null) return;
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             BrowseAlarmReceiver.cancelLegacySchedule(ctx);
-            Log.i(TAG, "package updated -> canceled legacy APK browse alarm");
+            Log.i(TAG, "package updated -> canceled legacy alarm + requested recovery only");
+            dispatchRunCommand(ctx, RECOVERY_ONLY_COMMAND, "package-recovery");
             return;
         }
         if (!Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
@@ -42,7 +49,15 @@ public class BootReceiver extends BroadcastReceiver {
         }
         BrowseAlarmReceiver.cancelLegacySchedule(ctx);
         Log.i(TAG, "boot -> canceled legacy APK browse alarm + starting on-device stack");
+        dispatchRunCommand(ctx, BOOT_COMMAND, "boot");
+    }
 
+    static boolean dispatchRecoveryOrBoot(Context ctx) {
+        return dispatchRunCommand(ctx, BOOT_COMMAND, "foreground-retry");
+    }
+
+    private static boolean dispatchRunCommand(
+            Context ctx, String command, String reason) {
         try {
             Intent run = new Intent();
             run.setClassName("com.termux", "com.termux.app.RunCommandService");
@@ -50,10 +65,10 @@ public class BootReceiver extends BroadcastReceiver {
             run.putExtra("com.termux.RUN_COMMAND_PATH",
                     "/data/data/com.termux/files/usr/bin/bash");
             run.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[] {
-                    "-c", BOOT_COMMAND });
+                    "-c", command });
             run.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
             run.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
-            run.setData(Uri.parse("evogent-boot"));
+            run.setData(Uri.parse("evogent-" + reason));
             // After a reboot Termux is in the "stopped" state (nothing has launched it yet);
             // an intent won't reach a stopped package without this flag — the whole boot chain
             // silently fails without it. This is what makes RUN_COMMAND work FROM boot.
@@ -63,11 +78,13 @@ public class BootReceiver extends BroadcastReceiver {
             } else {
                 ctx.startService(run);
             }
-            Log.i(TAG, "dispatched RUN_COMMAND -> evogent-boot.sh");
+            Log.i(TAG, "dispatched RUN_COMMAND: " + reason);
+            return true;
         } catch (Throwable t) {
             // Termux may not be installed / may reject the intent; the Termux:Boot addon path
             // (if present) still covers startup.
-            Log.e(TAG, "RUN_COMMAND dispatch failed; relying on Termux:Boot if installed", t);
+            Log.e(TAG, "RUN_COMMAND dispatch failed for " + reason, t);
+            return false;
         }
     }
 }

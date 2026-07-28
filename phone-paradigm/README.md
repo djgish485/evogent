@@ -3,8 +3,9 @@
 Android is Evogent's canonical production paradigm. Evogent is the phone's home
 screen, and the complete personal runtime stays on the phone:
 
-- the shell APK supplies the launcher, WebView, native-app routing, overlay, and
-  accessibility mechanics;
+- the shell APK supplies the preference-aware launcher, authenticated WebView,
+  system-assistant Add Message surface, local notification curation/digest,
+  native-app routing, and accessibility mechanics;
 - Termux runs the local Next.js server, SQLite database, brain CLI, source
   mechanics, one scheduler, and its independent watchdog;
 - hidden-display browsing reads the user's real logged-in apps without replacing
@@ -38,7 +39,7 @@ the product's on-device ownership model.
 
 | Component | Responsibility |
 |---|---|
-| `android-shell/` | HOME activity, local WebView, overlay/composer, app routing, accessibility mechanics, boot signal |
+| `android-shell/` | Preference-aware HOME activity, local WebView, assistant composer, notification curation/digest, app routing, accessibility mechanics, boot signal |
 | `device/start-prod.sh` | Canonical phone-profile server environment: loopback, no Redis/background worker |
 | `device/phone-tools/phone.sh` | Deterministic hidden-display launch, capture, tap, and scroll primitives |
 | `device/phone-tools/evogent-scheduler.sh` | Sole scheduling authority; coalesces open, heartbeat, notification, and recovery signals |
@@ -78,6 +79,8 @@ boundary; do not add a second ad-hoc server start path with different variables.
 - [`pixel-real-device-setup.md`](pixel-real-device-setup.md) — current
   stock-device setup details and Android constraints
 - [`device/DEV-LOOP.md`](device/DEV-LOOP.md) — host development and release loop
+- [`../docs/phone-notification-curation.md`](../docs/phone-notification-curation.md)
+  — safe notification and lock-screen digest contract
 - [`device/AGENTS.phone-browse.md`](device/AGENTS.phone-browse.md) — runtime
   browsing capability supplied to an on-device brain
 

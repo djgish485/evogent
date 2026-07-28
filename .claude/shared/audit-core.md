@@ -36,7 +36,7 @@ It runs inline during every curation cycle and every reflection cycle. The `pipe
 
 - Do the work inline in the current invocation. Do not spawn nested orchestration just to audit.
 - Do not add product-code heuristics to compensate for instruction drift. Fix the instructions and diagnostics instead.
-- Scheduled phone curation and reflection are runtime roles, not software-development agents.
+- Scheduled phone curation and oversight are runtime roles, not software-development agents.
   They do not inspect git history, host-agent memory, code diffs, or merge receipts and never
   edit code, scripts, skills, tests, or development artifacts. A manual host audit owns that
   work. Phone workers may surface evidence-backed product observations for host evaluation.

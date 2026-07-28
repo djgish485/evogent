@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PhoneNotificationCurationPanel } from '@/components/phone-notification-curation-panel';
 
 interface ConfigPanelProps {
   open: boolean;
@@ -17,6 +18,7 @@ type ConfigTabKey =
   | 'preference-insights'
   | 'preferences'
   | 'cache-hints'
+  | 'phone-notifications'
   | 'skills';
 
 interface CacheHintAccountView {
@@ -39,7 +41,7 @@ interface ConfigTabDefinition {
   placeholder: string;
   endpoint: string;
   readOnly?: boolean;
-  view?: 'text' | 'cache-hints';
+  view?: 'text' | 'cache-hints' | 'notification-curation';
 }
 
 const TABS: ConfigTabDefinition[] = [
@@ -113,6 +115,15 @@ const TABS: ConfigTabDefinition[] = [
     endpoint: '/api/config?target=cache-hints',
     readOnly: true,
     view: 'cache-hints',
+  },
+  {
+    key: 'phone-notifications',
+    label: 'Phone Alerts',
+    heading: 'Notification Curation',
+    placeholder: '',
+    endpoint: '/api/phone-notifications/settings',
+    readOnly: true,
+    view: 'notification-curation',
   },
   {
     key: 'skills',
@@ -267,6 +278,7 @@ export function ConfigPanel({ open, onClose }: ConfigPanelProps) {
   const activeTabDefinition = tabForKey(activeTab);
   const isReadOnly = Boolean(activeTabDefinition.readOnly);
   const usesCacheHintsView = activeTabDefinition.view === 'cache-hints';
+  const usesNotificationCurationView = activeTabDefinition.view === 'notification-curation';
 
   useEffect(() => {
     if (!open) return;
@@ -283,6 +295,11 @@ export function ConfigPanel({ open, onClose }: ConfigPanelProps) {
       setStatus(null);
       setContent('');
       setCacheHints(null);
+
+      if (usesNotificationCurationView) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         const response = await fetch(activeTabDefinition.endpoint, { cache: 'no-store' });
@@ -306,7 +323,7 @@ export function ConfigPanel({ open, onClose }: ConfigPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeTabDefinition.endpoint, open]);
+  }, [activeTabDefinition.endpoint, open, usesNotificationCurationView]);
 
   if (!open) return null;
 
@@ -346,7 +363,9 @@ export function ConfigPanel({ open, onClose }: ConfigPanelProps) {
             })}
           </div>
         </div>
-        {usesCacheHintsView ? (
+        {usesNotificationCurationView ? (
+          <PhoneNotificationCurationPanel />
+        ) : usesCacheHintsView ? (
           <CacheHintsPanel data={cacheHints} isLoading={isLoading} />
         ) : (
           <textarea
@@ -369,7 +388,9 @@ export function ConfigPanel({ open, onClose }: ConfigPanelProps) {
         )}
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs text-zinc-500">{status || ''}</p>
-          {isReadOnly ? (
+          {usesNotificationCurationView ? (
+            <p className="text-xs text-zinc-500">Local phone settings</p>
+          ) : isReadOnly ? (
             <p className="text-xs text-zinc-500">Read only</p>
           ) : (
             <button
