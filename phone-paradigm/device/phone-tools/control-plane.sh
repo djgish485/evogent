@@ -371,9 +371,28 @@ def same_live_name(path, observed):
     )
 
 def fsync_parent(path):
-    parent = os.open(path.parent, directory_flags)
+    # Versioned installs deliberately expose ~/phone-tools as a symlink to the
+    # private state directory.  The lock itself must never be a symlink, but
+    # opening that canonical parent with O_NOFOLLOW rejects the valid dispatch
+    # symlink *after* rename_noreplace has already published the lock.  Resolve
+    # and bind the parent identity before fsync so publication is both durable
+    # and reported as successful.
+    observed = os.stat(path.parent, follow_symlinks=True)
+    resolved = path.parent.resolve(strict=True)
+    parent = os.open(resolved, directory_flags)
     try:
+        opened = os.fstat(parent)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_uid != os.geteuid()
+            or (opened.st_dev, opened.st_ino)
+            != (observed.st_dev, observed.st_ino)
+        ):
+            raise SystemExit(75)
         os.fsync(parent)
+        current = os.stat(path.parent, follow_symlinks=True)
+        if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+            raise SystemExit(75)
     finally:
         os.close(parent)
 

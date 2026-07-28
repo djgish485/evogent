@@ -722,6 +722,56 @@ test -d "$1"
   assert.equal(live.status, 0, live.stderr);
 });
 
+test('control lock publication durably fsyncs through the canonical phone-tools symlink', () => {
+  const controlPlane = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/control-plane.sh'),
+    'utf8',
+  );
+  const operation = shellFunction(
+    controlPlane,
+    'control_lock_directory_operation',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-control-lock-symlink-parent-'),
+  );
+  const stateTools = path.join(fixture, 'state', 'phone-tools');
+  const dispatchTools = path.join(fixture, 'phone-tools');
+  fs.mkdirSync(stateTools, { recursive: true, mode: 0o700 });
+  fs.symlinkSync(stateTools, dispatchTools, 'dir');
+  const candidate = path.join(dispatchTools, '.scheduler.lock.pending.fixture');
+  const lock = path.join(dispatchTools, '.scheduler.lock');
+  fs.mkdirSync(candidate, { mode: 0o700 });
+  fs.writeFileSync(
+    path.join(candidate, 'owner'),
+    `owner=fixture\npid=${process.pid}\nstart=1\nlabel=scheduler\nacquired=1\n`,
+    { mode: 0o600 },
+  );
+  fs.writeFileSync(path.join(candidate, 'heartbeat'), '', { mode: 0o600 });
+
+  try {
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        `set -euo pipefail
+${operation}
+control_lock_directory_operation publish "$1" "$2"
+`,
+        'symlink-parent',
+        candidate,
+        lock,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(candidate), false);
+    assert.equal(fs.statSync(lock).isDirectory(), true);
+    assert.equal(fs.realpathSync(path.dirname(lock)), fs.realpathSync(stateTools));
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 test('installer creates its private tree with no-follow component walks', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
