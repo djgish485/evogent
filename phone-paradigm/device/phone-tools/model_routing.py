@@ -25,6 +25,47 @@ from typing import Any, Iterable
 SCHEMA_VERSION = 1
 ALLOWED_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,159}$")
+BENCHMARK_KIND_BY_TASK = {
+    # Versioned away from production route names on purpose. A rollback to the
+    # schema-v1 task-only router must ignore receipts whose newer equivalence,
+    # terminal-proof, and artifact-review gates it does not understand.
+    "browse_full_v2": "full_browse",
+    "browse_micro": "grounded_micro",
+    "curator_full_v2": "full_curation_snapshot",
+}
+PRODUCTION_RECEIPT_TASK = {
+    "browse": "browse_full_v2",
+    "curator": "curator_full_v2",
+}
+PRODUCTION_BENCHMARK_KIND = {
+    "browse": BENCHMARK_KIND_BY_TASK["browse_full_v2"],
+    "curator": BENCHMARK_KIND_BY_TASK["curator_full_v2"],
+}
+FULL_BROWSE_MIN_OUTCOME_RATIO = 0.80
+FULL_BROWSE_MAX_ELAPSED_RATIO = 1.20
+CURATOR_MINIMUM_PAIRED_PASSES = 3
+CURATOR_MECHANICS_STATUSES = frozenset({
+    "passed",
+    "timeout",
+    "runner_failed",
+    "snapshot_prepare_failed",
+    "terminal_failed",
+    "artifact_failed",
+    "restore_failed",
+})
+RECEIPT_ROLES = frozenset({"baseline", "candidate"})
+QUALITY_STATUSES = frozenset({"passed", "failed", "not_scored"})
+MECHANICS_STATUSES_BY_TASK = {
+    "browse_full_v2": frozenset({
+        "passed",
+        "failed",
+        "timeout",
+        "runner_failed",
+        "terminal_proof_failed",
+    }),
+    "browse_micro": frozenset({"passed", "failed", "timeout", "runner_failed"}),
+    "curator_full_v2": CURATOR_MECHANICS_STATUSES,
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -242,6 +283,59 @@ def _receipt_key(row: dict[str, Any]) -> tuple[str, str]:
     return (_safe_model(row.get("model")), _safe_effort(row.get("effort"), ""))
 
 
+def _full_browse_terminal_metrics(row: dict[str, Any]) -> tuple[int, int] | None:
+    """Return exact fresh-row and elapsed metrics only for a run-bound terminal proof."""
+
+    metrics = row.get("metrics")
+    if not isinstance(metrics, dict) or metrics.get("terminalProof") is not True:
+        return None
+    run_digest = metrics.get("runDigest")
+    if not isinstance(run_digest, str) or not re.fullmatch(r"[a-f0-9]{64}", run_digest):
+        return None
+
+    values: dict[str, int] = {}
+    for key in ("terminalItems", "freshRows", "completeRows", "elapsedMs"):
+        value = _finite_nonnegative(metrics.get(key))
+        if value is None or value < 1 or not value.is_integer():
+            return None
+        values[key] = int(value)
+    if not (
+        values["terminalItems"]
+        == values["freshRows"]
+        == values["completeRows"]
+    ):
+        return None
+    return values["freshRows"], values["elapsedMs"]
+
+
+def _curator_review_proof(row: dict[str, Any]) -> bool:
+    """Require an explicit review bound to one private full-snapshot artifact."""
+
+    metrics = row.get("metrics")
+    if (
+        not isinstance(metrics, dict)
+        or metrics.get("artifactReviewed") is not True
+        or metrics.get("fullSnapshotProof") is not True
+        or metrics.get("terminalProof") is not True
+    ):
+        return False
+    digest = metrics.get("artifactDigest")
+    run_digest = metrics.get("runDigest")
+    reviewed_at_ms = _finite_nonnegative(metrics.get("reviewedAtMs"))
+    candidate_count = _finite_nonnegative(metrics.get("candidateCount"))
+    return (
+        isinstance(digest, str)
+        and re.fullmatch(r"[a-f0-9]{64}", digest) is not None
+        and isinstance(run_digest, str)
+        and re.fullmatch(r"[a-f0-9]{64}", run_digest) is not None
+        and reviewed_at_ms is not None
+        and reviewed_at_ms > 0
+        and candidate_count is not None
+        and candidate_count >= 1
+        and candidate_count.is_integer()
+    )
+
+
 def qualification_decision(
     receipts: Iterable[dict[str, Any]],
     *,
@@ -263,16 +357,40 @@ def qualification_decision(
     """
 
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    cutoff_ms = now_ms - max_age_hours * 60 * 60 * 1000
+    bounded_max_age_hours = _positive_int(max_age_hours, 720)
+    cutoff_ms = now_ms - bounded_max_age_hours * 60 * 60 * 1000
     wanted_candidate = (_safe_model(candidate_model), _safe_effort(candidate_effort, ""))
     wanted_baseline = (_safe_model(baseline_model), _safe_effort(baseline_effort, ""))
-    if not all((*wanted_candidate, *wanted_baseline)) or not SAFE_TOKEN.fullmatch(suite_id):
+    if (
+        not all((*wanted_candidate, *wanted_baseline))
+        or wanted_candidate == wanted_baseline
+        or not SAFE_TOKEN.fullmatch(suite_id)
+    ):
         return {"qualified": False, "reason": "invalid_request", "pairedPasses": 0}
 
     by_round: dict[int, dict[str, dict[str, Any]]] = {}
     mechanics_failures = 0
+    browse_mechanics_failure_rounds: set[int] = set()
+    browse_terminal_failure_rounds: set[int] = set()
+    curator_mechanics_failure_rounds: set[int] = set()
+    curator_review_proof_failures = 0
+    terminal_proof_failures = 0
+    outcome_equivalence_failures = 0
+    latency_equivalence_failures = 0
+    role_integrity_failure_rounds: set[int] = set()
+    ineligible_kind_rows = 0
+    ineligible_task_rows = 0
+    required_kind = PRODUCTION_BENCHMARK_KIND.get(task, "")
+    required_receipt_task = PRODUCTION_RECEIPT_TASK.get(task, task)
     for row in receipts:
-        if row.get("task") != task or row.get("suiteId") != suite_id:
+        if row.get("suiteId") != suite_id:
+            continue
+        if row.get("task") != required_receipt_task:
+            if required_receipt_task != task and row.get("task") == task:
+                ineligible_task_rows += 1
+            continue
+        if required_kind and row.get("benchmarkKind") != required_kind:
+            ineligible_kind_rows += 1
             continue
         recorded_at = _finite_nonnegative(row.get("recordedAtMs"))
         if recorded_at is None or recorded_at < cutoff_ms or recorded_at > now_ms + 300_000:
@@ -287,10 +405,38 @@ def qualification_decision(
         role = "candidate" if key == wanted_candidate else "baseline" if key == wanted_baseline else ""
         if not role:
             continue
-        by_round.setdefault(round_number, {})[role] = row
+        # Model/effort determines which side a receipt can represent. The
+        # declared role is still part of the signed-by-process ledger contract:
+        # disagreement or duplicate side labels make the round ambiguous and
+        # invalidate the suite instead of silently relabeling a corrupt row.
+        if row.get("role") != role:
+            role_integrity_failure_rounds.add(round_number)
+            continue
+        if task == "browse":
+            if row.get("mechanicsStatus") != "passed":
+                browse_mechanics_failure_rounds.add(round_number)
+            elif _full_browse_terminal_metrics(row) is None:
+                browse_terminal_failure_rounds.add(round_number)
+        if task == "curator" and row.get("mechanicsStatus") != "passed":
+            # A failed side may have no peer because the benchmark aborts rather
+            # than pretending the snapshot comparison remained fair. It still
+            # invalidates the whole curator suite.
+            curator_mechanics_failure_rounds.add(round_number)
+        round_rows = by_round.setdefault(round_number, {})
+        if role in round_rows:
+            role_integrity_failure_rounds.add(round_number)
+            continue
+        round_rows[role] = row
 
+    bounded_minimum_paired_passes = _positive_int(minimum_paired_passes, 3)
+    required_paired_passes = (
+        max(CURATOR_MINIMUM_PAIRED_PASSES, bounded_minimum_paired_passes)
+        if task == "curator"
+        else bounded_minimum_paired_passes
+    )
     paired_passes = 0
     elapsed_ratios: list[float] = []
+    outcome_ratios: list[float] = []
     for pair in by_round.values():
         baseline = pair.get("baseline")
         candidate = pair.get("candidate")
@@ -300,31 +446,106 @@ def qualification_decision(
             baseline.get("mechanicsStatus") != "passed"
             or candidate.get("mechanicsStatus") != "passed"
         ):
-            mechanics_failures += 1
+            if task != "curator":
+                mechanics_failures += 1
             continue
+        if task == "browse":
+            baseline_terminal = _full_browse_terminal_metrics(baseline)
+            candidate_terminal = _full_browse_terminal_metrics(candidate)
+            if baseline_terminal is None or candidate_terminal is None:
+                continue
         if (
             baseline.get("qualityStatus") != "passed"
             or candidate.get("qualityStatus") != "passed"
         ):
             continue
-        paired_passes += 1
+        if task == "curator" and (
+            not _curator_review_proof(baseline)
+            or not _curator_review_proof(candidate)
+        ):
+            curator_review_proof_failures += 1
+            continue
         baseline_elapsed = _finite_nonnegative((baseline.get("metrics") or {}).get("elapsedMs"))
         candidate_elapsed = _finite_nonnegative((candidate.get("metrics") or {}).get("elapsedMs"))
         if baseline_elapsed and candidate_elapsed is not None:
             elapsed_ratios.append(candidate_elapsed / baseline_elapsed)
+        if task == "browse":
+            baseline_fresh, baseline_elapsed_exact = baseline_terminal
+            candidate_fresh, candidate_elapsed_exact = candidate_terminal
+            outcome_ratio = candidate_fresh / baseline_fresh
+            elapsed_ratio = candidate_elapsed_exact / baseline_elapsed_exact
+            outcome_ratios.append(outcome_ratio)
+            if outcome_ratio < FULL_BROWSE_MIN_OUTCOME_RATIO:
+                outcome_equivalence_failures += 1
+                continue
+            if elapsed_ratio > FULL_BROWSE_MAX_ELAPSED_RATIO:
+                latency_equivalence_failures += 1
+                continue
+        paired_passes += 1
 
-    qualified = mechanics_failures == 0 and paired_passes >= minimum_paired_passes
+    if task == "browse":
+        terminal_proof_failures = len(browse_terminal_failure_rounds)
+        mechanics_failures = len(
+            browse_mechanics_failure_rounds
+            | browse_terminal_failure_rounds
+            | role_integrity_failure_rounds
+        )
+    elif task == "curator":
+        mechanics_failures = len(
+            curator_mechanics_failure_rounds | role_integrity_failure_rounds
+        )
+    else:
+        mechanics_failures += len(role_integrity_failure_rounds)
+    qualified = (
+        not role_integrity_failure_rounds
+        and mechanics_failures == 0
+        and paired_passes >= required_paired_passes
+    )
+    reason = (
+        "qualified"
+        if qualified
+        else "ineligible_benchmark_task"
+        if ineligible_task_rows and not by_round
+        else "ineligible_benchmark_kind"
+        if ineligible_kind_rows and not by_round
+        else "ledger_integrity_failure"
+        if role_integrity_failure_rounds
+        else "mechanics_failure"
+        if mechanics_failures
+        else "outcome_equivalence_failure"
+        if outcome_equivalence_failures
+        else "latency_equivalence_failure"
+        if latency_equivalence_failures
+        else "quality_review_proof_failure"
+        if curator_review_proof_failures
+        else "insufficient_paired_quality_passes"
+    )
     decision: dict[str, Any] = {
         "qualified": qualified,
-        "reason": "qualified" if qualified else (
-            "mechanics_failure" if mechanics_failures else "insufficient_paired_quality_passes"
-        ),
+        "reason": reason,
         "pairedPasses": paired_passes,
-        "minimumPairedPasses": minimum_paired_passes,
+        "minimumPairedPasses": required_paired_passes,
         "mechanicsFailedPairs": mechanics_failures,
+        "roleIntegrityFailedPairs": len(role_integrity_failure_rounds),
     }
+    if task == "curator":
+        decision["qualityReviewProofFailedPairs"] = curator_review_proof_failures
+    if task == "browse":
+        decision.update({
+            "terminalProofFailedPairs": terminal_proof_failures,
+            "outcomeEquivalenceFailedPairs": outcome_equivalence_failures,
+            "latencyEquivalenceFailedPairs": latency_equivalence_failures,
+            "minimumOutcomeRatio": FULL_BROWSE_MIN_OUTCOME_RATIO,
+            "maximumElapsedRatio": FULL_BROWSE_MAX_ELAPSED_RATIO,
+        })
+    if required_kind:
+        decision["requiredBenchmarkKind"] = required_kind
+    if required_receipt_task:
+        decision["requiredBenchmarkTask"] = required_receipt_task
     if elapsed_ratios:
         decision["meanElapsedRatio"] = sum(elapsed_ratios) / len(elapsed_ratios)
+    if outcome_ratios:
+        decision["meanOutcomeRatio"] = sum(outcome_ratios) / len(outcome_ratios)
     return decision
 
 
@@ -417,12 +638,18 @@ def grounded_title_metrics(response_text: str, tree_text: str) -> dict[str, Any]
         for title in titles
         if isinstance(title, str) and len(_normalize_text(title)) >= 4
     ]
+    normalized_titles = {_normalize_text(title) for title in valid}
     normalized_tree = _normalize_text(tree_text)
-    grounded = sum(1 for title in valid if _normalize_text(title) in normalized_tree)
+    grounded = sum(1 for title in normalized_titles if title in normalized_tree)
     mechanics_status = "passed" if len(normalized_tree) >= 40 else "failed"
     quality_status = (
         "passed"
-        if mechanics_status == "passed" and len(valid) == 5 and grounded == 5
+        if (
+            mechanics_status == "passed"
+            and len(valid) == 5
+            and len(normalized_titles) == 5
+            and grounded == 5
+        )
         else "failed" if mechanics_status == "passed" else "not_scored"
     )
     return {
@@ -430,6 +657,7 @@ def grounded_title_metrics(response_text: str, tree_text: str) -> dict[str, Any]
         "qualityStatus": quality_status,
         "metrics": {
             "reportedTitles": len(valid),
+            "distinctTitles": len(normalized_titles),
             "groundedTitles": grounded,
             "requiredTitles": 5,
             "caseDigest": hashlib.sha256(tree_text.encode("utf-8")).hexdigest(),
@@ -438,12 +666,15 @@ def grounded_title_metrics(response_text: str, tree_text: str) -> dict[str, Any]
 
 
 def append_receipt(path: Path, receipt: dict[str, Any]) -> None:
+    benchmark_kind = _safe_model(receipt.get("benchmarkKind"))
+    receipt_role = receipt.get("role")
     safe = {
         "schemaVersion": SCHEMA_VERSION,
         "recordedAtMs": int(receipt.get("recordedAtMs") or time.time() * 1000),
         "suiteId": str(receipt.get("suiteId") or "")[:160],
         "round": int(receipt.get("round") or 0),
         "task": str(receipt.get("task") or "")[:80],
+        "benchmarkKind": benchmark_kind,
         "role": "baseline" if receipt.get("role") == "baseline" else "candidate",
         "model": _safe_model(receipt.get("model")),
         "effort": _safe_effort(receipt.get("effort"), ""),
@@ -466,8 +697,22 @@ def append_receipt(path: Path, receipt: dict[str, Any]) -> None:
         or not SAFE_TOKEN.fullmatch(safe["task"])
         or not safe["model"]
         or not safe["effort"]
+        or BENCHMARK_KIND_BY_TASK.get(safe["task"]) != safe["benchmarkKind"]
     ):
         raise ValueError("invalid benchmark receipt identity")
+    mechanics_status = safe["mechanicsStatus"]
+    quality_status = safe["qualityStatus"]
+    if receipt_role not in RECEIPT_ROLES:
+        raise ValueError("invalid benchmark role")
+    if mechanics_status not in MECHANICS_STATUSES_BY_TASK[safe["task"]]:
+        raise ValueError("invalid benchmark mechanics status")
+    if quality_status not in QUALITY_STATUSES:
+        raise ValueError("invalid benchmark quality status")
+    if mechanics_status != "passed" and quality_status != "not_scored":
+        raise ValueError("benchmark mechanics failure cannot carry a quality score")
+    if safe["task"] == PRODUCTION_RECEIPT_TASK["curator"]:
+        if quality_status in {"passed", "failed"} and not _curator_review_proof(safe):
+            raise ValueError("curator quality requires explicit private artifact review")
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:

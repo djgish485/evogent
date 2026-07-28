@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { recordBrowseCacheRefresh, type UpsertBrowseCacheItemInput } from '@/lib/db/browse-cache';
+import { validateBenchmarkSharePayload } from '@/lib/browse-benchmark-proof';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     : [];
 
   try {
+    validateBenchmarkSharePayload(payload as Record<string, unknown>, items);
     const metadata = readRunMetadata(payload as Record<string, unknown>);
     const run = recordBrowseCacheRefresh({
       runId: typeof (payload as { runId?: unknown }).runId === 'string' ? (payload as { runId: string }).runId : null,

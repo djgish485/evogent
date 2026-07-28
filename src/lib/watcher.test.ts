@@ -37,16 +37,21 @@ describe('feed watcher startup notifications', { concurrency: false }, () => {
   let originalDataDir: string | undefined;
   let originalDbPath: string | undefined;
   let originalFeedWatcherStartupImport: string | undefined;
+  let originalRuntimeProfile: string | undefined;
+  let originalLegacyRuntimeProfile: string | undefined;
   let originalFetch: typeof fetch;
   let tempDir = '';
   let watcherModule: FeedWatcherModule | null = null;
   let notifyPayloads: Array<Record<string, unknown>> = [];
+  let requestedUrls: string[] = [];
 
   beforeEach(async () => {
     originalCwd = process.cwd();
     originalDataDir = process.env.DATA_DIR;
     originalDbPath = process.env.MEDIA_AGENT_DB_PATH;
     originalFeedWatcherStartupImport = process.env.MEDIA_AGENT_ENABLE_FEED_WATCHER_STARTUP_IMPORT;
+    originalRuntimeProfile = process.env.EVOGENT_RUNTIME_PROFILE;
+    originalLegacyRuntimeProfile = process.env.MEDIA_AGENT_RUNTIME_PROFILE;
     originalFetch = globalThis.fetch;
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-watcher-test-'));
 
@@ -59,9 +64,18 @@ describe('feed watcher startup notifications', { concurrency: false }, () => {
     process.env.DATA_DIR = path.join(tempDir, 'data');
     process.env.MEDIA_AGENT_DB_PATH = path.join(tempDir, 'data', 'media-agent.db');
     process.env.MEDIA_AGENT_ENABLE_FEED_WATCHER_STARTUP_IMPORT = '1';
+    delete process.env.EVOGENT_RUNTIME_PROFILE;
+    delete process.env.MEDIA_AGENT_RUNTIME_PROFILE;
     notifyPayloads = [];
+    requestedUrls = [];
 
-    globalThis.fetch = (async (_input, init) => {
+    globalThis.fetch = (async (input, init) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      requestedUrls.push(url);
       const rawBody = init?.body;
       const body = typeof rawBody === 'string'
         ? JSON.parse(rawBody) as Record<string, unknown>
@@ -121,12 +135,24 @@ describe('feed watcher startup notifications', { concurrency: false }, () => {
       process.env.MEDIA_AGENT_ENABLE_FEED_WATCHER_STARTUP_IMPORT = originalFeedWatcherStartupImport;
     }
 
+    if (originalRuntimeProfile === undefined) {
+      delete process.env.EVOGENT_RUNTIME_PROFILE;
+    } else {
+      process.env.EVOGENT_RUNTIME_PROFILE = originalRuntimeProfile;
+    }
+
+    if (originalLegacyRuntimeProfile === undefined) {
+      delete process.env.MEDIA_AGENT_RUNTIME_PROFILE;
+    } else {
+      process.env.MEDIA_AGENT_RUNTIME_PROFILE = originalLegacyRuntimeProfile;
+    }
+
     if (tempDir) {
       await fs.promises.rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  test('initial read populates the DB without notifying, then appended items notify', async () => {
+  test('initial import is silent and phone watcher inserts notify without automatic enrichment', async () => {
     assert.ok(watcherModule);
 
     await watcherModule.startFeedWatcher();
@@ -170,6 +196,36 @@ describe('feed watcher startup notifications', { concurrency: false }, () => {
       { sourceId: 'existing-item', text: 'existing post' },
       { sourceId: 'new-item', text: 'new post' },
     ]);
+
+    process.env.EVOGENT_RUNTIME_PROFILE = 'phone';
+    await fs.promises.appendFile(
+      path.join(tempDir, 'data', 'feed-output.jsonl'),
+      `${JSON.stringify({
+        type: 'tweet',
+        source: 'twitter',
+        source_id: 'phone-watcher-tweet',
+        text: 'phone watcher primary card',
+        url: 'https://x.com/example/status/1234567890',
+        author_username: 'example',
+        published_at: '2026-03-08T12:15:00.000Z',
+      })}\n`,
+      'utf8',
+    );
+
+    await waitFor(
+      () => requestedUrls.filter((url) => url.endsWith('/api/internal/feed-notify')).length === 2,
+      7_000,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert.equal(
+      requestedUrls.filter((url) => url.endsWith('/api/orchestrator/enqueue')).length,
+      0,
+    );
+    assert.equal(notifyPayloads.length, 2);
+    const phoneItems = notifyPayloads[1]?.items;
+    assert.ok(Array.isArray(phoneItems));
+    assert.equal((phoneItems[0] as { text?: unknown }).text, 'phone watcher primary card');
   });
 
   test('skips re-importing API audit lines for feed rows that already exist', async () => {

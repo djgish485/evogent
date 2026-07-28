@@ -15,6 +15,7 @@ import {
   itemIsStillIncomplete,
   queueFeedItemEnrichment,
 } from '@/lib/feed-enrichment';
+import { isPhoneRuntime } from '@/lib/runtime-profile';
 import type { FeedItem } from '@/types/feed';
 import { fetchInternal } from '@/lib/internal-request-auth';
 
@@ -87,6 +88,7 @@ async function notifyFeedUpdate(items: FeedItem[]) {
 }
 
 function queueFeedItemEnrichmentInBackground(item: FeedItem) {
+  if (isPhoneRuntime()) return;
   if (!itemIsStillIncomplete(item)) return;
 
   void queueFeedItemEnrichment(item, {

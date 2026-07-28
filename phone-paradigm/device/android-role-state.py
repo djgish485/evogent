@@ -17,7 +17,7 @@ multiple holders because HOME and ASSISTANT are exclusive roles.
 
 Exit status 0 means success or match. Status 1 is a valid comparison mismatch
 and is deliberately silent. Status 65 means invalid or unsafe input/state.
-Only the explicit ``query`` command emits a holder package name.
+Only explicit snapshot/query-result parsing commands emit observed values.
 """
 
 from __future__ import annotations
@@ -42,9 +42,20 @@ ASSISTANT_ROLE = "android.app.role.ASSISTANT"
 ROLES = (HOME_ROLE, ASSISTANT_ROLE)
 SNAPSHOT_BASENAME = "android-role-holders.json"
 CAPTURE_HEADER = b"EVOGENT_ANDROID_ROLE_RAW_V1\n"
+QUERY_RESULT_HEADER = b"EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1\n"
+CURRENT_USER_RESULT_HEADER = QUERY_RESULT_HEADER + b"current-user\n"
+ROLE_HOLDERS_RESULT_HEADER = QUERY_RESULT_HEADER + b"role-holders\n"
+ASSISTANT_SETTING_RESULT_HEADER = QUERY_RESULT_HEADER + b"assistant-setting\n"
+VOICE_SETTING_RESULT_HEADER = QUERY_RESULT_HEADER + b"voice-setting\n"
+HOME_COMPONENT_RESULT_HEADER = QUERY_RESULT_HEADER + b"home-component\n"
 
 MAX_ROLE_OUTPUT_BYTES = 4096
 MAX_CAPTURE_INPUT_BYTES = len(CAPTURE_HEADER) + (MAX_ROLE_OUTPUT_BYTES * 2)
+MAX_CURRENT_USER_RESULT_BYTES = len(CURRENT_USER_RESULT_HEADER) + 12
+MAX_ROLE_HOLDERS_RESULT_BYTES = (
+    len(ROLE_HOLDERS_RESULT_HEADER) + MAX_ROLE_OUTPUT_BYTES
+)
+MAX_COMPONENT_OUTPUT_BYTES = 1024
 MAX_SNAPSHOT_BYTES = 8192
 MAX_USER_ID = (2**31) - 1
 
@@ -138,6 +149,66 @@ def _parse_capture_input(stream: BinaryIO) -> dict[str, tuple[str, ...]]:
 
 def _parse_observed_input(stream: BinaryIO) -> tuple[str, ...]:
     return _parse_raw_role_output(_read_bounded(stream, MAX_ROLE_OUTPUT_BYTES))
+
+
+def _strip_one_optional_lf(payload: bytes) -> bytes:
+    if payload.endswith(b"\n"):
+        payload = payload[:-1]
+    if b"\n" in payload or b"\r" in payload:
+        raise RoleStateError
+    return payload
+
+
+def _parse_current_user_result(stream: BinaryIO) -> int:
+    payload = _read_bounded(stream, MAX_CURRENT_USER_RESULT_BYTES)
+    if not payload.startswith(CURRENT_USER_RESULT_HEADER):
+        raise RoleStateError
+    raw_user_id = _strip_one_optional_lf(
+        payload[len(CURRENT_USER_RESULT_HEADER) :]
+    )
+    try:
+        user_id = raw_user_id.decode("ascii", "strict")
+    except UnicodeDecodeError as error:
+        raise RoleStateError from error
+    return _parse_user_id(user_id)
+
+
+def _parse_role_holders_result(stream: BinaryIO) -> tuple[str, ...]:
+    payload = _read_bounded(stream, MAX_ROLE_HOLDERS_RESULT_BYTES)
+    if not payload.startswith(ROLE_HOLDERS_RESULT_HEADER):
+        raise RoleStateError
+    raw_holder = _strip_one_optional_lf(
+        payload[len(ROLE_HOLDERS_RESULT_HEADER) :]
+    )
+    if not raw_holder:
+        return ()
+    try:
+        holder = raw_holder.decode("ascii", "strict")
+    except UnicodeDecodeError as error:
+        raise RoleStateError from error
+    if ";" in holder:
+        raise RoleStateError
+    return (_parse_package(holder),)
+
+
+def _parse_single_line_result(
+    stream: BinaryIO,
+    header: bytes,
+) -> str:
+    payload = _read_bounded(
+        stream,
+        len(header) + MAX_COMPONENT_OUTPUT_BYTES,
+    )
+    if not payload.startswith(header):
+        raise RoleStateError
+    raw_value = _strip_one_optional_lf(payload[len(header) :])
+    try:
+        value = raw_value.decode("ascii", "strict")
+    except UnicodeDecodeError as error:
+        raise RoleStateError from error
+    if any(ord(character) < 0x20 or ord(character) > 0x7E for character in value):
+        raise RoleStateError
+    return value
 
 
 def _strict_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -481,6 +552,49 @@ def _command_capture(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _command_parse_current_user_result(_arguments: argparse.Namespace) -> int:
+    user_id = _parse_current_user_result(sys.stdin.buffer)
+    sys.stdout.write(f"{user_id}\n")
+    return 0
+
+
+def _command_parse_role_holders_result(_arguments: argparse.Namespace) -> int:
+    holders = _parse_role_holders_result(sys.stdin.buffer)
+    sys.stdout.write((holders[0] if holders else "") + "\n")
+    return 0
+
+
+def _command_parse_assistant_setting_result(
+    _arguments: argparse.Namespace,
+) -> int:
+    value = _parse_single_line_result(
+        sys.stdin.buffer,
+        ASSISTANT_SETTING_RESULT_HEADER,
+    )
+    sys.stdout.write(value + "\n")
+    return 0
+
+
+def _command_parse_voice_setting_result(_arguments: argparse.Namespace) -> int:
+    value = _parse_single_line_result(
+        sys.stdin.buffer,
+        VOICE_SETTING_RESULT_HEADER,
+    )
+    sys.stdout.write(value + "\n")
+    return 0
+
+
+def _command_parse_home_component_result(
+    _arguments: argparse.Namespace,
+) -> int:
+    value = _parse_single_line_result(
+        sys.stdin.buffer,
+        HOME_COMPONENT_RESULT_HEADER,
+    )
+    sys.stdout.write(value + "\n")
+    return 0
+
+
 def _command_validate(arguments: argparse.Namespace) -> int:
     _read_snapshot(
         arguments.snapshot,
@@ -542,6 +656,41 @@ def _build_parser() -> SafeArgumentParser:
     capture.add_argument("--snapshot", required=True)
     capture.add_argument("--user-id", required=True)
     capture.set_defaults(handler=_command_capture)
+
+    parse_current_user_result = commands.add_parser(
+        "parse-current-user-result"
+    )
+    parse_current_user_result.set_defaults(
+        handler=_command_parse_current_user_result
+    )
+
+    parse_role_holders_result = commands.add_parser(
+        "parse-role-holders-result"
+    )
+    parse_role_holders_result.set_defaults(
+        handler=_command_parse_role_holders_result
+    )
+
+    parse_assistant_setting_result = commands.add_parser(
+        "parse-assistant-setting-result"
+    )
+    parse_assistant_setting_result.set_defaults(
+        handler=_command_parse_assistant_setting_result
+    )
+
+    parse_voice_setting_result = commands.add_parser(
+        "parse-voice-setting-result"
+    )
+    parse_voice_setting_result.set_defaults(
+        handler=_command_parse_voice_setting_result
+    )
+
+    parse_home_component_result = commands.add_parser(
+        "parse-home-component-result"
+    )
+    parse_home_component_result.set_defaults(
+        handler=_command_parse_home_component_result
+    )
 
     validate = commands.add_parser("validate")
     _add_snapshot_arguments(validate)

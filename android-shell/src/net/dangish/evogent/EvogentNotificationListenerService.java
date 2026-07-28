@@ -16,48 +16,64 @@ import android.util.Log;
 
 import org.json.JSONObject;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
 /**
  * Local notification-curation bridge.
  *
  * Android grants listener access to every app at once, so this service applies privacy and
  * safety policy before constructing an authenticated loopback request. It never reads action
  * PendingIntents, RemoteViews, message bundles, or attachments. Known secrets are removed before
- * transport. Work runs on one bounded worker; overload or any failure leaves Android's original
- * notification untouched.
+ * transport. Work runs on one bounded worker. Before any key-cancellation request, overload or
+ * failure leaves Android's original notification untouched.
  *
- * OBSERVE is the server's safe default. In explicitly selected CURATED mode, only a clearable,
- * non-urgent notification may be replaced, and only after (1) the exact package/key/post-time/
- * content generation has a durable server receipt, (2) Evogent's digest is enabled and visible,
- * and (3) that exact generation is still active. NotificationListenerService sees notifications
- * after Android posts them, so an eligible original can appear briefly before replacement.
+ * OBSERVE is the server's safe default, and CURATED still preserves every Android original
+ * unless the user separately allows best-effort replacement for that package. Protected events
+ * always remain Android-owned. For an allowed ordinary event the listener requires a matching
+ * durable receipt, an active Evogent digest, and a still-matching generation immediately before
+ * asking Android to cancel. Android cancellation is key-only rather than an atomic generation
+ * compare, so the UI and docs describe that final narrow race truthfully.
  */
 public final class EvogentNotificationListenerService extends NotificationListenerService {
     private static final String TAG = "EvogentNotif";
     private static final String INGEST_URL = EvogentSecurityPolicy.PHONE_NOTIFICATION_INGEST_URL;
     private static final String DIGEST_CHANNEL_ID = "evogent_curated_notifications_v1";
     private static final int DIGEST_NOTIFICATION_ID = 0x45564f4e;
-    private static final int MAX_PENDING_EVENTS = 128;
+    private static final int MAX_LIVE_PENDING_EVENTS = 16;
+    private static final int MAX_HISTORICAL_PENDING_EVENTS = 128;
+    private static final int NOTIFICATION_NETWORK_BUDGET_MS = 2000;
+    private static final int DIGEST_VERIFY_BUDGET_MS = 750;
+    private static final String DIGEST_EVENT_ID_EXTRA = "evogent_event_id";
+    private static final String DIGEST_SERVICE_GENERATION_EXTRA =
+            "evogent_service_generation";
+    private static final String DIGEST_WORK_SEQUENCE_EXTRA = "evogent_work_sequence";
+    private static final Object DIGEST_PUBLICATION_LOCK = new Object();
+    private static long nextServiceGeneration;
+    private static long activeServiceGeneration;
 
-    private final ThreadPoolExecutor worker = new ThreadPoolExecutor(
-            1,
-            1,
-            20L,
-            TimeUnit.SECONDS,
-            new ArrayBlockingQueue<Runnable>(MAX_PENDING_EVENTS),
-            new ThreadFactory() {
-                @Override public Thread newThread(Runnable runnable) {
-                    Thread thread = new Thread(runnable, "evogent-notification-curation");
-                    thread.setDaemon(true);
-                    return thread;
-                }
-            },
-            new ThreadPoolExecutor.DiscardOldestPolicy());
+    private final EvogentNotificationWorkQueue<StatusBarNotification> workQueue =
+            new EvogentNotificationWorkQueue<StatusBarNotification>(
+                    MAX_LIVE_PENDING_EVENTS,
+                    MAX_HISTORICAL_PENDING_EVENTS);
+    private volatile boolean workerRunning;
+    private volatile long newestAppliedLiveDigestSequence;
+    private long serviceGeneration;
+    private Thread workerThread;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            serviceGeneration = ++nextServiceGeneration;
+            activeServiceGeneration = serviceGeneration;
+            workerRunning = true;
+        }
+        workerThread = new Thread(new Runnable() {
+            @Override public void run() {
+                runWorker();
+            }
+        }, "evogent-notification-curation");
+        workerThread.setDaemon(true);
+        workerThread.start();
+    }
 
     @Override
     public void onListenerConnected() {
@@ -82,38 +98,77 @@ public final class EvogentNotificationListenerService extends NotificationListen
 
     @Override
     public void onDestroy() {
-        worker.shutdownNow();
+        workerRunning = false;
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            if (activeServiceGeneration == serviceGeneration) {
+                activeServiceGeneration = 0L;
+            }
+        }
+        Thread thread = workerThread;
+        workerThread = null;
+        if (thread != null) thread.interrupt();
+        workQueue.clear();
         super.onDestroy();
+    }
+
+    private void runWorker() {
+        while (workerRunning) {
+            try {
+                EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry =
+                        workQueue.take();
+                try {
+                    ingest(entry);
+                } finally {
+                    // Drop the StatusBarNotification/content reference as soon as the exact
+                    // revision has finished. Only genuinely in-flight work needs successor
+                    // tracking.
+                    workQueue.complete(entry);
+                }
+            } catch (InterruptedException interrupted) {
+                if (!workerRunning) return;
+            } catch (Throwable error) {
+                logFailure("worker; original preserved", error);
+            }
+        }
     }
 
     private void enqueue(
             final StatusBarNotification notification,
             final boolean historical) {
         if (notification == null) return;
-        try {
-            worker.execute(new Runnable() {
-                @Override public void run() {
-                    ingest(notification, historical);
-                }
-            });
-        } catch (RejectedExecutionException rejected) {
-            // Safe overload behavior: no server receipt means no cancellation.
+        // Filter our digest before it can advance the live sequence. Waiting until capture()
+        // creates a race where manager.notify() supersedes the external event whose exact
+        // replacement proof is currently being applied.
+        String packageName = EvogentNotificationPolicy.normalize(
+                notification.getPackageName(),
+                255);
+        if (EvogentNotificationPolicy.EVOGENT_PACKAGE.equals(packageName)) return;
+        EvogentNotificationWorkQueue.OfferResult result = workerRunning
+                ? workQueue.offer(notification, historical, notification.getKey())
+                : EvogentNotificationWorkQueue.OfferResult.REJECTED;
+        if (!result.accepted()) {
+            // Safe shutdown/overload behavior: no server receipt means no cancellation.
             Log.w(TAG, "notification queue unavailable; original preserved");
+        } else if (result == EvogentNotificationWorkQueue.OfferResult.EVICTED_OLDEST_LIVE) {
+            Log.w(TAG, "stale live curation work evicted; Android original preserved");
         }
     }
 
-    private void ingest(StatusBarNotification notification, boolean historical) {
+    private void ingest(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry) {
         try {
-            Snapshot snapshot = capture(notification, historical);
+            Snapshot snapshot = capture(entry.value, entry.historical);
             if (snapshot == null || !snapshot.decision.ingest) return;
 
-            JSONObject response = EvogentLoopbackAuth.postJsonDirectForJson(
+            long networkDeadlineElapsedMs =
+                    SystemClock.elapsedRealtime() + NOTIFICATION_NETWORK_BUDGET_MS;
+            JSONObject response = EvogentLoopbackAuth.postJsonDirectForJsonBefore(
                     this,
                     INGEST_URL,
                     snapshot.request.toString(),
-                    6000,
-                    6000);
-            applyResponse(snapshot, response);
+                    networkDeadlineElapsedMs);
+            if (!isCurrentWork(entry)) return;
+            applyResponse(entry, snapshot, response);
         } catch (Throwable error) {
             // Never log notification text or app-provided exception messages.
             logFailure("ingest; original preserved", error);
@@ -175,12 +230,9 @@ public final class EvogentNotificationListenerService extends NotificationListen
         if (!decision.ingest) return null;
 
         String eventId = EvogentNotificationPolicy.eventId(
-                packageName,
+                policyInput,
                 sbn.getKey(),
-                sbn.getPostTime(),
-                title,
-                text,
-                subText);
+                sbn.getPostTime());
         JSONObject request = new JSONObject();
         try {
             request.put("schemaVersion", 1);
@@ -227,9 +279,14 @@ public final class EvogentNotificationListenerService extends NotificationListen
                 request);
     }
 
-    private void applyResponse(Snapshot snapshot, JSONObject response) {
+    private void applyResponse(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry,
+            Snapshot snapshot,
+            JSONObject response) {
         try {
-            if (response == null || !response.optBoolean("ok", false)) return;
+            if (!isCurrentWork(entry)
+                    || response == null
+                    || !response.optBoolean("ok", false)) return;
             JSONObject receipt = response.optJSONObject("receipt");
             JSONObject policy = response.optJSONObject("policy");
             JSONObject digest = response.optJSONObject("digest");
@@ -238,32 +295,118 @@ public final class EvogentNotificationListenerService extends NotificationListen
             String receiptEventId = receipt.optString("eventId", "");
             boolean persisted = receipt.optBoolean("persisted", false);
             String mode = policy.optString("mode", "");
+            boolean replacementAllowed =
+                    policy.optBoolean("replacementAllowed", false);
             boolean serverRequestedSuppression =
                     policy.optBoolean("suppressOriginal", false);
+            boolean receiptMatches = persisted
+                    && snapshot.eventId.equals(receiptEventId);
+            // The live lane is newest-first. An older distinct event may remain queued after a
+            // newer digest was already published. It is still useful to persist that event, but
+            // it must never regress the shared digest or cancel its Android original afterward.
+            if (wouldRegressAppliedLiveDigest(entry)) return;
             boolean digestCapability = hasDigestCapability();
             boolean digestActive = false;
+            DigestMarker digestMarker = null;
             if ("curated".equals(mode)
+                    && replacementAllowed
                     && serverRequestedSuppression
+                    && receiptMatches
                     && digestCapability) {
-                digestActive = publishAndVerifyDigest(digest, snapshot.eventId);
+                if (!isPublicationCurrent(entry, snapshot)) return;
+                digestMarker = new DigestMarker(
+                        snapshot.eventId,
+                        serviceGeneration,
+                        entry.liveSequence);
+                digestActive = publishAndVerifyDigest(
+                        digest,
+                        digestMarker,
+                        entry,
+                        snapshot);
+            }
+            if (digestActive && !isPublicationCurrent(entry, snapshot)) {
+                retractDigestIfOwned(digestMarker);
+                return;
+            }
+            if (digestActive) {
+                markLiveDigestApplied(entry);
+            }
+            if (!isCurrentWork(entry)
+                    || wouldRegressAppliedLiveDigest(entry)) {
+                if (digestActive) retractDigestIfOwned(digestMarker);
+                return;
             }
             boolean revisionMatches = isSameActiveRevision(snapshot);
+            if (!revisionMatches) {
+                if (digestActive) retractDigestIfOwned(digestMarker);
+                return;
+            }
 
-            if (EvogentNotificationPolicy.shouldCancelOriginal(
+            boolean shouldRequestKeyCancellation =
+                    isCurrentWork(entry)
+                    && EvogentNotificationPolicy.shouldCancelOriginal(
                     snapshot.decision,
                     snapshot.eventId,
                     receiptEventId,
                     persisted,
                     mode,
+                    replacementAllowed,
                     serverRequestedSuppression,
                     digestCapability,
                     digestActive,
-                    revisionMatches)) {
+                    revisionMatches);
+            if (shouldRequestKeyCancellation) {
+                // Public Android APIs cancel by stable notification key, not by an atomic
+                // event-version token. The immediately preceding generation checks narrow that
+                // unavoidable race; explicit per-package user consent bounds who can enter it.
                 cancelNotification(snapshot.notificationKey);
-                Log.i(TAG, "eligible notification replaced after exact durable receipt");
+                Log.i(TAG, "allowlisted notification key cancellation requested");
+            } else if (digestActive) {
+                retractDigestIfOwned(digestMarker);
             }
         } catch (Throwable error) {
             logFailure("response validation; original preserved", error);
+        }
+    }
+
+    private boolean isCurrentWork(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry) {
+        return workerRunning
+                && isCurrentServiceGeneration()
+                && workQueue.isCurrent(entry);
+    }
+
+    private boolean isCurrentServiceGeneration() {
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            return workerRunning
+                    && serviceGeneration > 0L
+                    && activeServiceGeneration == serviceGeneration;
+        }
+    }
+
+    private boolean isPublicationCurrent(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry,
+            Snapshot snapshot) {
+        return isCurrentWork(entry)
+                && !wouldRegressAppliedLiveDigest(entry)
+                && hasDigestCapability()
+                && isSameActiveRevision(snapshot);
+    }
+
+    private boolean wouldRegressAppliedLiveDigest(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry) {
+        return entry != null
+                && !entry.historical
+                && entry.liveSequence > 0L
+                && entry.liveSequence < newestAppliedLiveDigestSequence;
+    }
+
+    private void markLiveDigestApplied(
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry) {
+        if (entry != null
+                && !entry.historical
+                && entry.liveSequence > newestAppliedLiveDigestSequence) {
+            newestAppliedLiveDigestSequence = entry.liveSequence;
         }
     }
 
@@ -278,7 +421,10 @@ public final class EvogentNotificationListenerService extends NotificationListen
                     continue;
                 }
                 Snapshot current = capture(candidate, expected.historical);
-                return current != null && expected.eventId.equals(current.eventId);
+                return current != null
+                        && current.decision.nativeCanSuppress
+                        && expected.decision.nativeCanSuppress
+                        && expected.eventId.equals(current.eventId);
             }
         } catch (Throwable ignored) {
         }
@@ -303,7 +449,12 @@ public final class EvogentNotificationListenerService extends NotificationListen
         }
     }
 
-    private boolean publishAndVerifyDigest(JSONObject digest, String eventId) {
+    private boolean publishAndVerifyDigest(
+            JSONObject digest,
+            DigestMarker marker,
+            EvogentNotificationWorkQueue.Entry<StatusBarNotification> entry,
+            Snapshot snapshot) {
+        if (digest == null || marker == null) return false;
         NotificationManager manager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return false;
@@ -338,7 +489,11 @@ public final class EvogentNotificationListenerService extends NotificationListen
                     ? new Notification.Builder(this, DIGEST_CHANNEL_ID)
                     : new Notification.Builder(this);
             Bundle receiptMarker = new Bundle();
-            receiptMarker.putString("evogent_event_id", eventId);
+            receiptMarker.putString(DIGEST_EVENT_ID_EXTRA, marker.eventId);
+            receiptMarker.putLong(
+                    DIGEST_SERVICE_GENERATION_EXTRA,
+                    marker.serviceGeneration);
+            receiptMarker.putLong(DIGEST_WORK_SEQUENCE_EXTRA, marker.workSequence);
             builder
                     .setSmallIcon(R.drawable.ic_evogent)
                     .setContentTitle(title)
@@ -367,19 +522,35 @@ public final class EvogentNotificationListenerService extends NotificationListen
                         .build());
             }
 
-            manager.notify(DIGEST_NOTIFICATION_ID, builder.build());
-            long deadline = SystemClock.elapsedRealtime() + 750L;
+            Notification built = builder.build();
+            synchronized (DIGEST_PUBLICATION_LOCK) {
+                // This is the final service/work/revision check before the key-owned digest is
+                // replaced. Holding the process-wide lock orders old/new service instances.
+                if (!isPublicationCurrent(entry, snapshot)) return false;
+                manager.notify(DIGEST_NOTIFICATION_ID, built);
+            }
+            long deadline = SystemClock.elapsedRealtime() + DIGEST_VERIFY_BUDGET_MS;
             do {
-                if (isDigestActive(eventId)) return true;
+                if (!isPublicationCurrent(entry, snapshot)) {
+                    retractDigestIfOwned(marker);
+                    return false;
+                }
+                if (isDigestActive(marker)) {
+                    if (isPublicationCurrent(entry, snapshot)) return true;
+                    retractDigestIfOwned(marker);
+                    return false;
+                }
                 SystemClock.sleep(50L);
             } while (SystemClock.elapsedRealtime() < deadline);
         } catch (Throwable error) {
             logFailure("digest publication", error);
         }
+        retractDigestIfOwned(marker);
         return false;
     }
 
-    private boolean isDigestActive(String expectedEventId) {
+    private boolean isDigestActive(DigestMarker marker) {
+        if (marker == null) return false;
         try {
             StatusBarNotification[] active = getActiveNotifications();
             if (active == null) return false;
@@ -390,14 +561,36 @@ public final class EvogentNotificationListenerService extends NotificationListen
                                 candidate.getPackageName())
                         && candidate.getNotification() != null
                         && candidate.getNotification().extras != null
-                        && expectedEventId.equals(candidate.getNotification().extras.getString(
-                                "evogent_event_id"))) {
+                        && marker.eventId.equals(candidate.getNotification().extras.getString(
+                                DIGEST_EVENT_ID_EXTRA))
+                        && marker.serviceGeneration
+                                == candidate.getNotification().extras.getLong(
+                                        DIGEST_SERVICE_GENERATION_EXTRA)
+                        && marker.workSequence
+                                == candidate.getNotification().extras.getLong(
+                                        DIGEST_WORK_SEQUENCE_EXTRA)) {
                     return true;
                 }
             }
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    private void retractDigestIfOwned(DigestMarker marker) {
+        if (marker == null) return;
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            if (!isDigestActive(marker)) return;
+            try {
+                NotificationManager manager =
+                        (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                if (manager != null) {
+                    manager.cancel(DIGEST_NOTIFICATION_ID);
+                }
+            } catch (Throwable error) {
+                logFailure("stale digest retraction", error);
+            }
+        }
     }
 
     private void ensureDigestChannel(NotificationManager manager) {
@@ -453,6 +646,18 @@ public final class EvogentNotificationListenerService extends NotificationListen
     private static void logFailure(String operation, Throwable error) {
         String kind = error == null ? "unknown" : error.getClass().getSimpleName();
         Log.w(TAG, operation + " (" + kind + ")");
+    }
+
+    private static final class DigestMarker {
+        final String eventId;
+        final long serviceGeneration;
+        final long workSequence;
+
+        DigestMarker(String eventId, long serviceGeneration, long workSequence) {
+            this.eventId = eventId;
+            this.serviceGeneration = serviceGeneration;
+            this.workSequence = workSequence;
+        }
     }
 
     private static final class Snapshot {

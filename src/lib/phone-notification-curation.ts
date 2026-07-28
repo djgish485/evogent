@@ -21,6 +21,7 @@ export interface PhoneNotificationSettings {
   mode: PhoneNotificationMode;
   lockScreenPreview: PhoneNotificationLockScreenPreview;
   preservedPackages: string[];
+  replacementPackages: string[];
 }
 
 export interface PhoneNotificationSettingsState {
@@ -34,6 +35,7 @@ export interface ObservedNotificationApp {
   lastSeenAt: string;
   notificationCount: number;
   preserved: boolean;
+  replacementAllowed: boolean;
 }
 
 export interface PhoneNotificationSettingsView extends PhoneNotificationSettingsState {
@@ -41,6 +43,9 @@ export interface PhoneNotificationSettingsView extends PhoneNotificationSettings
   safeguards: {
     originalsAlwaysPreservedFor: string[];
     observeIsDefault: true;
+    originalsPreservedByDefault: true;
+    replacementIsPerPackage: true;
+    keyOnlyCancellationIsBestEffort: true;
     exactReceiptRequired: true;
     digestProofRequired: true;
   };
@@ -82,6 +87,7 @@ export interface PhoneNotificationIngestResult {
   };
   policy: {
     mode: PhoneNotificationMode;
+    replacementAllowed: boolean;
     suppressOriginal: boolean;
     preserveReason: string;
   };
@@ -207,6 +213,7 @@ function cloneDefaultSettings(): PhoneNotificationSettings {
     mode: 'observe',
     lockScreenPreview: 'private',
     preservedPackages: [],
+    replacementPackages: [],
   };
 }
 
@@ -221,10 +228,23 @@ function normalizeSettings(value: unknown): PhoneNotificationSettings | null {
   if (mode !== 'observe' && mode !== 'curated' && mode !== 'paused') return null;
   if (lockScreenPreview !== 'private' && lockScreenPreview !== 'detailed') return null;
   if (!Array.isArray(value.preservedPackages)) return null;
+  // schemaVersion 1 predates explicit per-package replacement. Missing means the
+  // safe migrated default: preserve every Android original.
+  const rawReplacementPackages = value.replacementPackages ?? [];
+  if (!Array.isArray(rawReplacementPackages)) return null;
   const preservedPackages = Array.from(new Set(value.preservedPackages.map((entry) => (
     typeof entry === 'string' ? entry.trim() : ''
   )))).filter(isPackageName).sort();
+  const replacementPackages = Array.from(new Set(rawReplacementPackages.map((entry) => (
+    typeof entry === 'string' ? entry.trim() : ''
+  )))).filter(isPackageName).sort();
   if (preservedPackages.length !== value.preservedPackages.length || preservedPackages.length > 256) {
+    return null;
+  }
+  if (
+    replacementPackages.length !== rawReplacementPackages.length
+    || replacementPackages.length > 256
+  ) {
     return null;
   }
   return {
@@ -232,6 +252,7 @@ function normalizeSettings(value: unknown): PhoneNotificationSettings | null {
     mode,
     lockScreenPreview,
     preservedPackages,
+    replacementPackages,
   };
 }
 
@@ -300,6 +321,7 @@ export async function updatePhoneNotificationSettings(
   let mode = current.config.mode;
   let lockScreenPreview = current.config.lockScreenPreview;
   let preservedPackages = current.config.preservedPackages;
+  let replacementPackages = current.config.replacementPackages;
 
   if ('mode' in patch) {
     if (patch.mode !== 'observe' && patch.mode !== 'curated' && patch.mode !== 'paused') {
@@ -331,12 +353,32 @@ export async function updatePhoneNotificationSettings(
       return entry.trim();
     }))).sort();
   }
+  if ('replacementPackages' in patch) {
+    if (!Array.isArray(patch.replacementPackages) || patch.replacementPackages.length > 256) {
+      throw new Error('replacementPackages must be an array with at most 256 entries');
+    }
+    const nextReplacementPackages = Array.from(new Set(patch.replacementPackages.map((entry) => {
+      if (typeof entry !== 'string' || !isPackageName(entry.trim())) {
+        throw new Error('replacementPackages contains an invalid package name');
+      }
+      return entry.trim();
+    }))).sort();
+    const existing = new Set(replacementPackages);
+    const addsReplacementAuthority = nextReplacementPackages.some((entry) => !existing.has(entry));
+    if (addsReplacementAuthority && patch.confirmBestEffortReplacement !== true) {
+      throw new Error(
+        'Allowing Android-original replacement requires explicit best-effort confirmation',
+      );
+    }
+    replacementPackages = nextReplacementPackages;
+  }
 
   const config: PhoneNotificationSettings = {
     schemaVersion: 1,
     mode,
     lockScreenPreview,
     preservedPackages,
+    replacementPackages,
   };
   await persistPhoneNotificationSettings(config);
   return { config, state: 'loaded' };
@@ -648,6 +690,9 @@ function resolvePreserveReason(
     return classification.protectionReason ?? 'protected';
   }
   if (!input.nativeCanSuppress) return 'native_ineligible';
+  if (!config.replacementPackages.includes(input.packageName)) {
+    return 'app_not_replacement_allowed';
+  }
   if (!input.digestCapability) return 'digest_unavailable';
   return 'eligible_for_curated_digest';
 }
@@ -659,13 +704,20 @@ export async function ingestPhoneNotification(
   const config = settingsState.config;
   const classification = classifyPhoneNotification(input);
   const preserveReason = resolvePreserveReason(input, classification, config);
+  const replacementAllowed = config.replacementPackages.includes(input.packageName)
+    && !config.preservedPackages.includes(input.packageName);
   const summary = notificationSummary(input, classification);
 
   if (input.packageName === 'net.dangish.evogent' || config.mode === 'paused') {
     return {
       ok: true,
       receipt: { eventId: input.eventId, sourceId: null, persisted: false },
-      policy: { mode: config.mode, suppressOriginal: false, preserveReason },
+      policy: {
+        mode: config.mode,
+        replacementAllowed,
+        suppressOriginal: false,
+        preserveReason,
+      },
       digest: {
         title: 'Evogent',
         text: 'Notification curation is paused.',
@@ -696,6 +748,7 @@ export async function ingestPhoneNotification(
     },
     policy: {
       mode: config.mode,
+      replacementAllowed,
       suppressOriginal,
       preserveReason: persisted.item ? preserveReason : 'persistence_failed',
     },
@@ -754,6 +807,8 @@ function observedNotificationApps(config: PhoneNotificationSettings): ObservedNo
       lastSeenAt: new Date(createdAt).toISOString(),
       notificationCount: 1,
       preserved: config.preservedPackages.includes(packageName),
+      replacementAllowed: config.replacementPackages.includes(packageName)
+        && !config.preservedPackages.includes(packageName),
     });
   }
   return [...byPackage.values()].sort((a, b) => (
@@ -769,6 +824,9 @@ export async function getPhoneNotificationSettingsView(): Promise<PhoneNotificat
     safeguards: {
       originalsAlwaysPreservedFor: [...PROTECTED_LABELS],
       observeIsDefault: true,
+      originalsPreservedByDefault: true,
+      replacementIsPerPackage: true,
+      keyOnlyCancellationIsBestEffort: true,
       exactReceiptRequired: true,
       digestProofRequired: true,
     },

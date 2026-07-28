@@ -179,6 +179,11 @@ banners can move hit targets.
   the canonical start or cycle script.
 - A timeout that creates a separate process group can suspend Android shell
   children; phone-driving timeouts must use foreground semantics.
+- A successful `rish` exit and its captured stdout are not a completion proof:
+  fast Android-shell output can arrive empty nondeterministically. Safety-
+  critical reads must publish a bounded, typed result to a randomized
+  `/data/local/tmp` capability path, change it to readable only after command
+  success, and let Termux poll, parse, and remove that exact result.
 - Never use a broad process-name kill for brain CLIs. Track and terminate only the
   process tree owned by the current task.
 - A stale hidden-display file is not proof that a display is live; validate the

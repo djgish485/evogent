@@ -42,11 +42,26 @@ Prefer no change over a weakly supported change.
   battery, latency, and provider-use evidence. Most cycles should not browse
   every source. Notification-driven sources may use slower baselines because a
   relevant signal can wake that source early.
-- A cheaper routine model/effort may enter `data/model-routing.json` only when
-  one content-free benchmark suite has at least three paired baseline/candidate
-  rounds with mechanics and quality passing for both routes. Change one route
-  at a time. The deterministic router will independently reject insufficient or
-  expired proof.
+- A cheaper routine browse model/effort may enter `data/model-routing.json` only
+  when one content-free `full_browse` suite has at least three paired
+  baseline/candidate rounds with mechanics and quality passing for both routes.
+  Durable full-browse rows use the versioned `browse_full_v2` benchmark task;
+  never reinterpret legacy `browse` rows as current proof.
+  Each row must have its exact run-bound terminal proof and complete canonical
+  rows; in every passing pair candidate fresh yield is at least 80% of baseline
+  and candidate elapsed time is no more than 120% of baseline. A missing proof
+  is a mechanics failure, while an outcome or latency miss is not a passing
+  pair.
+  Grounded micro-benchmark receipts use the non-production `browse_micro` task,
+  are screening evidence only, and can never qualify the production route.
+  Change one route at a time. The deterministic router will independently
+  reject ineligible, insufficient, or expired proof.
+- Keep the curator baseline pinned until the isolated curator benchmark exists.
+  Its reserved durable receipt pair is
+  `curator_full_v2` / `full_curation_snapshot`; never reinterpret legacy
+  `curator` rows as current proof. This task-name boundary ensures a rollback to
+  the former task-only router ignores evidence whose full-snapshot review and
+  suite-wide mechanics laws it does not understand.
 - Do not change the `overseer` route. Max and Ultra are explicit operator
   choices, never a conclusion this review may make about itself.
 - Keep notifications deterministic and model-free. Never trade their latency or

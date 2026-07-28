@@ -224,6 +224,8 @@ mkdir -p build/test
     src/net/dangish/evogent/EvogentAccessibilityActionPolicy.java \
     src/net/dangish/evogent/EvogentPhysicalDisplayPolicy.java \
     src/net/dangish/evogent/EvogentNotificationPolicy.java \
+    src/net/dangish/evogent/EvogentNotificationWorkQueue.java \
+    src/net/dangish/evogent/EvogentBenchmarkSharePolicy.java \
     tests/EvogentSecurityPolicyTest.java \
     tests/EvogentLoopbackAuthProtocolTest.java \
     tests/EvogentDocumentAuthorityTest.java \
@@ -232,7 +234,9 @@ mkdir -p build/test
     tests/EvogentAssistantContextStoreTest.java \
     tests/EvogentAccessibilityActionPolicyTest.java \
     tests/EvogentPhysicalDisplayPolicyTest.java \
-    tests/EvogentNotificationPolicyTest.java
+    tests/EvogentNotificationPolicyTest.java \
+    tests/EvogentNotificationWorkQueueTest.java \
+    tests/EvogentBenchmarkSharePolicyTest.java
 "$JAVA" -cp build/test net.dangish.evogent.EvogentSecurityPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentLoopbackAuthProtocolTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentDocumentAuthorityTest
@@ -242,6 +246,8 @@ mkdir -p build/test
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAccessibilityActionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentPhysicalDisplayPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationPolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationWorkQueueTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentBenchmarkSharePolicyTest
 
 "$BTN/aapt2" compile --dir "$PACKAGE_RES" -o build/res.zip
 

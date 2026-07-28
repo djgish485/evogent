@@ -37,9 +37,11 @@ drilled is a guess — this command is how guards stay real.
    "prompt file missing, skipping" and keep going; harvest_watch counts the source barren and
    alarms at 3 cycles. Restore immediately (verify the skip line only).
 6. **Barren source (simulated)**: seed `~/phone-tools/.barren-<src>` with `2` and let one
-   zero-gain cycle tick it to 3 → warning card + diagnosis agent must fire; on the next
-   gaining cycle the card must AUTO-CLEAR. (Only when a source is genuinely idle; never
-   fabricate cache rows.)
+   zero-gain cycle tick it to 3 → the warning card must ship. The diagnosis agent must fire
+   only when the global automatic-diagnosis slot for that service date is unspent; otherwise
+   the threshold must remain durably pending and become eligible on a later service date. On
+   the next gaining cycle the card must AUTO-CLEAR. (Only when a source is genuinely idle;
+   never fabricate cache rows.)
 
 ## Verify-by-inspection (do not induce)
 

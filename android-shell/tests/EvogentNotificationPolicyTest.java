@@ -161,14 +161,27 @@ public final class EvogentNotificationPolicyTest {
                 "Do not expose"));
         require(secret.redactContent, "VISIBILITY_SECRET content was not redacted");
 
+        EvogentNotificationPolicy.Input eventInput = input(
+                "example.reader", "recommendation", 0, 3, true, false, false,
+                false, false, 0, "Title", "Body");
         String eventA = EvogentNotificationPolicy.eventId(
-                "example.reader", "notification-key", 1000L, "Title", "Body", null);
+                eventInput, "notification-key", 1000L);
         String eventB = EvogentNotificationPolicy.eventId(
-                "example.reader", "notification-key", 1001L, "Title", "Body", null);
+                eventInput, "notification-key", 1001L);
+        EvogentNotificationPolicy.Input replacementInput = input(
+                "example.reader", "recommendation", 0, 3, true, false, false,
+                false, false, 0, "Title", "Replacement");
         String eventReplacement = EvogentNotificationPolicy.eventId(
-                "example.reader", "notification-key", 1000L, "Title", "Replacement", null);
+                replacementInput, "notification-key", 1000L);
+        EvogentNotificationPolicy.Input protectedInput = input(
+                "example.reader", "recommendation", 0, 4, true, false, false,
+                false, false, 0, "Title", "Body");
+        String protectedEvent = EvogentNotificationPolicy.eventId(
+                protectedInput, "notification-key", 1000L);
         require(!eventA.equals(eventB), "post time was not bound into receipt");
         require(!eventA.equals(eventReplacement), "content generation was not bound into receipt");
+        require(!eventA.equals(protectedEvent),
+                "suppression-relevant ranking drift reused event id");
 
         require(EvogentNotificationPolicy.shouldCancelOriginal(
                         normal,
@@ -179,26 +192,37 @@ public final class EvogentNotificationPolicyTest {
                         true,
                         true,
                         true,
+                        true,
                         true),
                 "fully proven curated replacement was rejected");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventA, true, "observe", true, true, true, true),
+                        normal, eventA, eventA, true, "observe",
+                        true, true, true, true, true),
                 "OBSERVE mode cancelled an original");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventB, true, "curated", true, true, true, true),
+                        normal, eventA, eventB, true, "curated",
+                        true, true, true, true, true),
                 "stale receipt cancelled a repost");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventA, false, "curated", true, true, true, true),
+                        normal, eventA, eventA, false, "curated",
+                        true, true, true, true, true),
                 "server persistence failure cancelled an original");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventA, true, "curated", true, true, false, true),
+                        normal, eventA, eventA, true, "curated",
+                        true, true, true, false, true),
                 "digest publication failure cancelled an original");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventA, true, "curated", true, false, false, true),
+                        normal, eventA, eventA, true, "curated",
+                        true, true, false, false, true),
                 "missing digest capability cancelled an original");
         require(!EvogentNotificationPolicy.shouldCancelOriginal(
-                        normal, eventA, eventA, true, "curated", true, true, true, false),
+                        normal, eventA, eventA, true, "curated",
+                        true, true, true, true, false),
                 "changed active generation was cancelled");
+        require(!EvogentNotificationPolicy.shouldCancelOriginal(
+                        normal, eventA, eventA, true, "curated",
+                        false, true, true, true, true),
+                "package without explicit replacement permission was cancelled");
 
         System.out.println("EvogentNotificationPolicyTest: PASS");
     }

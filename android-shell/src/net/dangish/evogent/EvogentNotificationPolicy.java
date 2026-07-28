@@ -10,7 +10,8 @@ import java.util.Locale;
  * Android grants a notification listener access to every app at once.  Keep the decisions that
  * bound that privilege in one host-testable class: ignore Evogent's own digest, redact known
  * secrets before the loopback request is constructed, identify notifications that must retain
- * their Android original, and require an exact durable receipt before cancellation.
+ * their Android original, and require a matching durable receipt before any best-effort
+ * cancellation request.
  */
 final class EvogentNotificationPolicy {
     static final String EVOGENT_PACKAGE = "net.dangish.evogent";
@@ -135,9 +136,11 @@ final class EvogentNotificationPolicy {
     }
 
     /**
-     * Cancellation is the last step, never an assumption.  A listener may cancel only the exact
-     * still-active generation for which the local server returned a durable receipt, and only
-     * after Android exposes Evogent's replacement digest.
+     * Cancellation is the last step, never an assumption. The server must prove that the user
+     * explicitly allowed best-effort replacement for this package, return the matching durable
+     * receipt, and expose Evogent's digest before the listener asks Android to cancel by key.
+     * Android has no atomic generation-bound cancellation API, so callers must describe the final
+     * key-only operation truthfully and keep protected events outside it.
      */
     static boolean shouldCancelOriginal(
             Decision decision,
@@ -145,6 +148,7 @@ final class EvogentNotificationPolicy {
             String receiptEventId,
             boolean receiptPersisted,
             String serverMode,
+            boolean replacementAllowed,
             boolean serverRequestedSuppression,
             boolean digestCapability,
             boolean digestActive,
@@ -156,6 +160,7 @@ final class EvogentNotificationPolicy {
                 && expectedEventId.equals(receiptEventId)
                 && receiptPersisted
                 && "curated".equals(serverMode)
+                && replacementAllowed
                 && serverRequestedSuppression
                 && digestCapability
                 && digestActive
@@ -163,24 +168,31 @@ final class EvogentNotificationPolicy {
     }
 
     /**
-     * The raw Android notification key never crosses loopback.  The event receipt binds package,
-     * key, post time, and a content-generation hash so a receipt for a replaced notification
-     * cannot cancel its successor.
+     * The raw Android notification key never crosses loopback. The event identity binds package,
+     * key, post time, and a content-generation hash so the caller can reject known stale receipts
+     * before requesting key-only cancellation. It is not an atomic Android generation token.
      */
     static String eventId(
-            String packageName,
+            Input input,
             String notificationKey,
-            long postTimeMs,
-            String title,
-            String text,
-            String subText) {
+            long postTimeMs) {
+        if (input == null) return null;
         return sha256(
-                normalize(packageName, 255),
+                input.packageName,
                 normalize(notificationKey, 1024),
                 Long.toString(postTimeMs),
-                normalize(title, 512),
-                normalize(text, 4096),
-                normalize(subText, 512));
+                input.category,
+                Integer.toString(input.flags),
+                Integer.toString(input.importance),
+                Boolean.toString(input.clearable),
+                Boolean.toString(input.ongoing),
+                Boolean.toString(input.fullScreen),
+                Boolean.toString(input.groupSummary),
+                Boolean.toString(input.conversation),
+                Integer.toString(input.visibility),
+                input.title,
+                input.text,
+                input.subText);
     }
 
     /** Hash potentially identifying channel/conversation ids before transport. */

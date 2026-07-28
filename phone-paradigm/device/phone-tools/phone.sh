@@ -13,6 +13,9 @@
 #   phone.sh swipe <x1> <y1> <x2> <y2> [ms] [display]   coordinate swipe on the display
 #   phone.sh swipe-rel <x1> <y1> <x2> <y2> [ms] [display]
 #                                  swipe using per-thousand display coordinates
+#   phone.sh benchmark-share-arm <run-id> <sequence> <token> <armed-at-ms>
+#   phone.sh benchmark-share-clear <run-id>
+#                                  authenticated one-shot benchmark provenance
 set -euo pipefail
 TOKEN=$(cat "$HOME/evogent/data/control-token.txt")
 DISPFILE="$HOME/.phone-display"
@@ -225,10 +228,61 @@ display_size() {
 }
 
 case "${1:-}" in
-  launch|see|tap|scroll|swipe|swipe-rel|shot|clip|paste|shotnode|stop|close) acquire_display_lease ;;
+  launch|see|tap|scroll|swipe|swipe-rel|shot|clip|paste|shotnode|stop|close|benchmark-share-arm|benchmark-share-clear) acquire_display_lease ;;
 esac
 
 case "${1:-}" in
+  benchmark-share-arm)
+    RUN_ID="${2:-}"
+    SEQUENCE="${3:-}"
+    SHARE_TOKEN="${4:-}"
+    ARMED_AT_MS="${5:-}"
+    [[ "$RUN_ID" =~ ^full-browse-[A-Za-z0-9][A-Za-z0-9._:-]{7,140}$ ]] || {
+      echo "ERROR: invalid benchmark run identity" >&2
+      exit 64
+    }
+    [[ "$SEQUENCE" =~ ^[1-5]$ ]] || {
+      echo "ERROR: benchmark share sequence must be 1..5" >&2
+      exit 64
+    }
+    [[ "$SHARE_TOKEN" =~ ^[a-f0-9]{64}$ ]] || {
+      echo "ERROR: invalid benchmark share token" >&2
+      exit 64
+    }
+    [[ "$ARMED_AT_MS" =~ ^[1-9][0-9]{11,14}$ ]] || {
+      echo "ERROR: invalid benchmark share arm timestamp" >&2
+      exit 64
+    }
+    if ! a11y_grab --es op benchmark_share_arm --es run_id "$RUN_ID" \
+        --ei sequence "$SEQUENCE" --es share_token "$SHARE_TOKEN" \
+        --el armed_at_ms "$ARMED_AT_MS"; then
+      echo "ERROR: benchmark share arm was not acknowledged" >&2
+      exit 1
+    fi
+    ARM_RESULT=$(tr -d '\r\n' < "$A11Y_LAST_REPLY")
+    if [ "$ARM_RESULT" != "armed" ]; then
+      echo "ERROR: benchmark share arm was refused" >&2
+      exit 1
+    fi
+    echo "BROWSE_SHARE_ARMED $SEQUENCE"
+    ;;
+  benchmark-share-clear)
+    RUN_ID="${2:-}"
+    [[ "$RUN_ID" =~ ^full-browse-[A-Za-z0-9][A-Za-z0-9._:-]{7,140}$ ]] || {
+      echo "ERROR: invalid benchmark run identity" >&2
+      exit 64
+    }
+    if ! a11y_grab --es op benchmark_share_clear --es run_id "$RUN_ID"; then
+      echo "ERROR: benchmark share cleanup was not acknowledged" >&2
+      exit 1
+    fi
+    CLEAR_RESULT=$(tr -d '\r\n' < "$A11Y_LAST_REPLY")
+    if [ "$CLEAR_RESULT" != "cleared" ]; then
+      echo "ERROR: benchmark share cleanup was refused" >&2
+      exit 1
+    fi
+    echo "BROWSE_SHARE_CLEARED"
+    ;;
   launch)
     PKG="$2"
     [[ "$PKG" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || {
@@ -406,5 +460,5 @@ case "${1:-}" in
     echo "closed Evogent hidden display"
     ;;
   *)
-    echo "usage: phone.sh {launch <pkg>|see [display]|tap <text> [display]|scroll [display]|swipe x1 y1 x2 y2 [ms] [display]|swipe-rel x1‰ y1‰ x2‰ y2‰ [ms] [display]|shot [dest] [display]|shotnode <match> [dest] [display] [name]|stop <pkg>|close}"; exit 1;;
+    echo "usage: phone.sh {launch <pkg>|see [display]|tap <text> [display]|scroll [display]|swipe x1 y1 x2 y2 [ms] [display]|swipe-rel x1‰ y1‰ x2‰ y2‰ [ms] [display]|shot [dest] [display]|shotnode <match> [dest] [display] [name]|benchmark-share-arm <run-id> <sequence> <token> <armed-at-ms>|benchmark-share-clear <run-id>|stop <pkg>|close}"; exit 1;;
 esac

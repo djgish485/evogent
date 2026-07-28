@@ -54,6 +54,8 @@ export interface BrowseCacheRefreshRunRecord {
 }
 
 export const SOURCE_SETUP_REFRESH_TRIGGERED_BY = 'setup-source-smoke';
+export const PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY =
+  'phone-benchmark-full-browse-share';
 
 export interface UpsertBrowseCacheItemInput {
   source: string;
@@ -946,7 +948,7 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       seen_by_curation_at_ms = COALESCE(excluded.seen_by_curation_at_ms, browse_cache_items.seen_by_curation_at_ms)
   `);
 
-  const upsertRun = getDb().prepare(`
+  const insertRunSql = `
     INSERT INTO browse_cache_refresh_runs (
       id,
       source,
@@ -958,6 +960,10 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       error,
       metadata_json
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const insertRun = getDb().prepare(insertRunSql);
+  const upsertRun = getDb().prepare(`
+    ${insertRunSql}
     ON CONFLICT(id) DO UPDATE SET
       source = excluded.source,
       triggered_by = excluded.triggered_by,
@@ -967,6 +973,7 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       items_added = excluded.items_added,
       error = excluded.error,
       metadata_json = excluded.metadata_json
+    WHERE browse_cache_refresh_runs.triggered_by <> ?
   `);
 
   const tx = getDb().transaction(() => {
@@ -988,7 +995,7 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       ).changes;
     }
 
-    upsertRun.run(
+    const runValues = [
       runId,
       source,
       triggeredBy,
@@ -998,7 +1005,13 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       Number.isFinite(input.itemsAdded) ? Math.max(0, Math.floor(Number(input.itemsAdded))) : itemsAdded,
       trimToNull(input.error),
       runMetadata ? JSON.stringify(runMetadata) : null,
-    );
+    ] as const;
+    const writeResult = triggeredBy === PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY
+      ? insertRun.run(...runValues)
+      : upsertRun.run(...runValues, PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY);
+    if (writeResult.changes !== 1) {
+      throw new Error('Browse cache refresh run identity is immutable');
+    }
   });
 
   tx();

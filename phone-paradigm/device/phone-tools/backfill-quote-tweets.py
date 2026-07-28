@@ -20,6 +20,7 @@ from tweet_clean import extract_quote
 
 EVO = os.path.expanduser('~/evogent')
 MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
+EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
 ESCALATE_CAP = 20        # rows per brain pass — the legacy set is finite and shrinking
 ESCALATE_BUDGET_S = 180
 HANDLE = re.compile(r'^[A-Za-z0-9_]{1,15}$')
@@ -166,7 +167,8 @@ Write JSON to {out_file}: a list, one element per ROW, in order:
 {{"row": 0, "own": "...", "quotedHandle": "..." or null, "quotedText": "..." or null}}
 Use the Write tool or bash to create the file."""
     try:
-        subprocess.run(["codex", "exec", "--model", MODEL, "-c", "model_reasoning_effort=low",
+        subprocess.run(["codex", "exec", "--model", MODEL, "-c",
+                        f"model_reasoning_effort={EFFORT}",
                         "--dangerously-bypass-approvals-and-sandbox", "-"],
                        cwd=EVO, input=(prompt + "\n\n" + numbered).encode(),
                        timeout=ESCALATE_BUDGET_S, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -78,7 +78,27 @@ test('safe settings default to Observe with private lock-screen previews', async
     mode: 'observe',
     lockScreenPreview: 'private',
     preservedPackages: [],
+    replacementPackages: [],
   });
+});
+
+test('legacy schema-one settings migrate to preserving every Android original', async () => {
+  fs.writeFileSync(
+    path.join(temporaryDataDir, 'phone-notification-curation.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      mode: 'curated',
+      lockScreenPreview: 'private',
+      preservedPackages: ['example.legacy'],
+    })}\n`,
+    { mode: 0o600 },
+  );
+
+  const state = await readPhoneNotificationSettings();
+  assert.equal(state.state, 'loaded');
+  assert.equal(state.config.mode, 'curated');
+  assert.deepEqual(state.config.preservedPackages, ['example.legacy']);
+  assert.deepEqual(state.config.replacementPackages, []);
 });
 
 test('curated mode requires an explicit opt-in and is reversible', async () => {
@@ -177,11 +197,27 @@ test('sensitive content is redacted from durable local feed data', async () => {
   assert.equal((JSON.parse(row.metadata) as Record<string, unknown>).contentRedacted, true);
 });
 
-test('Curated suppression requires exact persistence, native eligibility, digest capability, and a fresh event', async () => {
+test('Curated preserves originals until per-app best-effort replacement is explicitly allowed', async () => {
   await updatePhoneNotificationSettings({ mode: 'curated', confirmCurated: true });
+
+  const preservedByDefault = await ingestPhoneNotification(payload());
+  assert.equal(preservedByDefault.receipt.persisted, true);
+  assert.equal(preservedByDefault.policy.replacementAllowed, false);
+  assert.equal(preservedByDefault.policy.suppressOriginal, false);
+  assert.equal(preservedByDefault.policy.preserveReason, 'app_not_replacement_allowed');
+
+  await assert.rejects(
+    updatePhoneNotificationSettings({ replacementPackages: ['example.reader'] }),
+    /explicit best-effort confirmation/i,
+  );
+  await updatePhoneNotificationSettings({
+    replacementPackages: ['example.reader'],
+    confirmBestEffortReplacement: true,
+  });
 
   const eligible = await ingestPhoneNotification(payload());
   assert.equal(eligible.receipt.persisted, true);
+  assert.equal(eligible.policy.replacementAllowed, true);
   assert.equal(eligible.policy.suppressOriginal, true);
   assert.equal(eligible.policy.preserveReason, 'eligible_for_curated_digest');
 
@@ -208,6 +244,15 @@ test('Curated suppression requires exact persistence, native eligibility, digest
   }));
   assert.equal(historical.policy.suppressOriginal, false);
   assert.equal(historical.policy.preserveReason, 'historical_scan');
+
+  await updatePhoneNotificationSettings({ replacementPackages: [] });
+  const revoked = await ingestPhoneNotification(payload({
+    eventId: '9'.repeat(64),
+    postedAtMs: Date.now() + 5,
+  }));
+  assert.equal(revoked.policy.replacementAllowed, false);
+  assert.equal(revoked.policy.suppressOriginal, false);
+  assert.equal(revoked.policy.preserveReason, 'app_not_replacement_allowed');
 });
 
 test('Curated mode never suppresses a user-preserved app or protected event', async () => {
@@ -215,10 +260,15 @@ test('Curated mode never suppresses a user-preserved app or protected event', as
     mode: 'curated',
     confirmCurated: true,
     preservedPackages: ['example.reader'],
+    replacementPackages: ['example.reader'],
+    confirmBestEffortReplacement: true,
   });
   const preserved = await ingestPhoneNotification(payload());
+  assert.equal(preserved.policy.replacementAllowed, false);
   assert.equal(preserved.policy.suppressOriginal, false);
   assert.equal(preserved.policy.preserveReason, 'app_preserved');
+  const preservedView = await getPhoneNotificationSettingsView();
+  assert.equal(preservedView.observedApps[0].replacementAllowed, false);
 
   await updatePhoneNotificationSettings({ preservedPackages: [] });
   const alarm = await ingestPhoneNotification(payload({
@@ -261,7 +311,11 @@ test('settings view exposes observed apps and immutable safeguards without notif
   const view = await getPhoneNotificationSettingsView();
   assert.equal(view.observedApps.length, 1);
   assert.equal(view.observedApps[0].label, 'Reader');
+  assert.equal(view.observedApps[0].replacementAllowed, false);
   assert.equal(view.safeguards.observeIsDefault, true);
+  assert.equal(view.safeguards.originalsPreservedByDefault, true);
+  assert.equal(view.safeguards.replacementIsPerPackage, true);
+  assert.equal(view.safeguards.keyOnlyCancellationIsBestEffort, true);
   assert.equal(view.safeguards.exactReceiptRequired, true);
   assert.equal(view.safeguards.digestProofRequired, true);
   assert.doesNotMatch(JSON.stringify(view), /A useful update|A concise body/);

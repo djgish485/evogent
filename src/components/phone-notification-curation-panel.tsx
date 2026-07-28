@@ -11,6 +11,7 @@ interface ObservedApp {
   lastSeenAt: string;
   notificationCount: number;
   preserved: boolean;
+  replacementAllowed: boolean;
 }
 
 interface SettingsView {
@@ -19,12 +20,16 @@ interface SettingsView {
     mode: NotificationMode;
     lockScreenPreview: LockScreenPreview;
     preservedPackages: string[];
+    replacementPackages: string[];
   };
   state: 'default' | 'loaded' | 'invalid';
   observedApps: ObservedApp[];
   safeguards: {
     originalsAlwaysPreservedFor: string[];
     observeIsDefault: true;
+    originalsPreservedByDefault: true;
+    replacementIsPerPackage: true;
+    keyOnlyCancellationIsBestEffort: true;
     exactReceiptRequired: true;
     digestProofRequired: true;
   };
@@ -43,7 +48,7 @@ const MODE_OPTIONS: Array<{
   {
     value: 'curated',
     label: 'Curated shade',
-    description: 'Replace eligible originals with one private Evogent digest after exact receipt checks.',
+    description: 'Organize notifications in Evogent. Android originals stay unless you separately allow best-effort replacement for an app.',
   },
   {
     value: 'paused',
@@ -140,6 +145,7 @@ export function PhoneNotificationCurationPanel() {
 
   const selectedMode = view.config.mode;
   const preserved = new Set(view.config.preservedPackages);
+  const replacementAllowed = new Set(view.config.replacementPackages);
 
   return (
     <div
@@ -184,10 +190,8 @@ export function PhoneNotificationCurationPanel() {
         </div>
         {selectedMode === 'curated' ? (
           <div className="mt-3 rounded-lg border border-sky-900/70 bg-sky-950/20 p-3 text-xs leading-5 text-sky-100">
-            Curated shade is reversible: choose Observe at any time. Android posts notifications
-            before a listener can inspect them, so an eligible original may appear briefly.
-            Evogent keeps the original whenever its server, receipt, posting permission, digest,
-            or active-generation check is unavailable.
+            Curated shade is reversible: choose Observe at any time. It still preserves every
+            Android original by default. Replacement is a separate per-app choice below.
           </div>
         ) : null}
       </section>
@@ -244,8 +248,70 @@ export function PhoneNotificationCurationPanel() {
         </ul>
         <p className="mt-2 text-xs leading-5 text-zinc-500">
           Evogent never reads notification action payloads. Known one-time codes and secret
-          notifications are stripped before local loopback transport and storage.
+          notifications are stripped before local loopback transport and storage. Protected
+          categories stay Android-owned even if an app is on the replacement list.
         </p>
+      </section>
+
+      <section aria-labelledby="replacement-apps-heading">
+        <h3 id="replacement-apps-heading" className="font-semibold text-zinc-100">
+          Allow best-effort replacement for these apps
+        </h3>
+        <p id="replacement-apps-explanation" className="mt-1 text-xs leading-5 text-zinc-400">
+          Off by default. When enabled in Curated shade, Evogent may replace an eligible ordinary
+          notification with its digest after receipt and active-state checks. Android only permits
+          cancellation by notification key, not by an atomic version token, so a same-key update can
+          still race the final check. Turn this off, choose Observe, or mark the app “always keep” to
+          stop future replacement attempts.
+        </p>
+        {view.observedApps.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {view.observedApps.map((app) => {
+              const checked = replacementAllowed.has(app.packageName);
+              const blocked = preserved.has(app.packageName);
+              const descriptionId = `replacement-${app.packageName.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+              return (
+                <label
+                  key={app.packageName}
+                  className="flex min-h-16 cursor-pointer items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={saving || blocked}
+                    aria-describedby={`replacement-apps-explanation ${descriptionId}`}
+                    onChange={() => {
+                      const next = new Set(replacementAllowed);
+                      if (checked) next.delete(app.packageName);
+                      else next.add(app.packageName);
+                      void update({
+                        replacementPackages: [...next],
+                        ...(!checked ? { confirmBestEffortReplacement: true } : {}),
+                      });
+                    }}
+                    className="h-5 w-5 accent-amber-500"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-zinc-100">{app.label}</span>
+                    <span id={descriptionId} className="block text-[11px] leading-4 text-zinc-500">
+                      {blocked
+                        ? 'Blocked because this app is set to always keep originals.'
+                        : checked
+                          ? 'Best-effort replacement allowed; uncheck to revoke.'
+                          : 'Android original preserved.'}
+                    </span>
+                  </span>
+                  <span className="text-xs text-zinc-500">{app.notificationCount}</span>
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-lg border border-dashed border-zinc-700 p-3 text-xs text-zinc-500">
+            Apps appear here after Evogent observes a notification. Until then, every Android
+            original is preserved.
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="preserved-apps-heading">
@@ -253,8 +319,8 @@ export function PhoneNotificationCurationPanel() {
           Always keep originals from these apps
         </h3>
         <p className="mt-1 text-xs leading-5 text-zinc-400">
-          Apps appear after Evogent has observed a notification. Their notification still remains
-          in Android while Observe or Paused is selected.
+          This overrides the replacement list as an extra block. Android originals also remain
+          unchanged while Observe or Paused is selected.
         </p>
         {view.observedApps.length > 0 ? (
           <div className="mt-3 space-y-2">

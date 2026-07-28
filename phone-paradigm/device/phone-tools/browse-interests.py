@@ -77,6 +77,7 @@ def cfg(key, default):
 
 
 BROWSE_MODEL = os.environ.get("EVOGENT_BROWSE_MODEL") or cfg("Browse Model", "gpt-5.6-terra")
+BROWSE_EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
 
 
 def fetch_text(url, cap=6000):
@@ -380,7 +381,7 @@ create the file."""
         "--model",
         BROWSE_MODEL,
         "-c",
-        "model_reasoning_effort=low",
+        f"model_reasoning_effort={BROWSE_EFFORT}",
         "--dangerously-bypass-approvals-and-sandbox",
     ]
     for (_, _, _, path) in all_shots:

@@ -29,6 +29,7 @@ import {
 } from '@/lib/curation-submit';
 import {
   applyCachedItemEnrichment,
+  itemIsStillIncomplete,
   queueBatchEnrichment,
 } from '@/lib/feed-enrichment';
 import { getBrowseCacheItemByExactSourceId } from '@/lib/db/browse-cache';
@@ -45,6 +46,7 @@ import {
 } from '@/lib/twitter-feed-canonicalization';
 import { pickNextThreadColor, sanitizeThreadColor } from '@/lib/thread-colors';
 import { readUsageLevelConfig } from '@/lib/usage-level';
+import { isPhoneRuntime } from '@/lib/runtime-profile';
 import {
   fetchPublicHttpText,
   UnsafePublicHttpUrlError,
@@ -1851,21 +1853,22 @@ async function postUnlocked(request: Request) {
   let notificationItems = acceptedFeedItems.map((acceptedFeedItem) => (
     acceptedFeedItem.id ? getFeedItemById(acceptedFeedItem.id) ?? acceptedFeedItem : acceptedFeedItem
   ));
-  const acceptedEnrichmentTargets = notificationItems.filter((acceptedFeedItem) => (
-    Boolean(acceptedFeedItem.id)
-    && !acceptedFeedItem.parentId
-    && (acceptedFeedItem.type === 'tweet' || acceptedFeedItem.source === 'hackernews')
-    // Freshness-fallback items are already display-ready (tweet text / HN synopsis in hand). Bulk
-    // enrichment spawns a codex/claude agent per batch — slow AND memory-hungry (the OOM cause)
-    // — and it BLOCKS the submit response (await queueBatchEnrichment). Skipping it for fallback
-    // items keeps promotion bounded and safe under memory pressure.
-    && (acceptedFeedItem.metadata as Record<string, unknown> | null)?.freshnessFloor !== true
-  ));
+  const shouldSkipBulkEnrichment = isPhoneRuntime() || readUsageLevelConfig().level === 'low';
+  const acceptedEnrichmentTargets = shouldSkipBulkEnrichment
+    ? []
+    : notificationItems.filter((acceptedFeedItem) => (
+      Boolean(acceptedFeedItem.id)
+      && !acceptedFeedItem.parentId
+      && (acceptedFeedItem.type === 'tweet' || acceptedFeedItem.source === 'hackernews')
+      && itemIsStillIncomplete(acceptedFeedItem)
+      // Freshness-fallback items are already display-ready (tweet text / HN synopsis in hand). Bulk
+      // enrichment spawns a codex/claude agent per batch — slow AND memory-hungry (the OOM cause)
+      // — and it BLOCKS the submit response (await queueBatchEnrichment). Skipping it for fallback
+      // items keeps promotion bounded and safe under memory pressure.
+      && (acceptedFeedItem.metadata as Record<string, unknown> | null)?.freshnessFloor !== true
+    ));
 
-  const usageLevelConfig = readUsageLevelConfig();
-  const shouldSkipBulkEnrichment = usageLevelConfig.level === 'low';
-
-  if (acceptedEnrichmentTargets.length > 0 && !shouldSkipBulkEnrichment) {
+  if (acceptedEnrichmentTargets.length > 0) {
     try {
       const chunks: FeedItem[][] = [];
       for (let index = 0; index < acceptedEnrichmentTargets.length; index += maxBatchEnrichmentChunkSize) {

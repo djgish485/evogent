@@ -22,6 +22,9 @@ import java.util.regex.Pattern;
 public class ShareReceiverActivity extends Activity {
     private static final String TAG = "EvogentShare";
     private static final int MAX_ITEM_TEXT_CHARS = 4000;
+    private static final String BENCHMARK_SHARE_TRIGGERED_BY =
+            "phone-benchmark-full-browse-share";
+    private static final String BENCHMARK_SHARE_PROOF_KIND = "full_browse_share";
     private static final Pattern VIDEO_URL = Pattern.compile(
             "https?://(?:(?:www\\.|m\\.|music\\.)?youtube\\.com/"
             + "(?:watch\\?(?:[^\\s#&]*&)*v=|shorts/|embed/|live/)|youtu\\.be/)"
@@ -60,10 +63,18 @@ public class ShareReceiverActivity extends Activity {
         // Shared text can contain private notification/content data; log only bounded metadata.
         Log.i(TAG, "accepted text share chars=" + text.length()
                 + " subjectChars=" + (subject == null ? 0 : subject.length()));
+        final boolean isTweet = TWEET.matcher(text).find();
+        final boolean isYoutube = !isTweet && VIDEO_URL.matcher(text).find();
+        // Consume the one-shot provenance synchronously in the receiving activity, before its
+        // asynchronous HTTP work. Tweets and unsupported shares leave a YouTube benchmark arm
+        // untouched; ordinary YouTube shares simply see no arm and retain their original shape.
+        final EvogentBenchmarkShareProvenance.Consumed benchmarkProof = isYoutube
+                ? EvogentBenchmarkShareProvenance.consume(this, System.currentTimeMillis())
+                : null;
         new Thread(new Runnable() {
             @Override public void run() {
-                if (text != null && TWEET.matcher(text).find()) ingestTweet(text, subject);
-                else ingest(text, subject);
+                if (isTweet) ingestTweet(text, subject);
+                else ingest(text, subject, benchmarkProof);
             }
         }).start();
         finish();
@@ -130,7 +141,10 @@ public class ShareReceiverActivity extends Activity {
         Log.i(TAG, "cache " + label + " -> HTTP " + code);
     }
 
-    private void ingest(String text, String subject) {
+    private void ingest(
+            String text,
+            String subject,
+            EvogentBenchmarkShareProvenance.Consumed benchmarkProof) {
         try {
             if (text == null) { Log.e(TAG, "no share text"); return; }
             Matcher m = VIDEO_URL.matcher(text);
@@ -172,12 +186,29 @@ public class ShareReceiverActivity extends Activity {
 
             JSONObject body = new JSONObject();
             body.put("source", "youtube");            // base source the curator reads
-            body.put("triggeredBy", "phone-browse");   // how it was acquired (diagnosability)
+            body.put("triggeredBy", benchmarkProof == null
+                    ? "phone-browse"
+                    : BENCHMARK_SHARE_TRIGGERED_BY);
             body.put("startedAtMs", now);
             body.put("completedAtMs", now);
             body.put("status", "completed");
             body.put("itemsAdded", 1);
             body.put("items", new JSONArray().put(item));
+            if (benchmarkProof != null) {
+                String sourceIdDigest = EvogentBenchmarkSharePolicy.sha256Hex(id);
+                JSONObject proof = new JSONObject();
+                proof.put("schemaVersion", 1);
+                proof.put("kind", BENCHMARK_SHARE_PROOF_KIND);
+                proof.put("benchmarkRunId", benchmarkProof.benchmarkRunId);
+                proof.put("sequence", benchmarkProof.sequence);
+                proof.put("receiptId", benchmarkProof.receiptId);
+                proof.put("tokenDigest", benchmarkProof.tokenDigest);
+                proof.put("sourceIdDigest", sourceIdDigest);
+                proof.put("armedAtMs", benchmarkProof.armedAtMs);
+                proof.put("fetchedAtMs", now);
+                body.put("runId", benchmarkProof.receiptId);
+                body.put("metadata", new JSONObject().put("benchmarkShareProof", proof));
+            }
 
             postCache(body, "youtube");
         } catch (Throwable t) {

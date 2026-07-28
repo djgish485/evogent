@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { after, before, beforeEach, describe, test } from 'node:test';
+import { recordBrowseCacheRefresh } from '../src/lib/db/browse-cache';
+import { getFeedItemById } from '../src/lib/db/feed';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -14,6 +16,13 @@ type GlobalWithDb = typeof globalThis & {
 
 type SubmitRouteModule = {
   POST: (request: Request) => Promise<Response>;
+};
+
+type ManualEnrichRouteModule = {
+  POST: (
+    request: Request,
+    context: { params: Promise<{ id: string }> },
+  ) => Promise<Response>;
 };
 
 type SubmitResponse = {
@@ -27,9 +36,11 @@ type EnqueuePayload = {
   priority?: string;
   source?: string;
   metadata?: {
+    endpoint?: string;
     enrichmentMode?: string;
     itemCount?: number;
     postIds?: string[];
+    trigger?: string;
   };
 };
 
@@ -51,10 +62,14 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
   let originalOrchestratorUrl: string | undefined;
   let originalFeedNotifyUrl: string | undefined;
   let originalDisableBackgroundJobs: string | undefined;
+  let originalRuntimeProfile: string | undefined;
+  let originalLegacyRuntimeProfile: string | undefined;
   let originalFetch: typeof fetch;
   let tempDir = '';
   let routeModule: SubmitRouteModule;
+  let manualEnrichRouteModule: ManualEnrichRouteModule;
   let enqueuePayloads: EnqueuePayload[] = [];
+  let feedNotifyPayloads: Array<Record<string, unknown>> = [];
 
   before(async () => {
     originalCwd = process.cwd();
@@ -65,6 +80,8 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     originalOrchestratorUrl = process.env.ORCHESTRATOR_INTERNAL_URL;
     originalFeedNotifyUrl = process.env.INTERNAL_FEED_NOTIFY_URL;
     originalDisableBackgroundJobs = process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS;
+    originalRuntimeProfile = process.env.EVOGENT_RUNTIME_PROFILE;
+    originalLegacyRuntimeProfile = process.env.MEDIA_AGENT_RUNTIME_PROFILE;
     originalFetch = globalThis.fetch;
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-curate-submit-enrichment-test-'));
     closeDb();
@@ -77,6 +94,8 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     process.env.ORCHESTRATOR_INTERNAL_URL = 'http://127.0.0.1:3173';
     process.env.INTERNAL_FEED_NOTIFY_URL = 'http://127.0.0.1:3173/api/internal/feed-notify';
     delete process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS;
+    delete process.env.EVOGENT_RUNTIME_PROFILE;
+    delete process.env.MEDIA_AGENT_RUNTIME_PROFILE;
 
     globalThis.fetch = (async (input, init) => {
       const url = typeof input === 'string'
@@ -99,6 +118,10 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
         });
       }
 
+      if (url.endsWith('/api/internal/feed-notify')) {
+        feedNotifyPayloads.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+      }
+
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -107,11 +130,16 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
 
     const routeModuleUrl = `${pathToFileURL(path.join(originalCwd, 'src/app/api/internal/curate/submit/route.ts')).href}?case=${Date.now()}-${randomUUID()}`;
     routeModule = await import(routeModuleUrl) as SubmitRouteModule;
+    const manualEnrichRouteModuleUrl = `${pathToFileURL(path.join(originalCwd, 'src/app/api/feed/[id]/enrich/route.ts')).href}?case=${Date.now()}-${randomUUID()}`;
+    manualEnrichRouteModule = await import(manualEnrichRouteModuleUrl) as ManualEnrichRouteModule;
   });
 
   beforeEach(async () => {
     closeDb();
     enqueuePayloads = [];
+    feedNotifyPayloads = [];
+    delete process.env.EVOGENT_RUNTIME_PROFILE;
+    delete process.env.MEDIA_AGENT_RUNTIME_PROFILE;
 
     const dbPath = process.env.MEDIA_AGENT_DB_PATH;
     if (dbPath) {
@@ -147,12 +175,18 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     if (originalDisableBackgroundJobs === undefined) delete process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS;
     else process.env.MEDIA_AGENT_DISABLE_BACKGROUND_JOBS = originalDisableBackgroundJobs;
 
+    if (originalRuntimeProfile === undefined) delete process.env.EVOGENT_RUNTIME_PROFILE;
+    else process.env.EVOGENT_RUNTIME_PROFILE = originalRuntimeProfile;
+
+    if (originalLegacyRuntimeProfile === undefined) delete process.env.MEDIA_AGENT_RUNTIME_PROFILE;
+    else process.env.MEDIA_AGENT_RUNTIME_PROFILE = originalLegacyRuntimeProfile;
+
     if (tempDir) {
       await fs.promises.rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  async function writeBrainConfig(provider: 'claude' | 'codex', usageLevel: 'low' | 'medium') {
+  async function writeBrainConfig(provider: 'claude' | 'codex', usageLevel: 'low' | 'medium' | 'high') {
     const configPath = path.join(process.env.DATA_DIR ?? '', 'config.md');
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, [
@@ -191,20 +225,33 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     });
   }
 
-  async function submitTweets(count: number, provider: 'claude' | 'codex', usageLevel: 'low' | 'medium') {
+  async function submitItems(
+    items: ReturnType<typeof makeTweets>,
+    provider: 'claude' | 'codex',
+    usageLevel: 'low' | 'medium' | 'high',
+  ): Promise<SubmitResponse> {
     await writeBrainConfig(provider, usageLevel);
 
     const response = await routeModule.POST(new Request('http://127.0.0.1:3173/api/internal/curate/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: makeTweets(count) }),
+      body: JSON.stringify({ items }),
     }));
     const body = await response.json() as SubmitResponse;
 
     assert.equal(response.status, 200);
-    assert.equal(body.accepted, count);
+    assert.equal(body.accepted, items.length);
     assert.deepEqual(body.errors, []);
-    assert.equal(body.acceptedIds?.length, count);
+    assert.equal(body.acceptedIds?.length, items.length);
+    return body;
+  }
+
+  async function submitTweets(
+    count: number,
+    provider: 'claude' | 'codex',
+    usageLevel: 'low' | 'medium' | 'high',
+  ): Promise<SubmitResponse> {
+    return submitItems(makeTweets(count), provider, usageLevel);
   }
 
   function assertEnqueueChunks(expectedItemCounts: number[]) {
@@ -245,15 +292,109 @@ describe('curate submit batch enrichment dispatch', { concurrency: false }, () =
     assertEnqueueChunks([1]);
   });
 
-  test('skips bulk enrichment for Low Claude', async () => {
-    await submitTweets(16, 'claude', 'low');
+  test('keeps non-phone High enrichment dispatch chunked', async () => {
+    await submitTweets(5, 'codex', 'high');
+
+    assertEnqueueChunks([4, 1]);
+  });
+
+  test('skips automatic Medium enrichment agents on phone while still delivering primary cards', async () => {
+    process.env.EVOGENT_RUNTIME_PROFILE = 'phone';
+    const body = await submitTweets(5, 'claude', 'medium');
 
     assert.deepEqual(enqueuePayloads, []);
+    assert.equal(feedNotifyPayloads.length, 1);
+    const deliveredItems = feedNotifyPayloads[0]?.items;
+    assert.ok(Array.isArray(deliveredItems));
+    assert.equal(deliveredItems.length, 5);
+    assert.match(String((deliveredItems[0] as { text?: unknown }).text), /batch enrichment routing/);
+    for (const id of body.acceptedIds ?? []) {
+      const stored = getFeedItemById(id);
+      assert.ok(stored);
+      assert.equal((stored.metadata as Record<string, unknown> | null)?.batchEnrichment, undefined);
+    }
+  });
+
+  test('skips automatic High enrichment agents on phone without queued metadata', async () => {
+    process.env.EVOGENT_RUNTIME_PROFILE = 'phone';
+    const body = await submitTweets(5, 'codex', 'high');
+
+    assert.deepEqual(enqueuePayloads, []);
+    for (const id of body.acceptedIds ?? []) {
+      const stored = getFeedItemById(id);
+      assert.ok(stored);
+      assert.equal((stored.metadata as Record<string, unknown> | null)?.batchEnrichment, undefined);
+    }
+  });
+
+  test('skips bulk enrichment for Low Claude', async () => {
+    const body = await submitTweets(16, 'claude', 'low');
+
+    assert.deepEqual(enqueuePayloads, []);
+    for (const id of body.acceptedIds ?? []) {
+      const stored = getFeedItemById(id);
+      assert.ok(stored);
+      assert.equal((stored.metadata as Record<string, unknown> | null)?.batchEnrichment, undefined);
+    }
   });
 
   test('skips bulk enrichment for Low Codex', async () => {
     await submitTweets(5, 'codex', 'low');
 
     assert.deepEqual(enqueuePayloads, []);
+  });
+
+  test('excludes targets made complete by deterministic cache enrichment before dispatch', async () => {
+    const items = makeTweets(3);
+    const now = Date.now();
+    recordBrowseCacheRefresh({
+      source: 'twitter',
+      triggeredBy: 'test',
+      startedAtMs: now,
+      completedAtMs: now,
+      status: 'completed',
+      items: items.map((item, index) => ({
+        source: 'twitter',
+        sourceId: item.sourceId,
+        payload: {
+          authorAvatarUrl: `https://example.com/avatar-${index + 1}.jpg`,
+        },
+        fetchedAtMs: now,
+        expiresAtMs: now + 60_000,
+      })),
+    });
+
+    const body = await submitItems(items, 'claude', 'medium');
+
+    assert.deepEqual(enqueuePayloads, []);
+    for (const [index, id] of (body.acceptedIds ?? []).entries()) {
+      const stored = getFeedItemById(id);
+      assert.ok(stored);
+      assert.equal(stored.authorAvatarUrl, `https://example.com/avatar-${index + 1}.jpg`);
+      assert.equal((stored.metadata as Record<string, unknown> | null)?.batchEnrichment, undefined);
+    }
+  });
+
+  test('keeps manual full enrichment available on phone and queues it exactly once', async () => {
+    process.env.EVOGENT_RUNTIME_PROFILE = 'phone';
+    const body = await submitTweets(1, 'claude', 'medium');
+    const id = body.acceptedIds?.[0];
+    assert.ok(id);
+    assert.deepEqual(enqueuePayloads, []);
+
+    const response = await manualEnrichRouteModule.POST(
+      new Request(`http://127.0.0.1:3173/api/feed/${encodeURIComponent(id)}/enrich`, {
+        method: 'POST',
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    const result = await response.json() as { ok?: boolean; postId?: string };
+
+    assert.equal(response.status, 202);
+    assert.equal(result.ok, true);
+    assert.equal(result.postId, id);
+    assert.equal(enqueuePayloads.length, 1);
+    assert.equal(enqueuePayloads[0]?.metadata?.enrichmentMode, 'full');
+    assert.equal(enqueuePayloads[0]?.metadata?.trigger, 'on_demand_enrichment');
   });
 });

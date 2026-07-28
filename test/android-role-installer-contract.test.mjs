@@ -110,6 +110,297 @@ printf '%s\\n' preserved
   }
 });
 
+test('Android role reads use bounded typed filesystem publication, not rish stdout', () => {
+  const query = shellFunction(installer, 'read_android_role_query_result');
+  const current = shellFunction(installer, 'read_android_current_user');
+  const holders = shellFunction(installer, 'read_android_role_holders');
+  const assistant = shellFunction(installer, 'read_android_assistant_setting');
+  const voice = shellFunction(installer, 'read_android_voice_setting');
+  const home = shellFunction(installer, 'read_android_home_component');
+  assert.match(query, /allocate_shell_staging_file android-role-query/);
+  assert.match(query, /EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1/);
+  assert.match(query, /copy_published_shell_file "\$shell_path" "\$private_result" 100/);
+  assert.match(query, /remove_shell_staging_file "\$shell_path"/);
+  assert.match(query, /rish_command[\s\S]*30 >\/dev\/null 2>&1 \|\| true/);
+  assert.doesNotMatch(current, /\$\(\s*rish_command/);
+  assert.doesNotMatch(holders, /\$\(\s*rish_command/);
+  assert.doesNotMatch(assistant, /\$\(\s*rish_command/);
+  assert.doesNotMatch(voice, /\$\(\s*rish_command/);
+  assert.doesNotMatch(home, /\$\(\s*rish_command/);
+  assert.match(assistant, /read_android_role_query_result/);
+  assert.match(voice, /read_android_role_query_result/);
+  assert.match(home, /read_android_role_query_result/);
+  assert.doesNotMatch(
+    shellFunction(installer, 'android_assistant_components_match'),
+    /rish_command/,
+  );
+  assert.doesNotMatch(
+    shellFunction(installer, 'android_home_component_matches'),
+    /rish_command/,
+  );
+  assert.match(
+    installer,
+    /evogent-\(android-role-query\|control-token\|installed-apk\|package-version\|rollback-dump\)/,
+  );
+});
+
+test('filesystem role query accepts explicit empty holder and rejects missing publication silently', () => {
+  const query = shellFunction(installer, 'read_android_role_query_result');
+  const current = shellFunction(installer, 'read_android_current_user');
+  const holders = shellFunction(installer, 'read_android_role_holders');
+  const assistant = shellFunction(installer, 'read_android_assistant_setting');
+  const voice = shellFunction(installer, 'read_android_voice_setting');
+  const home = shellFunction(installer, 'read_android_home_component');
+  const componentsMatch = shellFunction(
+    installer,
+    'android_assistant_components_match',
+  );
+  const homeMatch = shellFunction(installer, 'android_home_component_matches');
+  const fixture = fs.mkdtempSync(
+    path.join(fs.realpathSync(os.tmpdir()), 'evogent-role-query-'),
+  );
+  fs.chmodSync(fixture, 0o700);
+  const stage = path.join(fixture, 'stage');
+  const shellRoot = path.join(fixture, 'shell');
+  fs.mkdirSync(stage, { mode: 0o700 });
+  fs.mkdirSync(shellRoot, { mode: 0o700 });
+  const helper = path.join(
+    root,
+    'phone-paradigm/device/android-role-state.py',
+  );
+  const harness = `
+set -u
+${query}
+${current}
+${holders}
+${assistant}
+${voice}
+${home}
+${componentsMatch}
+${homeMatch}
+android_role_state_helper_safe() {
+  [ -f "$ANDROID_ROLE_STATE_HELPER" ] && [ ! -L "$ANDROID_ROLE_STATE_HELPER" ]
+}
+android_role_name_valid() {
+  case "\${1:-}" in
+    "$ANDROID_HOME_ROLE"|"$ANDROID_ASSISTANT_ROLE") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+allocate_shell_staging_file() {
+  operation="$SHELL_ROOT/query-$ALLOCATIONS"
+  ALLOCATIONS=$((ALLOCATIONS + 1))
+  mkdir -m 0700 "$operation"
+  : > "$operation/payload"
+  chmod 0600 "$operation/payload"
+  chmod 0711 "$operation"
+  printf '%s\\n' "$operation/payload"
+}
+copy_published_shell_file() {
+  source="$1" destination="$2" attempts="$3"
+  COPY_ATTEMPTS="$attempts"
+  for _ in $(seq 1 "$attempts"); do
+    if [ -f "$source" ] && [ ! -L "$source" ]; then
+      cp "$source" "$destination"
+      chmod 600 "$destination"
+      return 0
+    fi
+    sleep 0.01
+  done
+  return 1
+}
+remove_shell_staging_file() {
+  path="$1"
+  rm -rf -- "\${path%/payload}"
+}
+rish_command() {
+  command="$1" budget="$2"
+  printf '%s\\n' "$budget" >> "$TRACE"
+  [ "$RISH_MODE" = publish ] && bash -c "$command"
+  # Intentionally publish no stdout even on rc=0, matching the device fault.
+  return 0
+}
+STAGE="$STAGE_PATH"
+SHELL_ROOT="$SHELL_PATH"
+TRACE="$TRACE_PATH"
+ANDROID_ROLE_STATE_HELPER="$HELPER_PATH"
+ANDROID_HOME_ROLE=android.app.role.HOME
+ANDROID_ASSISTANT_ROLE=android.app.role.ASSISTANT
+PACKAGE_NAME=net.dangish.evogent
+ALLOCATIONS=0
+COPY_ATTEMPTS=0
+RISH_MODE="$1"
+case "$2" in
+  current) read_android_current_user ;;
+  empty) read_android_role_holders "$ANDROID_ASSISTANT_ROLE" 10 ;;
+  holder) read_android_role_holders "$ANDROID_HOME_ROLE" 10 ;;
+  components) android_assistant_components_match 10 ;;
+  home-match) android_home_component_matches 10 ;;
+  *) exit 99 ;;
+esac
+`;
+  const fakeBin = path.join(fixture, 'bin');
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(
+    path.join(fakeBin, 'am'),
+    '#!/bin/sh\n[ "$1" = get-current-user ] || exit 65\nprintf "10\\n"\n',
+    { mode: 0o700 },
+  );
+  fs.writeFileSync(
+    path.join(fakeBin, 'cmd'),
+    '#!/bin/sh\n'
+      + 'case "$1:$2" in\n'
+      + '  role:get-role-holders)\n'
+      + '    case "$5" in\n'
+      + '      android.app.role.HOME) printf "com.example.home\\n" ;;\n'
+      + '      android.app.role.ASSISTANT) : ;;\n'
+      + '      *) exit 65 ;;\n'
+      + '    esac\n'
+      + '    ;;\n'
+      + '  package:resolve-activity)\n'
+      + '    printf "net.dangish.evogent/.MainActivity\\n"\n'
+      + '    ;;\n'
+      + '  *) exit 65 ;;\n'
+      + 'esac\n',
+    { mode: 0o700 },
+  );
+  fs.writeFileSync(
+    path.join(fakeBin, 'settings'),
+    '#!/bin/sh\n'
+      + '[ "$1" = --user ] && [ "$2" = 10 ] && [ "$3" = get ] '
+      + '&& [ "$4" = secure ] || exit 65\n'
+      + 'case "$5" in\n'
+      + '  assistant|voice_interaction_service)\n'
+      + '    printf "net.dangish.evogent/.EvogentVoiceInteractionService\\n"\n'
+      + '    ;;\n'
+      + '  *) exit 65 ;;\n'
+      + 'esac\n',
+    { mode: 0o700 },
+  );
+  const trace = path.join(fixture, 'trace');
+  const runHarness = (mode, kind) => spawnSync(
+    'bash',
+    ['-c', harness, 'role-query', mode, kind],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        STAGE_PATH: stage,
+        SHELL_PATH: shellRoot,
+        TRACE_PATH: trace,
+        HELPER_PATH: helper,
+      },
+    },
+  );
+  try {
+    let result = runHarness('publish', 'current');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '10\n');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    result = runHarness('publish', 'empty');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '\n');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    result = runHarness('publish', 'holder');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'com.example.home\n');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    result = runHarness('publish', 'components');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    result = runHarness('publish', 'home-match');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    result = runHarness('lost', 'empty');
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+
+    assert.equal(
+      fs.readFileSync(trace, 'utf8').split('\n').filter(Boolean)
+        .every((value) => value === '30'),
+      true,
+    );
+    assert.deepEqual(fs.readdirSync(stage), []);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('malformed role query publication is rejected without leaking holder content and is removed', () => {
+  const query = shellFunction(installer, 'read_android_role_query_result');
+  const fixture = fs.mkdtempSync(
+    path.join(fs.realpathSync(os.tmpdir()), 'evogent-role-query-invalid-'),
+  );
+  fs.chmodSync(fixture, 0o700);
+  const stage = path.join(fixture, 'stage');
+  const shellRoot = path.join(fixture, 'shell');
+  fs.mkdirSync(stage, { mode: 0o700 });
+  fs.mkdirSync(shellRoot, { mode: 0o700 });
+  const helper = path.join(
+    root,
+    'phone-paradigm/device/android-role-state.py',
+  );
+  const harness = `
+set -u
+${query}
+android_role_state_helper_safe() { return 0; }
+allocate_shell_staging_file() {
+  mkdir -m 0711 "$SHELL_ROOT/query"
+  printf 'EVOGENT_ANDROID_ROLE_QUERY_RESULT_V2\\nrole-holders\\ncom.example.privateholder\\n' > "$SHELL_ROOT/query/payload"
+  chmod 0644 "$SHELL_ROOT/query/payload"
+  printf '%s\\n' "$SHELL_ROOT/query/payload"
+}
+rish_command() { return 0; }
+copy_published_shell_file() {
+  cp "$1" "$2"
+  chmod 600 "$2"
+}
+remove_shell_staging_file() { rm -rf -- "\${1%/payload}"; }
+STAGE="$STAGE_PATH"
+SHELL_ROOT="$SHELL_PATH"
+ANDROID_ROLE_STATE_HELPER="$HELPER_PATH"
+read_android_role_query_result role-holders "cmd role ignored" 4096
+`;
+  try {
+    const result = spawnSync(
+      'bash',
+      ['-c', harness],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          STAGE_PATH: stage,
+          SHELL_PATH: shellRoot,
+          HELPER_PATH: helper,
+        },
+      },
+    );
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, /privateholder/);
+    assert.deepEqual(fs.readdirSync(shellRoot), []);
+    assert.deepEqual(fs.readdirSync(stage), []);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 test('assistant qualification failure cannot mutate HOME', () => {
   const assign = shellFunction(installer, 'assign_release_android_roles');
   const harness = `

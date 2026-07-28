@@ -119,6 +119,28 @@ public class EvogentAccessibilityService extends AccessibilityService {
                     sendToLocalAgent(reply, pasted == null ? "" : pasted);
                     break;
                 }
+                case "benchmark_share_arm": {
+                    boolean armed = EvogentBenchmarkShareProvenance.arm(
+                            EvogentAccessibilityService.this,
+                            i.getStringExtra("run_id"),
+                            i.getIntExtra("sequence", 0),
+                            i.getStringExtra("share_token"),
+                            i.getLongExtra("armed_at_ms", 0),
+                            System.currentTimeMillis());
+                    String armResult = armed ? "armed" : "refused";
+                    try { if (isOrderedBroadcast()) setResultData(armResult); } catch (Throwable ignored) {}
+                    sendToLocalAgent(reply, armResult);
+                    break;
+                }
+                case "benchmark_share_clear": {
+                    boolean cleared = EvogentBenchmarkShareProvenance.clear(
+                            EvogentAccessibilityService.this,
+                            i.getStringExtra("run_id"));
+                    String clearResult = cleared ? "cleared" : "refused";
+                    try { if (isOrderedBroadcast()) setResultData(clearResult); } catch (Throwable ignored) {}
+                    sendToLocalAgent(reply, clearResult);
+                    break;
+                }
                 case "scroll":  scrollOnDisplay(i.getIntExtra("display", Display.DEFAULT_DISPLAY)); break;
                 case "clicktext": {
                     String clickResult = clickTextOnDisplay(
@@ -144,7 +166,9 @@ public class EvogentAccessibilityService extends AccessibilityService {
         return "nodes".equals(op)
                 || "windows".equals(op)
                 || "clip".equals(op)
-                || "paste".equals(op);
+                || "paste".equals(op)
+                || "benchmark_share_arm".equals(op)
+                || "benchmark_share_clear".equals(op);
     }
 
     /**

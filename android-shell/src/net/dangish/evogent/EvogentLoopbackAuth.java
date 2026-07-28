@@ -68,6 +68,8 @@ final class EvogentLoopbackAuth {
     private static final String COOKIE_NAME = "evogent_phone_session";
     private static final String AUTH_SCHEME = "EvogentSession ";
     private static final int MAX_AUTH_RESPONSE_BYTES = 16 * 1024;
+    private static final int DEFAULT_AUTH_STAGE_TIMEOUT_MS = 6000;
+    private static final int MIN_DIRECT_RETRY_REMAINING_MS = 300;
     private static final long MAX_CHALLENGE_FUTURE_MS = 2 * 60 * 1000L;
     private static final long MAX_DIRECT_SESSION_FUTURE_MS = 2 * 60 * 1000L;
     private static final long MAX_WEB_SESSION_FUTURE_MS = 2 * 24 * 60 * 60 * 1000L;
@@ -254,20 +256,89 @@ final class EvogentLoopbackAuth {
         return new JSONObject(response.body);
     }
 
+    /**
+     * Notification-only direct request whose challenge, completion, optional gate retry, and route
+     * POST all share one monotonic deadline. Every stage receives only the remaining time.
+     */
+    static JSONObject postJsonDirectForJsonBefore(
+            Context context,
+            String targetUrl,
+            String json,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        DirectResponse response = postJsonDirectResponseBefore(
+                context,
+                targetUrl,
+                json,
+                deadlineElapsedRealtimeMs);
+        if (response.status != HttpURLConnection.HTTP_OK || response.body == null) {
+            throw new AuthException("direct_http_error", response.status);
+        }
+        JSONObject parsed = new JSONObject(response.body);
+        requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        return parsed;
+    }
+
+    /**
+     * Direct JSON POST with caller-specific independent stage timeouts. Callers that need a true
+     * end-to-end bound use the monotonic-deadline overload above; WebView and share callers retain
+     * the more patient default overload.
+     */
+    static JSONObject postJsonDirectForJson(
+            Context context,
+            String targetUrl,
+            String json,
+            int connectTimeoutMs,
+            int readTimeoutMs,
+            int authStageTimeoutMs) throws Exception {
+        DirectResponse response = postJsonDirectResponse(
+                context,
+                targetUrl,
+                json,
+                connectTimeoutMs,
+                readTimeoutMs,
+                authStageTimeoutMs);
+        if (response.status != HttpURLConnection.HTTP_OK || response.body == null) {
+            throw new AuthException("direct_http_error", response.status);
+        }
+        return new JSONObject(response.body);
+    }
+
     private static DirectResponse postJsonDirectResponse(
             Context context,
             String targetUrl,
             String json,
             int connectTimeoutMs,
             int readTimeoutMs) throws Exception {
+        return postJsonDirectResponse(
+                context,
+                targetUrl,
+                json,
+                connectTimeoutMs,
+                readTimeoutMs,
+                DEFAULT_AUTH_STAGE_TIMEOUT_MS);
+    }
+
+    private static DirectResponse postJsonDirectResponse(
+            Context context,
+            String targetUrl,
+            String json,
+            int connectTimeoutMs,
+            int readTimeoutMs,
+            int authStageTimeoutMs) throws Exception {
         if (targetUrl == null
                 || !EvogentSecurityPolicy.isTrustedWebUrl(targetUrl)
-                || json == null) {
+                || json == null
+                || connectTimeoutMs <= 0
+                || readTimeoutMs <= 0
+                || authStageTimeoutMs <= 0) {
             throw new IllegalArgumentException("invalid direct request");
         }
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         for (int attempt = 0; attempt < 2; attempt++) {
-            SessionMaterial session = authenticate(context.getApplicationContext(), "direct");
+            SessionMaterial session = authenticate(
+                    context.getApplicationContext(),
+                    "direct",
+                    authStageTimeoutMs);
             DirectResponse response = postAuthenticatedJson(
                     targetUrl,
                     body,
@@ -279,13 +350,84 @@ final class EvogentLoopbackAuth {
         throw new AuthException("direct_request_failed", -1);
     }
 
+    private static DirectResponse postJsonDirectResponseBefore(
+            Context context,
+            String targetUrl,
+            String json,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        if (targetUrl == null
+                || !EvogentSecurityPolicy.isTrustedWebUrl(targetUrl)
+                || json == null) {
+            throw new IllegalArgumentException("invalid direct request");
+        }
+        requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            SessionMaterial session = authenticateBefore(
+                    context.getApplicationContext(),
+                    "direct",
+                    deadlineElapsedRealtimeMs);
+            DirectResponse response = postAuthenticatedJsonBefore(
+                    targetUrl,
+                    body,
+                    session.sessionToken,
+                    deadlineElapsedRealtimeMs);
+            if (!response.phoneSessionRequired || attempt == 1) return response;
+            if (requireRemainingDeadlineMs(deadlineElapsedRealtimeMs)
+                    < MIN_DIRECT_RETRY_REMAINING_MS) {
+                throw new AuthException("direct_retry_budget_exhausted", -1);
+            }
+        }
+        throw new AuthException("direct_request_failed", -1);
+    }
+
     private static SessionMaterial authenticate(Context context, String sessionKind)
             throws Exception {
+        return authenticate(context, sessionKind, DEFAULT_AUTH_STAGE_TIMEOUT_MS);
+    }
+
+    private static SessionMaterial authenticate(
+            Context context,
+            String sessionKind,
+            int authStageTimeoutMs) throws Exception {
+        return authenticate(
+                context,
+                sessionKind,
+                authStageTimeoutMs,
+                0L);
+    }
+
+    private static SessionMaterial authenticateBefore(
+            Context context,
+            String sessionKind,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        return authenticate(
+                context,
+                sessionKind,
+                0,
+                deadlineElapsedRealtimeMs);
+    }
+
+    private static SessionMaterial authenticate(
+            Context context,
+            String sessionKind,
+            int authStageTimeoutMs,
+            long deadlineElapsedRealtimeMs) throws Exception {
         byte[] key = readControlToken(context);
         try {
             String clientNonce = randomLowerHex(32);
-            ChallengeMaterial challenge =
-                    requestVerifiedChallenge(key, clientNonce, null, 6000);
+            ChallengeMaterial challenge = deadlineElapsedRealtimeMs > 0L
+                    ? requestVerifiedChallengeBefore(
+                            key,
+                            clientNonce,
+                            null,
+                            deadlineElapsedRealtimeMs)
+                    : requestVerifiedChallenge(
+                            key,
+                            clientNonce,
+                            null,
+                            authStageTimeoutMs);
 
             String clientProof = EvogentLoopbackAuthProtocol.clientProof(
                     key,
@@ -305,7 +447,15 @@ final class EvogentLoopbackAuth {
             completionBody.put("sessionKind", sessionKind);
             completionBody.put("clientProof", clientProof);
 
-            JSONObject completion = postAuthJson(COMPLETE_URL, completionBody, 6000);
+            JSONObject completion = deadlineElapsedRealtimeMs > 0L
+                    ? postAuthJsonBefore(
+                            COMPLETE_URL,
+                            completionBody,
+                            deadlineElapsedRealtimeMs)
+                    : postAuthJson(
+                            COMPLETE_URL,
+                            completionBody,
+                            authStageTimeoutMs);
             int completedVersion = completion.getInt("version");
             String completedKind = completion.getString("sessionKind");
             String sessionToken = completion.getString("sessionToken");
@@ -372,12 +522,45 @@ final class EvogentLoopbackAuth {
             String clientNonce,
             String expectedServerInstanceId,
             int timeoutMs) throws Exception {
+        return requestVerifiedChallenge(
+                key,
+                clientNonce,
+                expectedServerInstanceId,
+                timeoutMs,
+                0L);
+    }
+
+    private static ChallengeMaterial requestVerifiedChallengeBefore(
+            byte[] key,
+            String clientNonce,
+            String expectedServerInstanceId,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        return requestVerifiedChallenge(
+                key,
+                clientNonce,
+                expectedServerInstanceId,
+                0,
+                deadlineElapsedRealtimeMs);
+    }
+
+    private static ChallengeMaterial requestVerifiedChallenge(
+            byte[] key,
+            String clientNonce,
+            String expectedServerInstanceId,
+            int timeoutMs,
+            long deadlineElapsedRealtimeMs) throws Exception {
         if (!EvogentLoopbackAuthProtocol.isLowerHex(clientNonce, 64)) {
             throw new AuthException("invalid_client_nonce", -1);
         }
         JSONObject challengeBody = new JSONObject();
         challengeBody.put("clientNonce", clientNonce);
-        JSONObject challenge = postAuthJson(CHALLENGE_URL, challengeBody, timeoutMs);
+        JSONObject challenge = deadlineElapsedRealtimeMs > 0L
+                ? postAuthJsonBefore(
+                        CHALLENGE_URL,
+                        challengeBody,
+                        deadlineElapsedRealtimeMs)
+                : postAuthJson(CHALLENGE_URL, challengeBody, timeoutMs);
 
         int version = challenge.getInt("version");
         String echoedClientNonce = challenge.getString("clientNonce");
@@ -442,6 +625,35 @@ final class EvogentLoopbackAuth {
         }
     }
 
+    private static JSONObject postAuthJsonBefore(
+            String targetUrl,
+            JSONObject body,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        int timeoutMs = requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        HttpURLConnection connection = openPost(targetUrl, timeoutMs, timeoutMs);
+        try {
+            byte[] encoded = body.toString().getBytes(StandardCharsets.UTF_8);
+            connection.setFixedLengthStreamingMode(encoded.length);
+            OutputStream output = connection.getOutputStream();
+            try {
+                output.write(encoded);
+            } finally {
+                output.close();
+            }
+            connection.setReadTimeout(requireRemainingDeadlineMs(deadlineElapsedRealtimeMs));
+            int status = connection.getResponseCode();
+            if (status != HttpURLConnection.HTTP_OK) {
+                throw new AuthException("auth_http_error", status);
+            }
+            return new JSONObject(readBoundedBefore(
+                    connection,
+                    connection.getInputStream(),
+                    deadlineElapsedRealtimeMs));
+        } finally {
+            connection.disconnect();
+        }
+    }
+
     private static DirectResponse postAuthenticatedJson(
             String targetUrl,
             byte[] body,
@@ -478,6 +690,44 @@ final class EvogentLoopbackAuth {
         }
     }
 
+    private static DirectResponse postAuthenticatedJsonBefore(
+            String targetUrl,
+            byte[] body,
+            String sessionToken,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        int timeoutMs = requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
+        HttpURLConnection connection = openPost(targetUrl, timeoutMs, timeoutMs);
+        try {
+            connection.setRequestProperty("Authorization", AUTH_SCHEME + sessionToken);
+            connection.setFixedLengthStreamingMode(body.length);
+            OutputStream output = connection.getOutputStream();
+            try {
+                output.write(body);
+            } finally {
+                output.close();
+            }
+            connection.setReadTimeout(requireRemainingDeadlineMs(deadlineElapsedRealtimeMs));
+            int status = connection.getResponseCode();
+            boolean phoneSessionRequired =
+                    status == HttpURLConnection.HTTP_UNAUTHORIZED
+                    && "EvogentPhoneSession".equals(
+                            connection.getHeaderField("WWW-Authenticate"));
+            String responseBody = null;
+            if (status >= 200 && status < 300) {
+                InputStream input = connection.getInputStream();
+                if (input != null) {
+                    responseBody = readBoundedBefore(
+                            connection,
+                            input,
+                            deadlineElapsedRealtimeMs);
+                }
+            }
+            return new DirectResponse(status, phoneSessionRequired, responseBody);
+        } finally {
+            connection.disconnect();
+        }
+    }
+
     private static HttpURLConnection openPost(
             String targetUrl,
             int connectTimeoutMs,
@@ -494,6 +744,15 @@ final class EvogentLoopbackAuth {
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Cache-Control", "no-store");
         return connection;
+    }
+
+    private static int requireRemainingDeadlineMs(
+            long deadlineElapsedRealtimeMs) throws AuthException {
+        long remaining = deadlineElapsedRealtimeMs - SystemClock.elapsedRealtime();
+        if (deadlineElapsedRealtimeMs <= 0L || remaining <= 0L) {
+            throw new AuthException("direct_deadline_exceeded", -1);
+        }
+        return (int) Math.min((long) Integer.MAX_VALUE, remaining);
     }
 
     private static void drain(HttpURLConnection connection, int status) {
@@ -529,6 +788,33 @@ final class EvogentLoopbackAuth {
                 }
                 output.write(buffer, 0, count);
             }
+            return new String(output.toByteArray(), StandardCharsets.UTF_8);
+        } finally {
+            input.close();
+        }
+    }
+
+    private static String readBoundedBefore(
+            HttpURLConnection connection,
+            InputStream input,
+            long deadlineElapsedRealtimeMs) throws Exception {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[2048];
+            int total = 0;
+            int count;
+            while (true) {
+                connection.setReadTimeout(requireRemainingDeadlineMs(
+                        deadlineElapsedRealtimeMs));
+                count = input.read(buffer);
+                if (count == -1) break;
+                total += count;
+                if (total > MAX_AUTH_RESPONSE_BYTES) {
+                    throw new AuthException("auth_response_too_large", -1);
+                }
+                output.write(buffer, 0, count);
+            }
+            requireRemainingDeadlineMs(deadlineElapsedRealtimeMs);
             return new String(output.toByteArray(), StandardCharsets.UTF_8);
         } finally {
             input.close();

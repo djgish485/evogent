@@ -225,7 +225,7 @@ describe('twitter canonicalization submit route', { concurrency: false }, () => 
     }
   });
 
-  test('persists tweet-shaped Twitter articles as tweets before cache enrichment and batch routing', async () => {
+  test('persists tweet-shaped Twitter articles before cache enrichment excludes complete rows from batch routing', async () => {
     const tweetId = `2030455675357${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
     const now = Date.now();
     const cachedPublishedAt = '2026-04-28T01:02:00.000Z';
@@ -321,11 +321,8 @@ describe('twitter canonicalization submit route', { concurrency: false }, () => 
       batchEnrichment?: { requestId?: string; status?: string; itemCount?: number };
     };
     assert.equal(metadata.twitterCanonicalization?.canonicalTweetId, tweetId);
-    assert.equal(metadata.batchEnrichment?.status, 'queued');
-    assert.equal(metadata.batchEnrichment?.itemCount, 1);
-    assert.equal(enqueuePayloads.length, 1);
-    assert.equal(enqueuePayloads[0]?.source, 'curation_submit_feed_enrichment');
-    assert.deepEqual((enqueuePayloads[0]?.metadata as { postIds?: string[] } | undefined)?.postIds, body.acceptedIds);
+    assert.equal(metadata.batchEnrichment, undefined);
+    assert.equal(enqueuePayloads.length, 0);
   });
 
   test('assigns a stable thread color when submitting a fresh thread id', async () => {

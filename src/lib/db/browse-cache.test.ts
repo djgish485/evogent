@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { getDb } from './client';
 import {
+  PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY,
   SOURCE_SETUP_REFRESH_TRIGGERED_BY,
   getLatestBrowseCacheRefreshRun,
   getLatestBrowseCacheSourceSetupRun,
@@ -135,6 +136,122 @@ describe('browse cache refresh run timestamps', () => {
         status: 'completed',
       });
     }, /Completed browse cache refresh runs require completedAtMs/);
+  });
+
+  test('benchmark share receipts are insert-only and replay rolls back its item mutation', () => {
+    const now = Date.now();
+    const runId = `benchmark-share-${'a'.repeat(64)}`;
+    const sourceId = 'AAAAAAAAAAA';
+    const originalTitle = 'Original token-bound benchmark video';
+    const replayTitle = 'Replay must not overwrite this cache row';
+    const item = {
+      source: 'youtube',
+      sourceId,
+      url: `https://www.youtube.com/watch?v=${sourceId}`,
+      title: originalTitle,
+      payload: { type: 'youtube', videoId: sourceId, title: originalTitle },
+      fetchedAtMs: now,
+      expiresAtMs: now + 60_000,
+    };
+
+    recordBrowseCacheRefresh({
+      runId,
+      source: 'youtube',
+      triggeredBy: PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY,
+      startedAtMs: now,
+      completedAtMs: now,
+      status: 'completed',
+      itemsAdded: 1,
+      items: [item],
+      metadata: { benchmarkShareProof: { tokenDigest: 'a'.repeat(64) } },
+    });
+
+    assert.throws(() => {
+      recordBrowseCacheRefresh({
+        runId,
+        source: 'youtube',
+        triggeredBy: PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY,
+        startedAtMs: now + 1,
+        completedAtMs: now + 1,
+        status: 'completed',
+        itemsAdded: 1,
+        items: [{
+          ...item,
+          title: replayTitle,
+          payload: { ...item.payload, title: replayTitle },
+          fetchedAtMs: now + 1,
+        }],
+        metadata: { benchmarkShareProof: { tokenDigest: 'b'.repeat(64) } },
+      });
+    }, /UNIQUE constraint failed: browse_cache_refresh_runs\.id/);
+    assert.throws(() => {
+      recordBrowseCacheRefresh({
+        runId,
+        source: 'youtube',
+        // A replayer cannot bypass immutability by changing its incoming trigger.
+        triggeredBy: 'phone-browse',
+        startedAtMs: now + 2,
+        completedAtMs: now + 2,
+        status: 'completed',
+        itemsAdded: 1,
+        items: [{
+          ...item,
+          title: replayTitle,
+          payload: { ...item.payload, title: replayTitle },
+          fetchedAtMs: now + 2,
+        }],
+      });
+    }, /Browse cache refresh run identity is immutable/);
+
+    const persistedItem = listBrowseCacheItems({
+      source: 'youtube',
+      includeExpired: true,
+      limit: 10,
+    })[0];
+    assert.strictEqual(persistedItem?.title, originalTitle);
+    assert.strictEqual(persistedItem?.fetchedAtMs, now);
+    const persistedRun = getDb().prepare(`
+      SELECT started_at_ms, metadata_json
+      FROM browse_cache_refresh_runs
+      WHERE id = ?
+    `).get(runId) as { started_at_ms: number; metadata_json: string };
+    assert.strictEqual(persistedRun.started_at_ms, now);
+    assert.deepStrictEqual(JSON.parse(persistedRun.metadata_json), {
+      benchmarkShareProof: { tokenDigest: 'a'.repeat(64) },
+    });
+  });
+
+  test('ordinary refresh run ids retain idempotent upsert semantics', () => {
+    const now = Date.now();
+    const runId = 'ordinary-idempotent-refresh';
+    recordBrowseCacheRefresh({
+      runId,
+      source: 'youtube',
+      triggeredBy: 'phone-browse',
+      startedAtMs: now - 1,
+      completedAtMs: now - 1,
+      status: 'completed',
+      itemsAdded: 1,
+    });
+    recordBrowseCacheRefresh({
+      runId,
+      source: 'youtube',
+      triggeredBy: 'phone-browse',
+      startedAtMs: now,
+      completedAtMs: now,
+      status: 'completed',
+      itemsAdded: 2,
+    });
+
+    const persisted = getDb().prepare(`
+      SELECT started_at_ms, items_added
+      FROM browse_cache_refresh_runs
+      WHERE id = ?
+    `).get(runId) as { started_at_ms: number; items_added: number };
+    assert.deepStrictEqual(persisted, {
+      started_at_ms: now,
+      items_added: 2,
+    });
   });
 
   test('source setup evidence only accepts completed setup-smoke runs with rows', () => {

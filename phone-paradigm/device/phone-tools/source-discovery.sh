@@ -126,6 +126,9 @@ PYEOF
 PROMPT=$(sed -e "s|__PKG__|$PKG|g" -e "s|__NAME__|$NAME|g" -e "s|__SRC__|$SRC|g" \
              -e "s|__NOTES__|$NOTES|g" "$TOOLS/source-discovery-prompt.txt")
 
+# Source discovery is a one-time instruction-authoring/research task, not routine extraction.
+# It deliberately keeps the independently configured Codex route; a browse benchmark must not
+# silently change the model that writes a new durable source recipe.
 # Brain provider from data/config.md, same convention as evogent-cycle.sh.
 BRAIN=$(awk '/^## Brain Provider/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' \
         "$EVO/data/config.md" 2>/dev/null | grep -qi codex && echo codex || echo claude)

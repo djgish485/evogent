@@ -20,6 +20,7 @@ DB = os.path.join(EVO, "data", "media-agent.db")
 BRIEF = os.path.expanduser("~/phone-tools/taste-score.md")
 OUT = os.path.join(EVO, "data", "tmp", "freshness-shipment-judgments.json")
 MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
+EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "medium")
 SCHEMA = "evogent.freshness-shipment.v1"
 MAX_BATCH = 120
 MAX_BUDGET_S = 240
@@ -239,7 +240,7 @@ def main():
                 "--model",
                 MODEL,
                 "-c",
-                "model_reasoning_effort=medium",
+                f"model_reasoning_effort={EFFORT}",
                 "--dangerously-bypass-approvals-and-sandbox",
                 "-",
             ],

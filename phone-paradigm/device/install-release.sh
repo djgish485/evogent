@@ -1303,7 +1303,7 @@ rish_command() {
 allocate_shell_staging_file() {
   local purpose="$1" operation="" path="" nonce="" attempt probe
   case "$purpose" in
-    control-token|installed-apk|package-version|rollback-dump) ;;
+    android-role-query|control-token|installed-apk|package-version|rollback-dump) ;;
     *) return 1 ;;
   esac
   for attempt in $(seq 1 3); do
@@ -1331,7 +1331,7 @@ allocate_shell_staging_file() {
 
 remove_shell_staging_file() {
   local path="$1" operation probe
-  [[ "$path" =~ ^/data/local/tmp/evogent-(control-token|installed-apk|package-version|rollback-dump)\.[0-9a-f]{32}/payload$ ]] \
+  [[ "$path" =~ ^/data/local/tmp/evogent-(android-role-query|control-token|installed-apk|package-version|rollback-dump)\.[0-9a-f]{32}/payload$ ]] \
     || return 1
   operation="${path%/payload}"
   rish_command "rm -rf '$operation'" >/dev/null 2>&1 || true
@@ -1733,26 +1733,117 @@ android_role_name_valid() {
   esac
 }
 
+read_android_role_query_result() {
+  local kind="$1" command="$2" max_bytes="$3"
+  local shell_path="" private_result="" value="" parsed=0 removed=0
+  case "$kind:$max_bytes" in
+    current-user:64|role-holders:4096|\
+    assistant-setting:1024|voice-setting:1024|home-component:1024) ;;
+    *) return 1 ;;
+  esac
+  [ -n "$STAGE" ] && [ -d "$STAGE" ] && [ ! -L "$STAGE" ] \
+    && android_role_state_helper_safe || return 1
+  private_result="$(mktemp "$STAGE/android-role-query.XXXXXX")" || return 1
+  chmod 600 "$private_result" || {
+    rm -f -- "$private_result"
+    return 1
+  }
+  shell_path="$(
+    allocate_shell_staging_file android-role-query 2>/dev/null || true
+  )"
+  if [ -n "$shell_path" ]; then
+    # rish stdout is not a completion channel: on some devices it is
+    # nondeterministically empty even with rc=0. The Android shell instead
+    # captures the bounded query privately, publishes a typed/versioned result
+    # by changing the randomized capability path to 0644 only after success,
+    # and the Termux side polls that filesystem proof.
+    rish_command \
+      "query_tmp='${shell_path}.query'; rm -f \"\$query_tmp\"; umask 077; if $command > \"\$query_tmp\" 2>/dev/null && [ -f \"\$query_tmp\" ] && [ ! -L \"\$query_tmp\" ]; then query_size=\$(wc -c < \"\$query_tmp\" | tr -d '[:space:]'); if [ -n \"\$query_size\" ] && [ \"\$query_size\" -le '$max_bytes' ]; then { printf 'EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1\\n%s\\n' '$kind'; cat \"\$query_tmp\"; } > '$shell_path' && rm -f \"\$query_tmp\" && chmod 0644 '$shell_path'; else rm -f \"\$query_tmp\"; exit 65; fi; else rm -f \"\$query_tmp\"; exit 65; fi" \
+      30 >/dev/null 2>&1 || true
+    if copy_published_shell_file "$shell_path" "$private_result" 100; then
+      case "$kind" in
+        current-user)
+          value="$(
+            python3 "$ANDROID_ROLE_STATE_HELPER" \
+              parse-current-user-result < "$private_result" 2>/dev/null
+          )" && parsed=1
+          ;;
+        role-holders)
+          value="$(
+            python3 "$ANDROID_ROLE_STATE_HELPER" \
+              parse-role-holders-result < "$private_result" 2>/dev/null
+          )" && parsed=1
+          ;;
+        assistant-setting)
+          value="$(
+            python3 "$ANDROID_ROLE_STATE_HELPER" \
+              parse-assistant-setting-result < "$private_result" 2>/dev/null
+          )" && parsed=1
+          ;;
+        voice-setting)
+          value="$(
+            python3 "$ANDROID_ROLE_STATE_HELPER" \
+              parse-voice-setting-result < "$private_result" 2>/dev/null
+          )" && parsed=1
+          ;;
+        home-component)
+          value="$(
+            python3 "$ANDROID_ROLE_STATE_HELPER" \
+              parse-home-component-result < "$private_result" 2>/dev/null
+          )" && parsed=1
+          ;;
+      esac
+    fi
+    remove_shell_staging_file "$shell_path" >/dev/null 2>&1 && removed=1
+  fi
+  rm -f -- "$private_result"
+  [ "$parsed" = 1 ] && [ "$removed" = 1 ] || return 1
+  printf '%s\n' "$value"
+}
+
 read_android_role_holders() {
-  local role="$1" user_id="$2" raw
+  local role="$1" user_id="$2"
   android_role_name_valid "$role" \
     && [[ "$user_id" =~ ^(0|[1-9][0-9]{0,9})$ ]] \
     && [ "$user_id" -le 2147483647 ] || return 1
-  raw="$(
-    rish_command \
-      "cmd role get-role-holders --user '$user_id' '$role'" 30 \
-      2>/dev/null
-  )" || return 1
-  [ "${#raw}" -le 4096 ] || return 1
-  printf '%s\n' "$raw"
+  read_android_role_query_result \
+    role-holders \
+    "cmd role get-role-holders --user '$user_id' '$role'" \
+    4096
 }
 
 read_android_current_user() {
-  local raw
-  raw="$(rish_command "am get-current-user" 30 2>/dev/null)" || return 1
-  [[ "$raw" =~ ^(0|[1-9][0-9]{0,9})$ ]] \
-    && [ "$raw" -le 2147483647 ] || return 1
-  printf '%s\n' "$raw"
+  read_android_role_query_result current-user "am get-current-user" 64
+}
+
+read_android_assistant_setting() {
+  local user_id="$1"
+  [[ "$user_id" =~ ^(0|[1-9][0-9]{0,9})$ ]] \
+    && [ "$user_id" -le 2147483647 ] || return 1
+  read_android_role_query_result \
+    assistant-setting \
+    "settings --user '$user_id' get secure assistant" \
+    1024
+}
+
+read_android_voice_setting() {
+  local user_id="$1"
+  [[ "$user_id" =~ ^(0|[1-9][0-9]{0,9})$ ]] \
+    && [ "$user_id" -le 2147483647 ] || return 1
+  read_android_role_query_result \
+    voice-setting \
+    "settings --user '$user_id' get secure voice_interaction_service" \
+    1024
+}
+
+read_android_home_component() {
+  local user_id="$1"
+  [[ "$user_id" =~ ^(0|[1-9][0-9]{0,9})$ ]] \
+    && [ "$user_id" -le 2147483647 ] || return 1
+  read_android_role_query_result \
+    home-component \
+    "cmd package resolve-activity --brief --user '$user_id' -a android.intent.action.MAIN -c android.intent.category.HOME | tail -n 1" \
+    1024
 }
 
 capture_android_role_backup() {
@@ -1853,15 +1944,8 @@ installed_release_apk_exact() {
 
 android_assistant_components_match() {
   local user_id="$1" assistant voice
-  assistant="$(
-    rish_command "settings --user '$user_id' get secure assistant" 30 \
-      2>/dev/null
-  )" || return 1
-  voice="$(
-    rish_command \
-      "settings --user '$user_id' get secure voice_interaction_service" 30 \
-      2>/dev/null
-  )" || return 1
+  assistant="$(read_android_assistant_setting "$user_id")" || return 1
+  voice="$(read_android_voice_setting "$user_id")" || return 1
   case "$assistant" in
     "$PACKAGE_NAME/.EvogentVoiceInteractionService"|\
     "$PACKAGE_NAME/$PACKAGE_NAME.EvogentVoiceInteractionService") ;;
@@ -1876,11 +1960,7 @@ android_assistant_components_match() {
 
 android_home_component_matches() {
   local user_id="$1" component
-  component="$(
-    rish_command \
-      "cmd package resolve-activity --brief --user '$user_id' -a android.intent.action.MAIN -c android.intent.category.HOME | tail -n 1" \
-      30 2>/dev/null
-  )" || return 1
+  component="$(read_android_home_component "$user_id")" || return 1
   case "$component" in
     "$PACKAGE_NAME/.MainActivity"|"$PACKAGE_NAME/$PACKAGE_NAME.MainActivity")
       return 0

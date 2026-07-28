@@ -283,6 +283,7 @@ def collect():
 
 
 EXTRACT_MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
+EXTRACT_EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
 EXTRACT_BUDGET_S = int(os.environ.get("X_EXTRACT_BUDGET_S", "240"))
 # brain_extract is the SOLE path from captured screens -> tweets (the legacy a11y parser yields 0
 # on the current X cell shape). It calls the codex backend, which intermittently returns 503 /
@@ -344,7 +345,8 @@ Write JSON to {out_file}: a list of
   "mediaDescription": null,
   "promotionLabel": false, "language": null}}
 Use the Write tool or bash to create the file."""
-    cmd = ["codex", "exec", "--model", EXTRACT_MODEL, "-c", "model_reasoning_effort=low",
+    cmd = ["codex", "exec", "--model", EXTRACT_MODEL, "-c",
+           f"model_reasoning_effort={EXTRACT_EFFORT}",
            "--dangerously-bypass-approvals-and-sandbox", "-"]
     try:
         # Never let one extract call outspend the run: cap by the shared budget (floor 30s so a

@@ -64,6 +64,139 @@ function snapshotArgs(command, value, digest, userId = '0') {
   ];
 }
 
+test('versioned query publications distinguish empty holders from missing or malformed results', () => {
+  const currentHeader = 'EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1\ncurrent-user\n';
+  const holdersHeader = 'EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1\nrole-holders\n';
+  const lineFixtures = [
+    {
+      command: 'parse-assistant-setting-result',
+      kind: 'assistant-setting',
+      value: 'com.example.app/.Assistant',
+    },
+    {
+      command: 'parse-voice-setting-result',
+      kind: 'voice-setting',
+      value: 'com.example.app/com.example.app.Assistant',
+    },
+    {
+      command: 'parse-home-component-result',
+      kind: 'home-component',
+      value: 'com.example.app/.Home',
+    },
+  ];
+
+  for (const input of [`${currentHeader}0`, `${currentHeader}10\n`]) {
+    const result = run(['parse-current-user-result'], input);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^(?:0|10)\n$/);
+    assert.equal(result.stderr, '');
+  }
+
+  const empty = run(['parse-role-holders-result'], holdersHeader);
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(empty.stdout, '\n');
+  assert.equal(empty.stderr, '');
+
+  const blankLine = run(
+    ['parse-role-holders-result'],
+    `${holdersHeader}\n`,
+  );
+  assert.equal(blankLine.status, 0, blankLine.stderr);
+  assert.equal(blankLine.stdout, '\n');
+
+  const populated = run(
+    ['parse-role-holders-result'],
+    `${holdersHeader}com.example.home\n`,
+  );
+  assert.equal(populated.status, 0, populated.stderr);
+  assert.equal(populated.stdout, 'com.example.home\n');
+
+  for (const { command, kind, value } of lineFixtures) {
+    const header = `EVOGENT_ANDROID_ROLE_QUERY_RESULT_V1\n${kind}\n`;
+    let result = run([command], `${header}${value}\n`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${value}\n`);
+    assert.equal(result.stderr, '');
+
+    result = run([command], header);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '\n');
+
+    for (const invalid of [
+      `${header}${value}\nextra\n`,
+      `${header}${value}\r\n`,
+      `${header}${'x'.repeat(1025)}`,
+      `${currentHeader}${value}\n`,
+      `EVOGENT_ANDROID_ROLE_QUERY_RESULT_V2\n${kind}\n${value}\n`,
+    ]) {
+      result = run([command], invalid);
+      assert.equal(result.status, 65);
+      assert.equal(result.stdout, '');
+      assert.equal(
+        result.stderr,
+        'android-role-state: invalid or unsafe role state\n',
+      );
+    }
+  }
+
+  const rejected = [
+    { command: 'parse-current-user-result', input: '' },
+    { command: 'parse-current-user-result', input: currentHeader },
+    {
+      command: 'parse-current-user-result',
+      input: 'EVOGENT_ANDROID_ROLE_QUERY_RESULT_V2\ncurrent-user\n0\n',
+    },
+    {
+      command: 'parse-current-user-result',
+      input: `${holdersHeader}0\n`,
+    },
+    { command: 'parse-current-user-result', input: `${currentHeader}00\n` },
+    {
+      command: 'parse-current-user-result',
+      input: `${currentHeader}2147483648\n`,
+    },
+    {
+      command: 'parse-current-user-result',
+      input: `${currentHeader}0\nextra\n`,
+    },
+    { command: 'parse-role-holders-result', input: '' },
+    {
+      command: 'parse-role-holders-result',
+      input: `${currentHeader}com.example.home\n`,
+    },
+    {
+      command: 'parse-role-holders-result',
+      input: `${holdersHeader}not-a-package\n`,
+    },
+    {
+      command: 'parse-role-holders-result',
+      input: `${holdersHeader}com.example.one;com.example.two\n`,
+    },
+    {
+      command: 'parse-role-holders-result',
+      input: `${holdersHeader}com.example.home\nextra\n`,
+    },
+    {
+      command: 'parse-role-holders-result',
+      input: `${holdersHeader}com.example.private\r\n`,
+    },
+    {
+      command: 'parse-role-holders-result',
+      input: `${holdersHeader}com.example.${'a'.repeat(4096)}`,
+    },
+  ];
+  for (const { command, input } of rejected) {
+    const result = run([command], input);
+    assert.equal(result.status, 65, `${command} accepted ${input.length} bytes`);
+    assert.equal(result.stdout, '');
+    assert.equal(
+      result.stderr,
+      'android-role-state: invalid or unsafe role state\n',
+    );
+    assert.doesNotMatch(result.stderr, /private/);
+  }
+});
+
 test('capture publishes one canonical private snapshot and explicit query is the only holder output', () => {
   const value = fixture();
   try {

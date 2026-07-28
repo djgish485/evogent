@@ -2,9 +2,10 @@
 # benchmark-cu-micro.sh — a FAIR, bounded computer-use micro-task to compare models' speed and
 # accuracy at the core hidden-display loop (launch -> navigate -> read), without the fragile
 # multi-step share flow that timed everyone out. Task: open YouTube, go to Subscriptions, read
-# and report exactly 5 real video titles as JSON. The harness re-reads the hidden-display tree
-# and proves that all five titles are grounded there. Raw titles and model output live only in
-# a mode-0600 temporary directory and never enter benchmark receipts.
+# and report exactly 5 distinct real video titles as JSON. The harness re-reads the hidden-display
+# tree and proves that all five distinct titles are grounded there. Raw titles and model output
+# live only in a mode-0600 temporary directory and never enter benchmark receipts. This is a
+# screening gate: its grounded_micro receipts can never qualify a persistent production route.
 set -u
 EVO="$HOME/evogent"; TOOLS="$HOME/phone-tools"
 export EVOGENT_API_CURL="$TOOLS/evo-curl"
@@ -64,7 +65,7 @@ Bounded computer-use task on the hidden display. Do exactly this, no more:
 1. ~/phone-tools/phone.sh launch com.google.android.youtube ; wait 5s.
 2. ~/phone-tools/phone.sh tap "Subscriptions" ; wait 3s.
 3. ~/phone-tools/phone.sh see  — read the accessibility tree.
-4. From what you SEE, extract exactly 5 real video titles currently on screen (skip Shorts, ads,
+4. From what you SEE, extract exactly 5 distinct real video titles currently on screen (skip Shorts, ads,
    nav labels). Do NOT scroll, share, or open anything.
 Reply with ONLY this JSON on the last line: {"titles":["...","...","...","...","..."]}
 EOF
@@ -133,7 +134,8 @@ PY
       "$MECHANICS" "$QUALITY" "$METRICS" <<'PY'
 import json,sys
 print(json.dumps({
-  "suiteId":sys.argv[1],"round":int(sys.argv[2]),"task":"browse","role":sys.argv[3],
+  "suiteId":sys.argv[1],"round":int(sys.argv[2]),"task":"browse_micro","role":sys.argv[3],
+  "benchmarkKind":"grounded_micro",
   "model":sys.argv[4],"effort":sys.argv[5],"mechanicsStatus":sys.argv[6],
   "qualityStatus":sys.argv[7],"metrics":json.loads(sys.argv[8]),
 },separators=(",",":")))
@@ -148,4 +150,4 @@ PY
     : > "$RESPONSE"; : > "$TREE"
   done
 done
-say "=== SUMMARY (qualified routing needs paired grounded passes; timeouts are not quality scores) ==="
+say "=== SUMMARY (micro screening only; production routing requires a full_browse suite) ==="
