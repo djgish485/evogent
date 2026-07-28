@@ -44,6 +44,27 @@ ts(){ date '+%F %T'; }
 say(){ echo "[$(ts)] [sched] $*" | tee -a "$LOG" >&2; }
 
 . "$TOOLS/control-plane.sh"
+scheduler_status_write() {
+  local policy="$1" rc=0
+  shift
+  [ "$policy" = required ] || [ "$policy" = heartbeat ] || return 64
+  control_status_write scheduler "$@" || rc=$?
+  case "$rc:$policy" in
+    0:*) return 0 ;;
+    75:heartbeat)
+      say "scheduler status heartbeat timed out; live owner retained for retry"
+      return 0
+      ;;
+    75:required)
+      say "CRITICAL: initial scheduler status publication timed out"
+      return 75
+      ;;
+    *)
+      say "CRITICAL: scheduler status publication failed structurally"
+      return 1
+      ;;
+  esac
+}
 control_init_owner scheduler
 SCHED_LOCK="$TOOLS/.scheduler.lock"
 SCHED_LOCK_HELD=0
@@ -107,8 +128,8 @@ SCHED_LOCK_HELD=1
   printf 'signal=%s\n' "$EVO/data/phone-cycle-request.json"
 } > "$SCHED_CONTRACT.tmp"
 mv "$SCHED_CONTRACT.tmp" "$SCHED_CONTRACT"
-control_status_write scheduler - running "" "" "" \
-  "signal=$EVO/data/phone-cycle-request.json"
+scheduler_status_write required - running "" "" "" \
+  "signal=$EVO/data/phone-cycle-request.json" || exit 70
 
 # read the "## Curation Schedule" Minimum/Maximum interval from config.md, in minutes.
 # Accepts "2 hours", "90 min", etc. Falls back to the generic 120 / 720 bounds.
@@ -430,8 +451,8 @@ pause_for_release_transaction() {
     say "release transaction in progress — scheduler dispatch is gated"
     INSTALL_GATE_LOGGED=1
   fi
-  control_status_write scheduler - running "" "" "" \
-    "healthy; waiting for release transaction commit"
+  scheduler_status_write heartbeat - running "" "" "" \
+    "healthy; waiting for release transaction commit" || exit 70
   sleep 2
   control_lock_renew "$SCHED_LOCK" || true
   return 0
@@ -572,7 +593,8 @@ while true; do
     sleep 60
     continue
   fi
-  control_status_write scheduler - running "" "" "" "dispatching cycle trigger=$CYCLE_TRIGGER"
+  scheduler_status_write heartbeat - running "" "" "" \
+    "dispatching cycle trigger=$CYCLE_TRIGGER" || exit 70
   EVOGENT_CYCLE_TRIGGER="$CYCLE_TRIGGER" \
     EVOGENT_CURATION_CYCLE_ID="$CURATION_CYCLE_ID" \
     bash "$CYCLE"
@@ -588,7 +610,8 @@ while true; do
     say "cycle exited non-zero (rc=$CYCLE_RC); request claim retained for retry"
   fi
   control_lock_renew "$SCHED_LOCK" || true
-  control_status_write scheduler - running "" "" "" "waiting for next cycle"
+  scheduler_status_write heartbeat - running "" "" "" \
+    "waiting for next cycle" || exit 70
   if [ "$CYCLE_RC" -ne 0 ]; then
     # A busy release/cycle lease is cheap mechanics contention. Every other
     # failure may have launched the expensive curator, so retry it with bounded

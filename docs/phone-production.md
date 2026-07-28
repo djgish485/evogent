@@ -194,24 +194,43 @@ the prior release, database, and APK and verifies the restored APK identity.
 
 One narrow recovery exception exists for a failed initial migration that
 reached `health_pending` after installing its APK, restored the complete legacy
-database/token/role snapshot, and then proved Android had already consumed the
-exact native rollback. It is not a force-install or downgrade path. The builder
-must reuse the failed release's exact APK, embedded CA, TLS certificate, and TLS
-key as one verified artifact set; the installer accepts
+database/token/role snapshot, and then proved every native rollback that can
+move the installed release APK was terminally committed or deleted/expired.
+Duplicate exact committed rollback records are admissible only when their
+rollback and committed-session identities are independently unique.
+Package-manager handlers must be idle and no valid
+`evogent-package-op.<32-hex>` shell operation may remain. Unrelated staged
+Play/Mainline sessions are allowed, but no active PackageInstaller parent/child
+may be reachable from an exact rollback session ID, name Evogent, or require its
+installed version. A committed parent/child session whose `applied` and
+`failed` flags are both false is unresolved, not terminal; an apparently stuck
+session blocks the exception rather than being treated as success. It is not a
+force-install or downgrade path. The builder must reuse the failed release's
+exact APK, embedded CA, TLS certificate, and TLS key as one verified artifact
+set; the installer accepts
 `--forward-supersede` only for that exact private v3 transaction shape and exact
 installed APK/TLS identity.
 
 The successor revalidates and hashes the retained v3 journal, rollback plan,
 role snapshot, restored private state, installed APK/TLS identity, complete
-release inventories, and its pinned recovery program before publishing the
-`evogent.phone.forward-rescue.v1` decision journal. Nothing in the new release
-may mutate production before that journal is durable. Once published, the
+release inventories, terminal-or-absent rollback/session proof, the empty valid
+shell package-operation namespace, and its pinned recovery program before
+publishing the `evogent.phone.forward-rescue.v1` decision journal. Nothing in
+the new release may mutate production before that journal is durable. Once
+published, the
 transaction is deliberately forward-only: recovery stops the exact prior
 writers, migrates the already-restored private state, prepares the sealed
 runtime, switches mechanics and `current`, starts and health-checks the exact
 successor, commits, and only then retires live recovery intent. It never
 replays a database/token backup, invokes APK rollback, downgrades, or changes
 the installed package.
+
+The terminal native proof is repeated around decision publication, before a
+chained successor, and during final health. Exact installed APK byte equality
+also fixes its signing-certificate identity; a version-code-only observation is
+never sufficient. The terminal rollback rows and committed session IDs are
+bound into the durable forward journal so a later active session or changed
+lineage cannot be hidden by replay.
 
 If the selected successor itself proves unusable before switching
 (`prepare_pending`) or after its runtime health attempt (`health_pending`), one

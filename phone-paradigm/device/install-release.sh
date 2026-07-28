@@ -1677,7 +1677,8 @@ wait_for_apk_backup_identity() {
 }
 
 rollback_apk_native() {
-  local probe="$STAGING_ROOT/installed-after-rollback.apk"
+  local probe="$STAGING_ROOT/installed-after-rollback.apk" current_code=""
+  local version_mismatch=0
   [ "$APK_INSTALL_ATTEMPTED" = 1 ] || return 0
   [ "$APK_BACKUP_READY" = 1 ] || {
     say "CRITICAL: APK install was attempted without a proven rollback backup"
@@ -1690,10 +1691,20 @@ rollback_apk_native() {
   reap_recorded_package_operation || return 1
 
   # Accept an already-restored APK only after both package-manager handlers are
-  # idle and three stable exact-identity observations agree.
-  if wait_for_package_manager_idle \
-      && wait_for_apk_backup_identity "$probe"; then
-    return 0
+  # idle and three stable exact-identity observations agree. A version mismatch
+  # observed after that idle barrier proves the backup identity cannot match,
+  # so skip the full exact-byte window before asking Android to roll back.
+  if wait_for_package_manager_idle; then
+    current_code="$(installed_apk_version_code 2>/dev/null || true)"
+    if [[ "$current_code" =~ ^[0-9]{1,18}$ ]] \
+        && [[ "$PREVIOUS_APK_CODE" =~ ^[0-9]{1,18}$ ]] \
+        && [ "$current_code" != "$PREVIOUS_APK_CODE" ]; then
+      version_mismatch=1
+    fi
+    if [ "$version_mismatch" = 0 ] \
+        && wait_for_apk_backup_identity "$probe"; then
+      return 0
+    fi
   fi
 
   # Otherwise serialize a native rollback (or exact-byte fallback reinstall)
@@ -3862,6 +3873,7 @@ retire_rolled_back_transaction_journal() {
   local result
   [ "$TRANSACTION_PHASE" = rolled_back ] \
     && [ "$ROLLBACK_DECISION_DURABLE" = 1 ] || return 70
+  remove_exact_empty_recovery_phone_state_parent || return 70
   # The non-replayable rollback decision remains durable while the predecessor
   # is re-armed. Retire it only after the restored live/stopped contract has
   # been proved, so a crash can never replay backups over acknowledged writes.
@@ -6755,6 +6767,482 @@ cycle_gate_absent_or_owned() {
     && cycle_gate_owned_by_current "$lock"
 }
 
+select_recovery_cycle_gate() {
+  local selected parent
+  if [ "$INITIAL_MIGRATION" = 1 ] \
+      && [ "$LEGACY_EXPECTATION_COMPAT" = 0 ]; then
+    selected="$(
+      python3 - "$MIGRATION_DIR/rollback-plan.json" "$HOME" "$STATE" \
+        "$PHONE_STATE" "$MIGRATION_DIR" "$TRANSACTION_DIR" \
+        "$LEGACY_RUNTIME_EXPECTED" "$LEGACY_SNAPSHOT_READY" \
+        "$MIGRATION_STARTED" "$CYCLE_GATE" <<'PY'
+import json
+import os
+import pathlib
+import stat
+import sys
+
+(
+    raw_plan,
+    raw_home,
+    raw_state,
+    raw_phone_state,
+    raw_migration,
+    raw_transaction,
+    raw_runtime_expected,
+    raw_snapshot_ready,
+    raw_migration_started,
+    raw_journal_gate,
+) = sys.argv[1:]
+plan_path = pathlib.Path(raw_plan)
+home = pathlib.Path(raw_home)
+state = pathlib.Path(raw_state)
+phone_state = pathlib.Path(raw_phone_state)
+migration = pathlib.Path(raw_migration)
+transaction = pathlib.Path(raw_transaction)
+runtime_expected = int(raw_runtime_expected)
+snapshot_ready = int(raw_snapshot_ready)
+migration_started = int(raw_migration_started)
+journal_gate = pathlib.Path(raw_journal_gate)
+home_tools = home / "phone-tools"
+snapshot_tools = migration / "phone-tools"
+quarantine_tools = migration / "rolled-back-phone-state"
+home_gate = home_tools / ".cycle.lock"
+state_gate = phone_state / ".cycle.lock"
+initial_gate = transaction / "initial-cycle.lock"
+recovery_gate = transaction / "recovery-cycle.lock"
+entry_names = {
+    "runtime",
+    "data",
+    "nodeModules",
+    "environment",
+    "phoneTools",
+    "home:start-prod-sub.sh",
+    "home:start-prod.sh",
+    "home:restart-evo.sh",
+    "home:deploy-next.sh",
+    "home:install-evogent-release.sh",
+}
+snapshot_names = {
+    "phoneTools",
+    "home:start-prod-sub.sh",
+    "home:start-prod.sh",
+    "home:restart-evo.sh",
+    "home:deploy-next.sh",
+    "home:install-evogent-release.sh",
+}
+
+def reject(message):
+    raise SystemExit(f"unsafe initial recovery cycle topology: {message}")
+
+try:
+    plan_stat = os.lstat(plan_path)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+except (FileNotFoundError, OSError, ValueError, TypeError) as error:
+    reject(f"rollback plan unavailable: {error}")
+if (
+    not stat.S_ISREG(plan_stat.st_mode)
+    or stat.S_IMODE(plan_stat.st_mode) != 0o600
+    or plan_stat.st_uid != os.getuid()
+    or plan.get("schema") != "evogent.phone.legacy-rollback-plan.v1"
+    or plan.get("home") != str(home)
+    or plan.get("state") != str(state)
+    or plan.get("phoneState") != str(phone_state)
+    or plan.get("migrationDir") != str(migration)
+    or plan.get("legacyRuntimeExpected") != runtime_expected
+    or plan.get("snapshotReady") != snapshot_ready
+    or not isinstance(plan.get("entries"), dict)
+    or set(plan["entries"]) != entry_names
+    or not isinstance(plan.get("snapshots"), dict)
+    or (
+        snapshot_ready == 1
+        and set(plan["snapshots"]) != snapshot_names
+    )
+    or (snapshot_ready == 0 and plan["snapshots"] != {})
+):
+    reject("rollback plan inventory changed")
+if (
+    runtime_expected not in {0, 1}
+    or snapshot_ready not in {0, 1}
+    or migration_started not in {0, 1}
+    or (migration_started == 1 and snapshot_ready != 1)
+):
+    reject("rollback state flags are inconsistent")
+if journal_gate not in {home_gate, state_gate, initial_gate, recovery_gate}:
+    reject("journal gate is outside the transaction topology")
+
+original = plan["entries"]["phoneTools"]
+snapshot = (
+    plan["snapshots"]["phoneTools"]
+    if snapshot_ready == 1
+    else {"type": "absent"}
+)
+
+def exact_directory(path, expected):
+    if expected.get("type") != "directory":
+        return False
+    try:
+        current = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return (
+        stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and current.st_dev == expected.get("dev")
+        and current.st_ino == expected.get("ino")
+        and stat.S_IMODE(current.st_mode) == expected.get("mode")
+        and current.st_uid == expected.get("uid")
+    )
+
+def lexists(path):
+    return os.path.lexists(path)
+
+def exact_generated_home_link():
+    try:
+        current = os.lstat(home_tools)
+    except FileNotFoundError:
+        return False
+    return (
+        stat.S_ISLNK(current.st_mode)
+        and os.readlink(home_tools) == str(phone_state)
+    )
+
+def exact_empty_recovery_parent():
+    try:
+        current = os.lstat(phone_state)
+    except FileNotFoundError:
+        return False
+    return (
+        stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and current.st_uid == os.getuid()
+        and stat.S_IMODE(current.st_mode) == 0o700
+        and not any(phone_state.iterdir())
+    )
+
+def generated_directory(path):
+    marker = plan.get("generatedMarker")
+    try:
+        current = os.lstat(path)
+        marker_stat = os.lstat(path / ".evogent-install-owner")
+        marker_value = (path / ".evogent-install-owner").read_text(
+            encoding="utf-8"
+        )
+    except (FileNotFoundError, OSError, UnicodeError):
+        return False
+    return (
+        isinstance(marker, str)
+        and len(marker) == 64
+        and all(value in "0123456789abcdef" for value in marker)
+        and stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and current.st_uid == os.getuid()
+        and stat.S_ISREG(marker_stat.st_mode)
+        and not stat.S_ISLNK(marker_stat.st_mode)
+        and marker_stat.st_uid == os.getuid()
+        and stat.S_IMODE(marker_stat.st_mode) == 0o600
+        and marker_value == f"{marker}\n"
+    )
+
+paths = {
+    "home": home_tools,
+    "state": phone_state,
+    "snapshot": snapshot_tools,
+    "quarantine": quarantine_tools,
+}
+
+if runtime_expected == 1:
+    if original.get("type") != "directory":
+        reject("legacy phone-tools identity is not a directory")
+    if snapshot_ready == 0:
+        if not exact_directory(home_tools, original):
+            reject("pre-snapshot legacy phone-tools identity is missing")
+        if any(lexists(path) for name, path in paths.items() if name != "home"):
+            reject("pre-snapshot legacy phone-tools has a second parent")
+        print(home_gate)
+        raise SystemExit(0)
+    if snapshot.get("type") != "directory":
+        reject("legacy phone-tools snapshot identity is not a directory")
+    if (
+        original.get("dev") == snapshot.get("dev")
+        and original.get("ino") == snapshot.get("ino")
+    ):
+        reject("original and snapshot identities alias")
+    original_locations = [
+        name for name, path in paths.items() if exact_directory(path, original)
+    ]
+    snapshot_locations = [
+        name for name, path in paths.items() if exact_directory(path, snapshot)
+    ]
+    if len(original_locations) != 1 or len(snapshot_locations) != 1:
+        reject("planned phone-tools identity is missing or has two parents")
+    pair = (original_locations[0], snapshot_locations[0])
+    if migration_started == 0 and pair != ("home", "snapshot"):
+        reject("unstarted migration has a moved phone-tools identity")
+    valid_pairs = {
+        ("home", "snapshot"): home_gate,
+        ("state", "snapshot"): state_gate,
+        ("state", "home"): home_gate,
+        ("quarantine", "home"): home_gate,
+    }
+    selected = valid_pairs.get(pair)
+    if selected is None:
+        reject("planned phone-tools identities occupy an invalid pair")
+    for name, path in paths.items():
+        if name in pair or not lexists(path):
+            continue
+        if (
+            pair == ("state", "snapshot")
+            and name == "home"
+            and exact_generated_home_link()
+        ):
+            continue
+        if (
+            pair == ("quarantine", "home")
+            and name == "state"
+            and exact_empty_recovery_parent()
+        ):
+            continue
+        reject(f"unexpected phone-tools parent: {name}")
+    print(selected)
+    raise SystemExit(0)
+
+if original.get("type") != "absent" or snapshot.get("type") != "absent":
+    reject("fresh-install plan unexpectedly binds phone-tools")
+home_present = lexists(home_tools)
+home_link = exact_generated_home_link()
+if home_present and not home_link:
+    reject("fresh-install HOME phone-tools is unsafe")
+state_generated = generated_directory(phone_state)
+state_empty = exact_empty_recovery_parent()
+state_present = lexists(phone_state)
+quarantine_generated = generated_directory(quarantine_tools)
+quarantine_present = lexists(quarantine_tools)
+if state_present and not state_generated and not state_empty:
+    reject("fresh-install phone state is unsafe")
+if quarantine_present and not quarantine_generated:
+    reject("fresh-install quarantine is unsafe")
+if lexists(snapshot_tools):
+    reject("fresh-install snapshot path is occupied")
+if state_generated and quarantine_generated:
+    reject("fresh-install generated state has two parents")
+if migration_started == 0:
+    if home_present or state_present or quarantine_present:
+        reject("unstarted fresh migration has a phone-tools footprint")
+    if journal_gate != initial_gate:
+        reject("unstarted fresh migration lost its initial gate")
+    print(initial_gate)
+    raise SystemExit(0)
+if quarantine_generated:
+    if home_present or (state_present and not state_empty):
+        reject("rolled-back fresh install has live phone state")
+    print(recovery_gate)
+elif state_generated:
+    print(state_gate)
+elif state_present:
+    reject("unbound empty phone state has no rolled-back owner")
+else:
+    if home_present or journal_gate not in {initial_gate, recovery_gate}:
+        reject("fresh-install gate parent is missing")
+    print(journal_gate)
+PY
+    )" || return 1
+    CYCLE_GATE="$selected"
+    return 0
+  fi
+
+  parent="$(dirname "$CYCLE_GATE")"
+  if [ -e "$parent" ] || [ -L "$parent" ]; then
+    [ -d "$parent" ] && [ ! -L "$parent" ] || return 1
+  else
+    [ "$CYCLE_GATE" = "$PHONE_STATE/.cycle.lock" ] || return 1
+    mkdir "$PHONE_STATE" || return 1
+    fsync_directory "$STATE" || return 1
+  fi
+}
+
+remove_exact_empty_recovery_phone_state_parent() {
+  [ "$RECOVERY_ACTIVE" = 1 ] \
+    && [ "$INITIAL_MIGRATION" = 1 ] \
+    && [ "$LEGACY_EXPECTATION_COMPAT" = 0 ] || return 0
+  python3 - "$MIGRATION_DIR/rollback-plan.json" "$HOME" "$STATE" \
+    "$PHONE_STATE" "$MIGRATION_DIR" "$LEGACY_RUNTIME_EXPECTED" \
+    "$LEGACY_SNAPSHOT_READY" <<'PY'
+import json
+import os
+import pathlib
+import stat
+import sys
+
+(
+    raw_plan,
+    raw_home,
+    raw_state,
+    raw_phone_state,
+    raw_migration,
+    raw_runtime_expected,
+    raw_snapshot_ready,
+) = sys.argv[1:]
+plan_path = pathlib.Path(raw_plan)
+home = pathlib.Path(raw_home)
+state = pathlib.Path(raw_state)
+phone_state = pathlib.Path(raw_phone_state)
+migration = pathlib.Path(raw_migration)
+runtime_expected = int(raw_runtime_expected)
+snapshot_ready = int(raw_snapshot_ready)
+home_tools = home / "phone-tools"
+snapshot_tools = migration / "phone-tools"
+quarantine_tools = migration / "rolled-back-phone-state"
+
+try:
+    phone_entry = os.lstat(phone_state)
+except FileNotFoundError:
+    parent = os.open(
+        state,
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+    raise SystemExit(0)
+if (
+    not stat.S_ISDIR(phone_entry.st_mode)
+    or stat.S_ISLNK(phone_entry.st_mode)
+    or phone_entry.st_uid != os.getuid()
+    or stat.S_IMODE(phone_entry.st_mode) != 0o700
+    or any(phone_state.iterdir())
+):
+    raise SystemExit("recovery phone-state parent is not exact and empty")
+
+try:
+    plan_stat = os.lstat(plan_path)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+except (FileNotFoundError, OSError, ValueError, TypeError) as error:
+    raise SystemExit(f"recovery rollback plan is unavailable: {error}")
+if (
+    not stat.S_ISREG(plan_stat.st_mode)
+    or stat.S_IMODE(plan_stat.st_mode) != 0o600
+    or plan_stat.st_uid != os.getuid()
+    or plan.get("schema") != "evogent.phone.legacy-rollback-plan.v1"
+    or plan.get("home") != str(home)
+    or plan.get("state") != str(state)
+    or plan.get("phoneState") != str(phone_state)
+    or plan.get("migrationDir") != str(migration)
+    or plan.get("legacyRuntimeExpected") != runtime_expected
+    or plan.get("snapshotReady") != snapshot_ready
+    or snapshot_ready != 1
+):
+    raise SystemExit("recovery rollback plan identity changed")
+original = plan.get("entries", {}).get("phoneTools", {})
+snapshot = plan.get("snapshots", {}).get("phoneTools", {})
+
+def exact_directory(path, expected):
+    if expected.get("type") != "directory":
+        return False
+    try:
+        current = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return (
+        stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and current.st_dev == expected.get("dev")
+        and current.st_ino == expected.get("ino")
+        and stat.S_IMODE(current.st_mode) == expected.get("mode")
+        and current.st_uid == expected.get("uid")
+    )
+
+def absent(path):
+    return not os.path.lexists(path)
+
+def generated_directory(path):
+    marker = plan.get("generatedMarker")
+    try:
+        current = os.lstat(path)
+        marker_stat = os.lstat(path / ".evogent-install-owner")
+        marker_value = (path / ".evogent-install-owner").read_text(
+            encoding="utf-8"
+        )
+    except (FileNotFoundError, OSError, UnicodeError):
+        return False
+    return (
+        isinstance(marker, str)
+        and len(marker) == 64
+        and all(value in "0123456789abcdef" for value in marker)
+        and stat.S_ISDIR(current.st_mode)
+        and not stat.S_ISLNK(current.st_mode)
+        and current.st_uid == os.getuid()
+        and stat.S_ISREG(marker_stat.st_mode)
+        and not stat.S_ISLNK(marker_stat.st_mode)
+        and marker_stat.st_uid == os.getuid()
+        and stat.S_IMODE(marker_stat.st_mode) == 0o600
+        and marker_value == f"{marker}\n"
+    )
+
+if runtime_expected == 1:
+    pre_move = (
+        exact_directory(home_tools, original)
+        and exact_directory(snapshot_tools, snapshot)
+        and absent(quarantine_tools)
+    )
+    restored = (
+        exact_directory(home_tools, snapshot)
+        and exact_directory(quarantine_tools, original)
+        and absent(snapshot_tools)
+    )
+    if not (pre_move or restored):
+        raise SystemExit("recovery phone-state parent has no restored legacy topology")
+elif runtime_expected == 0:
+    if (
+        original.get("type") != "absent"
+        or snapshot.get("type") != "absent"
+        or not absent(home_tools)
+        or not absent(snapshot_tools)
+        or (
+            not absent(quarantine_tools)
+            and not generated_directory(quarantine_tools)
+        )
+    ):
+        raise SystemExit("recovery phone-state parent has no fresh rollback topology")
+else:
+    raise SystemExit("recovery runtime expectation is invalid")
+
+parent_flags = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+child_flags = parent_flags
+parent = os.open(state, parent_flags)
+try:
+    child = os.open("phone-tools", child_flags, dir_fd=parent)
+    try:
+        opened = os.fstat(child)
+        rebound = os.stat("phone-tools", dir_fd=parent, follow_symlinks=False)
+        if (
+            opened.st_dev != phone_entry.st_dev
+            or opened.st_ino != phone_entry.st_ino
+            or rebound.st_dev != phone_entry.st_dev
+            or rebound.st_ino != phone_entry.st_ino
+            or opened.st_uid != os.getuid()
+            or stat.S_IMODE(opened.st_mode) != 0o700
+            or os.listdir(child)
+        ):
+            raise SystemExit("recovery phone-state parent changed before removal")
+    finally:
+        os.close(child)
+    os.rmdir("phone-tools", dir_fd=parent)
+    os.fsync(parent)
+finally:
+    os.close(parent)
+PY
+}
+
 legacy_control_plane_stopped() {
   ! tmux has-session -t evo 2>/dev/null \
     && ! tmux has-session -t evo-sched 2>/dev/null \
@@ -7666,24 +8154,8 @@ recover_interrupted_transaction() {
   ANDROID_ROLE_STATE_HELPER="$NEW_RELEASE/device/android-role-state.py"
   STAGE="$(mktemp -d "$STAGING_ROOT/recover.XXXXXX")"
 
-  if [ "$TRANSACTION_PHASE" = committed ]; then
-    :
-  elif [ "$INITIAL_MIGRATION" = 1 ] \
-      && [ "$LEGACY_RUNTIME_EXPECTED" = 0 ] \
-      && [ -d "$MIGRATION_DIR/rolled-back-phone-state" ] \
-      && [ ! -L "$MIGRATION_DIR/rolled-back-phone-state" ] \
-      && [ ! -e "$HOME/phone-tools" ] && [ ! -L "$HOME/phone-tools" ]; then
-    CYCLE_GATE="$TRANSACTION_DIR/recovery-cycle.lock"
-  elif [ "$INITIAL_MIGRATION" = 1 ] \
-      && [ -d "$HOME/phone-tools" ] && [ ! -L "$HOME/phone-tools" ] \
-      && [ -d "$HOME/phone-tools/.cycle.lock" ] \
-      && [ ! -L "$HOME/phone-tools/.cycle.lock" ]; then
-    CYCLE_GATE="$HOME/phone-tools/.cycle.lock"
-  elif [ -d "$PHONE_STATE/.cycle.lock" ]; then
-    CYCLE_GATE="$PHONE_STATE/.cycle.lock"
-  elif [ ! -d "$(dirname "$CYCLE_GATE")" ]; then
-    mkdir -p "$PHONE_STATE"
-    CYCLE_GATE="$PHONE_STATE/.cycle.lock"
+  if [ "$TRANSACTION_PHASE" != committed ]; then
+    select_recovery_cycle_gate
   fi
   acquire_lock_dir "$CYCLE_GATE" release-install-recovery-cycle-gate
   CYCLE_GATE_HELD=1

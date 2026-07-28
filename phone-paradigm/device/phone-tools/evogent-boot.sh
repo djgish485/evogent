@@ -75,6 +75,16 @@ server_code() {
   fi
 }
 
+wait_for_control_owner_status() {
+  local section="$1" lock="$2" max_age_seconds="$3"
+  for _ in $(seq 1 20); do
+    control_status_owner_live "$section" "$lock" "$max_age_seconds" \
+      && return 0
+    sleep 1
+  done
+  return 1
+}
+
 exec >>"$LOG" 2>&1
 say "=== evogent-boot start (pid $$) ==="
 
@@ -200,19 +210,29 @@ fi
 
 # Start the on-device periodic scheduler (source browse + curation). Must come AFTER the server.
 if control_lock_live "$TOOLS/.scheduler.lock"; then
-  say "scheduler already running"
+  say "scheduler owner lock already live"
 else
   tmux kill-session -t evo-sched 2>/dev/null || true
   tmux new -d -s evo-sched "exec bash '$TOOLS/evogent-scheduler.sh'"
-  say "scheduler started"
+  say "scheduler launch requested"
 fi
+if ! wait_for_control_owner_status scheduler "$TOOLS/.scheduler.lock" 0; then
+  say "CRITICAL: scheduler did not publish a live owner status"
+  exit 70
+fi
+say "scheduler ready"
 
 # Watchdog: keep the server alive unattended. It runs outside tmux and owns a
 # PID+start-aware single-instance lease.
 if ! control_lock_live "$TOOLS/.watchdog.lock"; then
   setsid bash "$TOOLS/evogent-watchdog.sh" >/dev/null 2>&1 &
-  say "watchdog started"
+  say "watchdog launch requested"
 fi
+if ! wait_for_control_owner_status watchdog "$TOOLS/.watchdog.lock" 180; then
+  say "CRITICAL: watchdog did not publish a live owner status"
+  exit 70
+fi
+say "watchdog ready"
 
 # Dev/Mac access only: start sshd if opted in. A standalone user phone never needs this.
 if [ -f "$HOME/.evogent-dev-ssh" ]; then

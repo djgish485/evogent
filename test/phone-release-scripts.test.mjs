@@ -1461,6 +1461,102 @@ test('installer contract is complete and process-scoped', () => {
   );
 });
 
+test('APK rollback skips the slow preflight identity window on a proven version mismatch', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const rollback = shellFunction(installer, 'rollback_apk_native');
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-apk-rollback-fast-gate-'),
+  );
+  const trace = path.join(fixture, 'trace');
+  const harness = `
+set -euo pipefail
+${rollback}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+reap_recorded_package_operation() { record reap; }
+wait_for_package_manager_idle() { record idle; }
+installed_apk_version_code() {
+  record version
+  [ "$VERSION_RESULT" = available ] || return 1
+  printf '%s\\n' "$CURRENT_CODE"
+}
+wait_for_apk_backup_identity() {
+  record exact
+  [ "$(grep -c '^exact$' "$TRACE")" -ge "$EXACT_SUCCESS_AT" ]
+}
+rish_command() { record rollback; }
+install_apk() { record fallback; return 1; }
+TRACE="$1"
+STAGING_ROOT="$2"
+APK_INSTALL_ATTEMPTED=1
+APK_BACKUP_READY=1
+PREVIOUS_APK_CODE="$3"
+PACKAGE_NAME=net.dangish.evogent
+APK_BACKUP="$2/backup.apk"
+rollback_apk_native
+`;
+  function run({
+    currentCode,
+    previousCode = 100,
+    versionResult = 'available',
+    exactSuccessAt,
+  }) {
+    fs.rmSync(trace, { force: true });
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'rollback', trace, fixture, String(previousCode)],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CURRENT_CODE: String(currentCode),
+          EXACT_SUCCESS_AT: String(exactSuccessAt),
+          VERSION_RESULT: versionResult,
+        },
+      },
+    );
+  }
+
+  let result = run({ currentCode: 200, exactSuccessAt: 1 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'reap\nidle\nversion\nrollback\nidle\nexact\n',
+  );
+
+  result = run({ currentCode: 100, exactSuccessAt: 1 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'reap\nidle\nversion\nexact\n',
+  );
+
+  result = run({
+    currentCode: 200,
+    versionResult: 'unavailable',
+    exactSuccessAt: 1,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'reap\nidle\nversion\nexact\n',
+  );
+
+  result = run({
+    currentCode: 200,
+    previousCode: 'unproven',
+    exactSuccessAt: 1,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'reap\nidle\nversion\nexact\n',
+  );
+});
+
 test('phone release production config stays SWC-independent on the sealed Android tree', () => {
   const builder = fs.readFileSync(
     path.join(root, 'scripts/build-phone-release.sh'),
@@ -3343,6 +3439,589 @@ printf 'post-second\\n'
       );
     }
   }
+});
+
+test('initial recovery selects only the exact planned phone-tools gate topology', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const selectGate = shellFunction(installer, 'select_recovery_cycle_gate');
+  const harness = `
+set -euo pipefail
+${selectGate}
+HOME="$1"; ROOT="$2"; STATE="$ROOT/state"; PHONE_STATE="$STATE/phone-tools"
+MIGRATION_DIR="$3"; TRANSACTION_DIR="$ROOT/install-transaction"
+INITIAL_MIGRATION=1; LEGACY_EXPECTATION_COMPAT=0
+LEGACY_RUNTIME_EXPECTED="$4"; LEGACY_SNAPSHOT_READY="$5"
+MIGRATION_STARTED="$6"; CYCLE_GATE="$7"
+select_recovery_cycle_gate
+printf '%s\\n' "$CYCLE_GATE"
+`;
+
+  const absent = () => ({ type: 'absent' });
+  const metadata = (target) => {
+    const value = fs.lstatSync(target);
+    return {
+      dev: value.dev,
+      ino: value.ino,
+      mode: value.mode & 0o7777,
+      type: value.isDirectory() ? 'directory' : 'regular',
+      uid: value.uid,
+    };
+  };
+  const entryNames = [
+    'runtime',
+    'data',
+    'nodeModules',
+    'environment',
+    'phoneTools',
+    'home:start-prod-sub.sh',
+    'home:start-prod.sh',
+    'home:restart-evo.sh',
+    'home:deploy-next.sh',
+    'home:install-evogent-release.sh',
+  ];
+  const snapshotNames = [
+    'phoneTools',
+    'home:start-prod-sub.sh',
+    'home:start-prod.sh',
+    'home:restart-evo.sh',
+    'home:deploy-next.sh',
+    'home:install-evogent-release.sh',
+  ];
+
+  function makeFixture({ runtimeExpected = 1, snapshotReady = 1 } = {}) {
+    const fixture = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'evogent-recovery-tools-gate-'),
+    );
+    const home = path.join(fixture, 'home');
+    const releaseRoot = path.join(home, '.local/share/evogent');
+    const state = path.join(releaseRoot, 'state');
+    const migration = path.join(releaseRoot, 'migrations/legacy-fixture');
+    const transaction = path.join(releaseRoot, 'install-transaction');
+    const objects = path.join(fixture, 'objects');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(state, { recursive: true });
+    fs.mkdirSync(migration, { recursive: true });
+    fs.mkdirSync(transaction, { recursive: true });
+    fs.mkdirSync(objects);
+    const originalSource = path.join(objects, 'original');
+    const snapshotSource = path.join(objects, 'snapshot');
+    if (runtimeExpected === 1) {
+      fs.mkdirSync(originalSource);
+      if (snapshotReady === 1) fs.mkdirSync(snapshotSource);
+    }
+    const original = runtimeExpected === 1
+      ? metadata(originalSource)
+      : absent();
+    const snapshot = runtimeExpected === 1 && snapshotReady === 1
+      ? metadata(snapshotSource)
+      : absent();
+    const entries = Object.fromEntries(entryNames.map((name) => [name, absent()]));
+    entries.phoneTools = original;
+    const snapshots = snapshotReady === 1
+      ? Object.fromEntries(snapshotNames.map((name) => [name, absent()]))
+      : {};
+    if (snapshotReady === 1) snapshots.phoneTools = snapshot;
+    const plan = {
+      entries,
+      generatedMarker: 'a'.repeat(64),
+      home,
+      legacyControlPlaneExpected: 0,
+      legacyRuntimeExpected: runtimeExpected,
+      migrationDir: migration,
+      phoneState: path.join(state, 'phone-tools'),
+      rearmProgram: runtimeExpected === 1 ? 'start-prod.sh' : '',
+      releaseId: 'release-1',
+      root: releaseRoot,
+      schema: 'evogent.phone.legacy-rollback-plan.v1',
+      snapshotReady,
+      snapshots,
+      state,
+    };
+    const planPath = path.join(migration, 'rollback-plan.json');
+    fs.writeFileSync(planPath, `${JSON.stringify(plan)}\n`, { mode: 0o600 });
+    fs.chmodSync(planPath, 0o600);
+    return {
+      fixture,
+      home,
+      releaseRoot,
+      state,
+      migration,
+      transaction,
+      originalSource,
+      snapshotSource,
+      homeTools: path.join(home, 'phone-tools'),
+      stateTools: path.join(state, 'phone-tools'),
+      snapshotTools: path.join(migration, 'phone-tools'),
+      quarantineTools: path.join(migration, 'rolled-back-phone-state'),
+      marker: plan.generatedMarker,
+      runtimeExpected,
+      snapshotReady,
+    };
+  }
+
+  function place(directory, source, destination) {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.renameSync(source, destination);
+    return directory;
+  }
+
+  function generatedDirectory(target, marker) {
+    fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+    fs.chmodSync(target, 0o700);
+    fs.writeFileSync(
+      path.join(target, '.evogent-install-owner'),
+      `${marker}\n`,
+      { mode: 0o600 },
+    );
+  }
+
+  function emptyPrivateDirectory(target) {
+    fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+    fs.chmodSync(target, 0o700);
+  }
+
+  function run(fixture, {
+    journalGate = path.join(fixture.stateTools, '.cycle.lock'),
+    migrationStarted = fixture.snapshotReady,
+  } = {}) {
+    return spawnSync(
+      'bash',
+      [
+        '-c',
+        harness,
+        'gate',
+        fixture.home,
+        fixture.releaseRoot,
+        fixture.migration,
+        String(fixture.runtimeExpected),
+        String(fixture.snapshotReady),
+        String(migrationStarted),
+        journalGate,
+      ],
+      { encoding: 'utf8' },
+    );
+  }
+
+  const legacyCases = [
+    {
+      name: 'pre-move original at HOME',
+      original: 'homeTools',
+      snapshot: 'snapshotTools',
+      expected: 'homeTools',
+    },
+    {
+      name: 'post-move original at state with generated HOME link',
+      original: 'stateTools',
+      snapshot: 'snapshotTools',
+      homeLink: true,
+      expected: 'stateTools',
+    },
+    {
+      name: 'rollback midpoint snapshot at HOME and original at state',
+      original: 'stateTools',
+      snapshot: 'homeTools',
+      expected: 'homeTools',
+    },
+    {
+      name: 'rolled back snapshot at HOME and original in quarantine',
+      original: 'quarantineTools',
+      snapshot: 'homeTools',
+      expected: 'homeTools',
+    },
+    {
+      name: 'rolled back with exact empty recovery state parent',
+      original: 'quarantineTools',
+      snapshot: 'homeTools',
+      emptyState: true,
+      expected: 'homeTools',
+    },
+  ];
+  for (const scenario of legacyCases) {
+    const fixture = makeFixture();
+    place(fixture, fixture.originalSource, fixture[scenario.original]);
+    place(fixture, fixture.snapshotSource, fixture[scenario.snapshot]);
+    if (scenario.homeLink) {
+      fs.symlinkSync(fixture.stateTools, fixture.homeTools);
+    }
+    if (scenario.emptyState) emptyPrivateDirectory(fixture.stateTools);
+    const result = run(fixture);
+    assert.equal(result.status, 0, `${scenario.name}: ${result.stderr}`);
+    assert.equal(
+      result.stdout.trim(),
+      path.join(fixture[scenario.expected], '.cycle.lock'),
+      scenario.name,
+    );
+  }
+
+  const preSnapshot = makeFixture({ snapshotReady: 0 });
+  place(preSnapshot, preSnapshot.originalSource, preSnapshot.homeTools);
+  let result = run(preSnapshot, {
+    journalGate: path.join(preSnapshot.homeTools, '.cycle.lock'),
+    migrationStarted: 0,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout.trim(),
+    path.join(preSnapshot.homeTools, '.cycle.lock'),
+  );
+
+  for (const scenario of [
+    {
+      name: 'arbitrary real HOME cannot shadow exact state',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.stateTools);
+        place(fixture, fixture.snapshotSource, fixture.snapshotTools);
+        fs.mkdirSync(fixture.homeTools);
+      },
+    },
+    {
+      name: 'arbitrary HOME symlink cannot shadow exact state',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.stateTools);
+        place(fixture, fixture.snapshotSource, fixture.snapshotTools);
+        fs.symlinkSync(fixture.fixture, fixture.homeTools);
+      },
+    },
+    {
+      name: 'missing planned original fails closed',
+      setup(fixture) {
+        place(fixture, fixture.snapshotSource, fixture.snapshotTools);
+      },
+    },
+    {
+      name: 'missing planned snapshot fails closed',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.homeTools);
+      },
+    },
+    {
+      name: 'swapped dual parents fail closed',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.homeTools);
+        place(fixture, fixture.snapshotSource, fixture.stateTools);
+      },
+    },
+    {
+      name: 'unplanned state beside pre-move HOME fails closed',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.homeTools);
+        place(fixture, fixture.snapshotSource, fixture.snapshotTools);
+        emptyPrivateDirectory(fixture.stateTools);
+      },
+    },
+    {
+      name: 'nonempty recovery state beside restored HOME fails closed',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.quarantineTools);
+        place(fixture, fixture.snapshotSource, fixture.homeTools);
+        emptyPrivateDirectory(fixture.stateTools);
+        fs.writeFileSync(path.join(fixture.stateTools, 'unexpected'), 'data\n');
+      },
+    },
+    {
+      name: 'unstarted migration cannot admit moved planned identities',
+      setup(fixture) {
+        place(fixture, fixture.originalSource, fixture.stateTools);
+        place(fixture, fixture.snapshotSource, fixture.snapshotTools);
+        fs.symlinkSync(fixture.stateTools, fixture.homeTools);
+      },
+      runOptions: { migrationStarted: 0 },
+    },
+  ]) {
+    const fixture = makeFixture();
+    scenario.setup(fixture);
+    result = run(fixture, scenario.runOptions);
+    assert.notEqual(result.status, 0, scenario.name);
+  }
+
+  const freshInitial = makeFixture({ runtimeExpected: 0 });
+  result = run(freshInitial, {
+    journalGate: path.join(freshInitial.transaction, 'initial-cycle.lock'),
+    migrationStarted: 0,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout.trim(),
+    path.join(freshInitial.transaction, 'initial-cycle.lock'),
+  );
+
+  const freshActive = makeFixture({ runtimeExpected: 0 });
+  generatedDirectory(freshActive.stateTools, freshActive.marker);
+  fs.symlinkSync(freshActive.stateTools, freshActive.homeTools);
+  result = run(freshActive);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout.trim(),
+    path.join(freshActive.stateTools, '.cycle.lock'),
+  );
+
+  const freshRolledBack = makeFixture({ runtimeExpected: 0 });
+  generatedDirectory(freshRolledBack.quarantineTools, freshRolledBack.marker);
+  emptyPrivateDirectory(freshRolledBack.stateTools);
+  result = run(freshRolledBack);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout.trim(),
+    path.join(freshRolledBack.transaction, 'recovery-cycle.lock'),
+  );
+
+  for (const scenario of [
+    {
+      name: 'fresh state symlink fails closed',
+      setup(fixture) {
+        fs.symlinkSync(fixture.fixture, fixture.stateTools);
+      },
+    },
+    {
+      name: 'fresh state journal with missing parent fails closed',
+      setup() {},
+    },
+    {
+      name: 'fresh generated dual parents fail closed',
+      setup(fixture) {
+        generatedDirectory(fixture.stateTools, fixture.marker);
+        generatedDirectory(fixture.quarantineTools, fixture.marker);
+      },
+    },
+    {
+      name: 'unstarted fresh migration cannot admit generated state',
+      setup(fixture) {
+        generatedDirectory(fixture.stateTools, fixture.marker);
+      },
+      runOptions: { migrationStarted: 0 },
+    },
+  ]) {
+    const fixture = makeFixture({ runtimeExpected: 0 });
+    scenario.setup(fixture);
+    result = run(fixture, scenario.runOptions);
+    assert.notEqual(result.status, 0, scenario.name);
+  }
+});
+
+test('rolled-back recovery retires only an exact empty generated phone-state parent', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const removeParent = shellFunction(
+    installer,
+    'remove_exact_empty_recovery_phone_state_parent',
+  );
+  const retire = shellFunction(
+    installer,
+    'retire_rolled_back_transaction_journal',
+  );
+  assert.match(removeParent, /os\.rmdir\("phone-tools", dir_fd=parent\)/);
+  assert.match(removeParent, /os\.fsync\(parent\)/);
+  assert.ok(
+    retire.indexOf('remove_exact_empty_recovery_phone_state_parent')
+      < retire.indexOf('clear_transaction_journal'),
+  );
+
+  const absent = () => ({ type: 'absent' });
+  const metadata = (target) => {
+    const value = fs.lstatSync(target);
+    return {
+      dev: value.dev,
+      ino: value.ino,
+      mode: value.mode & 0o7777,
+      type: 'directory',
+      uid: value.uid,
+    };
+  };
+  const entryNames = [
+    'runtime',
+    'data',
+    'nodeModules',
+    'environment',
+    'phoneTools',
+    'home:start-prod-sub.sh',
+    'home:start-prod.sh',
+    'home:restart-evo.sh',
+    'home:deploy-next.sh',
+    'home:install-evogent-release.sh',
+  ];
+  const snapshotNames = [
+    'phoneTools',
+    'home:start-prod-sub.sh',
+    'home:start-prod.sh',
+    'home:restart-evo.sh',
+    'home:deploy-next.sh',
+    'home:install-evogent-release.sh',
+  ];
+
+  function makeFixture({ fresh = false } = {}) {
+    const fixture = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'evogent-recovery-state-retire-'),
+    );
+    const home = path.join(fixture, 'home');
+    const releaseRoot = path.join(home, '.local/share/evogent');
+    const state = path.join(releaseRoot, 'state');
+    const migration = path.join(releaseRoot, 'migrations/legacy-fixture');
+    const phoneState = path.join(state, 'phone-tools');
+    const homeTools = path.join(home, 'phone-tools');
+    const snapshotTools = path.join(migration, 'phone-tools');
+    const quarantineTools = path.join(migration, 'rolled-back-phone-state');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(state, { recursive: true });
+    fs.mkdirSync(migration, { recursive: true });
+    let original = absent();
+    let snapshot = absent();
+    if (fresh) {
+      fs.mkdirSync(quarantineTools);
+      fs.writeFileSync(
+        path.join(quarantineTools, '.evogent-install-owner'),
+        `${'b'.repeat(64)}\n`,
+        { mode: 0o600 },
+      );
+    } else {
+      fs.mkdirSync(homeTools);
+      fs.mkdirSync(quarantineTools);
+      snapshot = metadata(homeTools);
+      original = metadata(quarantineTools);
+    }
+    fs.mkdirSync(phoneState, { mode: 0o700 });
+    fs.chmodSync(phoneState, 0o700);
+    const entries = Object.fromEntries(entryNames.map((name) => [name, absent()]));
+    entries.phoneTools = original;
+    const snapshots = Object.fromEntries(
+      snapshotNames.map((name) => [name, absent()]),
+    );
+    snapshots.phoneTools = snapshot;
+    const plan = {
+      entries,
+      generatedMarker: 'b'.repeat(64),
+      home,
+      legacyControlPlaneExpected: 0,
+      legacyRuntimeExpected: fresh ? 0 : 1,
+      migrationDir: migration,
+      phoneState,
+      rearmProgram: fresh ? '' : 'start-prod.sh',
+      releaseId: 'release-1',
+      root: releaseRoot,
+      schema: 'evogent.phone.legacy-rollback-plan.v1',
+      snapshotReady: 1,
+      snapshots,
+      state,
+    };
+    const planPath = path.join(migration, 'rollback-plan.json');
+    fs.writeFileSync(planPath, `${JSON.stringify(plan)}\n`, { mode: 0o600 });
+    fs.chmodSync(planPath, 0o600);
+    return {
+      fixture,
+      home,
+      releaseRoot,
+      state,
+      migration,
+      phoneState,
+      homeTools,
+      snapshotTools,
+      quarantineTools,
+      fresh,
+    };
+  }
+
+  const harness = `
+set -euo pipefail
+${removeParent}
+HOME="$1"; ROOT="$2"; STATE="$ROOT/state"; PHONE_STATE="$STATE/phone-tools"
+MIGRATION_DIR="$3"; LEGACY_RUNTIME_EXPECTED="$4"
+LEGACY_SNAPSHOT_READY=1; LEGACY_EXPECTATION_COMPAT=0
+INITIAL_MIGRATION=1; RECOVERY_ACTIVE="$5"
+remove_exact_empty_recovery_phone_state_parent
+`;
+  function run(fixture, recoveryActive = 1) {
+    return spawnSync(
+      'bash',
+      [
+        '-c',
+        harness,
+        'retire-parent',
+        fixture.home,
+        fixture.releaseRoot,
+        fixture.migration,
+        fixture.fresh ? '0' : '1',
+        String(recoveryActive),
+      ],
+      { encoding: 'utf8' },
+    );
+  }
+
+  let fixture = makeFixture();
+  let result = run(fixture);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(fixture.phoneState), false);
+
+  fixture = makeFixture({ fresh: true });
+  result = run(fixture);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(fixture.phoneState), false);
+  assert.equal(fs.existsSync(fixture.quarantineTools), true);
+
+  fixture = makeFixture();
+  fs.writeFileSync(path.join(fixture.phoneState, 'private-state'), 'keep\n');
+  result = run(fixture);
+  assert.notEqual(result.status, 0);
+  assert.equal(
+    fs.readFileSync(path.join(fixture.phoneState, 'private-state'), 'utf8'),
+    'keep\n',
+  );
+
+  fixture = makeFixture();
+  fs.rmSync(fixture.phoneState, { recursive: true });
+  fs.symlinkSync(fixture.fixture, fixture.phoneState);
+  result = run(fixture);
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.lstatSync(fixture.phoneState).isSymbolicLink(), true);
+
+  fixture = makeFixture();
+  fs.renameSync(fixture.homeTools, fixture.snapshotTools);
+  fs.mkdirSync(fixture.homeTools);
+  result = run(fixture);
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.existsSync(fixture.phoneState), true);
+
+  fixture = makeFixture();
+  result = run(fixture, 0);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(fixture.phoneState), true);
+
+  const retireHarness = `
+set -euo pipefail
+${retire}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+remove_exact_empty_recovery_phone_state_parent() {
+  record cleanup
+  return "$CLEANUP_RESULT"
+}
+clear_transaction_journal() { record clear; }
+TRANSACTION_PHASE=rolled_back
+ROLLBACK_DECISION_DURABLE=1
+COMMITTED=0
+TRACE="$1"
+retire_rolled_back_transaction_journal
+printf 'committed=%s\\n' "$COMMITTED"
+`;
+  const trace = path.join(os.tmpdir(), `evogent-retire-trace-${process.pid}`);
+  fs.rmSync(trace, { force: true });
+  result = spawnSync('bash', ['-c', retireHarness, 'retire', trace], {
+    encoding: 'utf8',
+    env: { ...process.env, CLEANUP_RESULT: '1' },
+  });
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'cleanup\n');
+
+  fs.rmSync(trace, { force: true });
+  result = spawnSync('bash', ['-c', retireHarness, 'retire', trace], {
+    encoding: 'utf8',
+    env: { ...process.env, CLEANUP_RESULT: '0' },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'cleanup\nclear\n');
+  assert.match(result.stdout, /committed=1/);
 });
 
 test('legacy HOME hard-link topology fails closed before snapshot mutation', () => {
@@ -5434,46 +6113,57 @@ test('rollback-state requires positive proof that the exact rollback was consume
     ],
     { encoding: 'utf8', input: dump },
   );
-  const record = (state) => `
-  123:
+  const record = (state, id = 123, session = 42, packageName = 'com.example.evogent') => `
+  ${id}:
     -state: ${state}
     -isStaged: false
+    -originalSessionId: ${session}
     -packages:
-      com.example.evogent 8 -> 7 [0]
+      ${packageName} 8 -> 7 [0]
+${state === 'committed' ? `    -committedSessionId: ${session + 1000}\n` : ''}
 `;
-  assert.equal(command(record('committed')).status, 0);
-  assert.equal(command(record('deleted')).status, 0);
-  assert.notEqual(command(record('available')).status, 0);
+  const dump = (active, historical) => `${active}
+Historical rollbacks:
+${historical}
+Package Watchdog status
+  watchdog details that are outside rollback authority
+`;
+  assert.equal(command(dump(record('committed'), '')).status, 0);
+  assert.equal(command(dump('', record('deleted'))).status, 0);
+  assert.notEqual(command(dump(record('available'), '')).status, 0);
   assert.notEqual(
-    command(`${record('committed')}
+    command(dump(`${record('committed')}
   124:
     -state: available
     -isStaged: true
+    -originalSessionId: 43
     -packages:
       com.example.evogent 8 -> 7 [0]
-`).status,
+`, '')).status,
     0,
   );
   assert.notEqual(
-    command(`${record('committed')}
+    command(dump(`${record('committed')}
   125:
     -state: available
     -isStaged: false
+    -originalSessionId: 44
     -packages:
       com.example.evogent 8 -> 7 [0]
       com.example.companion 4 -> 3 [0]
-`).status,
+`, '')).status,
     0,
   );
   assert.notEqual(
-    command(`${record('committed')}
+    command(dump(`${record('committed')}
   126:
     -state: committed
     -isStaged: false
+    -originalSessionId: 45
     -packages:
       com.example.evogent 8 -> 7 [0]
       malformed competing package row
-`).status,
+`, '')).status,
     0,
   );
   const duplicateState = `
@@ -5481,30 +6171,41 @@ test('rollback-state requires positive proof that the exact rollback was consume
     -state: available
     -state: committed
     -isStaged: false
+    -originalSessionId: 42
     -packages:
       com.example.evogent 8 -> 7 [0]
 `;
-  assert.notEqual(command(duplicateState).status, 0);
+  assert.notEqual(command(dump(duplicateState, '')).status, 0);
   const duplicatePackages = `
   123:
     -state: committed
     -isStaged: false
+    -originalSessionId: 42
     -packages:
       com.example.evogent 8 -> 7 [0]
     -packages:
 `;
-  assert.notEqual(command(duplicatePackages).status, 0);
+  assert.notEqual(command(dump(duplicatePackages, '')).status, 0);
   const duplicateRow = `
   123:
     -state: committed
     -isStaged: false
+    -originalSessionId: 42
     -packages:
       com.example.evogent 8 -> 7 [0]
       com.example.evogent 8 -> 7 [0]
 `;
-  assert.notEqual(command(duplicateRow).status, 0);
+  assert.notEqual(command(dump(duplicateRow, '')).status, 0);
+  assert.equal(
+    command(dump('', `${record('deleted', 123, 42)}${record('deleted', 124, 43)}`)).status,
+    0,
+  );
   assert.notEqual(
-    command(`${record('committed')}${record('deleted')}`).status,
+    command(dump('', `${record('deleted', 123, 42)}${record('deleted', 123, 43)}`)).status,
+    0,
+  );
+  assert.notEqual(
+    command(dump('', `${record('deleted', 123, 42)}${record('deleted', 124, 42)}`)).status,
     0,
   );
   assert.equal(
@@ -5513,4 +6214,105 @@ test('rollback-state requires positive proof that the exact rollback was consume
     'ordinary availability checking retains its existing permissive parser',
   );
   assert.notEqual(command('').status, 0);
+});
+
+test('rollback-state accepts the framed Pixel dump while rejecting target authority drift', () => {
+  const command = (dump) => spawnSync(
+    'python3',
+    [
+      rollbackStateHelper,
+      'require-consumed',
+      'com.example.evogent',
+      '8',
+      '0',
+    ],
+    { encoding: 'utf8', input: dump },
+  );
+  const activeMainline = (id, session, packageName) => `${id}:
+ -state: enabling
+ -stateDescription:
+ -timestamp: 2030-01-01T00:00:00Z
+ -rollbackLifetimeMillis: 1209600000
+ -isStaged: true
+ -originalSessionId: ${session}
+ -packages:
+  ${packageName} 20 -> 19 [0]
+ -extensionVersions:
+  {30=20, 31=20, 1000000=20}
+`;
+  const expiredTarget = (id, session) => ` ${id}:
+  -state: deleted
+  -stateDescription: Expired by API
+  -timestamp: 2030-01-01T00:00:00Z
+  -rollbackLifetimeMillis: 1209600000
+  -isStaged: false
+  -originalSessionId: ${session}
+  -packages:
+   com.example.evogent 8 -> 0 [0]
+  -extensionVersions:
+   {30=20, 31=20, 1000000=20}
+`;
+  const framed = (active, historical) => `${active}
+Historical rollbacks:
+${historical}
+Package Watchdog status
+  999:
+    watchdog data must not become a rollback
+`;
+  const live = framed(
+    `${activeMainline(1, 101, 'com.android.module.one')}${activeMainline(2, 102, 'com.android.module.two')}${activeMainline(3, 103, 'com.android.module.three')}`,
+    `${expiredTarget(11, 201)}${expiredTarget(12, 202)}
+ 13:
+  -state: deleted
+  -stateDescription: Expired by API
+  -timestamp: 2030-01-01T00:00:00Z
+  -rollbackLifetimeMillis: 1209600000
+  -isStaged: false
+  -originalSessionId: 203
+  -packages:
+   com.android.module.four 20 -> 19 [0]
+  -extensionVersions:
+   {30=20, 31=20, 1000000=20}
+`,
+  );
+  assert.equal(command(live).status, 0);
+  for (const [label, rejected] of [
+    ['available target', live.replace('-state: deleted', '-state: available')],
+    ['staged target', live.replace('-isStaged: false', '-isStaged: true')],
+    ['wrong target version', live.replace('8 -> 0', '8 -> 1')],
+    ['multi-package target', live.replace(
+      'com.example.evogent 8 -> 0 [0]',
+      'com.example.evogent 8 -> 0 [0]\n   com.example.companion 2 -> 1 [0]',
+    )],
+    ['duplicate extension SDK', live.replace(
+      '{30=20, 31=20, 1000000=20}',
+      '{30=20, 30=21}',
+    )],
+    ['zero target session', live.replace(
+      '-originalSessionId: 201',
+      '-originalSessionId: 0',
+    )],
+    ['duplicate scalar', live.replace(
+      '-stateDescription: Expired by API',
+      '-stateDescription: Expired by API\n  -stateDescription: duplicate',
+    )],
+    ['unknown target field', live.replace(
+      '-stateDescription: Expired by API',
+      '-stateDescription: Expired by API\n  -unknownAuthority: com.example.evogent',
+    )],
+    ['duplicate cause section', live.replace(
+      '-stateDescription: Expired by API',
+      '-stateDescription: Expired by API\n  -causePackages:\n  -causePackages:',
+    )],
+    ['historical framing', live.replace(
+      'Historical rollbacks:',
+      'Historical rollback records:',
+    )],
+    ['watchdog framing', live.replace(
+      'Package Watchdog status',
+      'Package Watchdog status:',
+    )],
+  ]) {
+    assert.notEqual(command(rejected).status, 0, label);
+  }
 });

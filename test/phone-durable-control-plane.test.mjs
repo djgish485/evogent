@@ -669,6 +669,221 @@ test('duplicate watchdog exit cannot clobber the live owner heartbeat', () => {
   assert.match(watchdog, /if ! control_lock_acquire "\$WATCHDOG_LOCK" watchdog; then[\s\S]*exit 0/);
 });
 
+test('control status publication is bounded and proves the exact live lock owner', () => {
+  const fixture = fs.mkdtempSync(path.join(
+    process.env.TMPDIR || '/tmp',
+    'evogent-control-status-',
+  ));
+  const home = path.join(fixture, 'home');
+  const data = path.join(home, 'evogent', 'data');
+  const lock = path.join(home, 'phone-tools', '.scheduler.lock');
+  fs.mkdirSync(data, { recursive: true });
+  fs.mkdirSync(lock, { recursive: true, mode: 0o700 });
+  fs.chmodSync(lock, 0o700);
+  const owner = path.join(lock, 'owner');
+  const harness = `
+set -u
+. "$CONTROL_PLANE"
+CONTROL_OWNER_ID=status-owner
+CONTROL_SELF_START=424242
+{
+  printf 'owner=status-owner\\n'
+  printf 'pid=%s\\n' "$$"
+  printf 'start=%s\\n' "$CONTROL_SELF_START"
+  printf 'label=scheduler\\n'
+  printf 'acquired=%s\\n' "$(date +%s)"
+} > "$OWNER"
+chmod 600 "$OWNER"
+control_status_write scheduler - running "" "" "" "fixture"
+control_status_owner_live scheduler "$LOCK" 5
+python3 - "$HOME/evogent/data/phone-control-status.json" <<'PY'
+import json
+import sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+data["scheduler"]["processStartTicks"] += 1
+with open(path, "w", encoding="utf-8") as output:
+    json.dump(data, output)
+PY
+if control_status_owner_live scheduler "$LOCK" 5; then
+  exit 70
+fi
+printf 'status-proof-ok\\n'
+`;
+
+  try {
+    const result = spawnSync('bash', ['-c', harness], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: home,
+        CONTROL_PLANE: path.join(tools, 'control-plane.sh'),
+        LOCK: lock,
+        OWNER: owner,
+      },
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(result.stdout, 'status-proof-ok\n');
+
+    const contention = `
+set -u
+holder=""
+cleanup() {
+  [ -n "$holder" ] || return 0
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+}
+trap cleanup EXIT
+python3 - "$STATUS_LOCK" "$READY" <<'PY' &
+import fcntl
+import pathlib
+import sys
+import time
+lock, ready = map(pathlib.Path, sys.argv[1:])
+with open(lock, "a+", encoding="utf-8") as descriptor:
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    ready.touch()
+    time.sleep(10)
+PY
+holder=$!
+for _ in $(seq 1 100); do
+  [ -f "$READY" ] && break
+  sleep 0.01
+done
+[ -f "$READY" ] || exit 71
+. "$CONTROL_PLANE"
+CONTROL_OWNER_ID=blocked-owner
+CONTROL_SELF_START=1
+control_status_write watchdog - running "" "" "" "blocked fixture"
+write_rc=$?
+[ "$write_rc" = 75 ] || exit 72
+printf 'bounded-failure-ok\\n'
+`;
+    const ready = path.join(fixture, 'holder-ready');
+    const startedAt = Date.now();
+    const blocked = spawnSync('bash', ['-c', contention], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 3_000,
+      env: {
+        ...process.env,
+        HOME: home,
+        CONTROL_PLANE: path.join(tools, 'control-plane.sh'),
+        STATUS_LOCK: path.join(data, 'phone-control-status.json.lock'),
+        READY: ready,
+        EVOGENT_CONTROL_STATUS_WRITE_TIMEOUT_SECONDS: '0.1',
+      },
+    });
+    const elapsedMs = Date.now() - startedAt;
+    assert.equal(blocked.status, 0, `${blocked.stdout}\n${blocked.stderr}`);
+    assert.equal(blocked.stdout, 'bounded-failure-ok\n');
+    assert.match(
+      blocked.stderr,
+      /control status: watchdog publication timed out; retry deferred/,
+    );
+    assert.ok(elapsedMs < 2_000, `status contention took ${elapsedMs}ms`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('live scheduler and watchdog owners retain transient status timeouts only after readiness', () => {
+  const schedulerStatus = shellFunction(
+    read('evogent-scheduler.sh'),
+    'scheduler_status_write',
+  );
+  const watchdogStatus = shellFunction(
+    read('evogent-watchdog.sh'),
+    'watchdog_status_write',
+  );
+  const harness = `
+set -u
+say() { printf '%s\\n' "$*" >&2; }
+control_status_write() { return "$STATUS_RESULT"; }
+${schedulerStatus}
+${watchdogStatus}
+"$STATUS_FUNCTION" "$STATUS_POLICY" - running "" "" "" fixture
+`;
+  const runPolicy = (statusFunction, statusPolicy, statusResult) => spawnSync(
+    'bash',
+    ['-c', harness],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        STATUS_FUNCTION: statusFunction,
+        STATUS_POLICY: statusPolicy,
+        STATUS_RESULT: String(statusResult),
+      },
+    },
+  );
+
+  for (const statusFunction of [
+    'scheduler_status_write',
+    'watchdog_status_write',
+  ]) {
+    let result = runPolicy(statusFunction, 'heartbeat', 75);
+    assert.equal(result.status, 0, `${statusFunction}\n${result.stderr}`);
+    assert.match(result.stderr, /heartbeat timed out; live owner retained for retry/);
+
+    result = runPolicy(statusFunction, 'required', 75);
+    assert.equal(result.status, 75, statusFunction);
+    assert.match(result.stderr, /initial .* status publication timed out/);
+
+    result = runPolicy(statusFunction, 'heartbeat', 1);
+    assert.equal(result.status, 1, statusFunction);
+    assert.match(result.stderr, /status publication failed structurally/);
+
+    result = runPolicy(statusFunction, 'heartbeat', 0);
+    assert.equal(result.status, 0, `${statusFunction}\n${result.stderr}`);
+  }
+});
+
+test('boot reports control readiness only after PID-start-bound status proof', () => {
+  const control = read('control-plane.sh');
+  const scheduler = read('evogent-scheduler.sh');
+  const watchdog = read('evogent-watchdog.sh');
+  const boot = read('evogent-boot.sh');
+
+  assert.match(control, /fcntl\.LOCK_EX \| fcntl\.LOCK_NB/);
+  assert.match(control, /EVOGENT_CONTROL_STATUS_WRITE_TIMEOUT_SECONDS/);
+  assert.match(control, /signal\.setitimer\(signal\.ITIMER_REAL, lock_timeout\)/);
+  assert.match(control, /control_status_owner_live\(\)/);
+  assert.match(
+    scheduler,
+    /scheduler_status_write required - running[\s\S]*\|\| exit 70/,
+  );
+  assert.match(
+    watchdog,
+    /watchdog_status_write required - running[\s\S]*\|\| exit 70/,
+  );
+  assert.match(scheduler, /scheduler_status_write heartbeat - running/);
+  assert.match(watchdog, /watchdog_status_write heartbeat - running/);
+
+  const schedulerLaunch = boot.indexOf('scheduler launch requested');
+  const schedulerProof = boot.indexOf(
+    'wait_for_control_owner_status scheduler "$TOOLS/.scheduler.lock" 0',
+  );
+  const schedulerReady = boot.indexOf('scheduler ready');
+  const watchdogLaunch = boot.indexOf('watchdog launch requested');
+  const watchdogProof = boot.indexOf(
+    'wait_for_control_owner_status watchdog "$TOOLS/.watchdog.lock" 180',
+  );
+  const watchdogReady = boot.indexOf('watchdog ready');
+  const done = boot.indexOf('=== evogent-boot done:');
+  assert.ok(
+    schedulerLaunch >= 0
+      && schedulerLaunch < schedulerProof
+      && schedulerProof < schedulerReady
+      && schedulerReady < watchdogLaunch
+      && watchdogLaunch < watchdogProof
+      && watchdogProof < watchdogReady
+      && watchdogReady < done,
+  );
+});
+
 test('X extraction preserves short, promotional, non-English, quote-only, and media-only evidence', () => {
   const source = read('browse-x-scrape.py');
   assert.doesNotMatch(source, /AD_HANDLES|ad-handles\.txt/);

@@ -139,6 +139,719 @@ test('invalid forward journals fail without filesystem mutation', () => {
   assert.deepEqual(treeSnapshot(fixture), before);
 });
 
+test('forward admission accepts only exact restored HOME snapshots and topology', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-home-layout-'));
+  const script = `${loadPrelude()}
+import copy
+import os
+import pathlib
+import shutil
+import types
+import sys
+
+base = pathlib.Path(sys.argv[2])
+home = base / "home"
+migration = base / "migration"
+snapshot_home = migration / "home"
+runtime = home / "evogent"
+phone = home / "phone-tools"
+phone_snapshot = migration / "phone-tools"
+for value in (
+    snapshot_home,
+    runtime / "data",
+    runtime / "node_modules",
+    phone,
+    phone_snapshot,
+):
+    value.mkdir(parents=True, exist_ok=True)
+
+def planned(path):
+    value = rescue.capture(path)
+    value.pop("nlink", None)
+    return value
+
+for name in (
+    "evogent-boot.sh",
+    "evogent-scheduler.sh",
+    "evogent-watchdog.sh",
+):
+    for root in (phone, phone_snapshot):
+        (root / name).write_text(name + "\\n")
+        os.chmod(root / name, 0o600)
+
+(home / "start-prod-sub.sh").write_text("start\\n")
+os.chmod(home / "start-prod-sub.sh", 0o700)
+os.symlink("start-prod-sub.sh", home / "restart-evo.sh")
+
+ctx = types.SimpleNamespace(home=home)
+entries = {
+    key: planned(path)
+    for key, path in rescue.paths(ctx).items()
+}
+shutil.copy2(
+    home / "start-prod-sub.sh",
+    snapshot_home / "start-prod-sub.sh",
+    follow_symlinks=False,
+)
+os.symlink(
+    os.readlink(home / "restart-evo.sh"),
+    snapshot_home / "restart-evo.sh",
+)
+phone_value = planned(phone_snapshot)
+phone_value["controlPrograms"] = {
+    name: planned(phone_snapshot / name)
+    for name in (
+        "evogent-boot.sh",
+        "evogent-scheduler.sh",
+        "evogent-watchdog.sh",
+    )
+}
+snapshots = {"phoneTools": phone_value}
+for name in rescue.HOME_NAMES:
+    snapshots["home:" + name] = planned(snapshot_home / name)
+plan = {"entries": entries, "snapshots": snapshots}
+
+os.rename(phone, migration / "rolled-back-phone-state")
+os.rename(phone_snapshot, phone)
+os.unlink(home / "start-prod-sub.sh")
+os.unlink(home / "restart-evo.sh")
+os.rename(
+    snapshot_home / "start-prod-sub.sh",
+    home / "start-prod-sub.sh",
+)
+os.rename(
+    snapshot_home / "restart-evo.sh",
+    home / "restart-evo.sh",
+)
+assert rescue.valid_plan_snapshots(plan)
+assert rescue.admitted_live_entries(ctx, migration, plan) is not None
+
+# Equal bytes and metadata on an unbound inode are not admissible.
+exact = base / "exact-start"
+os.rename(home / "start-prod-sub.sh", exact)
+shutil.copy2(exact, home / "start-prod-sub.sh")
+assert rescue.admitted_live_entries(ctx, migration, plan) is None
+os.unlink(home / "start-prod-sub.sh")
+os.rename(exact, home / "start-prod-sub.sh")
+assert rescue.admitted_live_entries(ctx, migration, plan) is not None
+
+program = phone / "evogent-boot.sh"
+program.write_text("changed\\n")
+assert rescue.admitted_live_entries(ctx, migration, plan) is None
+program.write_text("evogent-boot.sh\\n")
+os.chmod(program, 0o600)
+assert rescue.admitted_live_entries(ctx, migration, plan) is not None
+
+extra = copy.deepcopy(plan)
+extra["snapshots"]["home:unexpected.sh"] = {"type": "absent"}
+assert not rescue.valid_plan_snapshots(extra)
+
+linked = copy.deepcopy(plan)
+linked["snapshots"]["home:restart-evo.sh"]["dev"] = (
+    linked["snapshots"]["home:start-prod-sub.sh"]["dev"]
+)
+linked["snapshots"]["home:restart-evo.sh"]["ino"] = (
+    linked["snapshots"]["home:start-prod-sub.sh"]["ino"]
+)
+assert not rescue.valid_plan_snapshots(linked)
+
+malformed = copy.deepcopy(plan)
+malformed["snapshots"]["home:start-prod-sub.sh"]["nlink"] = 1
+assert not rescue.valid_plan_snapshots(malformed)
+`;
+  const result = run('python3', ['-c', script, rescue, fixture]);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('durable decisions migrate snapshot-live and mixed identities across crash replay', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-bound-live-'));
+  const script = `${loadPrelude()}
+import copy
+import hashlib
+import json
+import os
+import pathlib
+import shutil
+import sqlite3
+import types
+import sys
+
+fixture = pathlib.Path(sys.argv[2])
+
+def planned(path):
+    value = rescue.capture(path)
+    value.pop("nlink", None)
+    return value
+
+def build(label, snapshot_tools, snapshot_home_names, crash_after):
+    base = fixture / label
+    home = base / "home"
+    root = home / ".local/share/evogent"
+    state = root / "state"
+    releases = root / "releases"
+    incoming = releases / "B"
+    migration = root / "migrations/source"
+    workspace = root / ("migrations/legacy-forward-B-" + label)
+    tx = root / "install-transaction"
+    runtime = home / "evogent"
+    phone = home / "phone-tools"
+    for value in (
+        state,
+        incoming,
+        migration / "home",
+        workspace / "home",
+        workspace / "phone-tools",
+        tx,
+        runtime / "data",
+        runtime / "node_modules",
+        phone,
+    ):
+        value.mkdir(parents=True, exist_ok=True)
+
+    database = sqlite3.connect(runtime / "data/media-agent.db")
+    database.execute("create table proof(value text)")
+    database.execute("insert into proof values (?)", (label,))
+    database.commit()
+    database.close()
+    token = ("token-" + label).encode()
+    (runtime / "data/control-token.txt").write_bytes(token)
+    os.chmod(runtime / "data/control-token.txt", 0o600)
+    for name in (
+        "evogent-boot.sh",
+        "evogent-scheduler.sh",
+        "evogent-watchdog.sh",
+    ):
+        (phone / name).write_text(name + "\\n")
+        os.chmod(phone / name, 0o600)
+    for name in rescue.HOME_NAMES:
+        (home / name).write_text(name + "\\n")
+        os.chmod(home / name, 0o700)
+
+    entries = {
+        key: planned(path)
+        for key, path in rescue.paths(types.SimpleNamespace(home=home)).items()
+    }
+    shutil.copytree(
+        phone,
+        migration / "phone-tools",
+        copy_function=shutil.copy2,
+    )
+    for name in rescue.HOME_NAMES:
+        shutil.copy2(home / name, migration / "home" / name)
+    phone_snapshot = planned(migration / "phone-tools")
+    phone_snapshot["controlPrograms"] = {
+        name: planned(migration / "phone-tools" / name)
+        for name in (
+            "evogent-boot.sh",
+            "evogent-scheduler.sh",
+            "evogent-watchdog.sh",
+        )
+    }
+    snapshots = {"phoneTools": phone_snapshot}
+    for name in rescue.HOME_NAMES:
+        snapshots["home:" + name] = planned(migration / "home" / name)
+    plan = {"entries": entries, "snapshots": snapshots}
+    assert rescue.valid_plan_snapshots(plan)
+    source_bytes = rescue.encode(plan)
+    source_plan = workspace / "source-rollback-plan.json"
+    source_plan.write_bytes(source_bytes)
+    os.chmod(source_plan, 0o600)
+
+    if snapshot_tools:
+        os.rename(phone, migration / "rolled-back-phone-state")
+        os.rename(migration / "phone-tools", phone)
+    for name in snapshot_home_names:
+        os.unlink(home / name)
+        os.rename(migration / "home" / name, home / name)
+    (phone / ".cycle.lock").mkdir()
+
+    ctx = types.SimpleNamespace(
+        home=home,
+        root=root,
+        state=state,
+        releases=releases,
+        tx=tx,
+        journal=tx / "journal.json",
+        recoverer=tx / "install-release.sh",
+        old_recoverer=tx / "source-install-release.sh",
+    )
+    admitted = rescue.admitted_live_entries(ctx, migration, plan)
+    assert admitted is not None
+    expected_phone = (
+        rescue.migration_snapshot(plan, "phoneTools")
+        if snapshot_tools
+        else entries["phoneTools"]
+    )
+    assert admitted["phoneTools"] == expected_phone
+    for name in rescue.HOME_NAMES:
+        key = "home:" + name
+        expected = (
+            rescue.migration_snapshot(plan, key)
+            if name in snapshot_home_names
+            else entries[key]
+        )
+        assert admitted[key] == expected
+    nlinks = rescue.admitted_nlinks(ctx, migration, plan, admitted)
+
+    manifest = {
+        "android": {"versionCode": 7, "sha256": "a" * 64},
+        "phoneTls": {"certificateDerSha256": "b" * 64},
+        "dependencies": {"packageLockSha256": "c" * 64},
+    }
+    (incoming / "manifest.json").write_text(json.dumps(manifest) + "\\n")
+    source_journal = {"schema": rescue.OLD_SCHEMA, "label": label}
+    ctx.journal.write_bytes(rescue.encode(source_journal))
+    os.chmod(ctx.journal, 0o600)
+    shutil.copy2(ctx.journal, workspace / "source-journal.json")
+    shutil.copy2(rescue.__file__, ctx.recoverer)
+    os.chmod(ctx.recoverer, 0o700)
+    (workspace / "source-install-release.sh").write_text("pinned source\\n")
+    os.chmod(workspace / "source-install-release.sh", 0o700)
+    (workspace / "source-android-role-holders.json").write_text("{}\\n")
+    os.chmod(workspace / "source-android-role-holders.json", 0o600)
+    old = {
+        "packageOperation": "/data/local/tmp/evogent-package-op." + "d" * 32,
+        "previousApkCode": "0",
+    }
+    proof = {
+        "databaseLogicalSha256": rescue.logical_db(
+            runtime / "data/media-agent.db"),
+        "controlTokenSha256": hashlib.sha256(token).hexdigest(),
+        "admittedEntries": admitted,
+        "nlinks": nlinks,
+        "rollbackTerminalProof": {
+            "schema": rescue.TERMINAL_ROLLBACK_SCHEMA,
+            "disposition": "terminal",
+            "package": rescue.PACKAGE,
+            "fromVersion": 7,
+            "toVersion": 0,
+            "rows": [{
+                "rollbackId": 11,
+                "committedSessionId": 21,
+            }],
+            "successorValidatorAccepted": True,
+        },
+    }
+    decision = rescue.forward_journal(
+        ctx,
+        old,
+        source_plan,
+        workspace / "source-android-role-holders.json",
+        incoming,
+        manifest,
+        proof,
+        workspace,
+    )
+    decision["phase"] = "migration_pending"
+    rescue.jput(ctx.journal, decision, True)
+    rescue.release = lambda _ctx, _path: manifest
+    durable = rescue.load_forward(ctx)
+    assert durable["admittedEntries"] == admitted
+    assert source_plan.read_bytes() == source_bytes
+
+    real_rename = rescue.os.rename
+    renames = {"count": 0}
+    class Crash(Exception):
+        pass
+    def crash(source, target):
+        real_rename(source, target)
+        renames["count"] += 1
+        if renames["count"] == crash_after:
+            raise Crash(str(target))
+    rescue.os.rename = crash
+    try:
+        rescue.migrate(ctx, durable)
+    except Crash:
+        pass
+    else:
+        raise AssertionError("migration fault did not fire")
+    finally:
+        rescue.os.rename = real_rename
+
+    replay = rescue.load_forward(ctx)
+    assert replay["admittedEntries"] == admitted
+    rescue.migrate(ctx, replay)
+    rescue.migrate(ctx, replay)
+    rescue.migrated_topology(ctx, replay)
+    assert source_plan.read_bytes() == source_bytes
+    assert rescue.same(
+        state / "phone-tools", admitted["phoneTools"], core=True)
+    for name in rescue.HOME_NAMES:
+        assert rescue.same(
+            workspace / "home" / name,
+            admitted["home:" + name],
+        )
+
+    alternate = copy.deepcopy(replay)
+    changed = "home:" + next(iter(snapshot_home_names))
+    alternate["admittedEntries"][changed] = plan["entries"][changed]
+    try:
+        rescue.migrated_topology(ctx, alternate)
+    except rescue.Error:
+        pass
+    else:
+        raise AssertionError("alternate admitted identity was accepted after migration")
+    return ctx, replay, manifest, source_bytes
+
+all_names = set(rescue.HOME_NAMES)
+ctx, prior, manifest, source_bytes = build(
+    "all-snapshot", True, all_names, 2)
+build(
+    "mixed-snapshot-tools",
+    True,
+    {rescue.HOME_NAMES[0], rescue.HOME_NAMES[2], rescue.HOME_NAMES[4]},
+    1,
+)
+build(
+    "mixed-original-tools",
+    False,
+    {rescue.HOME_NAMES[1], rescue.HOME_NAMES[3]},
+    3,
+)
+
+# A chained decision must preserve the origin's exact admitted identities.
+prior["phase"] = "prepare_pending"
+rescue.jput(ctx.journal, prior, True)
+chain_incoming = ctx.releases / "C"
+chain_incoming.mkdir()
+chain_manifest = {
+    **manifest,
+    "dependencies": {"packageLockSha256": "e" * 64},
+}
+(chain_incoming / "manifest.json").write_text(
+    json.dumps(chain_manifest) + "\\n")
+chain_workspace = ctx.root / "migrations/legacy-forward-chain-C"
+chain_workspace.mkdir()
+shutil.copy2(ctx.journal, chain_workspace / "source-forward-journal.json")
+shutil.copy2(
+    ctx.recoverer,
+    chain_workspace / "source-forward-recoverer.sh",
+)
+os.chmod(chain_workspace / "source-forward-recoverer.sh", 0o700)
+chain_proof = {
+    "databaseLogicalSha256": prior["databaseLogicalSha256"],
+    "controlTokenSha256": prior["controlTokenSha256"],
+}
+chained = rescue.chained_journal(
+    ctx, prior, chain_incoming, chain_manifest, chain_proof, chain_workspace)
+rescue.jput(ctx.journal, chained, True)
+rescue.release = lambda _ctx, path: (
+    chain_manifest if pathlib.Path(path).name == "C" else manifest)
+loaded_chain = rescue.load_forward(ctx)
+assert loaded_chain["admittedEntries"] == prior["admittedEntries"]
+rescue.migrated_authorities(ctx, loaded_chain)
+
+tampered = copy.deepcopy(chained)
+tampered["admittedEntries"]["home:start-prod-sub.sh"] = (
+    json.loads(source_bytes)["entries"]["home:start-prod-sub.sh"]
+)
+rescue.jput(ctx.journal, tampered, True)
+try:
+    rescue.load_forward(ctx)
+except rescue.Error:
+    pass
+else:
+    raise AssertionError("chained decision changed its origin admission")
+`;
+  const result = run('python3', ['-c', script, rescue, fixture], {
+    timeout: 30_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('forward native proof uses the successor rollback validator', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-validator-'));
+  const script = `${loadPrelude()}
+import pathlib
+import types
+import sys
+
+base = pathlib.Path(sys.argv[2])
+home = base / "home"
+incoming = base / "incoming"
+old_release = base / "old"
+for value in (
+    home / "evogent/data",
+    home / "phone-tools",
+    incoming / "device",
+    old_release / "device",
+):
+    value.mkdir(parents=True, exist_ok=True)
+ctx = types.SimpleNamespace(home=home)
+entries = {}
+for key, value in rescue.paths(ctx).items():
+    entries[key] = rescue.capture(value)
+plan = {"entries": entries}
+manifest = {"android": {"versionCode": 7, "sha256": "a" * 64}}
+old = {
+    "newRelease": str(old_release),
+    "migrationDir": str(base / "migration"),
+    "packageOperation": "/data/local/tmp/evogent-package-op." + "d" * 32,
+    "previousApkCode": "0",
+    "androidRoleBackupSha256": "b" * 64,
+    "androidRoleUserId": 0,
+}
+answers = {
+    "package-idle": b"idle\\n",
+    "package-namespace": b"absent\\n",
+    "installed-apk": ("7\\n" + "a" * 64 + "\\n").encode(),
+    "rollback-dump": b"""11:
+  -state: committed
+  -isStaged: false
+  -originalSessionId: 20
+  -packages:
+    net.dangish.evogent 7 -> 0 [0]
+  -committedSessionId: 21
+Historical rollbacks:
+Package Watchdog status
+""",
+    "package-installer": (
+        b"Active install sessions:\\n\\nHistorical install sessions:\\n"
+    ),
+    "control-token": b"token",
+}
+android_scripts = {}
+def fake_android(script, purpose, *_args, **_kwargs):
+    android_scripts[purpose] = script
+    return answers[purpose]
+rescue.android = fake_android
+calls = []
+def record(args, **kwargs):
+    calls.append((args, kwargs))
+    return types.SimpleNamespace(returncode=0)
+rescue.command = record
+rescue.roles = lambda *_args: None
+rescue.slurp = lambda *_args, **_kwargs: b"token"
+rescue.logical_db = lambda *_args: "c" * 64
+rescue.stopped = lambda *_args: None
+rescue.admitted_nlinks = lambda *_args: {
+    key: rescue.capture(value)["nlink"]
+    for key, value in rescue.paths(ctx).items()
+    if rescue.capture(value)["type"] != "absent"
+}
+proof = rescue.evidence(
+    ctx, old, plan, base / "roles.json", manifest, incoming, {})
+assert proof["databaseLogicalSha256"] == "c" * 64
+assert proof["admittedEntries"] == {}
+assert proof["rollbackTerminalProof"]["rows"] == [{
+    "rollbackId": 11,
+    "committedSessionId": 21,
+}]
+assert len(calls) == 1
+assert pathlib.Path(calls[0][0][1]) == incoming / "device/rollback-state.py"
+assert pathlib.Path(calls[0][0][1]) != old_release / "device/rollback-state.py"
+assert calls[0][0][2] == "require-consumed"
+assert (
+    "cmd package wait-for-handler --timeout 120000 >/dev/null"
+    in android_scripts["package-idle"]
+)
+assert (
+    "cmd package wait-for-background-handler --timeout 120000 >/dev/null"
+    in android_scripts["package-idle"]
+)
+`;
+  const result = run('python3', ['-c', script, rescue, fixture]);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('terminal or expired rollback lineages reject only target PackageInstaller authority', () => {
+  const script = `${loadPrelude()}
+assert rescue.valid_package_operation("")
+assert rescue.valid_package_operation(
+    "/data/local/tmp/evogent-package-op." + "a" * 32)
+assert not rescue.valid_package_operation("/data/local/tmp/unbound")
+duplicate_terminal = b"""1599558273:
+  -state: committed
+  -stateDescription:
+  -isStaged: false
+  -originalSessionId: 100
+  -packages:
+    net.dangish.evogent 1785216876 -> 0 [0]
+  -committedSessionId: 441583237
+1292178639:
+  -state: committed
+  -stateDescription:
+  -isStaged: false
+  -originalSessionId: 101
+  -packages:
+    net.dangish.evogent 1785216876 -> 0 [0]
+  -committedSessionId: 1286209599
+Historical rollbacks:
+Package Watchdog status
+"""
+proof = rescue.terminal_rollback_proof(
+    duplicate_terminal, 1785216876, 0, False)
+assert proof == {
+    "schema": rescue.TERMINAL_ROLLBACK_SCHEMA,
+    "disposition": "terminal",
+    "package": rescue.PACKAGE,
+    "fromVersion": 1785216876,
+    "toVersion": 0,
+    "rows": [
+        {"rollbackId": 1292178639, "committedSessionId": 1286209599},
+        {"rollbackId": 1599558273, "committedSessionId": 441583237},
+    ],
+    "successorValidatorAccepted": False,
+}
+assert rescue.valid_terminal_rollback_proof(proof, 1785216876, 0)
+assert rescue.package_installer_quiescent(
+    b"Active install sessions:\\n\\nHistorical install sessions:\\n",
+    proof,
+    1785216876,
+)
+
+stuck = b"""Active install sessions:
+  Active Session 1286209599:
+    mCommitted=true mSessionApplied=false mSessionFailed=false
+    mChildSessionIds=[2122617521]
+    Active Child Session 2122617521:
+      mParentSessionId=1286209599 mCommitted=true
+      mSessionApplied=false mSessionFailed=false
+
+Historical install sessions:
+"""
+assert not rescue.package_installer_quiescent(stuck, proof, 1785216876)
+unrelated = b"""Active install sessions:
+  Active Session 99:
+    mOriginalInstallerPackageName=com.android.vending
+    appPackageName=com.android.module
+    requiredInstalledVersionCode=42
+    params.isStaged=true
+
+Historical install sessions:
+"""
+assert rescue.package_installer_quiescent(unrelated, proof, 1785216876)
+named_target = unrelated.replace(
+    b"appPackageName=com.android.module",
+    b"appPackageName=net.dangish.evogent",
+)
+assert not rescue.package_installer_quiescent(
+    named_target, proof, 1785216876)
+version_target = unrelated.replace(
+    b"requiredInstalledVersionCode=42",
+    b"requiredInstalledVersionCode=1785216876",
+)
+assert not rescue.package_installer_quiescent(
+    version_target, proof, 1785216876)
+
+expired = rescue.terminal_rollback_proof(
+    b"""1:
+  -state: enabling
+  -stateDescription:
+  -isStaged: true
+  -originalSessionId: 21
+  -packages:
+    com.android.module.one 20 -> 19 [0]
+  -extensionVersions:
+    {30=20, 31=20, 1000000=20}
+2:
+  -state: enabling
+  -stateDescription:
+  -isStaged: true
+  -originalSessionId: 22
+  -packages:
+    com.android.module.two 20 -> 19 [0]
+  -extensionVersions:
+    {30=20, 31=20, 1000000=20}
+3:
+  -state: enabling
+  -stateDescription:
+  -isStaged: true
+  -originalSessionId: 23
+  -packages:
+    com.android.module.three 20 -> 19 [0]
+  -extensionVersions:
+    {30=20, 31=20, 1000000=20}
+Historical rollbacks:
+  11:
+    -state: deleted
+    -stateDescription: Expired by API
+    -isStaged: false
+    -originalSessionId: 31
+    -packages:
+      net.dangish.evogent 1785216876 -> 0 [0]
+    -extensionVersions:
+      {30=20, 31=20, 1000000=20}
+  12:
+    -state: deleted
+    -stateDescription: Expired by API
+    -isStaged: false
+    -originalSessionId: 32
+    -packages:
+      net.dangish.evogent 1785216876 -> 0 [0]
+    -extensionVersions:
+      {30=20, 31=20, 1000000=20}
+  13:
+    -state: deleted
+    -stateDescription: Expired by API
+    -isStaged: false
+    -originalSessionId: 33
+    -packages:
+      com.android.module.four 20 -> 19 [0]
+    -extensionVersions:
+      {30=20, 31=20, 1000000=20}
+Package Watchdog status
+""",
+    1785216876,
+    0,
+    True,
+)
+assert expired["disposition"] == "expired"
+assert expired["rows"] == [{
+    "rollbackId": 11,
+    "originalSessionId": 31,
+}, {
+    "rollbackId": 12,
+    "originalSessionId": 32,
+}]
+assert rescue.valid_terminal_rollback_proof(expired, 1785216876, 0)
+for unproved_absence in (
+    b"",
+    b"unrecognized rollback dump format\\n",
+    b"""Historical rollbacks:
+  11:
+    -state: deleted
+    -isStaged: false
+    -originalSessionId: 31
+    -packages:
+      net.dangish.evogent 1785216876 -> 0 [0]
+Package Watchdog status
+""",
+):
+    try:
+        rescue.terminal_rollback_proof(
+            unproved_absence, 1785216876, 0, False)
+    except rescue.Error:
+        pass
+    else:
+        raise AssertionError("unproved active-row absence was admitted")
+for changed in (
+    duplicate_terminal.replace(
+        b"-state: committed", b"-state: available", 1),
+    duplicate_terminal.replace(
+        b"-isStaged: false", b"-isStaged: true", 1),
+    duplicate_terminal.replace(
+        b"1785216876 -> 0", b"1785216876 -> 1", 1),
+    duplicate_terminal.replace(
+        b"-committedSessionId: 1286209599",
+        b"-committedSessionId: 441583237"),
+    duplicate_terminal.replace(
+        b"-originalSessionId: 101",
+        b"-originalSessionId: 100"),
+    duplicate_terminal.replace(
+        b"1292178639:", b"1599558273:"),
+):
+    try:
+        rescue.terminal_rollback_proof(changed, 1785216876, 0, False)
+    except rescue.Error:
+        pass
+    else:
+        raise AssertionError("ambiguous native rollback state was admitted")
+`;
+  const result = run('python3', ['-c', script, rescue]);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test('decision publication exits 76 after making only the forward schema visible', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-fsync-'));
   const transaction = path.join(fixture, 'install-transaction');
@@ -217,9 +930,11 @@ manifest = {
 proof = {
     "databaseLogicalSha256": "d" * 64,
     "controlTokenSha256": "e" * 64,
+    "admittedEntries": {},
     "nlinks": {},
 }
-rescue.old_state = lambda _ctx, _incoming: (old, {}, plan, role, manifest)
+rescue.old_state = lambda _ctx, _incoming: (
+    old, {}, plan, role, manifest, {})
 rescue.evidence = lambda *_args: proof
 publish = rescue.publish_decision
 faulted = {"value": False}
@@ -504,6 +1219,8 @@ payload = {
 ctx.journal.write_text(json.dumps(payload, separators=(",", ":")) + "\\n")
 os.chmod(ctx.journal, 0o600)
 rescue.release = lambda _ctx, _path: {"releaseId": "B", **manifest}
+rescue.load_forward = lambda value: rescue.jread(value.journal, 0o600)
+rescue.migrated_authorities = lambda *_args: None
 health_calls = []
 rescue.healthy = lambda _ctx, journal: health_calls.append(journal["phase"])
 held = [None, None, types.SimpleNamespace(relocate=lambda _path: None)]
@@ -1217,6 +1934,7 @@ journal = {
     "phase": "migration_pending",
     "sourcePlan": str(plan_path),
     "workspace": str(workspace),
+    "admittedEntries": entries,
     "nlinks": counts,
     "databaseLogicalSha256": rescue.logical_db(data / "media-agent.db"),
     "controlTokenSha256": hashlib.sha256(b"token").hexdigest(),
@@ -1224,6 +1942,7 @@ journal = {
     "releaseId": "B",
     "newRelease": str(incoming),
 }
+rescue.effective_entries = lambda _plan, admitted: admitted
 rescue.migrate(ctx, journal)
 first_nlink = os.lstat(state / "data").st_nlink
 rescue.migrate(ctx, journal)
@@ -1342,10 +2061,21 @@ prior = {
     "phase": "prepare_pending",
     "newRelease": str(previous),
     "sourcePackageOperation": "/data/local/tmp/evogent-package-op." + "a" * 32,
+    "sourcePreviousApkCode": "0",
     "sourcePlan": str(base / "plan.json"),
     "sourceRole": str(base / "role.json"),
     "sourceRoleSha256": "c" * 64,
     "controlTokenSha256": token_sha,
+    "admittedEntries": {},
+    "rollbackTerminalProof": {
+        "schema": rescue.TERMINAL_ROLLBACK_SCHEMA,
+        "disposition": "terminal",
+        "package": rescue.PACKAGE,
+        "fromVersion": 7,
+        "toVersion": 0,
+        "rows": [{"rollbackId": 11, "committedSessionId": 21}],
+        "successorValidatorAccepted": True,
+    },
 }
 rescue.load_forward = lambda _ctx: {**prior, "phase": phase["value"]}
 rescue.release = lambda _ctx, release: (
@@ -1361,15 +2091,12 @@ rescue.jread = lambda value, _mode=None: (
     if pathlib.Path(value) == base / "plan.json"
     else {"userId": 0}
 )
+rescue.effective_entries = lambda plan, _admitted: plan["entries"]
 rescue.roles = lambda *_args: calls.append("roles")
 rescue.logical_db = lambda _path: "d" * 64
+rescue.native_terminal_evidence = lambda *_args: (
+    calls.append("native") or prior["rollbackTerminalProof"])
 def android(_script, purpose, _limit=4096, _timeout=30):
-    if purpose == "package-idle":
-        return b"idle\\n"
-    if purpose == "package-absence":
-        return b"absent\\n"
-    if purpose == "installed-apk":
-        return ("7\\n" + apk_sha + "\\n").encode()
     if purpose == "control-token":
         return b"token"
     raise AssertionError(purpose)
@@ -1461,6 +2188,7 @@ prior = {
     "sourcePreviousApkCode": "0",
     "databaseLogicalSha256": "5" * 64,
     "controlTokenSha256": "6" * 64,
+    "admittedEntries": {},
     "nlinks": {},
     "android": {"versionCode": 7, "sha256": "a" * 64},
     "phoneTls": {"certificateDerSha256": "b" * 64},

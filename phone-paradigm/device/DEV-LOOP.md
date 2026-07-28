@@ -141,7 +141,17 @@ Do not use this for an ordinary failure. It accepts only the one fail-closed
 initial-migration shape documented in `docs/phone-production.md`: private v3
 `health_pending` metadata, a fully restored legacy database/token/role
 snapshot, the exact installed failed-release APK/TLS identity, and positive
-RollbackManager proof that its exact rollback was consumed.
+RollbackManager proof that every rollback capable of moving that installed APK
+is committed and terminal, or has been deleted/expired. Multiple exact
+committed rows are permitted only when their rollback IDs and committed
+PackageInstaller session IDs are unique. The package-manager handlers must be
+idle and every valid `evogent-package-op.<32-hex>` shell operation must be
+absent. PackageInstaller may retain unrelated staged Play/Mainline sessions,
+but no active parent/child may be reachable from the exact rollback session
+IDs, name Evogent, or require its installed version. A committed parent/child
+session with neither `applied` nor `failed` is still live authority, even if it
+appears stuck; forward recovery fails closed until Android makes it terminal.
+There is no stuck-session override.
 
 Build the successor from committed source while reusing the complete private
 APK/TLS artifact set:

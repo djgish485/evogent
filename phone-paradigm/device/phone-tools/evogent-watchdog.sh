@@ -69,6 +69,27 @@ max_cycle_interval_min() {
   fi
 }
 . "$TOOLS/control-plane.sh"
+watchdog_status_write() {
+  local policy="$1" rc=0
+  shift
+  [ "$policy" = required ] || [ "$policy" = heartbeat ] || return 64
+  control_status_write watchdog "$@" || rc=$?
+  case "$rc:$policy" in
+    0:*) return 0 ;;
+    75:heartbeat)
+      say "watchdog status heartbeat timed out; live owner retained for retry"
+      return 0
+      ;;
+    75:required)
+      say "CRITICAL: initial watchdog status publication timed out"
+      return 75
+      ;;
+    *)
+      say "CRITICAL: watchdog status publication failed structurally"
+      return 1
+      ;;
+  esac
+}
 control_init_owner watchdog
 WATCHDOG_LOCK="$TOOLS/.watchdog.lock"
 WATCHDOG_LOCK_HELD=0
@@ -112,14 +133,16 @@ if ! control_lock_acquire "$WATCHDOG_LOCK" watchdog; then
 fi
 WATCHDOG_LOCK_HELD=1
 rm -f "$TOOLS/.watchdog.pid"  # legacy pid-only ownership marker
-control_status_write watchdog - running "" "" "" "independent control-plane supervisor"
+watchdog_status_write required - running "" "" "" \
+  "independent control-plane supervisor" || exit 70
 
 say "watchdog up (pid $$; owner $CONTROL_OWNER_ID; no permanent wakelock)"
 fails=0
 while true; do
   sleep 60
   control_lock_renew "$WATCHDOG_LOCK" || true
-  control_status_write watchdog - running "" "" "" "independent control-plane supervisor"
+  watchdog_status_write heartbeat - running "" "" "" \
+    "independent control-plane supervisor" || exit 70
   # SIGKILL and kernel/process death bypass a cycle's EXIT trap. Reap dead
   # reference owners every watchdog tick so a scoped Termux wake lock cannot
   # silently become a permanent battery drain after an abnormal exit. Live

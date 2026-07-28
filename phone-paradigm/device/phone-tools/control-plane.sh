@@ -1053,17 +1053,44 @@ control_take_cycle_request() {
 # readers from observing a partial document.
 control_status_write() {
   local section="$1" key="$2" state="$3" outcome="${4:-}" gain="${5:-}" rc="${6:-}" detail="${7:-}"
-  local registry="$HOME/evogent/data/phone-control-status.json"
+  local registry="$HOME/evogent/data/phone-control-status.json" status=0
   mkdir -p "$(dirname "$registry")"
   python3 - "$registry" "$section" "$key" "$state" "$outcome" "$gain" "$rc" "$detail" \
-    "${CONTROL_OWNER_ID:-}" "$$" "${CONTROL_SELF_START:-}" <<'PYEOF' >/dev/null 2>&1
-import fcntl, json, os, sys, time
+    "${CONTROL_OWNER_ID:-}" "$$" "${CONTROL_SELF_START:-}" <<'PYEOF' \
+    >/dev/null 2>&1 || status=$?
+import fcntl, json, math, os, signal, sys, time
 
 path, section, key, state, outcome, gain, rc, detail, owner, pid, start = sys.argv[1:]
 lock_path = path + ".lock"
 now = int(time.time() * 1000)
+try:
+    lock_timeout = float(
+        os.environ.get("EVOGENT_CONTROL_STATUS_WRITE_TIMEOUT_SECONDS", "5")
+    )
+except ValueError:
+    lock_timeout = 5.0
+if not math.isfinite(lock_timeout):
+    lock_timeout = 5.0
+lock_timeout = min(10.0, max(0.05, lock_timeout))
+
+def write_timeout(_signum, _frame):
+    # Status 75 is the sole retryable result. The shell owners distinguish it
+    # from malformed arguments, unsafe storage, and every other hard failure.
+    raise SystemExit(75)
+
+signal.signal(signal.SIGALRM, write_timeout)
+signal.setitimer(signal.ITIMER_REAL, lock_timeout)
 with open(lock_path, "a+", encoding="utf-8") as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+    deadline = time.monotonic() + lock_timeout
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SystemExit(75)
+            time.sleep(min(0.05, remaining))
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -1124,14 +1151,118 @@ with open(lock_path, "a+", encoding="utf-8") as lock:
     data["version"] = 1
     data["updatedAtMs"] = now
     tmp = f"{path}.tmp.{os.getpid()}"
-    with open(tmp, "w", encoding="utf-8") as f:
+    descriptor = os.open(
+        tmp,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+        0o600,
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as f:
         json.dump(data, f, separators=(",", ":"), sort_keys=True)
         f.write("\n")
         f.flush()
+        os.fchmod(f.fileno(), 0o600)
         os.fsync(f.fileno())
     os.replace(tmp, path)
-    os.chmod(path, 0o600)
     fcntl.flock(lock, fcntl.LOCK_UN)
+PYEOF
+  case "$status" in
+    0) return 0 ;;
+    75)
+      printf 'control status: %s publication timed out; retry deferred\n' \
+        "$section" >&2
+      return 75
+      ;;
+    *)
+      printf 'control status: %s publication failed (status %s)\n' \
+        "$section" "$status" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Prove that one status record belongs to the exact PID+start-aware lock owner
+# that is still alive. Boot uses this after launching the scheduler and watchdog
+# so "started" means observable control-plane health, not merely a fork request.
+control_status_owner_live() {
+  local section="$1" lock="$2" max_age_seconds="${3:-0}"
+  local registry="$HOME/evogent/data/phone-control-status.json"
+  python3 - "$registry" "$section" "$lock" "$max_age_seconds" <<'PYEOF' \
+    >/dev/null 2>&1
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+import time
+
+registry, section, lock, raw_max_age = sys.argv[1:]
+registry = pathlib.Path(registry)
+lock = pathlib.Path(lock)
+if section not in {"scheduler", "watchdog"}:
+    raise SystemExit(1)
+if re.fullmatch(r"[0-9]+", raw_max_age or "") is None:
+    raise SystemExit(1)
+max_age_ms = int(raw_max_age) * 1000
+
+lock_metadata = os.lstat(lock)
+if not stat.S_ISDIR(lock_metadata.st_mode) or stat.S_ISLNK(lock_metadata.st_mode):
+    raise SystemExit(1)
+owner_path = lock / "owner"
+owner_metadata = os.lstat(owner_path)
+if (
+    not stat.S_ISREG(owner_metadata.st_mode)
+    or stat.S_ISLNK(owner_metadata.st_mode)
+    or stat.S_IMODE(owner_metadata.st_mode) != 0o600
+    or owner_metadata.st_uid != os.geteuid()
+    or owner_metadata.st_size > 4096
+):
+    raise SystemExit(1)
+owner = {}
+for line in owner_path.read_text(encoding="utf-8").splitlines():
+    if "=" in line:
+        key, value = line.split("=", 1)
+        owner[key] = value
+
+data = json.loads(registry.read_text(encoding="utf-8"))
+record = data.get(section) if isinstance(data, dict) else None
+if not isinstance(record, dict) or record.get("state") != "running":
+    raise SystemExit(1)
+pid = owner.get("pid", "")
+start = owner.get("start", "")
+if (
+    re.fullmatch(r"[1-9][0-9]*", pid or "") is None
+    or re.fullmatch(r"[0-9]+", start or "") is None
+    or record.get("owner") != owner.get("owner")
+    or record.get("pid") != int(pid)
+    or record.get("processStartTicks") != int(start)
+):
+    raise SystemExit(1)
+try:
+    process_stat = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+except FileNotFoundError:
+    if sys.platform != "darwin":
+        raise SystemExit(1)
+    try:
+        os.kill(int(pid), 0)
+    except (ProcessLookupError, PermissionError):
+        raise SystemExit(1)
+else:
+    fields = process_stat.rsplit(") ", 1)
+    if (
+        len(fields) != 2
+        or len(fields[1].split()) < 20
+        or fields[1].split()[19] != start
+    ):
+        raise SystemExit(1)
+updated_at_ms = record.get("updatedAtMs")
+if max_age_ms and (
+    not isinstance(updated_at_ms, int)
+    or isinstance(updated_at_ms, bool)
+    or updated_at_ms > int(time.time() * 1000) + 60_000
+    or int(time.time() * 1000) - updated_at_ms > max_age_ms
+):
+    raise SystemExit(1)
 PYEOF
 }
 

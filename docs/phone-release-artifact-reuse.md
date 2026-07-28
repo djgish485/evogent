@@ -71,9 +71,15 @@ scripts/deploy-phone-release.sh --forward-supersede <successor-release.tar.gz>
 ```
 
 The explicit flag is accepted only when the device independently proves the
-retained v3 source shape, restored predecessor state, consumed exact native
-rollback, and equal installed APK/TLS identity. Exact APK SHA equality lets the
-installer avoid an Android package-manager mutation while still switching and
+retained v3 source shape, restored predecessor state, terminal or expired exact
+native rollback lineages, no active PackageInstaller session reachable from
+those lineages or naming the target, and equal installed APK/TLS identity.
+Unrelated staged Play/Mainline sessions do not block recovery. Duplicate
+committed rollback records are accepted only with unique rollback/session
+identities; an active committed session that has not applied or failed remains
+a blocker no matter how long it appears stuck. Exact APK SHA equality fixes
+both bytes and signer and lets the installer
+avoid an Android package-manager mutation while still switching and
 health-checking the successor runtime. Once the versioned forward decision is
 durable, recovery is one-way. If the first successor fails only at the bounded
 pre-switch preparation or post-start health phase, one explicit chained

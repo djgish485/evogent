@@ -39,9 +39,20 @@ PHASES = ("forward_decided", "migration_pending", "prepare_pending", "switch_pen
           "runtime_pending", "health_pending", "committed")
 HOME_NAMES = ("start-prod-sub.sh", "start-prod.sh", "restart-evo.sh",
               "deploy-next.sh", "install-evogent-release.sh")
+ADMITTED_KEYS = ("phoneTools", *(f"home:{name}" for name in HOME_NAMES))
+PLAN_KEYS = ("runtime", "data", "nodeModules", "environment", *ADMITTED_KEYS)
 HEX = re.compile(r"[0-9a-f]{64}")
 SAFE = re.compile(r"[A-Za-z0-9._-]{1,160}")
 PKG_OP = re.compile(r"/data/local/tmp/evogent-package-op\.[0-9a-f]{32}")
+ROLLBACK_ID = re.compile(r"([0-9]+):")
+ROLLBACK_PACKAGE = re.compile(
+    r"([A-Za-z0-9_.]+) ([0-9]+) -> ([0-9]+)(?: \[[0-9]+\])?"
+)
+ROLLBACK_CAUSE_PACKAGE = re.compile(r"[A-Za-z0-9_.]+ [0-9]+")
+ROLLBACK_EXTENSION_VERSION = re.compile(r"([0-9]+)=([0-9]+)")
+ROLLBACK_HISTORICAL_BOUNDARY = "Historical rollbacks:"
+ROLLBACK_WATCHDOG_BOUNDARY = "Package Watchdog status"
+TERMINAL_ROLLBACK_SCHEMA = "evogent.phone.rollback-terminal.v2"
 CONTROL_ARTIFACT = re.compile(
     r"(?:\.control|\.watchdog\.lock|\.scheduler\.lock|\.curation-control|"
     r"\.automatic-diagnosis-budget\.json|\.last-[A-Za-z0-9._-]+|"
@@ -69,6 +80,12 @@ def need(value, message):
     if not value:
         raise Error(message)
     return value
+
+
+def valid_package_operation(value):
+    return isinstance(value, str) and (
+        value == "" or PKG_OP.fullmatch(value) is not None
+    )
 
 
 def pairs(values):
@@ -390,8 +407,7 @@ def capture(path):
     return value
 
 
-def same(path, expected, nlink=None, core=False):
-    actual = capture(path)
+def same_capture(actual, expected, nlink=None, core=False):
     if expected.get("type") == "absent":
         return actual["type"] == "absent"
     if any(actual.get(key) != expected.get(key)
@@ -409,6 +425,212 @@ def same(path, expected, nlink=None, core=False):
     return True
 
 
+def same(path, expected, nlink=None, core=False):
+    return same_capture(capture(path), expected, nlink, core)
+
+
+def planned_entry(value, control_programs=False):
+    """Validate the exact entry shapes emitted by the retained v3 installer."""
+    if not isinstance(value, dict):
+        return False
+    kind = value.get("type")
+    fields = {"type"}
+    if kind != "absent":
+        fields.update({"dev", "ino", "mode", "uid"})
+    if kind == "regular":
+        fields.update({"size", "sha256"})
+    elif kind == "symlink":
+        fields.add("target")
+    elif kind not in {"absent", "directory"}:
+        return False
+    if control_programs:
+        if kind != "directory":
+            return False
+        fields.add("controlPrograms")
+    if set(value) != fields:
+        return False
+    if kind == "absent":
+        return True
+    if (type(value["dev"]) is not int or value["dev"] < 0
+            or type(value["ino"]) is not int or value["ino"] <= 0
+            or type(value["mode"]) is not int
+            or not 0 <= value["mode"] <= 0o7777
+            or type(value["uid"]) is not int or value["uid"] < 0):
+        return False
+    if kind == "regular":
+        return (type(value["size"]) is int and value["size"] >= 0
+                and isinstance(value["sha256"], str)
+                and HEX.fullmatch(value["sha256"]) is not None)
+    if kind == "symlink":
+        return (isinstance(value["target"], str) and value["target"] != ""
+                and "\0" not in value["target"])
+    if not control_programs:
+        return True
+    programs = value["controlPrograms"]
+    required = {"evogent-boot.sh", "evogent-scheduler.sh",
+                "evogent-watchdog.sh"}
+    if not isinstance(programs, dict) or not required <= set(programs):
+        return False
+    for name, expected in programs.items():
+        relative = pathlib.PurePosixPath(name) if isinstance(name, str) else None
+        if (relative is None or relative.is_absolute()
+                or not relative.parts or relative.as_posix() != name
+                or any(part in {"", ".", ".."} or not SAFE.fullmatch(part)
+                       for part in relative.parts)
+                or not planned_entry(expected)
+                or expected["type"] not in {"regular", "symlink"}):
+            return False
+    for name in required:
+        expected = programs[name]
+        if (expected["type"] != "regular"
+                or expected["uid"] != os.geteuid()
+                or expected["mode"] & 0o022
+                or not expected["mode"] & 0o400):
+            return False
+    return True
+
+
+def same_snapshot_metadata(original, snapshot):
+    if original["type"] != snapshot["type"]:
+        return False
+    if original["type"] == "absent":
+        return True
+    if any(original[key] != snapshot[key] for key in ("mode", "uid")):
+        return False
+    if original["type"] == "regular":
+        return all(original[key] == snapshot[key] for key in ("size", "sha256"))
+    if original["type"] == "symlink":
+        return original["target"] == snapshot["target"]
+    return True
+
+
+def linked(left, right):
+    return (left["type"] != "absent" and right["type"] != "absent"
+            and (left["dev"], left["ino"]) == (right["dev"], right["ino"]))
+
+
+def valid_plan_snapshots(plan):
+    entries, snapshots = plan.get("entries"), plan.get("snapshots")
+    home_keys = tuple(f"home:{name}" for name in HOME_NAMES)
+    expected_snapshots = {"phoneTools", *home_keys}
+    if (not isinstance(entries, dict) or not isinstance(snapshots, dict)
+            or set(entries) != set(PLAN_KEYS)
+            or set(snapshots) != expected_snapshots):
+        return False
+    regular_identities = set()
+    for key, value in entries.items():
+        if not planned_entry(value):
+            return False
+        if value["type"] == "regular":
+            identity = (value["dev"], value["ino"])
+            if identity in regular_identities:
+                return False
+            regular_identities.add(identity)
+    for key in expected_snapshots:
+        original, snapshot = entries.get(key), snapshots[key]
+        if (not planned_entry(original)
+                or not planned_entry(snapshot, key == "phoneTools")
+                or not same_snapshot_metadata(original, snapshot)
+                or linked(original, snapshot)):
+            return False
+    # The retained installer rejects linked HOME names before copying them.
+    # Require both sides of that exact topology, not just matching payloads.
+    for index, left in enumerate(home_keys):
+        for right in home_keys[index + 1:]:
+            if (linked(entries[left], entries[right])
+                    or linked(snapshots[left], snapshots[right])):
+                return False
+    return True
+
+
+def migration_snapshot(plan, key):
+    value = dict(plan["snapshots"][key])
+    value.pop("controlPrograms", None)
+    return value
+
+
+def valid_admitted_entries(plan, admitted):
+    if (not valid_plan_snapshots(plan) or not isinstance(admitted, dict)
+            or set(admitted) != set(ADMITTED_KEYS)):
+        return False
+    for key in ADMITTED_KEYS:
+        value = admitted[key]
+        if not planned_entry(value):
+            return False
+        choices = (plan["entries"][key], migration_snapshot(plan, key))
+        if value not in choices:
+            return False
+    home_keys = ADMITTED_KEYS[1:]
+    for index, left in enumerate(home_keys):
+        for right in home_keys[index + 1:]:
+            if linked(admitted[left], admitted[right]) != linked(
+                    plan["entries"][left], plan["entries"][right]):
+                return False
+    return True
+
+
+def effective_entries(plan, admitted):
+    need(valid_admitted_entries(plan, admitted),
+         "admitted migration identities changed")
+    result = dict(plan["entries"])
+    result.update(admitted)
+    return result
+
+
+def admitted_live_entries(ctx, migration, plan):
+    if not valid_plan_snapshots(plan):
+        return None
+    entries, snapshots = plan["entries"], plan["snapshots"]
+    admitted = {}
+    live = ctx.home / "phone-tools"
+    original, snapshot = entries["phoneTools"], migration_snapshot(plan, "phoneTools")
+    actual_phone = capture(live)
+    if same_capture(actual_phone, original):
+        admitted["phoneTools"] = original
+    elif same_capture(actual_phone, snapshot):
+        if not same(migration / "rolled-back-phone-state", original):
+            return None
+        for name, expected in snapshots["phoneTools"]["controlPrograms"].items():
+            if not same(live / pathlib.PurePosixPath(name), expected):
+                return None
+        admitted["phoneTools"] = snapshot
+    else:
+        return None
+
+    actual = {}
+    for name in HOME_NAMES:
+        key, path = f"home:{name}", ctx.home / name
+        actual[key] = capture(path)
+        snapshot = migration_snapshot(plan, key)
+        if same_capture(actual[key], entries[key]):
+            admitted[key] = entries[key]
+        elif same_capture(actual[key], snapshot):
+            admitted[key] = snapshot
+        else:
+            return None
+    home_keys = tuple(actual)
+    for index, left in enumerate(home_keys):
+        for right in home_keys[index + 1:]:
+            if linked(actual[left], actual[right]) != linked(
+                    entries[left], entries[right]):
+                return None
+    return admitted if valid_admitted_entries(plan, admitted) else None
+
+
+def admitted_nlinks(ctx, migration, plan, admitted):
+    need(admitted_live_entries(ctx, migration, plan) == admitted,
+         "admitted migration identities changed during proof")
+    entries, result = effective_entries(plan, admitted), {}
+    for key, path in paths(ctx).items():
+        if entries[key]["type"] == "absent":
+            continue
+        actual = capture(path)
+        need(same_capture(actual, entries[key]),
+             f"migration proof changed: {key}")
+        result[key] = actual["nlink"]
+    return result
+
+
 def old_state(ctx, incoming):
     old = jread(ctx.journal, 0o600)
     operation = old.get("packageOperation", "")
@@ -416,7 +638,7 @@ def old_state(ctx, incoming):
          and old.get("root") == str(ctx.root) and old.get("previousTarget") == ""
          and old.get("previousApkCode") == "0" and old.get("controlTokenBridge", "") == ""
          and all(old.get(key) == 1 for key in OLD_ONES)
-         and isinstance(operation, str) and PKG_OP.fullmatch(operation)
+         and valid_package_operation(operation)
          and not os.path.lexists(ctx.root / "current"),
          "retained transaction is not the exact admitted v3 shape")
     old_release = child(old.get("newRelease", ""), ctx.releases, "source release")
@@ -442,12 +664,17 @@ def old_state(ctx, incoming):
          and isinstance(plan.get("entries"), dict)
          and set(plan["entries"]) == set(expected_paths), "invalid rollback plan")
     entries = plan["entries"]
+    need(valid_plan_snapshots(plan), "invalid rollback plan snapshots")
     need(entries["runtime"].get("type") == entries["data"].get("type")
          == entries["phoneTools"].get("type") == "directory", "unexpected legacy topology")
     need(entries["environment"].get("type") in {"regular", "absent"}
          and entries["nodeModules"].get("type") in {"directory", "absent"},
          "unexpected legacy topology")
+    admitted = admitted_live_entries(ctx, migration, plan)
+    need(admitted is not None, "restored legacy dispatch identities changed")
     for key, path in expected_paths.items():
+        if key in ADMITTED_KEYS:
+            continue
         need(same(path, entries[key]), f"restored legacy entry changed: {key}")
     for target in (ctx.state / "data", ctx.state / "node_modules",
                    ctx.state / "config", ctx.state / "phone-tools",
@@ -458,7 +685,7 @@ def old_state(ctx, incoming):
          and digest(role) == old.get("androidRoleBackupSha256")
          and jread(role, 0o600).get("userId") == old.get("androidRoleUserId"),
          "Android role proof changed")
-    return old, plan, plan_path, role, second
+    return old, plan, plan_path, role, second, admitted
 
 
 def rish(script, timeout=30):
@@ -635,59 +862,393 @@ def roles(role_path, role_sha, user):
         need(observed == snapshot["holders"][role], "Android role holders changed")
 
 
-def evidence(ctx, old, plan, role_path, manifest):
-    idle = android("cmd package wait-for-handler --timeout 120000 "
-                   "&& cmd package wait-for-background-handler --timeout 120000 "
+def terminal_rollback_proof(raw, installed_version, backup_version,
+                            successor_validator_accepted):
+    """Prove every rollback that can move the installed APK is terminal.
+
+    RollbackManager may retain more than one deleted historical row for repeated
+    attempts at the same exact transition. Those rows are positive expiration
+    evidence, not evidence-free absence. Available, enabling, staged,
+    multi-package, malformed, or identity-ambiguous target rows are never
+    admitted.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeError as exc:
+        raise Error("rollback state is not UTF-8") from exc
+    lines = text.splitlines()
+    historical = [
+        index for index, line in enumerate(lines)
+        if line == ROLLBACK_HISTORICAL_BOUNDARY
+    ]
+    watchdog = [
+        index for index, line in enumerate(lines)
+        if line == ROLLBACK_WATCHDOG_BOUNDARY
+    ]
+    need(len(historical) == 1 and len(watchdog) == 1
+         and historical[0] < watchdog[0],
+         "invalid rollback dump framing")
+
+    def extension_versions(line):
+        need(line.startswith("{") and line.endswith("}"),
+             "invalid rollback extension versions")
+        parts = line[1:-1].split(", ")
+        need(1 <= len(parts) <= 64,
+             "invalid rollback extension version count")
+        values = []
+        for part in parts:
+            match = ROLLBACK_EXTENSION_VERSION.fullmatch(part)
+            need(match is not None, "invalid rollback extension version")
+            value = (int(match.group(1)), int(match.group(2)))
+            need(max(value) <= (1 << 31) - 1,
+                 "rollback extension version is out of range")
+            values.append(value)
+        need(len(values) == len(set(key for key, _value in values)),
+             "duplicate rollback extension SDK")
+
+    expected = (PACKAGE, installed_version, backup_version)
+    records, current, section, detail = [], None, "active", ""
+    for source in lines[:watchdog[0]]:
+        if source == ROLLBACK_HISTORICAL_BOUNDARY:
+            current, section, detail = None, "historical", ""
+            continue
+        line = source.strip()
+        match = ROLLBACK_ID.fullmatch(line)
+        if match:
+            current = {
+                "id": int(match.group(1)),
+                "section": section,
+                "state": None,
+                "staged": None,
+                "originalSessionId": None,
+                "originalSessionSeen": False,
+                "packages": [],
+                "packagesSeen": False,
+                "committedSessionId": None,
+                "committedSessionSeen": False,
+                "extensionVersionsSeen": False,
+                "extensionVersionRows": 0,
+                "scalarFields": set(),
+            }
+            records.append(current)
+            detail = ""
+            continue
+        if current is None:
+            need(not line, "unexpected rollback dump content")
+            continue
+        if line.startswith("-state:"):
+            need(current["state"] is None, "duplicate rollback state")
+            current["state"] = line.partition(":")[2].strip()
+            detail = ""
+        elif line.startswith("-isStaged:"):
+            need(current["staged"] is None, "duplicate rollback staged state")
+            value = line.partition(":")[2].strip().lower()
+            need(value in {"true", "false"}, "invalid rollback staged state")
+            current["staged"] = value == "true"
+            detail = ""
+        elif line.startswith("-stagedSessionId:"):
+            value = line.partition(":")[2].strip()
+            need(value.isdigit(), "invalid staged rollback session")
+            need("stagedSessionId" not in current["scalarFields"],
+                 "duplicate staged rollback session")
+            current["scalarFields"].add("stagedSessionId")
+            detail = ""
+        elif line.startswith("-originalSessionId:"):
+            need(not current["originalSessionSeen"],
+                 "duplicate original rollback session")
+            value = line.partition(":")[2].strip()
+            need(value.isdigit() and 0 < int(value) <= (1 << 31) - 1,
+                 "invalid original rollback session")
+            current["originalSessionId"] = int(value)
+            current["originalSessionSeen"] = True
+            detail = ""
+        elif line == "-packages:":
+            need(not current["packagesSeen"], "duplicate rollback package section")
+            current["packagesSeen"] = True
+            detail = "packages"
+        elif line == "-causePackages:":
+            need("causePackages" not in current["scalarFields"],
+                 "duplicate rollback cause package section")
+            current["scalarFields"].add("causePackages")
+            detail = "cause-packages"
+        elif line.startswith("-committedSessionId:"):
+            need(not current["committedSessionSeen"],
+                 "duplicate committed rollback session")
+            value = line.partition(":")[2].strip()
+            need(value.isdigit() and int(value) > 0,
+                 "invalid committed rollback session")
+            current["committedSessionId"] = int(value)
+            current["committedSessionSeen"] = True
+            detail = ""
+        elif line == "-extensionVersions:":
+            need(not current["extensionVersionsSeen"],
+                 "duplicate rollback extension versions")
+            current["extensionVersionsSeen"] = True
+            detail = "extension-versions"
+        elif any(line.startswith(f"-{field}:") for field in (
+                "stateDescription", "timestamp", "rollbackLifetimeMillis",
+                "rollbackImpactLevel")):
+            field = line[1:].partition(":")[0]
+            need(field not in current["scalarFields"],
+                 "duplicate rollback scalar field")
+            current["scalarFields"].add(field)
+            detail = ""
+        elif line.startswith("-"):
+            raise Error("unknown rollback field")
+        elif detail == "packages" and line:
+            package = ROLLBACK_PACKAGE.fullmatch(line)
+            need(package is not None, "malformed rollback package row")
+            row = (package.group(1), int(package.group(2)),
+                   int(package.group(3)))
+            need(row not in current["packages"], "duplicate rollback package row")
+            current["packages"].append(row)
+        elif detail == "cause-packages" and line:
+            need(ROLLBACK_CAUSE_PACKAGE.fullmatch(line) is not None,
+                 "malformed rollback cause package row")
+        elif detail == "extension-versions" and line:
+            current["extensionVersionRows"] += 1
+            need(current["extensionVersionRows"] == 1,
+                 "duplicate rollback extension version row")
+            extension_versions(line)
+        elif line:
+            raise Error("unexpected rollback record content")
+
+    need(records, "rollback dump has no records")
+    for record in records:
+        need(record["state"] in {
+                 "enabling", "available", "committed", "deleted"}
+             and record["staged"] is not None
+             and record["originalSessionSeen"]
+             and record["packagesSeen"] and record["packages"]
+             and (not record["extensionVersionsSeen"]
+                  or record["extensionVersionRows"] == 1),
+             "incomplete rollback record")
+
+    affecting = [
+        record for record in records
+        if any(row[0] == PACKAGE and row[1] == installed_version
+               for row in record["packages"])
+    ]
+    need(affecting, "exact rollback lineage is absent")
+    admitted, sections = [], {record["section"] for record in affecting}
+    need(len(sections) == 1, "target rollback spans active and historical state")
+    for record in records:
+        if record not in affecting:
+            continue
+        need(record["packages"] == [expected]
+             and record["staged"] is False,
+             "rollback that can change the installed APK is not terminal")
+        if record["section"] == "active":
+            need(record["state"] == "committed"
+                 and record["committedSessionSeen"],
+                 "active target rollback is not committed")
+            admitted.append({
+                "rollbackId": record["id"],
+                "committedSessionId": record["committedSessionId"],
+            })
+        else:
+            need(record["state"] == "deleted"
+                 and not record["committedSessionSeen"],
+                 "historical target rollback is not expired")
+            admitted.append({
+                "rollbackId": record["id"],
+                "originalSessionId": record["originalSessionId"],
+            })
+
+    rollback_ids = [row["rollbackId"] for row in admitted]
+    original_session_ids = [
+        record["originalSessionId"] for record in affecting
+    ]
+    session_key = (
+        "committedSessionId"
+        if sections == {"active"}
+        else "originalSessionId"
+    )
+    session_ids = [row[session_key] for row in admitted]
+    need(len(rollback_ids) == len(set(rollback_ids))
+         and len(original_session_ids) == len(set(original_session_ids))
+         and len(session_ids) == len(set(session_ids)),
+         "terminal rollback identity is ambiguous")
+    admitted.sort(key=lambda row: (row["rollbackId"], row[session_key]))
+    disposition = "terminal" if sections == {"active"} else "expired"
+    need(disposition != "expired" or successor_validator_accepted,
+         "successor did not validate expired rollback lineage")
+    return {
+        "schema": TERMINAL_ROLLBACK_SCHEMA,
+        "disposition": disposition,
+        "package": PACKAGE,
+        "fromVersion": installed_version,
+        "toVersion": backup_version,
+        "rows": admitted,
+        "successorValidatorAccepted": bool(successor_validator_accepted),
+    }
+
+
+def valid_terminal_rollback_proof(value, installed_version, backup_version):
+    if (not isinstance(value, dict)
+            or set(value) != {
+                "schema", "disposition", "package", "fromVersion",
+                "toVersion", "rows", "successorValidatorAccepted",
+            }
+            or value["schema"] != TERMINAL_ROLLBACK_SCHEMA
+            or value["disposition"] not in {"terminal", "expired"}
+            or value["package"] != PACKAGE
+            or value["fromVersion"] != installed_version
+            or value["toVersion"] != backup_version
+            or type(value["successorValidatorAccepted"]) is not bool
+            or not isinstance(value["rows"], list) or not value["rows"]
+            or (value["disposition"] == "expired"
+                and not value["successorValidatorAccepted"])):
+        return False
+    rollback_ids, session_ids = [], []
+    session_key = (
+        "committedSessionId"
+        if value["disposition"] == "terminal"
+        else "originalSessionId"
+    )
+    for row in value["rows"]:
+        if (not isinstance(row, dict)
+                or set(row) != {"rollbackId", session_key}
+                or type(row["rollbackId"]) is not int or row["rollbackId"] <= 0
+                or type(row[session_key]) is not int
+                or row[session_key] <= 0):
+            return False
+        rollback_ids.append(row["rollbackId"])
+        session_ids.append(row[session_key])
+    return (value["rows"] == sorted(
+                value["rows"],
+                key=lambda row: (row["rollbackId"], row[session_key]))
+            and len(rollback_ids) == len(set(rollback_ids))
+            and len(session_ids) == len(set(session_ids)))
+
+
+def package_installer_quiescent(raw, rollback_proof, installed_version):
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeError:
+        return False
+    active = [
+        index for index, line in enumerate(lines)
+        if line.strip() == "Active install sessions:"
+    ]
+    historical = [
+        index for index, line in enumerate(lines)
+        if line.strip() == "Historical install sessions:"
+    ]
+    if (len(active) != 1 or len(historical) != 1
+            or historical[0] <= active[0]):
+        return False
+    section = "\n".join(lines[active[0] + 1:historical[0]])
+    # Pixels normally retain unrelated staged Mainline sessions. Bind only the
+    # sessions reachable from exact rollback committed-session IDs, while also
+    # rejecting any active block that names this package or requires its exact
+    # installed version. This covers nullable rollback child package names
+    # without taking ownership of unrelated Play/System sessions.
+    if PACKAGE in section or re.search(
+            rf"\brequiredInstalledVersionCode={installed_version}\b", section):
+        return False
+    for row in (
+            rollback_proof["rows"]
+            if rollback_proof["disposition"] == "terminal"
+            else ()):
+        session = row["committedSessionId"]
+        if (re.search(
+                rf"(?m)^\s*Active(?: Child)? Session {session}:\s*$",
+                section)
+                or f"mParentSessionId={session}" in section):
+            return False
+    return True
+
+
+def native_terminal_evidence(old, manifest, incoming):
+    idle = android("cmd package wait-for-handler --timeout 120000 >/dev/null "
+                   "&& cmd package wait-for-background-handler --timeout 120000 >/dev/null "
                    "&& printf 'idle\\n'", "package-idle", 64, 300)
     need(idle == b"idle\n", "package manager is not idle")
-    op = old["packageOperation"]
-    need(android(f"[ ! -e '{op}' ] && [ ! -L '{op}' ] && printf 'absent\\n'",
-                 "package-absence", 64) == b"absent\n", "package operation remains")
+    namespace = android(
+        "found=0; for p in /data/local/tmp/evogent-package-op.*; do "
+        "[ -e \"$p\" ] || [ -L \"$p\" ] || continue; "
+        "n=${p##*/}; s=${n#evogent-package-op.}; "
+        "[ \"${#s}\" -eq 32 ] || continue; "
+        "case \"$s\" in *[!0-9a-f]*) continue;; esac; found=1; done; "
+        "[ \"$found\" -eq 0 ] && printf 'absent\\n'",
+        "package-namespace", 64)
+    need(namespace == b"absent\n", "Android package operation remains")
     apk = android(f"p=$(pm path '{PACKAGE}' | sed -n 's/^package://p' | head -1); "
                   f"c=$(dumpsys package '{PACKAGE}' | sed -n "
                   f"'s/.*versionCode=\\([0-9]*\\).*/\\1/p' | head -1); "
                   f"[ -n \"$p\" ] && [ -n \"$c\" ] && printf '%s\\n' \"$c\" "
                   f"&& sha256sum \"$p\" | awk '{{print $1}}'",
                   "installed-apk", 256).decode().splitlines()
-    need(apk == [str(manifest["android"]["versionCode"]), manifest["android"]["sha256"]],
+    need(apk == [str(manifest["android"]["versionCode"]),
+                 manifest["android"]["sha256"]],
          "installed APK changed")
     rollback = android("dumpsys rollback", "rollback-dump", 4 << 20)
-    command([sys.executable, str(P(old["newRelease"]) / "device/rollback-state.py"),
-             "require-consumed", PACKAGE, str(manifest["android"]["versionCode"]),
-             old["previousApkCode"]], data=rollback)
+    validator = command(
+        [sys.executable, str(P(incoming) / "device/rollback-state.py"),
+         "require-consumed", PACKAGE, str(manifest["android"]["versionCode"]),
+         old["previousApkCode"]],
+        data=rollback, check=False)
+    previous = old["previousApkCode"]
+    need(isinstance(previous, str) and previous.isdigit(),
+         "previous APK version changed")
+    proof = terminal_rollback_proof(
+        rollback,
+        manifest["android"]["versionCode"],
+        int(previous),
+        validator.returncode == 0,
+    )
+    installer = android(
+        "dumpsys package installer", "package-installer", 16 << 20)
+    need(package_installer_quiescent(
+             installer, proof, manifest["android"]["versionCode"]),
+         "Android PackageInstaller still has an active target session")
+    return proof
+
+
+def evidence(ctx, old, plan, role_path, manifest, incoming, admitted):
+    terminal = native_terminal_evidence(old, manifest, incoming)
     roles(role_path, old["androidRoleBackupSha256"], old["androidRoleUserId"])
     token = android(f"cat '{APP_TOKEN}'", "control-token", 4096)
     live = slurp(ctx.home / "evogent/data/control-token.txt", 4096, 0o600)
     need(token == live, "APK and live control tokens differ")
     stopped(ctx)
-    nlinks = {key: capture(path)["nlink"] for key, path in paths(ctx).items()
-              if plan["entries"][key]["type"] != "absent"}
+    nlinks = admitted_nlinks(
+        ctx, P(old["migrationDir"]), plan, admitted)
     return {"databaseLogicalSha256": logical_db(ctx.home / "evogent/data/media-agent.db"),
-            "controlTokenSha256": digest(live), "nlinks": nlinks}
+            "controlTokenSha256": digest(live), "admittedEntries": admitted,
+            "nlinks": nlinks, "rollbackTerminalProof": terminal}
 
 
-def migrated_topology(ctx, journal):
-    plan, workspace = jread(journal["sourcePlan"], 0o600), P(journal["workspace"])
-    entries = plan["entries"]
-    need(not os.path.lexists(ctx.root / "current")
-         and not os.path.lexists(ctx.home / "evogent")
-         and not os.path.lexists(ctx.home / "phone-tools"),
-         "pre-switch forward topology exposed a release")
+def migrated_authorities(ctx, journal):
+    plan = jread(journal["sourcePlan"], 0o600)
+    workspace = P(
+        journal["originWorkspace"]
+        if journal["chainDepth"] == 1 else journal["workspace"])
+    entries = effective_entries(plan, journal["admittedEntries"])
     need(same(workspace / "runtime", entries["runtime"], core=True)
          and same(ctx.state / "data", entries["data"], core=True)
          and same(ctx.state / "phone-tools", entries["phoneTools"], core=True),
-         "pre-switch migrated authority changed")
+         "migrated authority changed")
     expected_environment = entries["environment"]
     need(same(ctx.state / "config/.env.local", expected_environment)
          if expected_environment["type"] != "absent"
          else not os.path.lexists(ctx.state / "config/.env.local"),
-         "pre-switch environment changed")
+         "migrated environment changed")
     for name in HOME_NAMES:
         expected = entries[f"home:{name}"]
         need(same(workspace / "home" / name, expected)
              if expected["type"] != "absent"
              else not os.path.lexists(workspace / "home" / name),
-             "pre-switch HOME forensic entry changed")
+             "HOME forensic entry changed")
+
+
+def migrated_topology(ctx, journal):
+    migrated_authorities(ctx, journal)
+    need(not os.path.lexists(ctx.root / "current")
+         and not os.path.lexists(ctx.home / "evogent")
+         and not os.path.lexists(ctx.home / "phone-tools"),
+         "pre-switch forward topology exposed a release")
     real_dir(ctx.state / "next-cache" / journal["releaseId"],
              "pre-switch Next cache")
     real_dir(ctx.state / "phone-tools/.cycle.lock", "held cycle gate")
@@ -707,30 +1268,25 @@ def chain_state(ctx, incoming):
     for name in ("apk/evogent.apk", "tls/server-cert.pem", "tls/server-key.pem"):
         need(digest(previous / name) == digest(incoming / name),
              "chained successor changes native bytes")
+    origin_plan = jread(prior["sourcePlan"], 0o600)
+    origin_entries = effective_entries(origin_plan, prior["admittedEntries"])
     if prior["phase"] == "health_pending":
         topology(ctx, prior)
     else:
         migrated_topology(ctx, prior)
-    origin_plan = jread(prior["sourcePlan"], 0o600)
-    need(same(ctx.state / "data", origin_plan["entries"]["data"], core=True),
+    need(same(ctx.state / "data", origin_entries["data"], core=True),
          "chained data authority inode changed")
     quiesce(ctx)
-    idle = android("cmd package wait-for-handler --timeout 120000 "
-                   "&& cmd package wait-for-background-handler --timeout 120000 "
-                   "&& printf 'idle\\n'", "package-idle", 64, 300)
-    need(idle == b"idle\n", "package manager is not idle")
-    operation = prior["sourcePackageOperation"]
-    need(android(f"[ ! -e '{operation}' ] && [ ! -L '{operation}' ] "
-                 "&& printf 'absent\\n'", "package-absence", 64) == b"absent\n",
-         "source package operation reappeared")
-    apk = android(f"p=$(pm path '{PACKAGE}' | sed -n 's/^package://p' | head -1); "
-                  f"c=$(dumpsys package '{PACKAGE}' | sed -n "
-                  f"'s/.*versionCode=\\([0-9]*\\).*/\\1/p' | head -1); "
-                  f"[ -n \"$p\" ] && [ -n \"$c\" ] && printf '%s\\n' \"$c\" "
-                  f"&& sha256sum \"$p\" | awk '{{print $1}}'",
-                  "installed-apk", 256).decode().splitlines()
-    need(apk == [str(manifest["android"]["versionCode"]), manifest["android"]["sha256"]],
-         "installed native identity changed")
+    terminal = native_terminal_evidence(
+        {
+            "packageOperation": prior["sourcePackageOperation"],
+            "previousApkCode": prior["sourcePreviousApkCode"],
+        },
+        manifest,
+        incoming,
+    )
+    need(terminal == prior["rollbackTerminalProof"],
+         "terminal native recovery proof changed")
     role = jread(prior["sourceRole"], 0o600)
     roles(prior["sourceRole"], prior["sourceRoleSha256"], role["userId"])
     token = slurp(ctx.state / "data/control-token.txt", 4096, 0o600)
@@ -835,6 +1391,8 @@ def load_forward(ctx, journal=None):
              and prior.get("newRelease") == str(previous)
              and prior.get("workspace") == str(source_base)
              and prior.get("selfSha256") == data.get("selfSha256")
+             and prior.get("admittedEntries") == data.get("admittedEntries")
+             and prior.get("nlinks") == data.get("nlinks")
              and digest(prior_recoverer) == data.get("selfSha256"),
              "previous forward decision proof changed")
     else:
@@ -848,9 +1406,25 @@ def load_forward(ctx, journal=None):
         path = P(data.get(key, ""))
         need(path == source_base / name and digest(path) == data.get(sha),
              "forensic source proof changed")
+    source_plan = jread(data["sourcePlan"], 0o600)
+    entries = effective_entries(source_plan, data.get("admittedEntries"))
+    nlinks = data.get("nlinks")
+    expected_nlinks = {
+        key for key, value in entries.items() if value["type"] != "absent"
+    }
+    previous_code = data.get("sourcePreviousApkCode")
     need(HEX.fullmatch(str(data.get("databaseLogicalSha256", "")))
          and HEX.fullmatch(str(data.get("controlTokenSha256", "")))
-         and isinstance(data.get("nlinks"), dict), "forward evidence changed")
+         and valid_package_operation(data.get("sourcePackageOperation"))
+         and isinstance(previous_code, str) and previous_code.isdigit()
+         and valid_terminal_rollback_proof(
+             data.get("rollbackTerminalProof"),
+             data["android"]["versionCode"],
+             int(previous_code),
+         )
+         and isinstance(nlinks, dict) and set(nlinks) == expected_nlinks
+         and all(type(value) is int and value > 0 for value in nlinks.values()),
+         "forward evidence changed")
     return data
 
 
@@ -1178,7 +1752,8 @@ def migrate(ctx, journal):
     need(journal["phase"] == "migration_pending", "migration lacks durable intent")
     plan, workspace = jread(journal["sourcePlan"], 0o600), P(journal["workspace"])
     authority(ctx, journal, plan)
-    entries, counts, runtime = plan["entries"], journal["nlinks"], workspace / "runtime"
+    entries = effective_entries(plan, journal["admittedEntries"])
+    counts, runtime = journal["nlinks"], workspace / "runtime"
     move(entries["runtime"], counts["runtime"], [ctx.home / "evogent"], runtime, True)
     move(entries["data"], counts["data"], [ctx.home / "evogent/data", runtime / "data"],
          ctx.state / "data", True)
@@ -1317,6 +1892,7 @@ def switch(ctx, journal):
 
 def topology(ctx, journal):
     incoming, phone = P(journal["newRelease"]), ctx.state / "phone-tools"
+    migrated_authorities(ctx, journal)
     expected = ((ctx.home / "evogent", str(ctx.root / "current/runtime")),
                 (ctx.home / "phone-tools", str(phone)),
                 (ctx.home / "start-prod.sh", str(ctx.root / "current/device/start-prod.sh")),
@@ -1391,6 +1967,16 @@ def healthy(ctx, journal):
             need(cert == manifest["phoneTls"]["certificateDerSha256"], "TLS changed")
             role = jread(journal["sourceRole"], 0o600)
             roles(journal["sourceRole"], journal["sourceRoleSha256"], role["userId"])
+            terminal = native_terminal_evidence(
+                {
+                    "packageOperation": journal["sourcePackageOperation"],
+                    "previousApkCode": journal["sourcePreviousApkCode"],
+                },
+                manifest,
+                incoming,
+            )
+            need(terminal == journal["rollbackTerminalProof"],
+                 "terminal native recovery proof changed")
             token = android(f"cat '{APP_TOKEN}'", "control-token", 4096)
             live = slurp(ctx.state / "data/control-token.txt", 4096, 0o600)
             apk_sha = android(f"p=$(pm path '{PACKAGE}' | sed -n 's/^package://p' | head -1); "
@@ -1474,8 +2060,9 @@ def publish_decision(ctx, candidate):
 
 
 def decide(ctx, incoming):
-    old, plan, plan_path, role, manifest = old_state(ctx, incoming)
-    proof, source_sha = evidence(ctx, old, plan, role, manifest), digest(ctx.journal)
+    old, plan, plan_path, role, manifest, admitted = old_state(ctx, incoming)
+    proof = evidence(ctx, old, plan, role, manifest, incoming, admitted)
+    source_sha = digest(ctx.journal)
     workspace = ctx.root / "migrations" / f"legacy-forward-{incoming.name}-{source_sha[:12]}"
     need(SAFE.fullmatch(workspace.name), "forward workspace name is unsafe")
     ensure_dir(workspace)
@@ -1493,8 +2080,9 @@ def decide(ctx, incoming):
     payload = forward_journal(ctx, old, plan_path, role, incoming, manifest, proof, workspace)
     jput(candidate, payload)
     copy(__file__, ctx.recoverer, 0o700, True)
-    old2, plan2, path2, role2, manifest2 = old_state(ctx, incoming)
-    proof2 = evidence(ctx, old2, plan2, role2, manifest2)
+    old2, plan2, path2, role2, manifest2, admitted2 = old_state(ctx, incoming)
+    proof2 = evidence(
+        ctx, old2, plan2, role2, manifest2, incoming, admitted2)
     expected = forward_journal(ctx, old2, path2, role2, incoming, manifest2, proof2, workspace)
     need(jread(candidate, 0o600) == expected and digest(ctx.journal) == source_sha,
          "admission floor changed before decision")
