@@ -6207,13 +6207,220 @@ legacy_server_owner_live() {
   [[ "$fingerprint" =~ ^[0-9]+:[0-9]+$ ]]
 }
 
+legacy_wrapped_scheduler_fingerprint() {
+  local proc_root="${4:-/proc}"
+  local trusted_bash="${5:-$BASH}"
+  local installer_pid="${6:-$$}"
+  python3 - \
+    "$1" "$2" "$3" "$proc_root" "$trusted_bash" "$installer_pid" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+
+(
+    raw_pane,
+    expected,
+    log_path,
+    raw_proc,
+    trusted_bash,
+    raw_installer,
+) = sys.argv[1:]
+if not raw_pane.isdecimal() or not raw_installer.isdecimal():
+    raise SystemExit(1)
+pane = int(raw_pane)
+installer = int(raw_installer)
+proc = pathlib.Path(raw_proc)
+expected_uid = os.getuid()
+expected_command = f"bash {expected} >> {log_path} 2>&1"
+
+if (
+    not os.path.isabs(expected)
+    or os.path.normpath(expected) != expected
+    or not os.path.isabs(log_path)
+    or os.path.normpath(log_path) != log_path
+    or not os.path.isabs(raw_proc)
+    or os.path.normpath(raw_proc) != raw_proc
+    or not os.path.isabs(trusted_bash)
+    or os.path.normpath(trusted_bash) != trusted_bash
+):
+    raise SystemExit(1)
+
+def program_snapshot():
+    value = os.lstat(expected)
+    mode = stat.S_IMODE(value.st_mode)
+    if (
+        not stat.S_ISREG(value.st_mode)
+        or value.st_uid != expected_uid
+        or mode & 0o022
+        or not mode & 0o400
+    ):
+        raise SystemExit(1)
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+        value.st_uid,
+        mode,
+    )
+
+def arguments(pid):
+    return tuple(
+        os.fsdecode(value)
+        for value in (proc / str(pid) / "cmdline").read_bytes().split(b"\0")
+        if value
+    )
+
+def process_snapshot(pid):
+    directory = os.lstat(proc / str(pid))
+    if not stat.S_ISDIR(directory.st_mode):
+        raise OSError("process directory is not a directory")
+    raw = (proc / str(pid) / "stat").read_text()
+    opening = raw.find("(")
+    closing = raw.rfind(")")
+    if (
+        opening <= 0
+        or closing <= opening
+        or raw[:opening].strip() != str(pid)
+    ):
+        raise ValueError("process stat PID is invalid")
+    fields = raw[closing + 2 :].split()
+    if (
+        len(fields) < 20
+        or not fields[1].isdecimal()
+        or not fields[19].isdecimal()
+    ):
+        raise ValueError("process stat identity is invalid")
+    executable = os.stat(proc / str(pid) / "exe")
+    return {
+        "directory": (
+            directory.st_dev,
+            directory.st_ino,
+            directory.st_uid,
+        ),
+        "arguments": arguments(pid),
+        "parent": int(fields[1]),
+        "start": int(fields[19]),
+        "executable": (executable.st_dev, executable.st_ino),
+    }
+
+trusted_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+trusted_descriptor = os.open(trusted_bash, trusted_flags)
+try:
+    trusted = os.fstat(trusted_descriptor)
+    if not stat.S_ISREG(trusted.st_mode):
+        raise SystemExit(1)
+    trusted_identity = (trusted.st_dev, trusted.st_ino)
+    installer_executable = os.stat(proc / str(installer) / "exe")
+    if (
+        installer_executable.st_dev,
+        installer_executable.st_ino,
+    ) != trusted_identity:
+        raise SystemExit(1)
+
+    initial_program = program_snapshot()
+    initial_pane = process_snapshot(pane)
+    if (
+        initial_pane["directory"][2] != expected_uid
+        or initial_pane["arguments"] != ("bash", "-c", expected_command)
+        or initial_pane["executable"] != trusted_identity
+    ):
+        raise SystemExit(1)
+
+    def exact_candidates():
+        found = []
+        for entry in proc.iterdir():
+            if not entry.name.isdecimal():
+                continue
+            try:
+                pid = int(entry.name)
+                directory = os.lstat(entry)
+                if (
+                    not stat.S_ISDIR(directory.st_mode)
+                    or directory.st_uid != expected_uid
+                    or arguments(pid) != ("bash", expected)
+                ):
+                    continue
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            except (OSError, ValueError, IndexError):
+                continue
+            observed_directory = (
+                directory.st_dev,
+                directory.st_ino,
+                directory.st_uid,
+            )
+            try:
+                snapshot = process_snapshot(pid)
+            except (OSError, ValueError, IndexError):
+                # Once exact same-UID argv was visible, an incomplete identity
+                # is ambiguity rather than evidence that the process is absent.
+                raise SystemExit(1)
+            if (
+                snapshot["directory"] != observed_directory
+                or snapshot["arguments"] != ("bash", expected)
+            ):
+                raise SystemExit(1)
+            found.append((pid, snapshot))
+        return found
+
+    matches = exact_candidates()
+    if len(matches) != 1:
+        raise SystemExit(1)
+    child, initial_child = matches[0]
+    if (
+        initial_child["directory"][2] != expected_uid
+        or initial_child["arguments"] != ("bash", expected)
+        or initial_child["parent"] != pane
+        or initial_child["executable"] != trusted_identity
+    ):
+        raise SystemExit(1)
+
+    # Re-read every mutable identity field before returning. The start times
+    # make PID reuse visible; executable inodes prevent argv-only impersonation.
+    final_matches = exact_candidates()
+    if (
+        process_snapshot(pane) != initial_pane
+        or len(final_matches) != 1
+        or final_matches[0][0] != child
+        or final_matches[0][1] != initial_child
+        or program_snapshot() != initial_program
+    ):
+        raise SystemExit(1)
+    installer_executable = os.stat(proc / str(installer) / "exe")
+    if (
+        installer_executable.st_dev,
+        installer_executable.st_ino,
+    ) != trusted_identity:
+        raise SystemExit(1)
+    print(f"{child}:{initial_child['start']}")
+finally:
+    os.close(trusted_descriptor)
+PY
+}
+
 scheduler_owner_live() {
   local release_target="${1:-}"
   local lock="$HOME/phone-tools/.scheduler.lock"
   local expected="$HOME/phone-tools/evogent-scheduler.sh"
-  local pane="" pid="" start="" label=""
+  local pane="" scheduler_fingerprint="" scheduler_pid="" scheduler_start=""
+  local pid="" start="" label=""
   pane="$(single_tmux_pane_pid evo-sched)" || return 1
-  process_has_exact_script "$pane" "$expected" || return 1
+  if process_has_exact_script "$pane" "$expected"; then
+    scheduler_pid="$pane"
+  elif [ -z "$release_target" ]; then
+    scheduler_fingerprint="$(legacy_wrapped_scheduler_fingerprint \
+      "$pane" "$expected" "$HOME/evo-sched.log" /proc "$BASH" "$$")" \
+      || return 1
+    [[ "$scheduler_fingerprint" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+    scheduler_pid="${scheduler_fingerprint%%:*}"
+    scheduler_start="${scheduler_fingerprint#*:}"
+    pid_matches "$scheduler_pid" "$scheduler_start" || return 1
+  else
+    return 1
+  fi
   if [ -n "$release_target" ]; then
     process_has_exact_environment \
       "$pane" EVOGENT_CONTROL_RELEASE_ROOT "$release_target" || return 1
@@ -6225,7 +6432,8 @@ scheduler_owner_live() {
     pid="$(meta_field "$lock/owner" pid)"
     start="$(meta_field "$lock/owner" start)"
     label="$(meta_field "$lock/owner" label)"
-    [ "$label" = scheduler ] && [ "$pid" = "$pane" ] \
+    [ "$label" = scheduler ] && [ "$pid" = "$scheduler_pid" ] \
+      && { [ -z "$scheduler_start" ] || [ "$start" = "$scheduler_start" ]; } \
       && pid_matches "$pid" "$start" || return 1
   fi
   return 0

@@ -3281,6 +3281,10 @@ process_has_exact_script() {
   esac
   return "$SCRIPT_RESULT"
 }
+legacy_wrapped_scheduler_fingerprint() {
+  [ "$WRAPPER_RESULT" = 0 ] || return "$WRAPPER_RESULT"
+  printf '%s\\n' "$WRAPPER_FINGERPRINT"
+}
 meta_field() {
   case "$2" in
     pid) printf '%s\\n' "$OWNER_PID" ;;
@@ -3297,7 +3301,7 @@ pid_matches() {
 kill() { return "$KILL_RESULT"; }
 HOME="$1"
 case "$MODE" in
-  scheduler) scheduler_owner_live ;;
+  scheduler) scheduler_owner_live "\${SCHEDULER_RELEASE_TARGET:-}" ;;
   watchdog) watchdog_owner_live ;;
   *) exit 64 ;;
 esac
@@ -3325,6 +3329,8 @@ esac
         PANE_PID: '123',
         PID_RESULT: '0',
         SCRIPT_RESULT: '0',
+        WRAPPER_FINGERPRINT: '456:789',
+        WRAPPER_RESULT: '1',
         ...overrides,
       },
     });
@@ -3332,9 +3338,52 @@ esac
 
   clearLock(schedulerLock);
   assert.equal(prove('scheduler').status, 0);
+  assert.equal(
+    prove('scheduler', {
+      OWNER_PID: '456',
+      SCRIPT_RESULT: '1',
+      WRAPPER_RESULT: '0',
+    }).status,
+    0,
+  );
+  assert.notEqual(
+    prove('scheduler', {
+      SCHEDULER_RELEASE_TARGET: '/release',
+      OWNER_PID: '456',
+      SCRIPT_RESULT: '1',
+      WRAPPER_RESULT: '0',
+    }).status,
+    0,
+  );
+  assert.notEqual(
+    prove('scheduler', {
+      OWNER_PID: '456',
+      SCRIPT_RESULT: '1',
+      WRAPPER_FINGERPRINT: '456',
+      WRAPPER_RESULT: '0',
+    }).status,
+    0,
+  );
+  assert.notEqual(
+    prove('scheduler', {
+      OWNER_PID: '456',
+      SCRIPT_RESULT: '1',
+      WRAPPER_FINGERPRINT: '456:790',
+      WRAPPER_RESULT: '0',
+    }).status,
+    0,
+  );
   assert.notEqual(prove('scheduler', { SCRIPT_RESULT: '1' }).status, 0);
   writeOwner(schedulerLock);
   assert.equal(prove('scheduler').status, 0);
+  assert.equal(
+    prove('scheduler', {
+      OWNER_PID: '456',
+      SCRIPT_RESULT: '1',
+      WRAPPER_RESULT: '0',
+    }).status,
+    0,
+  );
   assert.notEqual(
     prove('scheduler', { OWNER_LABEL: 'watchdog' }).status,
     0,
@@ -3353,6 +3402,197 @@ esac
     0,
   );
   assert.notEqual(prove('watchdog', { PID_RESULT: '1' }).status, 0);
+});
+
+test('legacy scheduler wrapper proof binds one exact direct child', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(
+    installer,
+    'legacy_wrapped_scheduler_fingerprint',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-legacy-scheduler-'));
+  const proc = path.join(fixture, 'proc');
+  const scheduler = path.join(fixture, 'home/phone-tools/evogent-scheduler.sh');
+  const log = path.join(fixture, 'home/evo-sched.log');
+  const trustedBash = fs.realpathSync('/bin/bash');
+  fs.mkdirSync(path.dirname(scheduler), { recursive: true });
+  fs.writeFileSync(scheduler, '#!/bin/bash\n', { mode: 0o700 });
+
+  function writeProcess(
+    pid,
+    parent,
+    args,
+    start = pid * 10,
+    executable = trustedBash,
+  ) {
+    const directory = path.join(proc, String(pid));
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(
+      path.join(directory, 'cmdline'),
+      `${args.join('\0')}\0`,
+    );
+    fs.writeFileSync(
+      path.join(directory, 'stat'),
+      `${pid} (bash) ${[
+        'S',
+        String(parent),
+        ...Array(17).fill('0'),
+        String(start),
+        '0',
+      ].join(' ')}\n`,
+    );
+    fs.rmSync(path.join(directory, 'exe'), { force: true });
+    fs.symlinkSync(executable, path.join(directory, 'exe'));
+  }
+  writeProcess(999, 1, ['bash'], 9990);
+  writeProcess(
+    123,
+    1,
+    ['bash', '-c', `bash ${scheduler} >> ${log} 2>&1`],
+  );
+  writeProcess(456, 123, ['bash', scheduler]);
+
+  const harness = `
+set -u
+${helper}
+legacy_wrapped_scheduler_fingerprint 123 "$1" "$2" "$3" "$4" 999
+`;
+  function prove() {
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'legacy-scheduler', scheduler, log, proc, trustedBash],
+      { encoding: 'utf8' },
+    );
+  }
+  let result = prove();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '456:4560\n');
+
+  writeProcess(789, 1, ['bash', scheduler]);
+  result = prove();
+  assert.notEqual(result.status, 0);
+  fs.rmSync(path.join(proc, '789'), { force: true, recursive: true });
+
+  writeProcess(123, 1, ['bash', '-c', `bash ${scheduler} > ${log} 2>&1`]);
+  result = prove();
+  assert.notEqual(result.status, 0);
+
+  writeProcess(999, 1, ['bash'], 9990, '/usr/bin/true');
+  result = prove();
+  assert.notEqual(result.status, 0);
+
+  writeProcess(999, 1, ['bash'], 9990);
+  writeProcess(
+    123,
+    1,
+    ['bash', '-c', `bash ${scheduler} >> ${log} 2>&1`],
+  );
+  writeProcess(456, 123, ['bash', scheduler], 4560, '/usr/bin/true');
+  result = prove();
+  assert.notEqual(result.status, 0);
+
+  writeProcess(456, 123, ['bash', scheduler]);
+  writeProcess(
+    123,
+    1,
+    ['bash', '-c', `bash ${scheduler} >> ${log} 2>&1`],
+    1230,
+    '/usr/bin/true',
+  );
+  result = prove();
+  assert.notEqual(result.status, 0);
+
+  writeProcess(
+    123,
+    1,
+    ['bash', '-c', `bash ${scheduler} >> ${log} 2>&1`],
+  );
+  const paneStat = `123 (bash) ${[
+    'S',
+    '1',
+    ...Array(17).fill('0'),
+    '1230',
+    '0',
+  ].join(' ')}`;
+  const changedPaneStat = paneStat.replace('1230', '1231');
+  const childStat = `456 (bash) ${[
+    'S',
+    '123',
+    ...Array(17).fill('0'),
+    '4560',
+    '0',
+  ].join(' ')}`;
+  const changedChildStat = childStat.replace('4560', '4561');
+  const raceHarness = `
+set -u
+${helper}
+feed_two() {
+  exec 3> "$1.first"
+  printf '%s\\n' "$2" >&3
+  mv -f "$1.next" "$1"
+  exec 3>&-
+  printf '%s\\n' "$3" > "$1.second"
+}
+feed_two "$3/123/stat" "$PANE_STAT" "$CHANGED_PANE_STAT" &
+pane_writer=$!
+feed_two "$3/456/stat" "$CHILD_STAT" "$CHANGED_CHILD_STAT" &
+child_writer=$!
+set +e
+legacy_wrapped_scheduler_fingerprint 123 "$1" "$2" "$3" "$4" 999
+status=$?
+kill "$pane_writer" "$child_writer" 2>/dev/null || true
+wait "$pane_writer" "$child_writer" 2>/dev/null || true
+exit "$status"
+`;
+  function proveIdentityMutation(secondPaneStat, secondChildStat) {
+    for (const pid of [123, 456]) {
+      const statPath = path.join(proc, String(pid), 'stat');
+      for (const suffix of ['', '.first', '.second', '.next']) {
+        fs.rmSync(`${statPath}${suffix}`, { force: true });
+      }
+      const made = spawnSync(
+        'mkfifo',
+        [`${statPath}.first`, `${statPath}.second`],
+        { encoding: 'utf8' },
+      );
+      assert.equal(made.status, 0, made.stderr);
+      fs.symlinkSync('stat.first', statPath);
+      fs.symlinkSync('stat.second', `${statPath}.next`);
+    }
+    const mutationResult = spawnSync(
+      'bash',
+      [
+        '-c',
+        raceHarness,
+        'legacy-scheduler-race',
+        scheduler,
+        log,
+        proc,
+        trustedBash,
+      ],
+      {
+        encoding: 'utf8',
+        timeout: 5000,
+        env: {
+          ...process.env,
+          CHILD_STAT: childStat,
+          CHANGED_CHILD_STAT: secondChildStat,
+          PANE_STAT: paneStat,
+          CHANGED_PANE_STAT: secondPaneStat,
+        },
+      },
+    );
+    assert.equal(mutationResult.error, undefined);
+    return mutationResult;
+  }
+
+  result = proveIdentityMutation(paneStat, changedChildStat);
+  assert.notEqual(result.status, 0);
+  result = proveIdentityMutation(changedPaneStat, childStat);
+  assert.notEqual(result.status, 0);
 });
 
 test('release dispatch proof covers every artifact and rejects stale or direct links', () => {
@@ -4551,7 +4791,10 @@ test('release archives and private-key transit are owner-only', () => {
     'utf8',
   );
   assert.match(builder, /set -euo pipefail\s+umask 077/);
-  assert.match(builder, /tar -czf "\$ARCHIVE"[\s\S]*chmod 600 "\$ARCHIVE"/);
+  assert.match(
+    builder,
+    /tar --no-xattrs -czf "\$ARCHIVE"[\s\S]*chmod 600 "\$ARCHIVE"/,
+  );
   assert.match(builder, /chmod 600 "\$ARCHIVE\.sha256"/);
   assert.match(deploy, /set -euo pipefail\s+umask 077/);
   assert.match(deploy, /chmod 600 "\$ARCHIVE" "\$ARCHIVE\.sha256"/);
