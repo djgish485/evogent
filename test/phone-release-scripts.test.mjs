@@ -2786,6 +2786,175 @@ printf 'rc=%s\\n' "$rc"
   );
 });
 
+test('legacy snapshot accepts a genuine pre-helper surface and binds any optional control helper', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const planHarness = `
+set -euo pipefail
+${shellFunction(installer, 'fsync_tree')}
+${shellFunction(installer, 'copy_legacy_home_snapshots')}
+${shellFunction(installer, 'prepare_legacy_rollback_plan')}
+${shellFunction(installer, 'finalize_legacy_rollback_plan')}
+sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
+HOME="$1"
+ROOT="$2"
+STATE="$ROOT/state"
+PHONE_STATE="$STATE/phone-tools"
+MIGRATION_DIR="$ROOT/migrations/legacy-fixture"
+RELEASE_ID=release-1
+LEGACY_RUNTIME_EXPECTED=1
+LEGACY_CONTROL_PLANE_EXPECTED=1
+LEGACY_SNAPSHOT_READY=0
+LEGACY_PLAN_SHA256=""
+prepare_legacy_rollback_plan
+cp -a "$HOME/phone-tools" "$MIGRATION_DIR/phone-tools"
+fsync_tree "$MIGRATION_DIR/phone-tools"
+copy_legacy_home_snapshots "$MIGRATION_DIR/home" "$HOME/start-prod.sh"
+fsync_tree "$MIGRATION_DIR/home"
+finalize_legacy_rollback_plan
+printf '%s\\n' "$LEGACY_PLAN_SHA256"
+`;
+  const snapshotProbeHarness = `
+set -euo pipefail
+${shellFunction(installer, 'legacy_plan_snapshot_location')}
+MIGRATION_DIR="$1"
+legacy_plan_snapshot_location phoneTools "$MIGRATION_DIR/phone-tools"
+`;
+
+  function makeLegacyFixture({
+    helper = 'absent',
+    referencesMissingHelper = false,
+  } = {}) {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-pre-helper-'));
+    const home = path.join(fixture, 'home');
+    const releaseRoot = path.join(home, '.local/share/evogent');
+    const migration = path.join(releaseRoot, 'migrations/legacy-fixture');
+    const tools = path.join(home, 'phone-tools');
+    fs.mkdirSync(path.join(home, 'evogent'), { recursive: true });
+    fs.mkdirSync(tools);
+    fs.mkdirSync(path.join(releaseRoot, 'state'), { recursive: true });
+    fs.mkdirSync(path.join(migration, 'home'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'start-prod.sh'), 'start legacy server\\n', {
+      mode: 0o600,
+    });
+    fs.writeFileSync(
+      path.join(tools, 'evogent-boot.sh'),
+      referencesMissingHelper
+        ? 'source "$HOME/phone-tools/control-plane.sh"\\n'
+        : 'bash "$HOME/phone-tools/evogent-scheduler.sh"\\n',
+      { mode: 0o600 },
+    );
+    fs.writeFileSync(
+      path.join(tools, 'evogent-scheduler.sh'),
+      'scheduler legacy loop\\n',
+      { mode: 0o600 },
+    );
+    fs.writeFileSync(
+      path.join(tools, 'evogent-watchdog.sh'),
+      'watchdog legacy loop\\n',
+      { mode: 0o600 },
+    );
+    const helperPath = path.join(tools, 'control-plane.sh');
+    if (helper === 'safe' || helper === 'writable') {
+      fs.writeFileSync(helperPath, 'shared control helpers\\n', { mode: 0o600 });
+      if (helper === 'writable') fs.chmodSync(helperPath, 0o666);
+    } else if (helper === 'symlink') {
+      fs.symlinkSync('evogent-watchdog.sh', helperPath);
+    }
+    return {
+      home,
+      releaseRoot,
+      migration,
+      snapshotHelper: path.join(migration, 'phone-tools/control-plane.sh'),
+    };
+  }
+
+  function runPlan(fixture) {
+    return spawnSync(
+      'bash',
+      ['-c', planHarness, 'plan', fixture.home, fixture.releaseRoot],
+      { encoding: 'utf8' },
+    );
+  }
+
+  const preHelper = makeLegacyFixture();
+  let result = runPlan(preHelper);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout.trim(), /^[0-9a-f]{64}$/);
+  let plan = JSON.parse(
+    fs.readFileSync(path.join(preHelper.migration, 'rollback-plan.json'), 'utf8'),
+  );
+  assert.deepEqual(
+    Object.keys(plan.snapshots.phoneTools.controlPrograms).sort(),
+    [
+      'evogent-boot.sh',
+      'evogent-scheduler.sh',
+      'evogent-watchdog.sh',
+    ],
+  );
+
+  const missingDependency = makeLegacyFixture({ referencesMissingHelper: true });
+  result = runPlan(missingDependency);
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /legacy recovery program references missing control-plane[.]sh/,
+  );
+
+  for (const helper of ['symlink', 'writable']) {
+    const unsafe = makeLegacyFixture({ helper });
+    result = runPlan(unsafe);
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /legacy control helper is unsafe: control-plane[.]sh/,
+    );
+  }
+
+  const helperPresent = makeLegacyFixture({ helper: 'safe' });
+  result = runPlan(helperPresent);
+  assert.equal(result.status, 0, result.stderr);
+  plan = JSON.parse(
+    fs.readFileSync(
+      path.join(helperPresent.migration, 'rollback-plan.json'),
+      'utf8',
+    ),
+  );
+  assert.equal(
+    plan.snapshots.phoneTools.controlPrograms['control-plane.sh'].type,
+    'regular',
+  );
+  const probe = () => spawnSync(
+    'bash',
+    ['-c', snapshotProbeHarness, 'probe', helperPresent.migration],
+    { encoding: 'utf8' },
+  );
+  result = probe();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), path.join(helperPresent.migration, 'phone-tools'));
+
+  const helperBytes = fs.readFileSync(helperPresent.snapshotHelper);
+  fs.appendFileSync(helperPresent.snapshotHelper, 'tampered\\n');
+  result = probe();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'missing');
+  fs.writeFileSync(helperPresent.snapshotHelper, helperBytes);
+
+  const originalHelper = `${helperPresent.snapshotHelper}.original`;
+  fs.renameSync(helperPresent.snapshotHelper, originalHelper);
+  fs.writeFileSync(helperPresent.snapshotHelper, helperBytes, { mode: 0o600 });
+  result = probe();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'missing');
+  fs.unlinkSync(helperPresent.snapshotHelper);
+  fs.renameSync(originalHelper, helperPresent.snapshotHelper);
+  result = probe();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), path.join(helperPresent.migration, 'phone-tools'));
+});
+
 test('v2 legacy rollback is inode-bound and idempotent across every forward move', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -2948,6 +3117,15 @@ printf 'post-second\\n'
     );
     assert.equal(plan.snapshotReady, 1);
     assert.equal(plan.snapshots.phoneTools.type, 'directory');
+    assert.deepEqual(
+      Object.keys(plan.snapshots.phoneTools.controlPrograms).sort(),
+      [
+        'control-plane.sh',
+        'evogent-boot.sh',
+        'evogent-scheduler.sh',
+        'evogent-watchdog.sh',
+      ],
+    );
     assert.notEqual(plan.snapshots.phoneTools.ino, originalInodes.tools);
     for (const transient of [
       '.scheduler.lock',

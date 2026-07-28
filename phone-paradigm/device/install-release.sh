@@ -4753,14 +4753,43 @@ def capture(path, *, bind_control_programs=False):
             if value["type"] not in {"regular", "symlink"}:
                 raise SystemExit(f"legacy control program is unsafe: {name}")
             programs[name] = value
-        for required in (
-            "control-plane.sh",
+        required_programs = (
             "evogent-boot.sh",
             "evogent-scheduler.sh",
             "evogent-watchdog.sh",
-        ):
+        )
+        for required in required_programs:
             if required not in programs:
                 raise SystemExit(f"legacy control program is missing: {required}")
+            value = programs[required]
+            if (
+                value["type"] != "regular"
+                or value["uid"] != os.getuid()
+                or value["mode"] & 0o022
+                or not value["mode"] & 0o400
+            ):
+                raise SystemExit(f"legacy recovery program is unsafe: {required}")
+        # Pre-helper legacy releases have the complete boot/scheduler/watchdog
+        # recovery surface without a shared control-plane.sh. When the helper
+        # exists it is transitively executable, so bind the exact private
+        # regular file. When absent, reject scripts that still refer to it.
+        helper = programs.get("control-plane.sh")
+        if helper is not None:
+            if (
+                helper["type"] != "regular"
+                or helper["uid"] != os.getuid()
+                or helper["mode"] & 0o022
+                or not helper["mode"] & 0o400
+            ):
+                raise SystemExit("legacy control helper is unsafe: control-plane.sh")
+        else:
+            for required in required_programs:
+                with open(path / required, "rb") as handle:
+                    if b"control-plane.sh" in handle.read():
+                        raise SystemExit(
+                            "legacy recovery program references missing "
+                            "control-plane.sh"
+                        )
         result["controlPrograms"] = programs
     return result
 
