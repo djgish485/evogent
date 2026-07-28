@@ -4655,6 +4655,57 @@ test('release packages every device helper referenced by the installer', () => {
   }
 });
 
+test('an absent current pointer remains an initial migration when readlink -f accepts it', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const preflight = installer.match(
+    /CURRENT_RESOLVED=""\n([\s\S]*?)\nEXPECTED_APK_CODE=/,
+  );
+  assert.ok(preflight, 'missing current-release preflight block');
+
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-missing-current-'));
+  const fakeBin = path.join(fixture, 'bin');
+  const trace = path.join(fixture, 'readlink.trace');
+  fs.mkdirSync(fakeBin);
+  const fakeReadlink = path.join(fakeBin, 'readlink');
+  fs.writeFileSync(
+    fakeReadlink,
+    '#!/bin/sh\nprintf "%s\\n" "$1" > "$READLINK_TRACE"\nprintf "%s\\n" "$1"\n',
+    { mode: 0o755 },
+  );
+  const harness = `
+set -u
+CURRENT="$1/current"
+STATE="$1/state"
+PHONE_STATE="$STATE/phone-tools"
+HOME="$1/home"
+PREVIOUS_TARGET="unset"
+CURRENT_RESOLVED=""
+say() { printf '%s\\n' "$*" >&2; }
+is_real_release_target() { return 0; }
+release_dispatch_matches_target() { return 1; }
+${preflight[1]}
+printf 'current=<%s> previous=<%s>\\n' "$CURRENT_RESOLVED" "$PREVIOUS_TARGET"
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness, 'missing-current', fixture],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        READLINK_TRACE: trace,
+      },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'current=<> previous=<>\n');
+  assert.equal(fs.existsSync(trace), false);
+});
+
 test('boot recovery preserves the recovered contract and binds tmux release identity', () => {
   const boot = fs.readFileSync(
     path.join(
@@ -4705,6 +4756,7 @@ test('release builder strips host identity and excludes historical personal evid
   assert.match(builder, /config\["outputFileTracingRoot"\] = "\."/);
   assert.match(builder, /turbopack\["root"\] = "\."/);
   assert.match(builder, /export COPYFILE_DISABLE=1/);
+  assert.match(builder, /tar --no-xattrs -czf "\$ARCHIVE"/);
   assert.match(builder, /pure\.parts\[0\] != "release"/);
   assert.match(builder, /phone release: unsafe archive member/);
   assert.match(builder, /EVOGENT_RELEASE_PRIVATE_MARKERS_FILE/);

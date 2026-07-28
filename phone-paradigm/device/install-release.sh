@@ -7912,16 +7912,19 @@ EXPECTED_DEPENDENCY_LINK="../../../state/dependencies/$EXPECTED_PACKAGE_LOCK/nod
 prepare_android_dependency_tree "$EXPECTED_PACKAGE_LOCK"
 
 # Same release + matching APK metadata is an intentional no-op. Still prove the
-# local server is healthy instead of trusting a symlink alone.
-CURRENT_RESOLVED="$(readlink -f "$CURRENT" 2>/dev/null || true)"
-PREVIOUS_TARGET="$CURRENT_RESOLVED"
+# local server is healthy instead of trusting a symlink alone. GNU readlink -f
+# succeeds when only the final path component is absent, so resolve the pointer
+# only after proving that a directory entry actually exists.
+CURRENT_RESOLVED=""
 if [ -e "$CURRENT" ] || [ -L "$CURRENT" ]; then
+  CURRENT_RESOLVED="$(readlink -f "$CURRENT" 2>/dev/null || true)"
   [ -L "$CURRENT" ] && [ -n "$CURRENT_RESOLVED" ] \
     && is_real_release_target "$CURRENT_RESOLVED" || {
       say "current release pointer is dangling or unsafe; recover it before installing"
       exit 69
     }
 fi
+PREVIOUS_TARGET="$CURRENT_RESOLVED"
 if [ -n "$CURRENT_RESOLVED" ] \
     && ! release_dispatch_matches_target "$CURRENT_RESOLVED"; then
   say "current release dispatch is not canonical; recover it before installing"

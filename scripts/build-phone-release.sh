@@ -840,7 +840,10 @@ mkdir -p "$OUTPUT_DIR"
 ARCHIVE="$OUTPUT_DIR/evogent-phone-${RELEASE_ID}.tar.gz"
 assert_clean_source
 assert_source_commit_unchanged
-tar -czf "$ARCHIVE" -C "$WORK_DIR" release
+# macOS bsdtar otherwise serializes com.apple.provenance as a PAX xattr for
+# thousands of generated files. The phone ignores it but emits one warning per
+# member, wasting install time and obscuring the transactional status output.
+tar --no-xattrs -czf "$ARCHIVE" -C "$WORK_DIR" release
 chmod 600 "$ARCHIVE"
 python3 - "$ARCHIVE" <<'PY'
 import pathlib
