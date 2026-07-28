@@ -2589,6 +2589,38 @@ export default function Home() {
     setHasShellBridge(typeof shell?.openAndroidHome === 'function');
   }, []);
 
+  // The native digest is a doorway, not a dead-end launcher tap. Native stores a one-shot marker
+  // before dispatching this event so a tap that races React hydration still lands on the local
+  // Notifications view once the page mounts.
+  useEffect(() => {
+    const openNotifications = () => {
+      try {
+        window.sessionStorage.removeItem('evogent.openNotifications');
+      } catch {
+        // The live event still opens the view when storage is unavailable.
+      }
+      setDetailStack([]);
+      setGroupDetailEntry(null);
+      setShowConfigEditor(false);
+      setShowPreferencesPanel(false);
+      setSearchDraft('');
+      setSearchQuery(null);
+      setSelectedFilter('notification');
+      scrollFeedToTop();
+    };
+    window.addEventListener('evogent:open-notifications', openNotifications);
+    try {
+      if (window.sessionStorage.getItem('evogent.openNotifications') === '1') {
+        openNotifications();
+      }
+    } catch {
+      // A later native event remains sufficient.
+    }
+    return () => {
+      window.removeEventListener('evogent:open-notifications', openNotifications);
+    };
+  }, [scrollFeedToTop]);
+
   // HOME from another app returns to the feed beneath the external detail while preserving its
   // scroll. HOME while already looking at Evogent is launcher muscle memory: close every
   // transient surface and reset the feed to its canonical top-level state.
@@ -7171,6 +7203,11 @@ export default function Home() {
     if (item.type !== 'notification') return;
     if (notificationPendingActions[item.id]) return;
     const wasActiveNotification = isActiveNotification(item);
+    const receiptEventId = typeof item.metadata?.lastReceiptEventId === 'string'
+      ? item.metadata.lastReceiptEventId.trim()
+      : '';
+    const hasExactPhoneReceipt = item.source === 'phone-notification'
+      && /^[0-9a-f]{64}$/.test(receiptEventId);
 
     setNotificationFeedback((current) => {
       const next = { ...current };
@@ -7183,11 +7220,18 @@ export default function Home() {
       const notificationId = typeof item.metadata?.notificationId === 'string'
         ? item.metadata.notificationId.trim()
         : '';
-      const response = await fetch('/api/internal/notifications/resolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedItemId: item.id, notificationId: notificationId || undefined }),
-      });
+      const response = await fetch(
+        hasExactPhoneReceipt
+          ? '/api/internal/phone-notifications/remove'
+          : '/api/internal/notifications/resolve',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hasExactPhoneReceipt
+            ? { eventId: receiptEventId }
+            : { feedItemId: item.id, notificationId: notificationId || undefined }),
+        },
+      );
 
       if (!response.ok) {
         throw new Error(`Error ${response.status}`);
@@ -7196,6 +7240,17 @@ export default function Home() {
       const result = await response.json();
       if (!result.resolved) {
         throw new Error('Dismiss was not persisted');
+      }
+      if (hasExactPhoneReceipt) {
+        const shell = (window as typeof window & {
+          EvogentShell?: {
+            dismissPhoneNotification?: (eventId: string) => string | null;
+          };
+        }).EvogentShell;
+        // This is best-effort and deliberately follows the durable server dismissal. Native
+        // independently requires its app-private receipt, active digest coverage, exact live
+        // revision, and low-stakes policy before Android receives a key-cancellation request.
+        shell?.dismissPhoneNotification?.(receiptEventId);
       }
       if (wasActiveNotification) {
         adjustPendingCounts({ notification: -1 });

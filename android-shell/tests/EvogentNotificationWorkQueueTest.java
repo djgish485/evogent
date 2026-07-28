@@ -11,6 +11,7 @@ public final class EvogentNotificationWorkQueueTest {
         newestLiveEventNeverWaitsBehindPendingLiveBacklog();
         pendingRevisionsAreCoalescedByNotificationKey();
         inFlightRevisionDetectsPendingSameKeySuccessor();
+        removalRetiresPendingAndInFlightRevisions();
         completedRevisionIsNotRetainedAsInFlight();
         liveOverloadEvictsOldestPendingWork();
         liveEntriesCarryMonotonicSequence();
@@ -115,6 +116,32 @@ public final class EvogentNotificationWorkQueueTest {
                 "later notification was not available");
         require(!queue.hasNewerRevision(completed),
                 "completed entry remained registered as in-flight");
+    }
+
+    private static void removalRetiresPendingAndInFlightRevisions()
+            throws Exception {
+        EvogentNotificationWorkQueue<String> queue =
+                new EvogentNotificationWorkQueue<String>(4, 4);
+        require(queue.offer("live-in-flight", false, "same").accepted(),
+                "in-flight removal fixture rejected");
+        EvogentNotificationWorkQueue.Entry<String> inFlight = queue.take();
+        require(queue.offer("live-successor", false, "same").accepted(),
+                "pending successor rejected");
+        require(queue.offer("history", true, "same").accepted(),
+                "pending history rejected");
+        require(queue.offer("unrelated", false, "other").accepted(),
+                "unrelated work rejected");
+
+        require(queue.retire("same") == 3,
+                "removal did not retire every same-key revision");
+        require(!queue.isCurrent(inFlight),
+                "removed in-flight work retained publication authority");
+        require(queue.liveSize() == 1 && queue.historicalSize() == 0,
+                "removal retained queued same-key work");
+        require("unrelated".equals(queue.take().value),
+                "removal discarded unrelated work");
+        require(queue.retire("missing") == 0,
+                "unknown removal mutated the queue");
     }
 
     private static void liveOverloadEvictsOldestPendingWork()

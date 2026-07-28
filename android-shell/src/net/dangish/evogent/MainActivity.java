@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private static final String FEED_URL = EvogentSecurityPolicy.LOOPBACK_ORIGIN;
     static final String ACTION_OPEN_EVOGENT_HOME =
             "net.dangish.evogent.action.OPEN_EVOGENT_HOME";
+    static final String OPEN_NOTIFICATIONS_EXTRA = "evogent_open_notifications";
     private static final String HOME_CHOICE_PREFERENCES = "evogent_home_choice";
     private static final String HOME_CHOICE_KEY = "last_explicit_surface";
     private static final String NOTIFICATION_PERMISSION_PREFERENCES =
@@ -80,7 +81,9 @@ public class MainActivity extends Activity {
             + "Object.defineProperty(window,'EvogentShell',{"
             + "value:Object.freeze({"
             + "openExternal:function(url){return call('openExternal',[String(url)]);},"
-            + "openAndroidHome:function(){return call('openAndroidHome',[]);}"
+            + "openAndroidHome:function(){return call('openAndroidHome',[]);},"
+            + "dismissPhoneNotification:function(eventId){"
+            + "return call('dismissPhoneNotification',[String(eventId)]);}"
             + "}),writable:false,configurable:false});"
             + "})();";
     private static final String ASSISTANT_COMPOSER_FACADE_SCRIPT =
@@ -101,11 +104,15 @@ public class MainActivity extends Activity {
     private static final String IG_PACKAGE = "com.instagram.android";
     private static final String X_PACKAGE = "com.twitter.android";
     private static final String GM_PACKAGE = "com.google.android.gm";
+    private static final String PIXEL_LAUNCHER_PACKAGE =
+            "com.google.android.apps.nexuslauncher";
     private static final long SERVER_PROOF_MAX_AGE_MS = 5 * 60 * 1000L;
     private static final long FOREGROUND_REFRESH_AFTER_MS = 30 * 1000L;
     private static final long PERIODIC_REFRESH_MS = 4 * 60 * 1000L;
     private static final long AUTH_RETRY_MS = 2000L;
     private static final long RUNTIME_REVIVE_DEBOUNCE_MS = 2000L;
+    // A HOME gesture must never strand the user behind a slow/hung private loopback process.
+    private static final long SYSTEM_HOME_READY_TIMEOUT_MS = 2500L;
     private static final Pattern YT_ID = Pattern.compile(
             "(?:v=|/shorts/|youtu\\.be/|/embed/)([A-Za-z0-9_-]{11})");
     private WebView webView;
@@ -117,6 +124,8 @@ public class MainActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final EvogentHomeNavigationPolicy homeNavigation =
             new EvogentHomeNavigationPolicy();
+    private final EvogentHomeAvailabilityGate homeAvailability =
+            new EvogentHomeAvailabilityGate();
     private boolean shellDocumentStartInstalled = false;
     private volatile boolean trustedFeedDocument = false;
     private EvogentLoopbackAuth.WebSession activeWebSession;
@@ -133,8 +142,17 @@ public class MainActivity extends Activity {
     private boolean backInFlight;
     private boolean pendingBackPress;
     private long lastRuntimeReviveRequestMs;
+    private long systemHomeAvailabilityRequest;
     private SharedPreferences homeChoicePreferences;
     private boolean destroyed;
+    private boolean pendingNotificationView;
+    private final Runnable systemHomeReadyTimeout = new Runnable() {
+        @Override public void run() {
+            fallBackFromUnavailableSystemHome(
+                    systemHomeAvailabilityRequest,
+                    "authenticated surface readiness timed out");
+        }
+    };
     private final Runnable periodicProofRefresh = new Runnable() {
         @Override public void run() {
             if (destroyed || !resumed) return;
@@ -207,16 +225,16 @@ public class MainActivity extends Activity {
         boolean explicitReturn = ACTION_OPEN_EVOGENT_HOME.equals(intent.getAction());
         if (EvogentHomeChoicePolicy.explicitlyChoosesEvogent(
                 isMain, hasLauncher, hasHome, explicitReturn)) {
-            rememberHomeChoice(EvogentHomeChoicePolicy.Choice.EVOGENT);
+            if (!rememberHomeChoice(EvogentHomeChoicePolicy.Choice.EVOGENT)) {
+                Log.w("EvogentMain", "could not durably remember Evogent HOME");
+            }
             return false;
         }
         if (!EvogentHomeChoicePolicy.shouldRouteSystemHomeToAndroid(
                 isMain, hasHome, hasLauncher, rememberedHomeChoice())) {
             return false;
         }
-        if (launchStockAndroidHome()) return true;
-        rememberHomeChoice(
-                EvogentHomeChoicePolicy.choiceAfterAndroidLaunchAttempt(false));
+        if (launchRememberedAndroidHome()) return true;
         Log.w("EvogentMain", "remembered Android HOME unavailable; staying in Evogent");
         return false;
     }
@@ -226,10 +244,10 @@ public class MainActivity extends Activity {
                 .getString(HOME_CHOICE_KEY, EvogentHomeChoicePolicy.VALUE_EVOGENT));
     }
 
-    private void rememberHomeChoice(EvogentHomeChoicePolicy.Choice choice) {
-        homeChoicePreferences().edit()
+    private boolean rememberHomeChoice(EvogentHomeChoicePolicy.Choice choice) {
+        return homeChoicePreferences().edit()
                 .putString(HOME_CHOICE_KEY, EvogentHomeChoicePolicy.encode(choice))
-                .apply();
+                .commit();
     }
 
     private SharedPreferences homeChoicePreferences() {
@@ -300,16 +318,45 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (isHomeSurface() && routeHomeIntent(intent)) return;
+        captureNotificationViewIntent(intent);
+        if (isHomeSurface() && routeHomeIntent(intent)) {
+            cancelSystemHomeAvailabilityWait();
+            return;
+        }
+        boolean systemHome = isHomeSurface() && isSystemHomeIntent(intent);
+        if (systemHome) {
+            armSystemHomeAvailabilityWait();
+        } else {
+            // In particular, an explicit Evogent icon/action launch must not be redirected by a
+            // stale timeout from an earlier system-HOME invocation.
+            cancelSystemHomeAvailabilityWait();
+        }
+        dispatchPendingNotificationView();
         if (intent == null || !Intent.ACTION_MAIN.equals(intent.getAction())
                 || !intent.hasCategory(Intent.CATEGORY_HOME) || webView == null) {
             return;
         }
-        if (!isCurrentFeedDocumentAuthenticated()) {
+        if (!isCurrentFeedDocumentAuthenticated()
+                || (systemHome && !isCurrentFeedDocumentTrusted())) {
+            // A merely bound/in-flight document is not a usable HOME surface. Keep the fresh
+            // availability request armed until the replacement load passes its post-load proof.
             loadFeedRoot();
             return;
         }
         final boolean fullReset = resumed;
+        if (systemHome) {
+            final long availabilityRequest = systemHomeAvailabilityRequest;
+            refreshCurrentDocumentAuthentication(new Runnable() {
+                @Override public void run() {
+                    // A timeout, a repeated HOME, or an explicit icon launch may have superseded
+                    // this proof. Never dispatch JS for a stale availability request.
+                    if (markSystemHomeUsable(availabilityRequest)) {
+                        dispatchHomeGesture(fullReset);
+                    }
+                }
+            });
+            return;
+        }
         if (!hasFreshServerProof(FOREGROUND_REFRESH_AFTER_MS)) {
             refreshCurrentDocumentAuthentication(new Runnable() {
                 @Override public void run() {
@@ -319,6 +366,63 @@ public class MainActivity extends Activity {
             return;
         }
         dispatchHomeGesture(fullReset);
+    }
+
+    private boolean isSystemHomeIntent(Intent intent) {
+        if (intent == null) return false;
+        return EvogentHomeChoicePolicy.isSystemHomeInvocation(
+                Intent.ACTION_MAIN.equals(intent.getAction()),
+                intent.hasCategory(Intent.CATEGORY_HOME),
+                intent.hasCategory(Intent.CATEGORY_LAUNCHER));
+    }
+
+    private void armSystemHomeAvailabilityWait() {
+        main.removeCallbacks(systemHomeReadyTimeout);
+        // A cached proof can outlive a just-crashed loopback process. Every system-HOME return to
+        // remembered Evogent therefore gets one fresh, bounded local proof before page dispatch.
+        systemHomeAvailabilityRequest = homeAvailability.arm();
+        main.postDelayed(systemHomeReadyTimeout, SYSTEM_HOME_READY_TIMEOUT_MS);
+    }
+
+    private boolean markSystemHomeUsable(long request) {
+        if (!homeAvailability.markUsable(request)) return false;
+        systemHomeAvailabilityRequest = 0L;
+        main.removeCallbacks(systemHomeReadyTimeout);
+        return true;
+    }
+
+    private boolean markCurrentSystemHomeUsable() {
+        return markSystemHomeUsable(systemHomeAvailabilityRequest);
+    }
+
+    private void cancelSystemHomeAvailabilityWait() {
+        homeAvailability.cancel();
+        systemHomeAvailabilityRequest = 0L;
+        main.removeCallbacks(systemHomeReadyTimeout);
+    }
+
+    /**
+     * Definite authentication failure falls back immediately; the bounded timer handles a hung
+     * authentication or a document that never reaches process-bound READY. Explicit icon launches
+     * never arm the request and therefore remain on the native Retry / Android Home recovery UI.
+     */
+    private boolean fallBackFromUnavailableSystemHome(long request, String reason) {
+        if (!isHomeSurface()
+                || destroyed
+                || homeAvailability.onUnavailable(request)
+                        != EvogentHomeAvailabilityGate.Decision.FALL_BACK_TO_ANDROID) {
+            return false;
+        }
+        systemHomeAvailabilityRequest = 0L;
+        main.removeCallbacks(systemHomeReadyTimeout);
+        requestRuntimeReviveIfDue();
+        if (!launchAndroidHomeWithoutChangingChoice()) {
+            Log.w("EvogentMain", "Android HOME fallback unavailable; native recovery remains");
+            return false;
+        }
+        Log.i("EvogentMain", "system HOME fell back to Android: " + reason);
+        finish();
+        return true;
     }
 
     private void dispatchHomeGesture(final boolean fullReset) {
@@ -341,13 +445,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        captureNotificationViewIntent(getIntent());
         // An update from the legacy APK may leave its repeating browse PendingIntent behind.
         BrowseAlarmReceiver.cancelLegacySchedule(this);
         retireLegacyOverlayArtifacts();
+        boolean systemHomeInvocation = isHomeSurface() && isSystemHomeIntent(getIntent());
         if (isHomeSurface() && routeHomeIntent(getIntent())) {
             // This was a cold system-HOME invocation while Android HOME was remembered. There
             // is no Evogent document state to preserve, so do not create an invisible WebView
             // task behind the stock launcher.
+            cancelSystemHomeAvailabilityWait();
             finish();
             return;
         }
@@ -545,9 +652,13 @@ public class MainActivity extends Activity {
         setContentView(root);
         renderRecoverySurface();
 
-        // Shell bridge: the web composer renders the Android-home switcher in its own control
-        // row (no floating button covering the composer). Symmetric with the overlay's
-        // bottom-left "back to Evogent" button shown over other apps.
+        // The web shell renders the intentional Android-home switch in its own control row.
+        // No persistent or app-wide floating control is created by this Activity.
+        if (systemHomeInvocation) {
+            armSystemHomeAvailabilityWait();
+        } else {
+            cancelSystemHomeAvailabilityWait();
+        }
         loadFeedRoot();
 
         // Shizuku bridge for the privileged ops (create hidden display + launch app).
@@ -726,12 +837,7 @@ public class MainActivity extends Activity {
 
     private void retryFeedFromRecovery() {
         if (destroyed || webView == null) return;
-        long now = SystemClock.elapsedRealtime();
-        if (lastRuntimeReviveRequestMs == 0
-                || now - lastRuntimeReviveRequestMs >= RUNTIME_REVIVE_DEBOUNCE_MS) {
-            lastRuntimeReviveRequestMs = now;
-            BootReceiver.dispatchRecoveryOrBoot(this);
-        }
+        requestRuntimeReviveIfDue();
         ++authRequestId;
         authInFlight = false;
         ++backRequestId;
@@ -740,6 +846,15 @@ public class MainActivity extends Activity {
         showRecoveryStarting();
         webView.stopLoading();
         authenticateAndLoad(rootDocumentUrl(), 0);
+    }
+
+    private void requestRuntimeReviveIfDue() {
+        long now = SystemClock.elapsedRealtime();
+        if (lastRuntimeReviveRequestMs == 0
+                || now - lastRuntimeReviveRequestMs >= RUNTIME_REVIVE_DEBOUNCE_MS) {
+            lastRuntimeReviveRequestMs = now;
+            BootReceiver.dispatchRecoveryOrBoot(this);
+        }
     }
 
     private ShizukuController shizuku;
@@ -861,6 +976,11 @@ public class MainActivity extends Activity {
                 if (session == null || error != null) {
                     Log.i("EvogentMain", "loopback authentication unavailable — retrying");
                     showRecoveryError();
+                    if (fallBackFromUnavailableSystemHome(
+                            systemHomeAvailabilityRequest,
+                            "loopback authentication unavailable")) {
+                        return;
+                    }
                     authenticateAndLoad(targetUrl, AUTH_RETRY_MS);
                     return;
                 }
@@ -906,6 +1026,11 @@ public class MainActivity extends Activity {
                                 previousSession.serverInstanceId)) {
                     revokeDocumentTrust();
                     showRecoveryError();
+                    if (fallBackFromUnavailableSystemHome(
+                            systemHomeAvailabilityRequest,
+                            "server identity refresh failed")) {
+                        return;
+                    }
                     authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
                     return;
                 }
@@ -923,6 +1048,11 @@ public class MainActivity extends Activity {
     private void handleAuthenticatedMainFrameFailure(String failedUrl) {
         revokeDocumentTrust();
         showRecoveryError();
+        if (fallBackFromUnavailableSystemHome(
+                systemHomeAvailabilityRequest,
+                "authenticated document failed")) {
+            return;
+        }
         if (authInFlight) return;
         String retryUrl = EvogentSecurityPolicy.isTrustedWebUrl(failedUrl)
                 ? failedUrl
@@ -959,6 +1089,11 @@ public class MainActivity extends Activity {
                         activeWebSession.serverInstanceId)) {
             revokeDocumentTrust();
             showRecoveryError();
+            if (fallBackFromUnavailableSystemHome(
+                    systemHomeAvailabilityRequest,
+                    "loaded document was not authenticated")) {
+                return;
+            }
             if (!authInFlight) {
                 authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
             }
@@ -995,7 +1130,9 @@ public class MainActivity extends Activity {
                             return;
                         }
                         homeNavigation.markAuthenticatedDocumentReady();
+                        markCurrentSystemHomeUsable();
                         renderRecoverySurface();
+                        dispatchPendingNotificationView();
                         if (backInFlight) backInFlight = false;
                         drainPendingBackPress();
                         // Compatibility fallback is injected only after the loaded document has
@@ -1067,6 +1204,10 @@ public class MainActivity extends Activity {
                             && "openAndroidHome".equals(method)
                             && args != null
                             && args.length() == 0)
+                    || (shellPrompt
+                            && "dismissPhoneNotification".equals(method)
+                            && args != null
+                            && args.length() == 1)
                     || (assistantPrompt
                             && "getScreenContext".equals(method)
                             && args != null
@@ -1097,6 +1238,13 @@ public class MainActivity extends Activity {
                     && args != null
                     && args.length() == 0) {
                 openAndroidHome();
+            } else if ("dismissPhoneNotification".equals(method)
+                    && args != null
+                    && args.length() == 1) {
+                boolean dismissed = EvogentNotificationListenerService.requestUserDismiss(
+                        args.optString(0, ""));
+                result.confirm(dismissed ? "dismissed" : "preserved");
+                return;
             } else if ("getScreenContext".equals(method)
                     && args != null
                     && args.length() == 0
@@ -1113,8 +1261,7 @@ public class MainActivity extends Activity {
                     && args.length() == 1
                     && supportsAssistantComposerBridge()) {
                 // The assistant Activity already occupies its system-managed layer. Validate the
-                // existing overlay page's sizing call, then intentionally leave Activity sizing
-                // to Android.
+                // composer page's sizing call, then intentionally leave Activity sizing to Android.
                 double height = args.optDouble(0, Double.NaN);
                 if (Double.isNaN(height)
                         || Double.isInfinite(height)
@@ -1145,6 +1292,35 @@ public class MainActivity extends Activity {
             Log.w("EvogentMain", "rejected malformed shell prompt");
             result.cancel();
         }
+    }
+
+    private void captureNotificationViewIntent(Intent intent) {
+        if (!isHomeSurface()
+                || intent == null
+                || !intent.getBooleanExtra(OPEN_NOTIFICATIONS_EXTRA, false)) {
+            return;
+        }
+        pendingNotificationView = true;
+        intent.removeExtra(OPEN_NOTIFICATIONS_EXTRA);
+    }
+
+    private void dispatchPendingNotificationView() {
+        if (!pendingNotificationView
+                || webView == null
+                || !isCurrentFeedDocumentTrusted()) {
+            return;
+        }
+        webView.evaluateJavascript(
+                "(function(){try{"
+                + "sessionStorage.setItem('evogent.openNotifications','1');"
+                + "window.dispatchEvent(new Event('evogent:open-notifications'));"
+                + "return 'ok';"
+                + "}catch(e){return 'error';}})()",
+                new android.webkit.ValueCallback<String>() {
+                    @Override public void onReceiveValue(String value) {
+                        if ("\"ok\"".equals(value)) pendingNotificationView = false;
+                    }
+                });
     }
 
     /**
@@ -1272,48 +1448,95 @@ public class MainActivity extends Activity {
      * directly; the shell prompt still goes through openAndroidHome() and a fresh process proof.
      */
     private void openAndroidHomeOrApps() {
-        boolean launched = launchStockAndroidHome();
-        rememberHomeChoice(
-                EvogentHomeChoicePolicy.choiceAfterAndroidLaunchAttempt(launched));
-        if (launched) return;
+        if (chooseAndLaunchAndroidHome()) return;
         // Do not remember a launcher that does not exist. The native drawer remains a safe escape
         // while the next HOME gesture stays in a usable Evogent launcher.
         startActivity(new Intent(MainActivity.this, AppDrawerActivity.class));
     }
 
     /**
-     * Target a non-Evogent HOME component explicitly. An implicit HOME Intent would resolve right
-     * back to Evogent because Android permits only one default HOME holder.
+     * Resolve first, synchronously commit the Android choice, and only then start the resolved
+     * component. An implicit HOME Intent would resolve right back to Evogent because Android
+     * permits only one default HOME holder.
      */
-    private boolean launchStockAndroidHome() {
+    private boolean chooseAndLaunchAndroidHome() {
+        return EvogentHomeChoicePolicy.chooseAndLaunchAndroidHome(
+                androidHomeActions());
+    }
+
+    /** Follow remembered Android intent without rewriting the preference on each HOME gesture. */
+    private boolean launchRememberedAndroidHome() {
+        return EvogentHomeChoicePolicy.launchRememberedAndroidHome(
+                androidHomeActions());
+    }
+
+    /**
+     * Server-down failover is availability recovery, not an explicit surface choice. Keep
+     * last_explicit_surface untouched so a transient outage cannot silently rewrite user intent.
+     */
+    private boolean launchAndroidHomeWithoutChangingChoice() {
+        return EvogentHomeChoicePolicy.launchAndroidHomeWithoutChangingChoice(
+                androidHomeActions());
+    }
+
+    private EvogentHomeChoicePolicy.AndroidHomeActions<ComponentName> androidHomeActions() {
+        return new EvogentHomeChoicePolicy.AndroidHomeActions<ComponentName>() {
+            @Override public ComponentName resolve() {
+                return resolveStockAndroidHome();
+            }
+
+            @Override public boolean persist(
+                    EvogentHomeChoicePolicy.Choice choice) {
+                return rememberHomeChoice(choice);
+            }
+
+            @Override public boolean launch(ComponentName target) {
+                return launchResolvedAndroidHome(target);
+            }
+        };
+    }
+
+    private ComponentName resolveStockAndroidHome() {
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
-        android.content.pm.ResolveInfo pick = null;
+        android.content.pm.ResolveInfo pixel = null;
+        android.content.pm.ResolveInfo system = null;
         for (android.content.pm.ResolveInfo ri
                 : getPackageManager().queryIntentActivities(home, 0)) {
             if (ri.activityInfo != null
                     && !getPackageName().equals(ri.activityInfo.packageName)) {
-                if (pick == null) pick = ri;
+                if (PIXEL_LAUNCHER_PACKAGE.equals(ri.activityInfo.packageName)) {
+                    pixel = ri;
+                    break;
+                }
                 boolean isSystemHome = ri.activityInfo.applicationInfo != null
                         && (ri.activityInfo.applicationInfo.flags
                                 & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0;
-                if (isSystemHome) {
-                    pick = ri;
-                    break;
-                }
+                if (isSystemHome && system == null) system = ri;
             }
         }
-        if (pick != null) {
-            try {
-                startActivity(new Intent(Intent.ACTION_MAIN)
-                        .addCategory(Intent.CATEGORY_HOME)
-                        .setClassName(pick.activityInfo.packageName, pick.activityInfo.name)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                return true;
-            } catch (Throwable ignored) {
-                // The package changed between query and launch. Caller stays in Evogent.
-            }
+        android.content.pm.ResolveInfo pick = pixel != null
+                ? pixel
+                : system;
+        return pick == null
+                ? null
+                : new ComponentName(
+                        pick.activityInfo.packageName,
+                        pick.activityInfo.name);
+    }
+
+    private boolean launchResolvedAndroidHome(ComponentName target) {
+        if (target == null || getPackageName().equals(target.getPackageName())) return false;
+        try {
+            startActivity(new Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_HOME)
+                    .setComponent(target)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (Throwable ignored) {
+            // The package changed between resolution and launch. The transaction restores
+            // Evogent's choice before exposing the native drawer/recovery surface.
+            return false;
         }
-        return false;
     }
 
     @Override

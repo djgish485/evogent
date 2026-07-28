@@ -220,10 +220,14 @@ mkdir -p build/test
     src/net/dangish/evogent/EvogentDocumentAuthority.java \
     src/net/dangish/evogent/EvogentHomeNavigationPolicy.java \
     src/net/dangish/evogent/EvogentHomeChoicePolicy.java \
+    src/net/dangish/evogent/EvogentHomeAvailabilityGate.java \
+    src/net/dangish/evogent/EvogentAssistantLaunchGate.java \
     src/net/dangish/evogent/EvogentAssistantContextStore.java \
+    src/net/dangish/evogent/EvogentAssistantTraversalPolicy.java \
     src/net/dangish/evogent/EvogentAccessibilityActionPolicy.java \
     src/net/dangish/evogent/EvogentPhysicalDisplayPolicy.java \
     src/net/dangish/evogent/EvogentNotificationPolicy.java \
+    src/net/dangish/evogent/EvogentNotificationReceiptRetentionPolicy.java \
     src/net/dangish/evogent/EvogentNotificationWorkQueue.java \
     src/net/dangish/evogent/EvogentBenchmarkSharePolicy.java \
     tests/EvogentSecurityPolicyTest.java \
@@ -231,10 +235,13 @@ mkdir -p build/test
     tests/EvogentDocumentAuthorityTest.java \
     tests/EvogentHomeNavigationPolicyTest.java \
     tests/EvogentHomeChoicePolicyTest.java \
+    tests/EvogentHomeAvailabilityGateTest.java \
+    tests/EvogentAssistantLaunchGateTest.java \
     tests/EvogentAssistantContextStoreTest.java \
     tests/EvogentAccessibilityActionPolicyTest.java \
     tests/EvogentPhysicalDisplayPolicyTest.java \
     tests/EvogentNotificationPolicyTest.java \
+    tests/EvogentNotificationReceiptRetentionPolicyTest.java \
     tests/EvogentNotificationWorkQueueTest.java \
     tests/EvogentBenchmarkSharePolicyTest.java
 "$JAVA" -cp build/test net.dangish.evogent.EvogentSecurityPolicyTest
@@ -242,10 +249,13 @@ mkdir -p build/test
 "$JAVA" -cp build/test net.dangish.evogent.EvogentDocumentAuthorityTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeNavigationPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeChoicePolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentHomeAvailabilityGateTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantLaunchGateTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantContextStoreTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAccessibilityActionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentPhysicalDisplayPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationPolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationReceiptRetentionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationWorkQueueTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentBenchmarkSharePolicyTest
 
@@ -322,8 +332,19 @@ if ! grep -Fq openAndroidHome build/classes.strings; then
 fi
 if ! grep -Fq evogentHandleBack build/classes.strings \
         || ! grep -Fq 'Evogent is unavailable' build/resources.txt \
-        || ! grep -Fq 'Open apps' build/resources.txt; then
+        || ! grep -Fq 'Android Home' build/resources.txt; then
     echo "BUILD CHECK FAILED: native HOME recovery or authenticated page Back is missing" >&2
+    exit 1
+fi
+if grep -Fq '.apply()' src/net/dangish/evogent/MainActivity.java \
+        || ! grep -Fq 'SYSTEM_HOME_READY_TIMEOUT_MS = 2500L' \
+            src/net/dangish/evogent/MainActivity.java \
+        || ! grep -Fq 'EvogentHomeAvailabilityGate' build/classes.strings \
+        || ! grep -Fq 'chooseAndLaunchAndroidHome' build/classes.strings \
+        || ! grep -Fq 'launchRememberedAndroidHome' build/classes.strings \
+        || ! grep -Fq 'launchAndroidHomeWithoutChangingChoice' build/classes.strings \
+        || ! grep -Fq 'com.google.android.apps.nexuslauncher' build/classes.strings; then
+    echo "BUILD CHECK FAILED: durable fail-safe system-HOME routing is missing" >&2
     exit 1
 fi
 if grep -Fq 'http://localhost:3001' build/classes.strings; then
@@ -434,6 +455,22 @@ if ! grep -Fq '.EvogentVoiceInteractionService' AndroidManifest.xml \
         || ! grep -Fq 'last_explicit_surface' build/classes.strings \
         || ! grep -Fq '/?overlay=1' build/classes.strings; then
     echo "BUILD CHECK FAILED: HOME memory or system-assistant composer integration is missing" >&2
+    exit 1
+fi
+if grep -Fq 'EvogentAssistantContextStore.update' \
+        src/net/dangish/evogent/EvogentVoiceInteractionSession.java \
+        || grep -Fq 'hide();' \
+            src/net/dangish/evogent/EvogentVoiceInteractionSession.java \
+        || ! grep -Fq 'ASSIST_CONTEXT_WAIT_MS = 800L' \
+            src/net/dangish/evogent/EvogentVoiceInteractionSession.java \
+        || ! grep -Fq 'EvogentAssistantLaunchGate' build/classes.strings \
+        || ! grep -Fq 'EvogentAssistantContextStore.seal' \
+            src/net/dangish/evogent/EvogentVoiceInteractionSession.java \
+        || ! grep -Fq 'EvogentAssistantTraversalPolicy.shouldPruneSubtree' \
+            src/net/dangish/evogent/EvogentVoiceInteractionSession.java \
+        || ! grep -Fq 'node.isAssistBlocked()' \
+            src/net/dangish/evogent/EvogentVoiceInteractionSession.java; then
+    echo "BUILD CHECK FAILED: exact-once assistant context/launch rendezvous is missing" >&2
     exit 1
 fi
 if ! awk '

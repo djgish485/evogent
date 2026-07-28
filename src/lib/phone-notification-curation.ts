@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import { notifyFeedUpdate } from '@/lib/curation-submit';
 import {
+  getFeedItemById,
   getFeedItemBySourceId,
   insertOrIgnoreFeedItem,
+  setFeedItemSuggestionStatus,
   updateFeedItemFields,
 } from '@/lib/db/feed';
 import { getDb } from '@/lib/db/client';
@@ -15,11 +18,13 @@ import type { FeedItem, FeedMetadata } from '@/types/feed';
 
 export type PhoneNotificationMode = 'observe' | 'curated' | 'paused';
 export type PhoneNotificationLockScreenPreview = 'private' | 'detailed';
+export type PhoneNotificationReplacementScope = 'per_app' | 'all_eligible';
 
 export interface PhoneNotificationSettings {
   schemaVersion: 1;
   mode: PhoneNotificationMode;
   lockScreenPreview: PhoneNotificationLockScreenPreview;
+  replacementScope: PhoneNotificationReplacementScope;
   preservedPackages: string[];
   replacementPackages: string[];
 }
@@ -44,7 +49,8 @@ export interface PhoneNotificationSettingsView extends PhoneNotificationSettings
     originalsAlwaysPreservedFor: string[];
     observeIsDefault: true;
     originalsPreservedByDefault: true;
-    replacementIsPerPackage: true;
+    replacementScopeIsExplicit: true;
+    preservedPackagesOverrideScope: true;
     keyOnlyCancellationIsBestEffort: true;
     exactReceiptRequired: true;
     digestProofRequired: true;
@@ -70,6 +76,7 @@ export interface PhoneNotificationIngestInput {
   historical: boolean;
   nativePriority: 'critical' | 'high' | 'normal' | 'low';
   nativeCanSuppress: boolean;
+  nativeCategoryWireExact: boolean;
   nativeProtectionReason: string | null;
   contentRedacted: boolean;
   title: string | null;
@@ -95,6 +102,9 @@ export interface PhoneNotificationIngestResult {
     title: string;
     text: string;
     lockScreenPreview: PhoneNotificationLockScreenPreview;
+    activeCount: number;
+    coveredEventIds: string[];
+    expiresAtMs: number | null;
   };
   feedItem: FeedItem | null;
 }
@@ -102,6 +112,11 @@ export interface PhoneNotificationIngestResult {
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const MAX_POST_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const NOTIFICATION_TOMBSTONE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DIGEST_COVERED_EVENTS = 32;
+export const PHONE_NOTIFICATION_NATIVE_END_TO_END_BUDGET_MS = 2000;
+export const PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS =
+  PHONE_NOTIFICATION_NATIVE_END_TO_END_BUDGET_MS + 1;
 const PHONE_NOTIFICATION_SETTINGS_LOCK_KEY = Symbol.for(
   'evogent.phone-notification-settings-lock.v1',
 );
@@ -109,6 +124,11 @@ const PHONE_NOTIFICATION_SETTINGS_LOCK_KEY = Symbol.for(
 type PhoneNotificationSettingsLockState = {
   tail: Promise<void>;
 };
+
+export interface PhoneNotificationRevocationBarrierOptions {
+  monotonicNow?: () => number;
+  sleep?: (delayMs: number) => Promise<void>;
+}
 
 function getPhoneNotificationSettingsLockState(): PhoneNotificationSettingsLockState {
   const processGlobal = globalThis as Record<PropertyKey, unknown>;
@@ -262,6 +282,7 @@ function cloneDefaultSettings(): PhoneNotificationSettings {
     schemaVersion: 1,
     mode: 'observe',
     lockScreenPreview: 'private',
+    replacementScope: 'per_app',
     preservedPackages: [],
     replacementPackages: [],
   };
@@ -275,8 +296,12 @@ function normalizeSettings(value: unknown): PhoneNotificationSettings | null {
   if (!isRecord(value) || value.schemaVersion !== 1) return null;
   const mode = value.mode;
   const lockScreenPreview = value.lockScreenPreview;
+  // replacementScope was added to schema one after the original per-package release. Missing
+  // values migrate to the narrower behavior; broad low-stakes replacement is never inferred.
+  const replacementScope = value.replacementScope ?? 'per_app';
   if (mode !== 'observe' && mode !== 'curated' && mode !== 'paused') return null;
   if (lockScreenPreview !== 'private' && lockScreenPreview !== 'detailed') return null;
+  if (replacementScope !== 'per_app' && replacementScope !== 'all_eligible') return null;
   if (!Array.isArray(value.preservedPackages)) return null;
   // schemaVersion 1 predates explicit per-package replacement. Missing means the
   // safe migrated default: preserve every Android original.
@@ -301,6 +326,7 @@ function normalizeSettings(value: unknown): PhoneNotificationSettings | null {
     schemaVersion: 1,
     mode,
     lockScreenPreview,
+    replacementScope,
     preservedPackages,
     replacementPackages,
   };
@@ -380,17 +406,69 @@ async function persistPhoneNotificationSettings(config: PhoneNotificationSetting
   }
 }
 
+export function didPhoneNotificationReplacementAuthorityDecrease(
+  previous: PhoneNotificationSettings,
+  next: PhoneNotificationSettings,
+): boolean {
+  if (previous.mode !== 'curated') return false;
+
+  const previouslyAllowedPackages = previous.replacementPackages.filter(
+    (packageName) => !previous.preservedPackages.includes(packageName),
+  );
+  const previousHadAuthority = previous.replacementScope === 'all_eligible'
+    || previouslyAllowedPackages.length > 0;
+  if (!previousHadAuthority) return false;
+  if (next.mode !== 'curated') return true;
+
+  if (previous.replacementScope === 'all_eligible') {
+    if (next.replacementScope !== 'all_eligible') return true;
+    return next.preservedPackages.some(
+      (packageName) => !previous.preservedPackages.includes(packageName),
+    );
+  }
+
+  return previouslyAllowedPackages.some((packageName) => (
+    next.preservedPackages.includes(packageName)
+    || (
+      next.replacementScope !== 'all_eligible'
+      && !next.replacementPackages.includes(packageName)
+    )
+  ));
+}
+
+export async function waitForPhoneNotificationAuthorityRevocationDrain(
+  authorityDecreased: boolean,
+  options: PhoneNotificationRevocationBarrierOptions = {},
+): Promise<void> {
+  if (!authorityDecreased) return;
+
+  const monotonicNow = options.monotonicNow ?? (() => performance.now());
+  const sleep = options.sleep ?? ((delayMs: number) => (
+    new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+  ));
+  const deadline = monotonicNow() + PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS;
+
+  while (true) {
+    const remainingMs = deadline - monotonicNow();
+    if (remainingMs <= 0) return;
+    await sleep(Math.max(1, Math.ceil(remainingMs)));
+  }
+}
+
 export async function updatePhoneNotificationSettings(
   patch: unknown,
+  barrierOptions: PhoneNotificationRevocationBarrierOptions = {},
 ): Promise<PhoneNotificationSettingsState> {
   if (!isRecord(patch)) throw new Error('Invalid notification settings payload');
-  return withPhoneNotificationSettingsLock(async () => {
+  let authorityDecreased = false;
+  const state = await withPhoneNotificationSettingsLock(async () => {
     // Reading and validating authority additions must be in the same critical
     // section as the final durable rename. Otherwise an unrelated concurrent
     // PATCH can merge from stale bytes and resurrect a completed revocation.
     const current = await readPhoneNotificationSettings();
     let mode = current.config.mode;
     let lockScreenPreview = current.config.lockScreenPreview;
+    let replacementScope = current.config.replacementScope;
     let preservedPackages = current.config.preservedPackages;
     let replacementPackages = current.config.replacementPackages;
 
@@ -412,6 +490,21 @@ export async function updatePhoneNotificationSettings(
         throw new Error('lockScreenPreview must be private or detailed');
       }
       lockScreenPreview = patch.lockScreenPreview;
+    }
+    if ('replacementScope' in patch) {
+      if (patch.replacementScope !== 'per_app' && patch.replacementScope !== 'all_eligible') {
+        throw new Error('replacementScope must be per_app or all_eligible');
+      }
+      if (
+        patch.replacementScope === 'all_eligible'
+        && current.config.replacementScope !== 'all_eligible'
+        && patch.confirmBestEffortReplacement !== true
+      ) {
+        throw new Error(
+          'Replacing every eligible low-stakes original requires explicit best-effort confirmation',
+        );
+      }
+      replacementScope = patch.replacementScope;
     }
     if ('preservedPackages' in patch) {
       if (!Array.isArray(patch.preservedPackages) || patch.preservedPackages.length > 256) {
@@ -448,12 +541,25 @@ export async function updatePhoneNotificationSettings(
       schemaVersion: 1,
       mode,
       lockScreenPreview,
+      replacementScope,
       preservedPackages,
       replacementPackages,
     };
+    authorityDecreased = didPhoneNotificationReplacementAuthorityDecrease(
+      current.config,
+      config,
+    );
     await persistPhoneNotificationSettings(config);
-    return { config, state: 'loaded' };
+    return { config, state: 'loaded' as const };
   });
+  // A native ingest that read the old file started its single end-to-end deadline before this
+  // durable rename. Do not acknowledge reduced authority until that entire cancellation window
+  // has elapsed. Additions and unrelated settings changes return immediately.
+  await waitForPhoneNotificationAuthorityRevocationDrain(
+    authorityDecreased,
+    barrierOptions,
+  );
+  return state;
 }
 
 export function parsePhoneNotificationIngestInput(
@@ -484,12 +590,18 @@ export function parsePhoneNotificationIngestInput(
   }
 
   const contentRedacted = readBoolean(value, 'contentRedacted');
+  const category = normalizedText(value.category, 80);
+  const nativeCategoryWireExact = readBoolean(value, 'nativeCategoryWireExact')
+    && typeof value.category === 'string'
+    && value.category === category;
   return {
     schemaVersion: 1,
     eventId,
     packageName,
     appLabel: normalizedText(value.appLabel, 120),
-    category: normalizedText(value.category, 80)?.toLowerCase() ?? null,
+    // Android category values are exact lowercase wire literals. The trusted native client also
+    // supplies its pre-normalization decision; missing/false clients fail closed below.
+    category,
     channelHash: (() => {
       const channelHash = normalizedText(value.channelHash, 64);
       if (channelHash && !isLowerHex(channelHash, 64)) {
@@ -509,6 +621,7 @@ export function parsePhoneNotificationIngestInput(
     historical: readBoolean(value, 'historical'),
     nativePriority,
     nativeCanSuppress: readBoolean(value, 'nativeCanSuppress'),
+    nativeCategoryWireExact,
     nativeProtectionReason: normalizedText(value.nativeProtectionReason, 80),
     contentRedacted,
     title: contentRedacted ? null : normalizedText(value.title, 512),
@@ -550,7 +663,10 @@ export function classifyPhoneNotification(
   else if (input.importance === -1000) protectionReason = 'ranking_unavailable';
   else if (input.importance >= 4) protectionReason = 'high_importance';
   else if (CRITICAL_SYSTEM_PACKAGES.has(input.packageName)) protectionReason = 'system_safety';
-  else if (!REPLACEMENT_ELIGIBLE_CATEGORIES.has(category)) {
+  else if (
+    !input.nativeCategoryWireExact
+    || !REPLACEMENT_ELIGIBLE_CATEGORIES.has(category)
+  ) {
     protectionReason = category ? 'protected_category' : 'category_unavailable';
   }
 
@@ -638,23 +754,84 @@ function parseOccurrenceCount(item: FeedItem | null): number {
     : 1;
 }
 
+function isReplacementAllowedForPackage(
+  config: PhoneNotificationSettings,
+  packageName: string,
+): boolean {
+  return !config.preservedPackages.includes(packageName)
+    && (
+      config.replacementScope === 'all_eligible'
+      || config.replacementPackages.includes(packageName)
+    );
+}
+
+function prunePhoneNotificationTombstones(now = Date.now()): void {
+  getDb().prepare(`
+    DELETE FROM phone_notification_tombstones
+    WHERE removed_at_ms < ?
+  `).run(now - NOTIFICATION_TOMBSTONE_RETENTION_MS);
+}
+
+function isPhoneNotificationEventTombstoned(eventId: string): boolean {
+  const row = getDb().prepare(`
+    SELECT 1 AS present
+    FROM phone_notification_tombstones
+    WHERE event_id = ?
+    LIMIT 1
+  `).get(eventId) as { present: number } | undefined;
+  return Boolean(row?.present);
+}
+
 function persistNotificationFeedItem(
   input: PhoneNotificationIngestInput,
   classification: ServerClassification,
   config: PhoneNotificationSettings,
   preserveReason: string,
-): { sourceId: string; item: FeedItem | null } {
+): {
+  sourceId: string;
+  item: FeedItem | null;
+  tombstoned: boolean;
+  suppressionIdentityOwned: boolean;
+  suppressionIdentityNewlyCurated: boolean;
+} {
   const sourceId = dedupeSourceId(input, classification);
+  prunePhoneNotificationTombstones();
+  if (isPhoneNotificationEventTombstoned(input.eventId)) {
+    return {
+      sourceId,
+      item: null,
+      tombstoned: true,
+      suppressionIdentityOwned: false,
+      suppressionIdentityNewlyCurated: false,
+    };
+  }
   const summary = notificationSummary(input, classification);
   const existing = getFeedItemBySourceId(sourceId);
-  const occurrences = existing ? parseOccurrenceCount(existing) + 1 : 1;
+  // A duplicate inside the six-hour bucket must not revive a row the user dismissed or Android
+  // removed. We intentionally do not mint an exact receipt for this new event: without one the
+  // native side preserves its Android original and cannot publish a replacement digest.
+  if (
+    existing?.suggestionStatus === 'dismissed'
+    || typeof existing?.metadata?.phoneNotificationRemovedAt === 'string'
+  ) {
+    return {
+      sourceId,
+      item: null,
+      tombstoned: true,
+      suppressionIdentityOwned: false,
+      suppressionIdentityNewlyCurated: false,
+    };
+  }
   const publishedAt = new Date(input.postedAtMs).toISOString();
   const expiresAt = new Date(
     input.postedAtMs + (classification.priority === 'critical' || classification.priority === 'high'
       ? 7 * 24 * 60 * 60 * 1000
       : 3 * 24 * 60 * 60 * 1000),
   ).toISOString();
-  const metadata: FeedMetadata = {
+  const requestedDisposition = preserveReason === 'eligible_for_curated_digest'
+    ? 'curated_digest'
+    : 'preserve_original';
+  const incomingMetadata: FeedMetadata = {
     notificationId: sourceId,
     phoneNotification: true,
     severity: classification.priority === 'critical' ? 'warning' : 'info',
@@ -665,26 +842,93 @@ function persistNotificationFeedItem(
     contentRedacted: classification.contentRedacted,
     protectedFromSuppression: classification.protectedFromSuppression,
     protectionReason: classification.protectionReason,
-    requestedDisposition: preserveReason === 'eligible_for_curated_digest'
-      ? 'curated_digest'
-      : 'preserve_original',
+    requestedDisposition,
     curationMode: config.mode,
-    occurrences,
-    firstPostedAt: existing?.metadata?.firstPostedAt ?? publishedAt,
+    occurrences: 1,
+    firstPostedAt: publishedAt,
     lastPostedAt: publishedAt,
     lastReceiptEventId: input.eventId,
     expiresAt,
   };
 
   if (existing) {
+    const existingOwner = normalizedText(existing.metadata?.lastReceiptEventId, 64);
+    const existingOwnerIsValid = Boolean(
+      existingOwner && isLowerHex(existingOwner, 64),
+    );
+    const sameExactEvent = existingOwnerIsValid && existingOwner === input.eventId;
+    const existingDisposition = existing.metadata?.requestedDisposition === 'curated_digest'
+      ? 'curated_digest'
+      : 'preserve_original';
+    const existingHasCuratedOwner = existingOwnerIsValid
+      && existingDisposition === 'curated_digest';
+    const existingLastPostedAt = Date.parse(
+      normalizedText(existing.metadata?.lastPostedAt, 80) ?? existing.publishedAt,
+    );
+    const incomingIsNewer = !Number.isFinite(existingLastPostedAt)
+      || input.postedAtMs > existingLastPostedAt;
+
+    // Native can publish the server response and then fail before cancellation, so the server can
+    // never infer which response currently owns Android's fixed digest notification. Once a
+    // dedupe bucket has a curated owner, keep that exact event identity and disposition immutable.
+    // Later occurrences remain useful local evidence but stay in Android and cannot replace the
+    // owner. For never-curated rows, only a strictly newer event may advance ownership; LIFO worker
+    // completion therefore cannot regress the UI/native dismissal identity to an older callback.
+    const adoptIncomingOwner = !existingOwnerIsValid
+      || sameExactEvent
+      || (!existingHasCuratedOwner && incomingIsNewer);
+    const preserveExistingOwnership = existingOwnerIsValid
+      && (!adoptIncomingOwner || existingHasCuratedOwner);
+    const existingExpiry = Date.parse(
+      normalizedText(existing.metadata?.expiresAt, 80) ?? '',
+    );
+    const nextExpiry = Number.isFinite(existingExpiry)
+      && existingExpiry > Date.parse(expiresAt)
+      ? new Date(existingExpiry).toISOString()
+      : expiresAt;
+    const existingLastPosted = normalizedText(existing.metadata?.lastPostedAt, 80)
+      ?? existing.publishedAt;
+    const occurrences = sameExactEvent
+      ? parseOccurrenceCount(existing)
+      : parseOccurrenceCount(existing) + 1;
+    const metadata: FeedMetadata = {
+      ...incomingMetadata,
+      occurrences,
+      firstPostedAt: existing.metadata?.firstPostedAt ?? existing.publishedAt,
+      lastPostedAt: incomingIsNewer ? publishedAt : existingLastPosted,
+      expiresAt: nextExpiry,
+      ...(!incomingIsNewer ? {
+        appLabel: existing.metadata?.appLabel,
+        severity: existing.metadata?.severity,
+      } : {}),
+      ...(preserveExistingOwnership ? {
+        phonePriority: existing.metadata?.phonePriority,
+        contentRedacted: existing.metadata?.contentRedacted,
+        protectedFromSuppression: existing.metadata?.protectedFromSuppression,
+        protectionReason: existing.metadata?.protectionReason,
+        requestedDisposition: existingDisposition,
+        curationMode: existing.metadata?.curationMode,
+        lastReceiptEventId: existingOwner,
+      } : {}),
+    };
+    const updated = incomingIsNewer
+      ? updateFeedItemFields(existing.id, {
+          title: summary.title,
+          text: summary.text,
+          published_at: publishedAt,
+          metadata,
+        })
+      : updateFeedItemFields(existing.id, { metadata });
     return {
       sourceId,
-      item: updateFeedItemFields(existing.id, {
-        title: summary.title,
-        text: summary.text,
-        published_at: publishedAt,
-        metadata,
-      }),
+      item: updated,
+      tombstoned: false,
+      suppressionIdentityOwned: (
+        preserveExistingOwnership ? existingOwner : input.eventId
+      ) === input.eventId,
+      suppressionIdentityNewlyCurated: !existingHasCuratedOwner
+        && adoptIncomingOwner
+        && requestedDisposition === 'curated_digest',
     };
   }
 
@@ -697,10 +941,112 @@ function persistNotificationFeedItem(
     text: summary.text,
     reason: 'Lightweight on-device notification curation',
     tags: ['phone', 'notification', classification.priority],
-    metadata,
+    metadata: incomingMetadata,
     publishedAt,
   });
-  return { sourceId, item: getFeedItemBySourceId(sourceId) };
+  return {
+    sourceId,
+    item: getFeedItemBySourceId(sourceId),
+    tombstoned: false,
+    suppressionIdentityOwned: true,
+    suppressionIdentityNewlyCurated: requestedDisposition === 'curated_digest',
+  };
+}
+
+function buildPhoneNotificationDigest(
+  config: PhoneNotificationSettings,
+): PhoneNotificationIngestResult['digest'] {
+  const now = Date.now();
+  const rows = getDb().prepare(`
+    SELECT
+      json_extract(metadata, '$.lastReceiptEventId') AS event_id,
+      json_extract(metadata, '$.appLabel') AS app_label,
+      json_extract(metadata, '$.expiresAt') AS expires_at,
+      title AS item_title,
+      COUNT(*) OVER () AS total_count
+    FROM feed
+    WHERE type = 'notification'
+      AND source = 'phone-notification'
+      AND metadata IS NOT NULL
+      AND COALESCE(json_extract(metadata, '$.suggestionStatus'), 'pending') != 'dismissed'
+      AND json_extract(metadata, '$.requestedDisposition') = 'curated_digest'
+      AND COALESCE(json_extract(metadata, '$.protectedFromSuppression'), 1) = 0
+      AND LENGTH(json_extract(metadata, '$.lastReceiptEventId')) = 64
+      AND json_extract(metadata, '$.lastReceiptEventId') NOT GLOB '*[^0-9a-f]*'
+      AND json_type(metadata, '$.expiresAt') = 'text'
+      AND CAST(strftime('%s', json_extract(metadata, '$.expiresAt')) AS INTEGER) * 1000 > ?
+    ORDER BY
+      CASE json_extract(metadata, '$.phonePriority')
+        WHEN 'critical' THEN 0
+        WHEN 'high' THEN 1
+        WHEN 'normal' THEN 2
+        WHEN 'low' THEN 3
+        ELSE 4
+      END ASC,
+      COALESCE(published_at_ms, created_at_ms, 0) DESC,
+      id ASC
+    LIMIT ?
+  `).all(
+    now,
+    MAX_DIGEST_COVERED_EVENTS,
+  ) as Array<{
+    event_id: string;
+    app_label: string | null;
+    expires_at: string;
+    item_title: string | null;
+    total_count: number;
+  }>;
+  const coveredEventIds = rows.map((row) => row.event_id);
+  // Android must be able to retract every unit represented by activeCount using the bounded
+  // coverage list alone. The server UI still retains every row; the native digest deliberately
+  // represents only this fully owned, ranked window.
+  const activeCount = coveredEventIds.length;
+  const hasMore = Math.max(0, Math.floor(rows[0]?.total_count ?? 0)) > activeCount;
+  const expiresAtMs = rows.reduce(
+    (earliest, row) => Math.min(earliest, Date.parse(row.expires_at)),
+    Number.POSITIVE_INFINITY,
+  );
+  if (
+    activeCount === 0
+    || coveredEventIds.length === 0
+    || !Number.isSafeInteger(expiresAtMs)
+    || expiresAtMs <= now
+  ) {
+    return {
+      title: 'Evogent',
+      text: 'Curated notifications are ready.',
+      lockScreenPreview: config.lockScreenPreview,
+      activeCount: 0,
+      coveredEventIds: [],
+      expiresAtMs: null,
+    };
+  }
+
+  const top = rows.slice(0, 3).map((row) => {
+    const label = normalizedText(row.app_label, 120)
+      ?? normalizedText(row.item_title, 120)
+      ?? 'App';
+    return label;
+  });
+  const remaining = Math.max(0, activeCount - top.length);
+  return {
+    title: hasMore
+      ? `${activeCount} recent curated notifications`
+      : activeCount === 1
+      ? '1 curated notification'
+      : `${activeCount} curated notifications`,
+    text: `${top.join(' · ')}${
+      hasMore
+        ? ' · more in Evogent'
+        : remaining > 0
+          ? ` · +${remaining} more`
+          : ''
+    }`.slice(0, 512),
+    lockScreenPreview: config.lockScreenPreview,
+    activeCount,
+    coveredEventIds,
+    expiresAtMs,
+  };
 }
 
 function recordContentSourceDueSignal(
@@ -739,7 +1085,7 @@ function resolvePreserveReason(
     return classification.protectionReason ?? 'protected';
   }
   if (!input.nativeCanSuppress) return 'native_ineligible';
-  if (!config.replacementPackages.includes(input.packageName)) {
+  if (!isReplacementAllowedForPackage(config, input.packageName)) {
     return 'app_not_replacement_allowed';
   }
   if (!input.digestCapability) return 'digest_unavailable';
@@ -753,9 +1099,7 @@ export async function ingestPhoneNotification(
   const config = settingsState.config;
   const classification = classifyPhoneNotification(input);
   const preserveReason = resolvePreserveReason(input, classification, config);
-  const replacementAllowed = config.replacementPackages.includes(input.packageName)
-    && !config.preservedPackages.includes(input.packageName);
-  const summary = notificationSummary(input, classification);
+  const replacementAllowed = isReplacementAllowedForPackage(config, input.packageName);
 
   if (input.packageName === 'net.dangish.evogent' || config.mode === 'paused') {
     return {
@@ -771,6 +1115,9 @@ export async function ingestPhoneNotification(
         title: 'Evogent',
         text: 'Notification curation is paused.',
         lockScreenPreview: config.lockScreenPreview,
+        activeCount: 0,
+        coveredEventIds: [],
+        expiresAtMs: null,
       },
       feedItem: null,
     };
@@ -785,29 +1132,134 @@ export async function ingestPhoneNotification(
   if (persisted.item) {
     recordContentSourceDueSignal(input, classification);
   }
-  const suppressOriginal = Boolean(
-    persisted.item && preserveReason === 'eligible_for_curated_digest',
+  let digest = buildPhoneNotificationDigest(config);
+  let digestCoversInput = digest.coveredEventIds.includes(input.eventId);
+  const capacityDemoted = Boolean(
+    persisted.item
+      && preserveReason === 'eligible_for_curated_digest'
+      && persisted.suppressionIdentityOwned
+      && persisted.suppressionIdentityNewlyCurated
+      && !digestCoversInput,
   );
+  if (capacityDemoted && persisted.item) {
+    // A row outside the bounded native coverage window never received digest publication or
+    // cancellation authority. Demote that new ownership claim durably so it cannot drift into a
+    // later aggregate after higher-ranked rows disappear. A future exact occurrence may make a
+    // fresh, independently bounded claim; this already-preserved Android original never can.
+    persisted.item = updateFeedItemFields(persisted.item.id, {
+      metadata: {
+        requestedDisposition: 'preserve_original',
+      },
+    });
+    digest = buildPhoneNotificationDigest(config);
+    digestCoversInput = digest.coveredEventIds.includes(input.eventId);
+  }
+  const suppressOriginal = Boolean(
+    persisted.item
+      && !persisted.tombstoned
+      && preserveReason === 'eligible_for_curated_digest'
+      && persisted.suppressionIdentityOwned
+      && digestCoversInput,
+  );
+  const effectivePreserveReason = persisted.tombstoned
+    ? 'dedupe_tombstoned'
+    : persisted.item
+      ? preserveReason !== 'eligible_for_curated_digest'
+        ? preserveReason
+        : !persisted.suppressionIdentityOwned
+          ? 'dedupe_identity_preserved'
+          : capacityDemoted || !digestCoversInput
+            ? 'digest_capacity_preserved'
+            : preserveReason
+      : 'persistence_failed';
   return {
     ok: true,
     receipt: {
       eventId: input.eventId,
       sourceId: persisted.sourceId,
-      persisted: Boolean(persisted.item),
+      persisted: Boolean(persisted.item) && !persisted.tombstoned,
     },
     policy: {
       mode: config.mode,
       replacementAllowed,
       suppressOriginal,
-      preserveReason: persisted.item ? preserveReason : 'persistence_failed',
+      preserveReason: effectivePreserveReason,
     },
-    digest: {
-      title: 'Evogent',
-      text: `${summary.appLabel}: ${summary.text}`.slice(0, 512),
-      lockScreenPreview: config.lockScreenPreview,
-    },
+    digest,
     feedItem: persisted.item,
   };
+}
+
+export interface PhoneNotificationRemovalResult {
+  ok: true;
+  eventId: string;
+  resolved: boolean;
+  feedItem: FeedItem | null;
+}
+
+function schedulePhoneNotificationFeedUpdate(feedItem: FeedItem): void {
+  // notifyFeedUpdate hydrates its payload synchronously before its first await. Move the entire
+  // best-effort UI path to the next event-loop turn so native durable receipts are not charged for
+  // that work. This phone runtime is a persistent local Node process; SQLite remains the source of
+  // truth if the process exits before the optional broadcast.
+  setImmediate(() => {
+    void notifyFeedUpdate([feedItem]);
+  });
+}
+
+export function removePhoneNotification(
+  eventIdValue: unknown,
+  now = Date.now(),
+): PhoneNotificationRemovalResult {
+  const eventId = normalizedText(eventIdValue, 64) ?? '';
+  if (!isLowerHex(eventId, 64)) {
+    throw new Error('eventId must be 64 lowercase hex characters');
+  }
+  const db = getDb();
+  const feedItem = db.transaction(() => {
+    prunePhoneNotificationTombstones(now);
+    const row = db.prepare(`
+      SELECT id, source_id
+      FROM feed
+      WHERE type = 'notification'
+        AND source = 'phone-notification'
+        AND json_extract(metadata, '$.lastReceiptEventId') = ?
+      ORDER BY created_at_ms DESC
+      LIMIT 1
+    `).get(eventId) as { id: string; source_id: string | null } | undefined;
+    db.prepare(`
+      INSERT INTO phone_notification_tombstones (
+        event_id, source_id, removed_at_ms
+      ) VALUES (?, ?, ?)
+      ON CONFLICT(event_id) DO UPDATE SET
+        source_id = COALESCE(excluded.source_id, source_id),
+        removed_at_ms = MAX(removed_at_ms, excluded.removed_at_ms)
+    `).run(eventId, row?.source_id ?? null, now);
+    if (!row) return null;
+    setFeedItemSuggestionStatus(row.id, 'dismissed', {
+      phoneNotificationRemovedAt: new Date(now).toISOString(),
+    });
+    return getFeedItemById(row.id);
+  })();
+  return {
+    ok: true,
+    eventId,
+    resolved: Boolean(feedItem),
+    feedItem,
+  };
+}
+
+export async function removeAndNotifyPhoneNotification(
+  eventId: unknown,
+): Promise<PhoneNotificationRemovalResult> {
+  const result = removePhoneNotification(eventId);
+  if (result.feedItem) {
+    // The native lifecycle callback has a deliberately short deadline. The SQLite tombstone and
+    // dismissal above are the durable result; WebSocket publication is only UI freshness and
+    // clients reconcile from SQLite if it is late or lost.
+    schedulePhoneNotificationFeedUpdate(result.feedItem);
+  }
+  return result;
 }
 
 export async function ingestAndNotifyPhoneNotification(
@@ -818,7 +1270,7 @@ export async function ingestAndNotifyPhoneNotification(
     // The native listener has one short end-to-end deadline because the response is its
     // durable cancellation/preservation receipt. WebSocket publication is best-effort UI
     // freshness and must never consume that deadline; clients reconcile from SQLite.
-    void notifyFeedUpdate([result.feedItem]);
+    schedulePhoneNotificationFeedUpdate(result.feedItem);
   }
   return result;
 }
@@ -859,8 +1311,7 @@ function observedNotificationApps(config: PhoneNotificationSettings): ObservedNo
       lastSeenAt: new Date(createdAt).toISOString(),
       notificationCount: 1,
       preserved: config.preservedPackages.includes(packageName),
-      replacementAllowed: config.replacementPackages.includes(packageName)
-        && !config.preservedPackages.includes(packageName),
+      replacementAllowed: isReplacementAllowedForPackage(config, packageName),
     });
   }
   return [...byPackage.values()].sort((a, b) => (
@@ -877,7 +1328,8 @@ export async function getPhoneNotificationSettingsView(): Promise<PhoneNotificat
       originalsAlwaysPreservedFor: [...PROTECTED_LABELS],
       observeIsDefault: true,
       originalsPreservedByDefault: true,
-      replacementIsPerPackage: true,
+      replacementScopeIsExplicit: true,
+      preservedPackagesOverrideScope: true,
       keyOnlyCancellationIsBestEffort: true,
       exactReceiptRequired: true,
       digestProofRequired: true,

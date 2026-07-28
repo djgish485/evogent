@@ -6,8 +6,8 @@
     <string name="home_recovery_starting_title">Starting Evogent</string>
     <string name="home_recovery_starting_message">The on-phone runtime is getting ready.</string>
     <string name="home_recovery_error_title">Evogent is unavailable</string>
-    <string name="home_recovery_error_message">The on-phone service or its secure connection is not ready. Retry, or open your apps.</string>
+    <string name="home_recovery_error_message">The on-phone service or its secure connection is not ready. Retry, or open Android Home.</string>
     <string name="home_recovery_retry">Retry</string>
-    <string name="home_recovery_apps">Open apps</string>
+    <string name="home_recovery_apps">Android Home</string>
     <string name="assistant_recovery_close">Close</string>
 </resources>

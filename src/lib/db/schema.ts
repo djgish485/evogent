@@ -149,6 +149,22 @@ const createInteractionIndexesSql = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_interactions_feed_action ON interactions(feed_item_id, action);`,
 ];
 
+// Content-free lifecycle tombstones close the race where Android removes an exact notification
+// while its bounded ingest request is still in flight. They contain only the native event digest
+// and optional dedupe source digest; raw notification content never enters this table.
+const createPhoneNotificationTombstonesTableSql = `
+CREATE TABLE IF NOT EXISTS phone_notification_tombstones (
+  event_id TEXT PRIMARY KEY,
+  source_id TEXT,
+  removed_at_ms INTEGER NOT NULL
+);
+`;
+
+const createPhoneNotificationTombstoneIndexesSql = [
+  `CREATE INDEX IF NOT EXISTS phone_notification_tombstones_removed_idx
+    ON phone_notification_tombstones(removed_at_ms);`,
+];
+
 // One row per human detail-view session. Unlike `interactions`, which intentionally stores
 // idempotent yes/no facts such as "this item was expanded", this ledger preserves repeated
 // visits and their measured attention. The item snapshot keeps the private evidence useful after
@@ -2104,6 +2120,10 @@ export function ensureFeedSchema(db: Database.Database): void {
   });
   db.exec(createInteractionsTableSql);
   for (const stmt of createInteractionIndexesSql) {
+    db.exec(stmt);
+  }
+  db.exec(createPhoneNotificationTombstonesTableSql);
+  for (const stmt of createPhoneNotificationTombstoneIndexesSql) {
     db.exec(stmt);
   }
   db.exec(createFeedEngagementSessionsTableSql);

@@ -8,12 +8,17 @@ import Database from 'better-sqlite3';
 
 import {
   classifyPhoneNotification,
+  didPhoneNotificationReplacementAuthorityDecrease,
   getPhoneNotificationSettingsView,
   ingestPhoneNotification,
   parsePhoneNotificationIngestInput,
+  PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS,
   readPhoneNotificationSettings,
-  updatePhoneNotificationSettings,
+  removePhoneNotification,
+  updatePhoneNotificationSettings as updatePhoneNotificationSettingsWithBarrier,
+  waitForPhoneNotificationAuthorityRevocationDrain,
   type PhoneNotificationIngestInput,
+  type PhoneNotificationSettings,
 } from './phone-notification-curation';
 import { getDb } from './db/client';
 import {
@@ -31,6 +36,23 @@ function closeDatabase() {
     global.evogentDb.close();
     delete global.evogentDb;
   }
+}
+
+function immediateRevocationBarrier() {
+  let monotonicNow = 0;
+  return {
+    monotonicNow: () => monotonicNow,
+    sleep: async (delayMs: number) => {
+      monotonicNow += delayMs;
+    },
+  };
+}
+
+function updatePhoneNotificationSettings(patch: unknown) {
+  return updatePhoneNotificationSettingsWithBarrier(
+    patch,
+    immediateRevocationBarrier(),
+  );
 }
 
 beforeEach(() => {
@@ -69,6 +91,7 @@ function payload(
     historical: false,
     nativePriority: 'low',
     nativeCanSuppress: true,
+    nativeCategoryWireExact: true,
     nativeProtectionReason: null,
     contentRedacted: false,
     title: 'A useful update',
@@ -86,6 +109,7 @@ test('safe settings default to Observe with private lock-screen previews', async
     schemaVersion: 1,
     mode: 'observe',
     lockScreenPreview: 'private',
+    replacementScope: 'per_app',
     preservedPackages: [],
     replacementPackages: [],
   });
@@ -106,6 +130,7 @@ test('legacy schema-one settings migrate to preserving every Android original', 
   const state = await readPhoneNotificationSettings();
   assert.equal(state.state, 'loaded');
   assert.equal(state.config.mode, 'curated');
+  assert.equal(state.config.replacementScope, 'per_app');
   assert.deepEqual(state.config.preservedPackages, ['example.legacy']);
   assert.deepEqual(state.config.replacementPackages, []);
 });
@@ -155,6 +180,119 @@ test('settings replacement and revocation fsync the final inode and parent direc
     (await readPhoneNotificationSettings()).config.replacementPackages,
     [],
   );
+});
+
+test('only effective replacement-authority reductions require the native deadline drain', () => {
+  const perApp: PhoneNotificationSettings = {
+    schemaVersion: 1,
+    mode: 'curated',
+    lockScreenPreview: 'private',
+    replacementScope: 'per_app',
+    preservedPackages: [],
+    replacementPackages: ['example.reader'],
+  };
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    perApp,
+    { ...perApp, replacementPackages: ['example.reader', 'example.second'] },
+  ), false);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    perApp,
+    { ...perApp, lockScreenPreview: 'detailed' },
+  ), false);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    perApp,
+    { ...perApp, replacementPackages: [] },
+  ), true);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    perApp,
+    { ...perApp, preservedPackages: ['example.reader'] },
+  ), true);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    perApp,
+    { ...perApp, mode: 'observe' },
+  ), true);
+
+  const broad = { ...perApp, replacementScope: 'all_eligible' as const };
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    broad,
+    { ...broad, replacementScope: 'per_app' },
+  ), true);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    broad,
+    { ...broad, replacementPackages: [] },
+  ), false);
+  assert.equal(didPhoneNotificationReplacementAuthorityDecrease(
+    { ...perApp, mode: 'observe' },
+    { ...perApp, mode: 'observe', replacementPackages: [] },
+  ), false);
+});
+
+test('revocation waits beyond the native deadline after durable persistence without sleeping', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementPackages: ['example.reader'],
+    confirmBestEffortReplacement: true,
+  });
+
+  let monotonicNow = 100;
+  let releaseSleep!: () => void;
+  const sleepStarted = new Promise<void>((resolve) => {
+    releaseSleep = resolve;
+  });
+  let updateSettled = false;
+  const update = updatePhoneNotificationSettingsWithBarrier(
+    { replacementPackages: [] },
+    {
+      monotonicNow: () => monotonicNow,
+      sleep: async (delayMs) => {
+        assert.equal(delayMs, PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS);
+        assert.deepEqual(
+          JSON.parse(fs.readFileSync(
+            path.join(temporaryDataDir, 'phone-notification-curation.json'),
+            'utf8',
+          )).replacementPackages,
+          [],
+        );
+        await sleepStarted;
+        monotonicNow += delayMs;
+      },
+    },
+  ).finally(() => {
+    updateSettled = true;
+  });
+
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(updateSettled, false);
+  releaseSleep();
+  await update;
+  assert.equal(updateSettled, true);
+});
+
+test('revocation drain rechecks the monotonic deadline after an early timer wakeup', async () => {
+  let monotonicNow = 0;
+  const sleepCalls: number[] = [];
+  await waitForPhoneNotificationAuthorityRevocationDrain(true, {
+    monotonicNow: () => monotonicNow,
+    sleep: async (delayMs) => {
+      sleepCalls.push(delayMs);
+      monotonicNow += sleepCalls.length === 1 ? delayMs - 1 : delayMs;
+    },
+  });
+
+  assert.deepEqual(sleepCalls, [
+    PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS,
+    1,
+  ]);
+
+  await waitForPhoneNotificationAuthorityRevocationDrain(false, {
+    monotonicNow: () => {
+      throw new Error('non-reducing updates must not read the barrier clock');
+    },
+    sleep: async () => {
+      throw new Error('non-reducing updates must not sleep');
+    },
+  });
 });
 
 test('concurrent unrelated PATCH cannot resurrect a durably revoked replacement package across route bundles', async () => {
@@ -212,7 +350,7 @@ test('concurrent unrelated PATCH cannot resurrect a durably revoked replacement 
   await firstReadStarted;
   const revocationPatch = revocationBundle.updatePhoneNotificationSettings({
     replacementPackages: [],
-  }).finally(() => {
+  }, immediateRevocationBarrier()).finally(() => {
     revocationSettled = true;
   });
 
@@ -436,6 +574,436 @@ test('Curated mode never suppresses a user-preserved app or protected event', as
       /protected_category|category_unavailable/,
     );
   }
+});
+
+test('all-eligible scope is explicit and preserved apps remain authoritative', async () => {
+  await assert.rejects(
+    updatePhoneNotificationSettings({ replacementScope: 'all_eligible' }),
+    /explicit best-effort confirmation/i,
+  );
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+    preservedPackages: ['example.preserved'],
+  });
+
+  const eligible = await ingestPhoneNotification(payload({
+    packageName: 'example.editorial',
+  }));
+  assert.equal(eligible.policy.replacementAllowed, true);
+  assert.equal(eligible.policy.suppressOriginal, true);
+
+  const preserved = await ingestPhoneNotification(payload({
+    eventId: '2'.repeat(64),
+    packageName: 'example.preserved',
+    postedAtMs: Date.now() + 1,
+  }));
+  assert.equal(preserved.policy.replacementAllowed, false);
+  assert.equal(preserved.policy.suppressOriginal, false);
+  assert.equal(preserved.policy.preserveReason, 'app_preserved');
+
+  const narrowed = await updatePhoneNotificationSettings({
+    replacementScope: 'per_app',
+  });
+  assert.equal(narrowed.config.replacementScope, 'per_app');
+});
+
+test('digest aggregates and priority-ranks active eligible notification receipts', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const baseTime = Date.now();
+  const lowPostedAtMs = baseTime - 100;
+  const low = await ingestPhoneNotification(payload({
+    eventId: '3'.repeat(64),
+    packageName: 'example.first',
+    appLabel: 'First',
+    nativePriority: 'low',
+    postedAtMs: lowPostedAtMs,
+  }));
+  const normal = await ingestPhoneNotification(payload({
+    eventId: '4'.repeat(64),
+    packageName: 'example.second',
+    appLabel: 'Second',
+    category: 'social',
+    nativePriority: 'normal',
+    postedAtMs: baseTime,
+  }));
+
+  assert.equal(low.digest.activeCount, 1);
+  assert.equal(low.digest.expiresAtMs, lowPostedAtMs + 3 * 24 * 60 * 60 * 1000);
+  assert.equal(normal.digest.activeCount, 2);
+  assert.equal(normal.digest.expiresAtMs, low.digest.expiresAtMs);
+  assert.deepEqual(normal.digest.coveredEventIds, [
+    '4'.repeat(64),
+    '3'.repeat(64),
+  ]);
+  assert.match(normal.digest.title, /2 curated notifications/);
+  assert.match(normal.digest.text, /Second.*First/);
+});
+
+test('native digest excludes legacy rows without a valid finite expiry', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const baseTime = Date.now();
+  const missingExpiry = await ingestPhoneNotification(payload({
+    eventId: '1'.repeat(64),
+    packageName: 'example.missingexpiry',
+    postedAtMs: baseTime - 2_000,
+  }));
+  const invalidExpiry = await ingestPhoneNotification(payload({
+    eventId: '2'.repeat(64),
+    packageName: 'example.invalidexpiry',
+    postedAtMs: baseTime - 1_000,
+  }));
+  getDb().prepare(`
+    UPDATE feed
+    SET metadata = json_remove(metadata, '$.expiresAt')
+    WHERE source_id = ?
+  `).run(missingExpiry.receipt.sourceId);
+  getDb().prepare(`
+    UPDATE feed
+    SET metadata = json_set(metadata, '$.expiresAt', 'not-a-date')
+    WHERE source_id = ?
+  `).run(invalidExpiry.receipt.sourceId);
+
+  const currentEventId = '3'.repeat(64);
+  const current = await ingestPhoneNotification(payload({
+    eventId: currentEventId,
+    packageName: 'example.currentexpiry',
+    postedAtMs: baseTime,
+  }));
+
+  assert.deepEqual(current.digest.coveredEventIds, [currentEventId]);
+  assert.equal(current.digest.activeCount, 1);
+  assert.equal(current.digest.expiresAtMs, baseTime + 3 * 24 * 60 * 60 * 1000);
+});
+
+test('aggregate digest count is fully owned by its bounded native coverage window', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const baseTime = Date.now();
+  let latest: Awaited<ReturnType<typeof ingestPhoneNotification>> | null = null;
+  for (let index = 0; index < 35; index += 1) {
+    latest = await ingestPhoneNotification(payload({
+      eventId: (index + 1).toString(16).padStart(64, '0'),
+      packageName: `example.digest${index}`,
+      appLabel: `Digest ${index}`,
+      postedAtMs: baseTime + index,
+    }));
+  }
+
+  assert.equal(latest?.digest.activeCount, 32);
+  assert.equal(latest?.digest.coveredEventIds.length, 32);
+  assert.equal(
+    latest?.digest.coveredEventIds[0],
+    (35).toString(16).padStart(64, '0'),
+  );
+  assert.equal(
+    latest?.digest.expiresAtMs,
+    baseTime + 3 + 3 * 24 * 60 * 60 * 1000,
+  );
+  assert.match(latest?.digest.title ?? '', /32 recent curated notifications/);
+  assert.match(latest?.digest.text ?? '', /more in Evogent/);
+  assert.doesNotMatch(latest?.digest.title ?? '', /35/);
+  assert.equal(latest?.policy.suppressOriginal, true);
+});
+
+test('a capacity-excluded identity is durably preserved and cannot enter a later digest', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const bucketMs = 6 * 60 * 60 * 1000;
+  const baseTime = Math.floor(Date.now() / bucketMs) * bucketMs + 1_000;
+  const coveredEventIds: string[] = [];
+  for (let index = 1; index <= 32; index += 1) {
+    const eventId = index.toString(16).padStart(64, '0');
+    coveredEventIds.push(eventId);
+    const result = await ingestPhoneNotification(payload({
+      eventId,
+      packageName: `example.capacity${index}`,
+      category: 'social',
+      nativePriority: 'normal',
+      postedAtMs: baseTime + index,
+    }));
+    assert.equal(result.policy.suppressOriginal, true);
+  }
+
+  const excludedEventId = 'f'.repeat(64);
+  const excluded = await ingestPhoneNotification(payload({
+    eventId: excludedEventId,
+    packageName: 'example.capacityexcluded',
+    nativePriority: 'low',
+    postedAtMs: baseTime + 100,
+  }));
+  assert.equal(excluded.policy.suppressOriginal, false);
+  assert.equal(excluded.policy.preserveReason, 'digest_capacity_preserved');
+  assert.equal(excluded.digest.activeCount, 32);
+  assert.equal(excluded.digest.coveredEventIds.includes(excludedEventId), false);
+
+  const excludedRow = getDb().prepare(`
+    SELECT metadata
+    FROM feed
+    WHERE source_id = ?
+  `).get(excluded.receipt.sourceId) as { metadata: string };
+  assert.equal(
+    (JSON.parse(excludedRow.metadata) as Record<string, unknown>).requestedDisposition,
+    'preserve_original',
+  );
+
+  for (const eventId of coveredEventIds) {
+    assert.equal(removePhoneNotification(eventId).resolved, true);
+  }
+  const triggerEventId = 'a'.repeat(63) + '1';
+  const trigger = await ingestPhoneNotification(payload({
+    eventId: triggerEventId,
+    packageName: 'example.capacitytrigger',
+    category: 'social',
+    nativePriority: 'normal',
+    postedAtMs: baseTime + 200,
+  }));
+  assert.equal(trigger.policy.suppressOriginal, true);
+  assert.deepEqual(trigger.digest.coveredEventIds, [triggerEventId]);
+  assert.equal(trigger.digest.coveredEventIds.includes(excludedEventId), false);
+});
+
+test('a curated dedupe owner is immutable and later occurrences stay in Android', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const bucketMs = 6 * 60 * 60 * 1000;
+  const baseTime = Math.floor(Date.now() / bucketMs) * bucketMs + 1_000;
+  const ownerEventId = '8'.repeat(64);
+  const laterEventId = '9'.repeat(64);
+  const owner = await ingestPhoneNotification(payload({
+    eventId: ownerEventId,
+    postedAtMs: baseTime,
+  }));
+  const later = await ingestPhoneNotification(payload({
+    eventId: laterEventId,
+    postedAtMs: baseTime + 1_000,
+  }));
+
+  assert.equal(owner.policy.suppressOriginal, true);
+  assert.equal(later.receipt.sourceId, owner.receipt.sourceId);
+  assert.equal(later.receipt.persisted, true);
+  assert.equal(later.policy.suppressOriginal, false);
+  assert.equal(later.policy.preserveReason, 'dedupe_identity_preserved');
+  assert.deepEqual(later.digest.coveredEventIds, [ownerEventId]);
+  assert.equal(later.digest.activeCount, 1);
+
+  const row = getDb().prepare(`
+    SELECT metadata
+    FROM feed
+    WHERE source_id = ?
+  `).get(owner.receipt.sourceId) as { metadata: string };
+  const metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+  assert.equal(metadata.lastReceiptEventId, ownerEventId);
+  assert.equal(metadata.requestedDisposition, 'curated_digest');
+  assert.equal(metadata.occurrences, 2);
+  assert.equal(metadata.lastPostedAt, new Date(baseTime + 1_000).toISOString());
+
+  const removed = removePhoneNotification(ownerEventId);
+  assert.equal(removed.resolved, true);
+  const repeatedLater = await ingestPhoneNotification(payload({
+    eventId: laterEventId,
+    postedAtMs: baseTime + 1_000,
+  }));
+  assert.equal(repeatedLater.receipt.persisted, false);
+  assert.equal(repeatedLater.policy.preserveReason, 'dedupe_tombstoned');
+});
+
+test('LIFO completion cannot regress a dedupe owner or its display timestamp', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const bucketMs = 6 * 60 * 60 * 1000;
+  const baseTime = Math.floor(Date.now() / bucketMs) * bucketMs + 2_000;
+  const newerEventId = 'c'.repeat(64);
+  const olderEventId = 'b'.repeat(64);
+  const newer = await ingestPhoneNotification(payload({
+    eventId: newerEventId,
+    appLabel: 'Fresh label',
+    postedAtMs: baseTime + 2_000,
+  }));
+  const olderCompletingLater = await ingestPhoneNotification(payload({
+    eventId: olderEventId,
+    appLabel: 'Stale label',
+    postedAtMs: baseTime + 1_000,
+  }));
+
+  assert.equal(newer.policy.suppressOriginal, true);
+  assert.equal(olderCompletingLater.policy.suppressOriginal, false);
+  assert.equal(
+    olderCompletingLater.policy.preserveReason,
+    'dedupe_identity_preserved',
+  );
+  assert.deepEqual(olderCompletingLater.digest.coveredEventIds, [newerEventId]);
+
+  const row = getDb().prepare(`
+    SELECT title, published_at, metadata
+    FROM feed
+    WHERE source_id = ?
+  `).get(newer.receipt.sourceId) as {
+    title: string;
+    published_at: string;
+    metadata: string;
+  };
+  const metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+  assert.match(row.title, /Fresh label/);
+  assert.doesNotMatch(row.title, /Stale label/);
+  assert.equal(row.published_at, new Date(baseTime + 2_000).toISOString());
+  assert.equal(metadata.appLabel, 'Fresh label');
+  assert.equal(metadata.lastReceiptEventId, newerEventId);
+});
+
+test('revocation preserves an existing curated owner while later originals remain', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const bucketMs = 6 * 60 * 60 * 1000;
+  const baseTime = Math.floor(Date.now() / bucketMs) * bucketMs + 3_000;
+  const ownerEventId = 'd'.repeat(64);
+  const owner = await ingestPhoneNotification(payload({
+    eventId: ownerEventId,
+    postedAtMs: baseTime,
+  }));
+  await updatePhoneNotificationSettings({ mode: 'observe' });
+  const observedDuplicate = await ingestPhoneNotification(payload({
+    eventId: 'e'.repeat(64),
+    postedAtMs: baseTime + 1_000,
+  }));
+
+  assert.equal(observedDuplicate.policy.mode, 'observe');
+  assert.equal(observedDuplicate.policy.suppressOriginal, false);
+  assert.equal(observedDuplicate.policy.preserveReason, 'observe_mode');
+  assert.deepEqual(observedDuplicate.digest.coveredEventIds, [ownerEventId]);
+  assert.equal(observedDuplicate.receipt.sourceId, owner.receipt.sourceId);
+
+  const row = getDb().prepare(`
+    SELECT metadata
+    FROM feed
+    WHERE source_id = ?
+  `).get(owner.receipt.sourceId) as { metadata: string };
+  const metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+  assert.equal(metadata.lastReceiptEventId, ownerEventId);
+  assert.equal(metadata.requestedDisposition, 'curated_digest');
+  assert.equal(metadata.curationMode, 'curated');
+});
+
+test('a never-curated dedupe row can promote its first newer curated owner', async () => {
+  const bucketMs = 6 * 60 * 60 * 1000;
+  const baseTime = Math.floor(Date.now() / bucketMs) * bucketMs + 4_000;
+  const observed = await ingestPhoneNotification(payload({
+    eventId: '1'.repeat(64),
+    postedAtMs: baseTime,
+  }));
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const promotedEventId = '2'.repeat(64);
+  const promoted = await ingestPhoneNotification(payload({
+    eventId: promotedEventId,
+    postedAtMs: baseTime + 1_000,
+  }));
+
+  assert.equal(promoted.receipt.sourceId, observed.receipt.sourceId);
+  assert.equal(promoted.policy.suppressOriginal, true);
+  assert.deepEqual(promoted.digest.coveredEventIds, [promotedEventId]);
+});
+
+test('dismissed dedupe buckets and exact removal tombstones cannot resurrect', async () => {
+  await updatePhoneNotificationSettings({
+    mode: 'curated',
+    confirmCurated: true,
+    replacementScope: 'all_eligible',
+    confirmBestEffortReplacement: true,
+  });
+  const first = await ingestPhoneNotification(payload({
+    eventId: '5'.repeat(64),
+  }));
+  assert.equal(first.receipt.persisted, true);
+  const removed = removePhoneNotification('5'.repeat(64));
+  assert.equal(removed.resolved, true);
+  assert.equal(removed.feedItem?.suggestionStatus, 'dismissed');
+
+  const duplicate = await ingestPhoneNotification(payload({
+    eventId: '6'.repeat(64),
+    postedAtMs: Date.now() + 1,
+  }));
+  assert.equal(duplicate.receipt.sourceId, first.receipt.sourceId);
+  assert.equal(duplicate.receipt.persisted, false);
+  assert.equal(duplicate.policy.suppressOriginal, false);
+  assert.equal(duplicate.policy.preserveReason, 'dedupe_tombstoned');
+  assert.equal(duplicate.digest.activeCount, 0);
+  assert.equal(duplicate.digest.expiresAtMs, null);
+
+  removePhoneNotification('7'.repeat(64));
+  const racedIngest = await ingestPhoneNotification(payload({
+    eventId: '7'.repeat(64),
+    packageName: 'example.raced',
+    postedAtMs: Date.now() + 2,
+  }));
+  assert.equal(racedIngest.receipt.persisted, false);
+  assert.equal(racedIngest.policy.preserveReason, 'dedupe_tombstoned');
+});
+
+test('category whitespace, controls, case variants, and false native wire proof fail closed', () => {
+  for (const category of [
+    ' promo',
+    'promo ',
+    '\tpromo',
+    'promo\n',
+    'promo\0',
+    'recommendation\u0007',
+    'Promo',
+    'PROMO',
+  ]) {
+    const classification = classifyPhoneNotification(payload({
+      category,
+      nativeCategoryWireExact: true,
+    }));
+    assert.equal(
+      classification.protectedFromSuppression,
+      true,
+      `category variant gained server replacement authority: ${JSON.stringify(category)}`,
+    );
+  }
+  assert.equal(
+    classifyPhoneNotification(payload({
+      category: 'promo',
+      nativeCategoryWireExact: false,
+    })).protectedFromSuppression,
+    true,
+  );
 });
 
 test('Paused mode stores no event and can never produce a cancellation receipt', async () => {
@@ -1453,7 +2021,8 @@ test('settings view exposes observed apps and immutable safeguards without notif
   assert.equal(view.observedApps[0].replacementAllowed, false);
   assert.equal(view.safeguards.observeIsDefault, true);
   assert.equal(view.safeguards.originalsPreservedByDefault, true);
-  assert.equal(view.safeguards.replacementIsPerPackage, true);
+  assert.equal(view.safeguards.replacementScopeIsExplicit, true);
+  assert.equal(view.safeguards.preservedPackagesOverrideScope, true);
   assert.equal(view.safeguards.keyOnlyCancellationIsBestEffort, true);
   assert.equal(view.safeguards.exactReceiptRequired, true);
   assert.equal(view.safeguards.digestProofRequired, true);

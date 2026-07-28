@@ -10,6 +10,14 @@ const workQueue = fs.readFileSync(
   'android-shell/src/net/dangish/evogent/EvogentNotificationWorkQueue.java',
   'utf8',
 );
+const receiptStore = fs.readFileSync(
+  'android-shell/src/net/dangish/evogent/EvogentNotificationReceiptStore.java',
+  'utf8',
+);
+const receiptRetentionPolicy = fs.readFileSync(
+  'android-shell/src/net/dangish/evogent/EvogentNotificationReceiptRetentionPolicy.java',
+  'utf8',
+);
 const loopbackAuth = fs.readFileSync(
   'android-shell/src/net/dangish/evogent/EvogentLoopbackAuth.java',
   'utf8',
@@ -31,6 +39,7 @@ const settingsPanel = fs.readFileSync(
   'src/components/phone-notification-curation-panel.tsx',
   'utf8',
 );
+const phoneUi = fs.readFileSync('src/app/page.tsx', 'utf8');
 const notificationCuration = fs.readFileSync(
   'src/lib/phone-notification-curation.ts',
   'utf8',
@@ -56,7 +65,7 @@ const listenerWithoutComments = listener
 test('notification listener work is bounded and never reads action/message payloads', () => {
   assert.match(listener, /MAX_LIVE_PENDING_EVENTS\s*=\s*16/);
   assert.match(listener, /MAX_HISTORICAL_PENDING_EVENTS\s*=\s*128/);
-  assert.match(listener, /EvogentNotificationWorkQueue<StatusBarNotification>/);
+  assert.match(listener, /EvogentNotificationWorkQueue<NotificationWork>/);
   assert.match(workQueue, /ArrayDeque<Entry<T>> live/);
   assert.match(workQueue, /ArrayDeque<Entry<T>> historical/);
   assert.match(
@@ -68,6 +77,8 @@ test('notification listener work is bounded and never reads action/message paylo
   assert.match(workQueue, /liveSequence/);
   assert.match(workQueue, /hasNewerRevision/);
   assert.match(workQueue, /boolean isCurrent\(Entry<T> entry\)/);
+  assert.match(workQueue, /int retire\(String key\)/);
+  assert.match(workQueue, /!entry\.retired/);
   assert.match(workQueue, /supersededByNewerRevision/);
   assert.match(workQueue, /void complete\(Entry<T> entry\)[\s\S]*?inFlight = null/);
   assert.match(listener, /finally \{[\s\S]*?workQueue\.complete\(entry\)/);
@@ -76,8 +87,12 @@ test('notification listener work is bounded and never reads action/message paylo
     listener,
     /private void enqueue[\s\S]*?EVOGENT_PACKAGE\.equals\(packageName\)\) return;[\s\S]*?workQueue\.offer/,
   );
-  assert.match(listener, /wouldRegressAppliedLiveDigest/);
-  assert.match(listener, /markLiveDigestApplied/);
+  assert.match(listener, /mayCancelFromLiveSequence/);
+  assert.doesNotMatch(listener, /newestAppliedLiveDigestSequence/);
+  assert.match(
+    nativePolicy,
+    /return !historical && workSequence > 0L/,
+  );
   assert.match(
     listener,
     /if \(!isPublicationCurrent\(entry, snapshot\)\) return;[\s\S]*?publishAndVerifyDigest/,
@@ -85,6 +100,12 @@ test('notification listener work is bounded and never reads action/message paylo
   assert.match(
     listener,
     /isPublicationCurrent[\s\S]*?isCurrentWork\(entry\)[\s\S]*?isSameActiveRevision\(snapshot\)/,
+  );
+  assert.doesNotMatch(
+    listener.match(
+      /private boolean isPublicationCurrent[\s\S]*?\n    }\n/,
+    )?.[0] ?? '',
+    /mayCancelFromLiveSequence/,
   );
   assert.match(listener, /original preserved/);
   assert.doesNotMatch(
@@ -94,12 +115,30 @@ test('notification listener work is bounded and never reads action/message paylo
   assert.match(listener, /EvogentNotificationPolicy\.EVOGENT_PACKAGE\.equals/);
 });
 
-test('live notification lane uses one monotonic network deadline without changing share/web defaults', () => {
-  assert.match(listener, /NOTIFICATION_NETWORK_BUDGET_MS\s*=\s*2000/);
+test('live notification lane uses one bounded end-to-end deadline without changing share/web defaults', () => {
+  assert.match(listener, /NOTIFICATION_END_TO_END_BUDGET_MS\s*=\s*2000/);
+  const nativeBudgetMs = Number(
+    listener.match(/NOTIFICATION_END_TO_END_BUDGET_MS\s*=\s*(\d+)/)?.[1],
+  );
+  const serverBudgetMs = Number(
+    notificationCuration.match(
+      /PHONE_NOTIFICATION_NATIVE_END_TO_END_BUDGET_MS\s*=\s*(\d+)/,
+    )?.[1],
+  );
+  assert.equal(serverBudgetMs, nativeBudgetMs);
+  assert.match(
+    notificationCuration,
+    /PHONE_NOTIFICATION_AUTHORITY_REVOCATION_DRAIN_MS\s*=\s*[\s\S]*?PHONE_NOTIFICATION_NATIVE_END_TO_END_BUDGET_MS\s*\+\s*1/,
+  );
+  assert.match(
+    notificationCuration,
+    /didPhoneNotificationReplacementAuthorityDecrease[\s\S]*?waitForPhoneNotificationAuthorityRevocationDrain/,
+  );
   assert.match(
     listener,
-    /SystemClock\.elapsedRealtime\(\)\s*\+\s*NOTIFICATION_NETWORK_BUDGET_MS/,
+    /SystemClock\.elapsedRealtime\(\)\s*\+\s*NOTIFICATION_END_TO_END_BUDGET_MS/,
   );
+  assert.match(listener, /Math\.min\([\s\S]*?endToEndDeadlineElapsedMs/);
   assert.match(listener, /postJsonDirectForJsonBefore/);
   assert.match(loopbackAuth, /requireRemainingDeadlineMs/);
   assert.match(loopbackAuth, /readBoundedBefore/);
@@ -112,8 +151,11 @@ test('live notification lane uses one monotonic network deadline without changin
   assert.match(loopbackAuth, /DEFAULT_AUTH_STAGE_TIMEOUT_MS\s*=\s*6000/);
   assert.match(loopbackAuth, /authenticate\(context, sessionKind, DEFAULT_AUTH_STAGE_TIMEOUT_MS\)/);
   assert.match(shareReceiver, /postJsonDirect\([\s\S]*?8000,\s*8000\)/);
-  assert.match(notificationCuration, /void notifyFeedUpdate\(\[result\.feedItem\]\)/);
-  assert.doesNotMatch(notificationCuration, /await notifyFeedUpdate\(\[result\.feedItem\]\)/);
+  assert.match(notificationCuration, /setImmediate\(/);
+  assert.match(
+    notificationCuration,
+    /schedulePhoneNotificationFeedUpdate\(result\.feedItem\)/,
+  );
   assert.match(architectureProse, /Live `onNotificationPosted` callbacks always leapfrog reconnect history/);
   assert.match(architectureProse, /newest pending live callback is always selected next/);
   assert.match(architectureProse, /Historical completeness is best-effort/);
@@ -122,13 +164,18 @@ test('live notification lane uses one monotonic network deadline without changin
   assert.match(architectureProse, /A push does not start its own cycle or model call/);
 });
 
-test('best-effort native replacement requires per-package permission and generation-owned digest work', () => {
+test('best-effort native replacement requires durable private receipt and generation-owned digest work', () => {
   assert.match(listener, /postJsonDirectForJsonBefore/);
   assert.match(listener, /publishAndVerifyDigest/);
   assert.match(listener, /DIGEST_PUBLICATION_LOCK/);
   assert.match(listener, /activeServiceGeneration/);
   assert.match(listener, /DIGEST_SERVICE_GENERATION_EXTRA/);
   assert.match(listener, /DIGEST_WORK_SEQUENCE_EXTRA/);
+  assert.match(listener, /DIGEST_COVERED_EVENT_IDS_EXTRA/);
+  assert.match(listener, /DIGEST_ACTIVE_COUNT_EXTRA/);
+  assert.match(listener, /DIGEST_EXPIRES_AT_MS_EXTRA/);
+  assert.match(listener, /activeCount != marker\.coveredEventIds\.size\(\)/);
+  assert.match(listener, /values == null \|\| values\.isEmpty\(\)/);
   assert.match(listener, /isPublicationCurrent/);
   assert.match(listener, /retractDigestIfOwned/);
   assert.match(listener, /isDigestActive\(marker\)/);
@@ -144,7 +191,123 @@ test('best-effort native replacement requires per-package permission and generat
   assert.match(nativePolicy, /postTimeMs/);
   assert.match(nativePolicy, /Integer\.toString\(input\.importance\)/);
   assert.match(nativePolicy, /Boolean\.toString\(input\.clearable\)/);
+  assert.match(nativePolicy, /digestTimeoutAfterMs/);
+  assert.match(nativePolicy, /MAX_DIGEST_TIMEOUT_MS/);
   assert.match(listener, /current\.decision\.nativeCanSuppress/);
+  assert.match(
+    listener,
+    /replacementPolicyCandidate = !entry\.historical[\s\S]*?coveredEventIds\.contains\(snapshot\.eventId\)[\s\S]*?store\.recordReceipt/,
+  );
+  assert.match(listener, /markCancellationPending/);
+  assert.match(receiptStore, /getNoBackupFilesDir/);
+  assert.match(receiptStore, /output\.getFD\(\)\.sync\(\)/);
+  assert.doesNotMatch(receiptStore, /"title"|"text"|"subText"|"appLabel"/);
+});
+
+test('native removal and UI dismissal remain exact, bounded, and fail closed', () => {
+  assert.match(listener, /onNotificationRemoved/);
+  assert.match(listener, /NotificationListenerService\.REASON_LISTENER_CANCEL/);
+  assert.match(
+    listener,
+    /store\.markRemoved\(record\.eventId, listenerCancellation\)/,
+  );
+  assert.match(listener, /workQueue\.retire\(key\)/);
+  assert.match(listener, /PHONE_NOTIFICATION_REMOVE_URL/);
+  assert.match(listener, /REMOVAL_NETWORK_BUDGET_MS\s*=\s*750/);
+  assert.match(listener, /requestUserDismiss/);
+  assert.match(listener, /hasActiveDigestCovering/);
+  assert.match(listener, /pendingRemovalEventIds/);
+  assert.match(listener, /pendingUserDismissEventIds/);
+  assert.match(listener, /pendingCuratedCancellationEventIds/);
+  assert.match(listener, /pruneActiveDigestCoverage/);
+  assert.match(listener, /pruneResolvedLifecycleCoverage/);
+  assert.match(listener, /reconcilePendingUserDismissals/);
+  assert.match(listener, /reconcilePendingCuratedCancellations/);
+  assert.match(listener, /rebindActiveDigestGeneration/);
+  assert.match(receiptStore, /STATE_REMOVAL_PENDING/);
+  assert.match(receiptStore, /STATE_USER_DISMISS_PENDING/);
+  assert.match(receiptStore, /STATE_CURATED_REMOVED/);
+  assert.match(receiptStore, /STATE_USER_DISMISSED/);
+  assert.match(receiptStore, /STATE_EXTERNAL_REMOVED/);
+  assert.match(
+    receiptRetentionPolicy,
+    /listenerCancellation && "curated_cancel_pending"\.equals\(state\)/,
+  );
+  assert.match(receiptStore, /resolvedLifecycleEventIds/);
+  assert.match(listener, /store\.markUserDismissPending\(eventId\)/);
+  assert.match(listener, /store\.markUserDismissResolved\(eventId\)/);
+  assert.match(receiptStore, /EvogentNotificationReceiptRetentionPolicy\.priority/);
+  assert.match(
+    receiptRetentionPolicy,
+    /"removal_pending"\.equals\(state\)[\s\S]*?"curated_cancel_pending"\.equals\(state\)[\s\S]*?return 0/,
+  );
+  assert.match(
+    receiptRetentionPolicy,
+    /"receipt"\.equals\(state\) \|\| "curated_removed"\.equals\(state\)[\s\S]*?return 1/,
+  );
+  assert.match(receiptRetentionPolicy, /"observed"/);
+  assert.match(mainActivity, /dismissPhoneNotification/);
+  assert.match(phoneUi, /\/api\/internal\/phone-notifications\/remove/);
+  assert.match(phoneUi, /hasExactPhoneReceipt/);
+  assert.match(notificationCuration, /dedupe_tombstoned/);
+  assert.match(notificationCuration, /phone_notification_tombstones/);
+  assert.match(
+    notificationCuration,
+    /removeAndNotifyPhoneNotification[\s\S]*?schedulePhoneNotificationFeedUpdate/,
+  );
+  const appliedDigest = listener.indexOf('digestActive = publishAndVerifyDigest(');
+  const postPublicationPrune = listener.indexOf(
+    'pruneResolvedLifecycleCoverage();',
+    appliedDigest,
+  );
+  const cancellationDecision = listener.indexOf(
+    'boolean cancellationSequenceCurrent',
+    appliedDigest,
+  );
+  assert.ok(appliedDigest >= 0);
+  assert.ok(postPublicationPrune > appliedDigest);
+  assert.ok(cancellationDecision > postPublicationPrune);
+  assert.match(
+    listener,
+    /store\.acknowledgeRemoval\(entry\.value\.removedEventId\)[\s\S]*?pruneActiveDigestCoverage\(entry\.value\.removedEventId\)/,
+  );
+});
+
+test('digest is aggregate, silent, low-importance, and opens the notification view', () => {
+  assert.match(notificationCuration, /buildPhoneNotificationDigest/);
+  assert.match(notificationCuration, /coveredEventIds/);
+  assert.match(notificationCuration, /expiresAtMs:\s*number \| null/);
+  assert.match(notificationCuration, /Math\.min\(earliest, Date\.parse\(row\.expires_at\)\)/);
+  assert.match(notificationCuration, /expiresAtMs:\s*null/);
+  assert.match(listener, /evogent_curated_notifications_v2_silent/);
+  assert.match(listener, /IMPORTANCE_LOW/);
+  assert.match(listener, /\.setPriority\(Notification\.PRIORITY_LOW\)/);
+  assert.match(listener, /\.setSound\(null/);
+  assert.match(listener, /\.setVibrate\(null\)/);
+  assert.match(listener, /\.setAutoCancel\(false\)/);
+  assert.ok(
+    (listener.match(/\.setTimeoutAfter\(/g) ?? []).length >= 3,
+    'initial publication, generation rebind, and lifecycle prune must restore the timeout',
+  );
+  assert.match(
+    listener,
+    /if \(Build\.VERSION\.SDK_INT < 26\) return false/,
+  );
+  assert.match(listener, /raw instanceof Number/);
+  assert.match(
+    listener,
+    /timeoutAfterMs <= NOTIFICATION_END_TO_END_BUDGET_MS/,
+  );
+  assert.match(
+    listener,
+    /marker\.expiresAtMs == candidate\.getNotification\(\)\.extras\.getLong\([\s\S]*?DIGEST_EXPIRES_AT_MS_EXTRA/,
+  );
+  assert.match(listener, /OPEN_NOTIFICATIONS_EXTRA/);
+  assert.match(mainActivity, /evogent:open-notifications/);
+  assert.match(phoneUi, /setSelectedFilter\('notification'\)/);
+  assert.match(architectureProse, /earliest expiry among exactly those covered rows/);
+  assert.match(architectureProse, /recompute the remaining Android timeout/);
+  assert.match(architectureProse, /never extend it/);
 });
 
 test('known secrets are removed before native request fields are populated', () => {
@@ -152,6 +315,10 @@ test('known secrets are removed before native request fields are populated', () 
   assert.match(nativePolicy, /VISIBILITY_SECRET/);
   assert.match(nativePolicy, /redact \? null : input\.title/);
   assert.match(nativePolicy, /redact \? null : input\.text/);
+  assert.match(
+    nativePolicy,
+    /identityDecision\.redactContent \? "\[redacted\]" : input\.text/,
+  );
   assert.match(listener, /decision\.safeTitle/);
   assert.match(listener, /decision\.safeText/);
   assert.doesNotMatch(listener, /request\.put\("title", title\)/);
@@ -176,13 +343,16 @@ test('accessible UI exposes default preservation and explicit reversible best-ef
   assert.match(settingsPanel, /Private \(recommended\)/);
   assert.match(settingsPanel, /role="radiogroup"/);
   assert.match(settingsPanel, /Always keep originals from these apps/);
-  assert.match(settingsPanel, /Allow best-effort replacement for these apps/);
+  assert.match(settingsPanel, /Eligible low-stakes replacement scope/);
+  assert.match(settingsPanel, /All eligible low-stakes apps/);
   assert.match(settingsPanel, /aria-describedby/);
   assert.match(settingsPanel, /Android only permits[\s\S]*?notification key/);
   assert.match(settingsPanel, /same-key update can[\s\S]*?race the final check/);
   assert.match(settingsPanel, /confirmBestEffortReplacement/);
   assert.match(settingsPanel, /reversible/i);
   assert.match(notificationCuration, /replacementPackages:\s*\[\]/);
+  assert.match(notificationCuration, /replacementScope:\s*'per_app'/);
+  assert.match(notificationCuration, /preservedPackages\.includes/);
   assert.match(notificationCuration, /app_not_replacement_allowed/);
   assert.match(notificationCuration, /replacementAllowed/);
 });

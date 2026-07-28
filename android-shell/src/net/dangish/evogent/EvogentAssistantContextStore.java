@@ -30,36 +30,49 @@ final class EvogentAssistantContextStore {
     private static final class Entry {
         final long createdAtNanos;
         ContextData data;
+        boolean sealed;
 
         Entry(long createdAtNanos) {
             this.createdAtNanos = createdAtNanos;
-            this.data = new ContextData(null, "");
         }
     }
 
     private EvogentAssistantContextStore() {}
 
     static synchronized String begin() {
-        prune(System.nanoTime());
+        long now = System.nanoTime();
+        prune(now);
         String token = UUID.randomUUID().toString();
-        ENTRIES.put(token, new Entry(System.nanoTime()));
+        ENTRIES.put(token, new Entry(now));
         return token;
     }
 
-    static synchronized void update(String token, String app, String text) {
-        if (!isTokenShape(token)) return;
+    /**
+     * Seal the handoff exactly once. A timeout seals an empty value; a late assist callback can
+     * never overwrite it after the composer has launched or consumed the token.
+     */
+    static synchronized boolean seal(String token, String app, String text) {
+        if (!isTokenShape(token)) return false;
         long now = System.nanoTime();
         prune(now);
         Entry entry = ENTRIES.get(token);
-        if (entry == null || now - entry.createdAtNanos > MAX_AGE_NANOS) return;
+        if (entry == null
+                || entry.sealed
+                || now - entry.createdAtNanos > MAX_AGE_NANOS) {
+            return false;
+        }
         entry.data = new ContextData(app, text);
+        entry.sealed = true;
+        return true;
     }
 
     static synchronized ContextData consume(String token) {
         if (!isTokenShape(token)) return new ContextData(null, "");
         prune(System.nanoTime());
         Entry entry = ENTRIES.remove(token);
-        return entry == null ? new ContextData(null, "") : entry.data;
+        return entry == null || !entry.sealed || entry.data == null
+                ? new ContextData(null, "")
+                : entry.data;
     }
 
     static synchronized void discard(String token) {

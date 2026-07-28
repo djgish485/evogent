@@ -18,6 +18,8 @@ final class EvogentSecurityPolicy {
             LOOPBACK_ORIGIN + "/api/internal/browse-cache/submit";
     static final String PHONE_NOTIFICATION_INGEST_URL =
             LOOPBACK_ORIGIN + "/api/internal/phone-notifications/ingest";
+    static final String PHONE_NOTIFICATION_REMOVE_URL =
+            LOOPBACK_ORIGIN + "/api/internal/phone-notifications/remove";
     static final int MAX_NATIVE_PROMPT_CHARS = 16 * 1024;
     static final int MAX_EXTERNAL_URL_CHARS = 8 * 1024;
     static final int MAX_SHARE_TEXT_CHARS = 16 * 1024;

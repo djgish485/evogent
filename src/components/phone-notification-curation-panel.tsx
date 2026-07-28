@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 type NotificationMode = 'observe' | 'curated' | 'paused';
 type LockScreenPreview = 'private' | 'detailed';
+type ReplacementScope = 'per_app' | 'all_eligible';
 
 interface ObservedApp {
   packageName: string;
@@ -19,6 +20,7 @@ interface SettingsView {
     schemaVersion: 1;
     mode: NotificationMode;
     lockScreenPreview: LockScreenPreview;
+    replacementScope: ReplacementScope;
     preservedPackages: string[];
     replacementPackages: string[];
   };
@@ -28,7 +30,8 @@ interface SettingsView {
     originalsAlwaysPreservedFor: string[];
     observeIsDefault: true;
     originalsPreservedByDefault: true;
-    replacementIsPerPackage: true;
+    replacementScopeIsExplicit: true;
+    preservedPackagesOverrideScope: true;
     keyOnlyCancellationIsBestEffort: true;
     exactReceiptRequired: true;
     digestProofRequired: true;
@@ -48,7 +51,7 @@ const MODE_OPTIONS: Array<{
   {
     value: 'curated',
     label: 'Curated shade',
-    description: 'Organize notifications in Evogent. Android originals stay unless you separately allow best-effort replacement for an app.',
+    description: 'Organize notifications in Evogent. Android originals stay unless you separately confirm a best-effort low-stakes replacement scope.',
   },
   {
     value: 'paused',
@@ -191,7 +194,7 @@ export function PhoneNotificationCurationPanel() {
         {selectedMode === 'curated' ? (
           <div className="mt-3 rounded-lg border border-sky-900/70 bg-sky-950/20 p-3 text-xs leading-5 text-sky-100">
             Curated shade is reversible: choose Observe at any time. It still preserves every
-            Android original by default. Replacement is a separate per-app choice below.
+            Android original by default. Replacement is a separate explicit scope below.
           </div>
         ) : null}
       </section>
@@ -214,7 +217,7 @@ export function PhoneNotificationCurationPanel() {
             {
               value: 'detailed' as const,
               label: 'Detailed',
-              description: 'Show the newest eligible app summary while the phone is locked.',
+              description: 'Show the ranked eligible-app summary while the phone is locked.',
             },
           ]).map((option) => (
             <button
@@ -249,21 +252,66 @@ export function PhoneNotificationCurationPanel() {
         <p className="mt-2 text-xs leading-5 text-zinc-500">
           Evogent never reads notification action payloads. Known one-time codes and secret
           notifications are stripped before local loopback transport and storage. Protected
-          categories stay Android-owned even if an app is on the replacement list.
+          categories stay Android-owned under every replacement scope.
         </p>
       </section>
 
       <section aria-labelledby="replacement-apps-heading">
         <h3 id="replacement-apps-heading" className="font-semibold text-zinc-100">
-          Allow best-effort replacement for these apps
+          Eligible low-stakes replacement scope
         </h3>
         <p id="replacement-apps-explanation" className="mt-1 text-xs leading-5 text-zinc-400">
-          Off by default. When enabled in Curated shade, Evogent may replace an eligible ordinary
-          notification with its digest after receipt and active-state checks. Android only permits
-          cancellation by notification key, not by an atomic version token, so a same-key update can
-          still race the final check. Turn this off, choose Observe, or mark the app “always keep” to
-          stop future replacement attempts.
+          This affects only exact promo, recommendation, and social categories that pass every
+          native safety gate. Android only permits cancellation by notification key, not an atomic
+          version token, so a same-key update can still race the final check. Choose Observe or use
+          “always keep” below to stop future replacement attempts.
         </p>
+        <div className="mt-3 grid gap-2">
+          {([
+            {
+              value: 'per_app' as const,
+              label: 'Only selected apps',
+              description: 'Narrow default. Each app needs its own replacement toggle.',
+            },
+            {
+              value: 'all_eligible' as const,
+              label: 'All eligible low-stakes apps',
+              description: 'Curate every eligible app except protected classes and apps marked “always keep.”',
+            },
+          ]).map((scope) => (
+            <button
+              key={scope.value}
+              type="button"
+              disabled={saving}
+              aria-pressed={view.config.replacementScope === scope.value}
+              onClick={() => void update({
+                replacementScope: scope.value,
+                ...(scope.value === 'all_eligible'
+                  ? { confirmBestEffortReplacement: true }
+                  : {}),
+              })}
+              className={`min-h-16 rounded-xl border p-3 text-left disabled:opacity-60 ${
+                view.config.replacementScope === scope.value
+                  ? 'border-amber-600 bg-amber-950/30'
+                  : 'border-zinc-700 bg-zinc-950/60 hover:border-zinc-600'
+              }`}
+            >
+              <span className="block font-medium text-zinc-100">{scope.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-zinc-400">
+                {scope.description}
+              </span>
+            </button>
+          ))}
+        </div>
+        <h4 className="mt-4 font-medium text-zinc-200">
+          Per-app replacement choices
+        </h4>
+        {view.config.replacementScope === 'all_eligible' ? (
+          <p className="mt-1 text-xs leading-5 text-amber-100">
+            All otherwise eligible apps are currently included. These toggles are retained for a
+            future return to “Only selected apps”; “always keep” below remains authoritative now.
+          </p>
+        ) : null}
         {view.observedApps.length > 0 ? (
           <div className="mt-3 space-y-2">
             {view.observedApps.map((app) => {
@@ -278,7 +326,7 @@ export function PhoneNotificationCurationPanel() {
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={saving || blocked}
+                    disabled={saving || blocked || view.config.replacementScope === 'all_eligible'}
                     aria-describedby={`replacement-apps-explanation ${descriptionId}`}
                     onChange={() => {
                       const next = new Set(replacementAllowed);

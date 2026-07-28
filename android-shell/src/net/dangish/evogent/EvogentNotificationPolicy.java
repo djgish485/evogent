@@ -10,7 +10,8 @@ import java.util.Locale;
  * Android grants a notification listener access to every app at once.  Keep the decisions that
  * bound that privilege in one host-testable class: ignore Evogent's own digest, redact known
  * secrets before the loopback request is constructed, identify notifications that must retain
- * their Android original, and require a matching durable receipt before any best-effort
+ * their Android original, admit only the exact low-stakes Android wire categories promo,
+ * recommendation, and social, and require a matching durable receipt before any best-effort
  * cancellation request.
  */
 final class EvogentNotificationPolicy {
@@ -21,12 +22,15 @@ final class EvogentNotificationPolicy {
     static final int FLAG_ONGOING_EVENT = 0x00000002;
     static final int FLAG_FOREGROUND_SERVICE = 0x00000040;
     static final int FLAG_INSISTENT = 0x00000004;
+    static final long MAX_DIGEST_TIMEOUT_MS =
+            8L * 24L * 60L * 60L * 1000L;
 
     private EvogentNotificationPolicy() {}
 
     static final class Input {
         final String packageName;
         final String category;
+        final boolean exactReplacementEligibleCategory;
         final int flags;
         final int importance;
         final boolean clearable;
@@ -54,6 +58,8 @@ final class EvogentNotificationPolicy {
                 String text,
                 String subText) {
             this.packageName = normalize(packageName, 255);
+            this.exactReplacementEligibleCategory =
+                    isReplacementEligibleCategory(category);
             this.category = normalize(category, 80);
             this.flags = flags;
             this.importance = importance;
@@ -114,6 +120,7 @@ final class EvogentNotificationPolicy {
         boolean redact = shouldRedact(input, protectedReason);
         boolean protectedFromSuppression = protectedReason != null || redact;
         boolean canSuppress = !protectedFromSuppression
+                && input.exactReplacementEligibleCategory
                 && input.clearable
                 && !input.ongoing
                 && !input.fullScreen
@@ -168,6 +175,34 @@ final class EvogentNotificationPolicy {
     }
 
     /**
+     * Arrival sequence does not define response freshness because the live queue intentionally
+     * selects pending work newest-first while the worker and server writes remain serialized. Any
+     * current live entry may proceed; same-key supersession and exact active-revision checks remain
+     * the cancellation boundary. Reconnect history can never gain native replacement authority.
+     */
+    static boolean mayCancelFromLiveSequence(
+            boolean historical,
+            long workSequence) {
+        return !historical && workSequence > 0L;
+    }
+
+    /**
+     * Convert the server's absolute earliest-covered expiry into Android's relative timeout.
+     *
+     * The absolute timestamp survives process-generation rebinds and lifecycle-only digest
+     * updates without extending the aggregate. Eight days safely covers the server's maximum
+     * seven-day card lifetime plus accepted clock skew; anything else removes replacement
+     * authority rather than creating an effectively permanent native digest.
+     */
+    static long digestTimeoutAfterMs(long expiresAtMs, long nowMs) {
+        if (nowMs <= 0L || expiresAtMs <= nowMs) return 0L;
+        long remainingMs = expiresAtMs - nowMs;
+        return remainingMs > 0L && remainingMs <= MAX_DIGEST_TIMEOUT_MS
+                ? remainingMs
+                : 0L;
+    }
+
+    /**
      * The raw Android notification key never crosses loopback. The event identity binds package,
      * key, post time, and a content-generation hash so the caller can reject known stale receipts
      * before requesting key-only cancellation. It is not an atomic Android generation token.
@@ -177,6 +212,10 @@ final class EvogentNotificationPolicy {
             String notificationKey,
             long postTimeMs) {
         if (input == null) return null;
+        Decision identityDecision = decide(input);
+        String identityTitle = identityDecision.redactContent ? "[redacted]" : input.title;
+        String identityText = identityDecision.redactContent ? "[redacted]" : input.text;
+        String identitySubText = identityDecision.redactContent ? "[redacted]" : input.subText;
         return sha256(
                 input.packageName,
                 normalize(notificationKey, 1024),
@@ -190,9 +229,9 @@ final class EvogentNotificationPolicy {
                 Boolean.toString(input.groupSummary),
                 Boolean.toString(input.conversation),
                 Integer.toString(input.visibility),
-                input.title,
-                input.text,
-                input.subText);
+                identityTitle,
+                identityText,
+                identitySubText);
     }
 
     /** Hash potentially identifying channel/conversation ids before transport. */
@@ -219,6 +258,7 @@ final class EvogentNotificationPolicy {
         String category = lower(input.category);
         if (input.fullScreen) return "full_screen";
         if (input.groupSummary) return "group_summary";
+        if (input.conversation) return "conversation";
         if (input.ongoing || (input.flags & FLAG_ONGOING_EVENT) != 0) return "ongoing";
         if ((input.flags & FLAG_FOREGROUND_SERVICE) != 0) return "foreground_service";
         if ((input.flags & FLAG_INSISTENT) != 0) return "insistent";
@@ -226,7 +266,9 @@ final class EvogentNotificationPolicy {
         if (input.importance == IMPORTANCE_UNSPECIFIED) return "ranking_unavailable";
         if (input.importance >= IMPORTANCE_HIGH) return "high_importance";
         if (isCriticalSystemPackage(pkg)) return "system_safety";
-        if (isProtectedCategory(category)) return "protected_category";
+        if (!input.exactReplacementEligibleCategory) {
+            return category == null ? "category_unavailable" : "protected_category";
+        }
         return null;
     }
 
@@ -258,12 +300,17 @@ final class EvogentNotificationPolicy {
                 || "call".equals(category)
                 || "alarm".equals(category)
                 || "emergency".equals(category)
+                || "car_emergency".equals(category)
+                || "car_warning".equals(category)
+                || "sys".equals(category)
+                || "err".equals(category)
                 || "error".equals(category)
                 || "system_safety".equals(protectedReason)) {
             return "critical";
         }
         if (input.importance >= IMPORTANCE_HIGH
                 || input.conversation
+                || "msg".equals(category)
                 || "message".equals(category)
                 || "email".equals(category)
                 || "missed_call".equals(category)
@@ -273,6 +320,7 @@ final class EvogentNotificationPolicy {
         }
         if ("promo".equals(category)
                 || "recommendation".equals(category)
+                || "social".equals(category)
                 || "progress".equals(category)
                 || "service".equals(category)
                 || "status".equals(category)) {
@@ -281,17 +329,14 @@ final class EvogentNotificationPolicy {
         return "normal";
     }
 
-    private static boolean isProtectedCategory(String category) {
-        return "alarm".equals(category)
-                || "call".equals(category)
-                || "emergency".equals(category)
-                || "navigation".equals(category)
-                || "service".equals(category)
-                || "transport".equals(category)
-                || "system".equals(category)
-                || "error".equals(category)
-                || "location_sharing".equals(category)
-                || "workout".equals(category);
+    /**
+     * Deliberately do not lowercase here. Android's public constants use exact lowercase wire
+     * literals; missing, case-variant, vendor-defined, and future categories remain Android-owned.
+     */
+    private static boolean isReplacementEligibleCategory(String category) {
+        return "promo".equals(category)
+                || "recommendation".equals(category)
+                || "social".equals(category);
     }
 
     private static boolean isCriticalSystemPackage(String pkg) {

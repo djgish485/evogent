@@ -30,6 +30,7 @@ final class EvogentNotificationWorkQueue<T> {
         final String key;
         final long liveSequence;
         volatile boolean supersededByNewerRevision;
+        volatile boolean retired;
 
         Entry(T value, boolean historical, String key, long liveSequence) {
             this.value = value;
@@ -126,7 +127,40 @@ final class EvogentNotificationWorkQueue<T> {
     synchronized boolean isCurrent(Entry<T> entry) {
         return entry != null
                 && inFlight == entry
+                && !entry.retired
                 && !hasNewerRevision(entry);
+    }
+
+    /**
+     * Retire every queued revision for an Android key before handling its removal callback.
+     *
+     * NotificationListenerService can deliver onNotificationRemoved while an earlier post is
+     * waiting on loopback. Marking the in-flight entry makes its later receipt powerless, and
+     * dropping pending history/live entries prevents reconnect work from resurrecting it.
+     */
+    synchronized int retire(String key) {
+        if (key == null || key.length() == 0) return 0;
+        int retiredCount = 0;
+        if (inFlight != null && key.equals(inFlight.key) && !inFlight.retired) {
+            inFlight.retired = true;
+            retiredCount++;
+        }
+        retiredCount += removeMatching(live, key);
+        retiredCount += removeMatching(historical, key);
+        return retiredCount;
+    }
+
+    private int removeMatching(ArrayDeque<Entry<T>> lane, String key) {
+        int removed = 0;
+        Iterator<Entry<T>> iterator = lane.iterator();
+        while (iterator.hasNext()) {
+            Entry<T> entry = iterator.next();
+            if (!key.equals(entry.key)) continue;
+            entry.retired = true;
+            iterator.remove();
+            removed++;
+        }
+        return removed;
     }
 
     synchronized void complete(Entry<T> entry) {

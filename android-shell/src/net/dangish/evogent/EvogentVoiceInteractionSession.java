@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.service.voice.VoiceInteractionSession;
 import android.text.InputType;
 import android.util.Log;
@@ -23,9 +25,26 @@ import android.view.View;
 final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
     private static final String TAG = "EvogentAssistant";
     private static final int MAX_NODES = 600;
+    private static final long ASSIST_CONTEXT_WAIT_MS = 800L;
 
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final EvogentAssistantLaunchGate launchGate =
+            new EvogentAssistantLaunchGate();
     private String contextToken;
     private boolean composerStarted;
+    private boolean contextTransferred;
+    private boolean closed;
+    private boolean timeoutScheduled;
+    private final Runnable assistContextTimeout = new Runnable() {
+        @Override public void run() {
+            timeoutScheduled = false;
+            if (closed || contextToken == null) return;
+            // Timeout is an intentional first-writer-wins empty context. A late assist callback
+            // cannot overwrite or relaunch it.
+            EvogentAssistantContextStore.seal(contextToken, null, "");
+            maybeLaunch(launchGate.onContextReady());
+        }
+    };
 
     EvogentVoiceInteractionSession(Context context) {
         super(context);
@@ -39,16 +58,33 @@ final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
         // startAssistantActivity supplies the visible surface. Avoid a blank assistant window
         // flashing underneath it.
         setUiEnabled(false);
-        if (contextToken == null) contextToken = EvogentAssistantContextStore.begin();
+        ensureContextToken();
     }
 
     @Override
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
-        if (composerStarted) return;
-        if (contextToken == null) contextToken = EvogentAssistantContextStore.begin();
+        if (closed || composerStarted) return;
+        ensureContextToken();
+        EvogentAssistantLaunchGate.Decision decision = launchGate.onShow();
+        if (decision == EvogentAssistantLaunchGate.Decision.LAUNCH) {
+            launchComposer();
+            return;
+        }
+        if (!closed && !composerStarted && !timeoutScheduled) {
+            timeoutScheduled = true;
+            main.postDelayed(assistContextTimeout, ASSIST_CONTEXT_WAIT_MS);
+        }
+    }
+
+    private void launchComposer() {
+        if (closed || composerStarted || contextToken == null) return;
+        composerStarted = true;
+        timeoutScheduled = false;
+        main.removeCallbacks(assistContextTimeout);
+        final String token = contextToken;
         Intent composer = new Intent(getContext(), EvogentAssistantActivity.class);
-        composer.putExtra(EvogentAssistantActivity.EXTRA_CONTEXT_TOKEN, contextToken);
+        composer.putExtra(EvogentAssistantActivity.EXTRA_CONTEXT_TOKEN, token);
         composer.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                 | Intent.FLAG_ACTIVITY_NO_ANIMATION);
         try {
@@ -60,12 +96,18 @@ final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
                 composer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getContext().startActivity(composer);
             }
-            composerStarted = true;
-            // The Activity is now the assistant layer; keep no inert session UI behind it.
-            hide();
-        } catch (Throwable error) {
-            EvogentAssistantContextStore.discard(contextToken);
+            contextTransferred = true;
             contextToken = null;
+            closed = true;
+            launchGate.cancel();
+            // The Activity owns the one-shot token now. End the inert voice session rather than
+            // merely hiding it and leaving late lifecycle callbacks able to race the next gesture.
+            finish();
+        } catch (Throwable error) {
+            EvogentAssistantContextStore.discard(token);
+            contextToken = null;
+            closed = true;
+            launchGate.cancel();
             Log.e(TAG, "could not open Add Message", error);
             finish();
         }
@@ -89,29 +131,69 @@ final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
     }
 
     private void storeFocusedContext(AssistStructure structure) {
-        if (contextToken == null || structure == null) return;
+        if (closed) return;
+        ensureContextToken();
+        if (contextToken == null) return;
         String app = null;
-        try {
-            ComponentName component = structure.getActivityComponent();
-            app = component == null ? null : component.getPackageName();
-        } catch (Throwable ignored) {}
-
         StringBuilder text = new StringBuilder();
-        int[] visited = new int[]{0};
-        try {
-            for (int w = 0;
-                    w < structure.getWindowNodeCount()
-                            && visited[0] < MAX_NODES
-                            && text.length() < EvogentAssistantContextStore.MAX_TEXT_CHARS;
-                    w++) {
-                AssistStructure.WindowNode window = structure.getWindowNodeAt(w);
-                if (window != null) appendNode(window.getRootViewNode(), text, visited);
+        if (structure != null) {
+            try {
+                ComponentName component = structure.getActivityComponent();
+                app = component == null ? null : component.getPackageName();
+            } catch (Throwable ignored) {}
+
+            int[] visited = new int[]{0};
+            try {
+                for (int w = 0;
+                        w < structure.getWindowNodeCount()
+                                && visited[0] < MAX_NODES
+                                && text.length() < EvogentAssistantContextStore.MAX_TEXT_CHARS;
+                        w++) {
+                    AssistStructure.WindowNode window = structure.getWindowNodeAt(w);
+                    if (window != null) appendNode(window.getRootViewNode(), text, visited);
+                }
+            } catch (Throwable error) {
+                // Partial, already-bounded context is still useful. Never log the content itself.
+                Log.w(TAG, "assist structure was only partially readable");
             }
-        } catch (Throwable error) {
-            // Partial, already-bounded context is still useful. Never log the content itself.
-            Log.w(TAG, "assist structure was only partially readable");
         }
-        EvogentAssistantContextStore.update(contextToken, app, text.toString());
+        EvogentAssistantContextStore.seal(contextToken, app, text.toString());
+        maybeLaunch(launchGate.onContextReady());
+    }
+
+    private void ensureContextToken() {
+        if (!closed && contextToken == null) {
+            contextToken = EvogentAssistantContextStore.begin();
+        }
+    }
+
+    private void maybeLaunch(EvogentAssistantLaunchGate.Decision decision) {
+        if (decision == EvogentAssistantLaunchGate.Decision.LAUNCH) {
+            launchComposer();
+        }
+    }
+
+    private void discardUntransferredContext() {
+        timeoutScheduled = false;
+        main.removeCallbacks(assistContextTimeout);
+        launchGate.cancel();
+        if (!contextTransferred && contextToken != null) {
+            EvogentAssistantContextStore.discard(contextToken);
+        }
+        contextToken = null;
+        closed = true;
+    }
+
+    @Override
+    public void onHide() {
+        if (!composerStarted) discardUntransferredContext();
+        super.onHide();
+    }
+
+    @Override
+    public void onDestroy() {
+        discardUntransferredContext();
+        super.onDestroy();
     }
 
     private void appendNode(
@@ -124,10 +206,14 @@ final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
             return;
         }
         visited[0]++;
-        if (node.getVisibility() == View.VISIBLE && !isPasswordNode(node)) {
-            appendValue(out, node.getText());
-            appendValue(out, node.getContentDescription());
+        if (EvogentAssistantTraversalPolicy.shouldPruneSubtree(
+                node.getVisibility() == View.VISIBLE,
+                isPasswordNode(node),
+                node.isAssistBlocked())) {
+            return;
         }
+        appendValue(out, node.getText());
+        appendValue(out, node.getContentDescription());
         for (int child = 0;
                 child < node.getChildCount()
                         && visited[0] < MAX_NODES
