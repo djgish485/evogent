@@ -112,6 +112,34 @@ test('capture publishes one canonical private snapshot and explicit query is the
   }
 });
 
+test('capture traverses searchable unreadable ancestors on Linux', {
+  skip: process.platform !== 'linux',
+}, () => {
+  const canonicalTmp = fs.realpathSync(os.tmpdir());
+  const outer = fs.mkdtempSync(
+    path.join(canonicalTmp, 'evogent-role-search-only-'),
+  );
+  const directory = path.join(outer, 'private');
+  fs.mkdirSync(directory, { mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
+  fs.chmodSync(outer, 0o711);
+  const value = {
+    directory,
+    snapshot: path.join(directory, 'android-role-holders.json'),
+  };
+  try {
+    const result = capture(value, {
+      home: 'com.example.home',
+      assistant: 'com.example.assistant',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.statSync(value.snapshot).mode & 0o777, 0o600);
+  } finally {
+    fs.chmodSync(outer, 0o700);
+    fs.rmSync(outer, { recursive: true, force: true });
+  }
+});
+
 test('snapshot and target comparisons are silent and distinguish mismatch from invalid input', () => {
   const value = fixture();
   try {
@@ -280,6 +308,52 @@ test('capture is atomic no-clobber and validation binds mode, user, canonical by
     fs.chmodSync(value.snapshot, 0o644);
     const unsafeMode = run(snapshotArgs('validate', value, digest));
     assert.equal(unsafeMode.status, 65);
+  } finally {
+    cleanup(value);
+  }
+});
+
+test('atomic capture uses renameat2 when Python omits os.link', {
+  skip: process.platform !== 'linux',
+}, () => {
+  const value = fixture();
+  const harness = `
+import base64
+import hashlib
+import importlib.util
+import os
+import pathlib
+import sys
+
+helper = pathlib.Path(sys.argv[1])
+snapshot = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("role_state_fallback", helper)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = base64.b64decode(sys.argv[3], validate=True)
+original = os.link
+try:
+    del os.link
+    module._publish_snapshot(snapshot, payload)
+finally:
+    os.link = original
+digest = hashlib.sha256(payload).hexdigest()
+module._read_snapshot(str(snapshot), digest, 0)
+`;
+  try {
+    // _read_snapshot also validates canonical role JSON, so publish a real
+    // snapshot first and exercise only publication through the fallback.
+    const payload = Buffer.from(
+      '{"holders":{"android.app.role.ASSISTANT":[],"android.app.role.HOME":[]},"schema":"evogent.phone.android-role-holders.v1","userId":0}\n',
+    );
+    const result = spawnSync(
+      'python3',
+      ['-c', harness, helper, value.snapshot, payload.toString('base64')],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(fs.readFileSync(value.snapshot), payload);
+    assert.equal(fs.statSync(value.snapshot).mode & 0o777, 0o600);
   } finally {
     cleanup(value);
   }

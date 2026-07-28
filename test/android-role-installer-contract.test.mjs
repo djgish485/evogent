@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -66,6 +67,47 @@ test('role snapshot, APK proof, assignment, switch, and commit are strictly orde
     installer.indexOf('# Allocate every recovery path'),
   );
   assert.match(noOp, /verify_release_android_roles/);
+});
+
+test('failed role capture leaves journal proof fields wholly unready', () => {
+  const capture = shellFunction(installer, 'capture_android_role_backup');
+  const fixture = fs.mkdtempSync(
+    path.join(fs.realpathSync(os.tmpdir()), 'evogent-role-capture-failure-'),
+  );
+  const backup = path.join(fixture, 'backup');
+  fs.mkdirSync(backup, { mode: 0o700 });
+  const harness = `
+set -u
+${capture}
+android_role_state_helper_safe() { return 0; }
+read_android_current_user() { printf '%s\\n' 0; }
+read_android_role_holders() { printf '%s\\n' com.example.holder; }
+python3() { return 65; }
+validate_android_role_backup() { return 0; }
+BACKUP_DIR="$1"
+ANDROID_ROLE_BACKUP="$1/android-role-holders.json"
+ANDROID_ROLE_BACKUP_READY=0
+ANDROID_ROLE_BACKUP_SHA256=""
+ANDROID_ROLE_USER_ID=""
+ANDROID_ROLE_STATE_HELPER=/fixture/android-role-state.py
+ANDROID_HOME_ROLE=android.app.role.HOME
+ANDROID_ASSISTANT_ROLE=android.app.role.ASSISTANT
+if capture_android_role_backup; then exit 91; fi
+[ "$ANDROID_ROLE_BACKUP" = "$1/android-role-holders.json" ]
+[ "$ANDROID_ROLE_BACKUP_READY" = 0 ]
+[ -z "$ANDROID_ROLE_BACKUP_SHA256" ]
+[ -z "$ANDROID_ROLE_USER_ID" ]
+printf '%s\\n' preserved
+`;
+  try {
+    const result = spawnSync('bash', ['-c', harness, 'capture', backup], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'preserved\n');
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('assistant qualification failure cannot mutate HOME', () => {

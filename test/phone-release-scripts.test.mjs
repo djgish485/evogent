@@ -2778,7 +2778,7 @@ printf 'rc=%s\\n' "$rc"
 
   assert.match(
     installer,
-    /EVOGENT_CONTROL_RELEASE_ROOT="\$PREVIOUS_TARGET"[\s\S]*bash "\$HOME\/phone-tools\/evogent-boot\.sh"[\s\S]*wait_for_authenticated_release_control_plane "\$PREVIOUS_TARGET"/,
+    /previous_boot="\$PREVIOUS_TARGET\/phone-tools\/evogent-boot[.]sh"[\s\S]*EVOGENT_CONTROL_RELEASE_ROOT="\$PREVIOUS_TARGET"[\s\S]*bash "\$previous_boot"[\s\S]*wait_for_authenticated_release_control_plane "\$PREVIOUS_TARGET"/,
   );
   assert.match(
     installer,
@@ -4334,12 +4334,105 @@ printf 'rc=%s failed=%s rearm=%s\\n' "$rc" "$ROLLBACK_FAILED" "$REARM_PRIOR_CONT
     /rollback_release\(\)[\s\S]*if ! stop_and_prove_runtime; then[\s\S]*return 1/,
   );
   const cleanup = shellFunction(installer, 'cleanup');
+  assert.match(
+    cleanup,
+    /if \[ -n "\$PREVIOUS_TARGET" \]; then[\s\S]*safe_private_program "\$previous_boot"[\s\S]*elif safe_private_program "\$HOME\/phone-tools\/evogent-boot[.]sh"; then/,
+  );
+  assert.doesNotMatch(
+    cleanup,
+    /\[ -x "\$HOME\/phone-tools\/evogent-boot[.]sh" \]/,
+  );
   const releaseInstallLock = cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"');
   const rearm = cleanup.indexOf(
     'if [ "$REARM_PRIOR_CONTROL_PLANE" = 1 ]',
     releaseInstallLock,
   );
   assert.ok(releaseInstallLock !== -1 && releaseInstallLock < rearm);
+});
+
+test('cleanup rearms legacy and versioned predecessors through their exact safe boot programs', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const safeProgram = shellFunction(installer, 'safe_private_program');
+  const cleanup = shellFunction(installer, 'cleanup');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-cleanup-rearm-'));
+  const home = path.join(fixture, 'home');
+  const legacyBoot = path.join(home, 'phone-tools/evogent-boot.sh');
+  const previous = path.join(fixture, 'releases/release-previous');
+  const previousBoot = path.join(previous, 'phone-tools/evogent-boot.sh');
+  const journal = path.join(fixture, 'journal.json');
+  const trace = path.join(fixture, 'trace');
+  fs.mkdirSync(path.dirname(legacyBoot), { recursive: true });
+  fs.mkdirSync(path.dirname(previousBoot), { recursive: true });
+  fs.writeFileSync(journal, '{}\n', { mode: 0o600 });
+  fs.writeFileSync(previousBoot, 'versioned boot fixture\n', { mode: 0o555 });
+  fs.chmodSync(previousBoot, 0o555);
+
+  const harness = `
+set -uo pipefail
+${safeProgram}
+${cleanup}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+is_real_release_target() { record "target:$1"; return 0; }
+set_tmux_control_release_root() { record "release-root:$1"; return 0; }
+bash() { record "bash:$1"; return 0; }
+wait_for_authenticated_release_control_plane() {
+  record "wait:$1"
+  return 0
+}
+rearm_legacy_server() { record legacy-server; return 0; }
+rearm_legacy_control_plane() { record legacy-control; return 0; }
+retire_rolled_back_transaction_journal() { record retire; return 0; }
+remove_transaction_recoverer() { :; }
+prune_orphan_migrations() { :; }
+HOME="$1"
+TRACE="$2"
+TRANSACTION_JOURNAL="$3"
+PREVIOUS_TARGET="$4"
+CYCLE_GATE_HELD=0
+CONTROL_MUTATION_GATE_HELD=0
+STAGE=""
+INSTALL_LOCK_HELD=0
+DEPENDENCY_BUILD=""
+REARM_PRIOR_CONTROL_PLANE=1
+ROLLBACK_DECISION_DURABLE=1
+TRANSACTION_PHASE=rolled_back
+LEGACY_CONTROL_PLANE_EXPECTED=1
+SUCCESS=1
+RECOVERY_ACTIVE=1
+cleanup
+`;
+  function run(previousTarget) {
+    fs.rmSync(trace, { force: true });
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'cleanup-rearm', home, trace, journal, previousTarget],
+      { encoding: 'utf8' },
+    );
+  }
+
+  let result = run(previous);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    `target:${previous}\n`
+      + `release-root:${previous}\n`
+      + `bash:${previousBoot}\n`
+      + `wait:${previous}\n`
+      + 'retire\n',
+  );
+
+  fs.writeFileSync(legacyBoot, 'legacy boot fixture\n', { mode: 0o600 });
+  fs.chmodSync(legacyBoot, 0o600);
+  result = run('');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'legacy-server\nlegacy-control\nretire\n',
+  );
 });
 
 test('runtime shutdown proof rejects detached listeners after tmux disappears', () => {

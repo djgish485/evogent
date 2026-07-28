@@ -23,6 +23,8 @@ Only the explicit ``query`` command emits a holder package name.
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -221,10 +223,19 @@ def _validate_snapshot_path(raw: str) -> pathlib.Path:
     return path
 
 
-def _directory_open_flags() -> int:
+def _directory_walk_flags() -> int:
     required = ("O_DIRECTORY", "O_NOFOLLOW")
     if any(not hasattr(os, name) for name in required):
         raise RoleStateError
+    return (
+        getattr(os, "O_PATH", os.O_RDONLY)
+        | os.O_DIRECTORY
+        | os.O_NOFOLLOW
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+
+
+def _directory_sync_flags() -> int:
     return (
         os.O_RDONLY
         | os.O_DIRECTORY
@@ -234,22 +245,34 @@ def _directory_open_flags() -> int:
 
 
 def _open_private_parent(path: pathlib.Path) -> int:
-    flags = _directory_open_flags()
-    descriptor = os.open("/", flags)
+    walk_flags = _directory_walk_flags()
+    descriptor = os.open("/", walk_flags)
+    sync_descriptor: int | None = None
     try:
         for component in path.parent.parts[1:]:
-            child = os.open(component, flags, dir_fd=descriptor)
+            child = os.open(component, walk_flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child
-        metadata = os.fstat(descriptor)
+        walked = os.fstat(descriptor)
+        sync_descriptor = os.open(
+            ".",
+            _directory_sync_flags(),
+            dir_fd=descriptor,
+        )
+        opened = os.fstat(sync_descriptor)
         if (
-            not stat.S_ISDIR(metadata.st_mode)
-            or metadata.st_uid != os.geteuid()
-            or stat.S_IMODE(metadata.st_mode) != 0o700
+            not stat.S_ISDIR(walked.st_mode)
+            or not stat.S_ISDIR(opened.st_mode)
+            or not _same_inode(walked, opened)
+            or opened.st_uid != os.geteuid()
+            or stat.S_IMODE(opened.st_mode) != 0o700
         ):
             raise RoleStateError
-        return descriptor
+        os.close(descriptor)
+        return sync_descriptor
     except BaseException:
+        if sync_descriptor is not None:
+            os.close(sync_descriptor)
         os.close(descriptor)
         raise
 
@@ -265,6 +288,54 @@ def _write_all(descriptor: int, payload: bytes) -> None:
         if written <= 0:
             raise RoleStateError
         offset += written
+
+
+def _publish_noreplace(
+    directory_descriptor: int,
+    source: str,
+    destination: str,
+) -> bool:
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is not None:
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            directory_descriptor,
+            os.fsencode(source),
+            directory_descriptor,
+            os.fsencode(destination),
+            1,
+        )
+        if result == 0:
+            return False
+        error = ctypes.get_errno()
+        if error in {errno.EEXIST, errno.ENOTEMPTY}:
+            raise FileExistsError(error, os.strerror(error), destination)
+        if error != errno.ENOSYS:
+            raise OSError(error, os.strerror(error), destination)
+
+    if hasattr(os, "link"):
+        try:
+            os.link(
+                source,
+                destination,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except (AttributeError, NotImplementedError, TypeError):
+            pass
+        else:
+            return True
+
+    raise RoleStateError
 
 
 def _snapshot_digest(payload: bytes) -> str:
@@ -305,17 +376,17 @@ def _publish_snapshot(path: pathlib.Path, payload: bytes) -> None:
         os.close(file_descriptor)
         file_descriptor = None
 
-        # Publishing a hard link is atomic and no-clobber. Both names are in
-        # the same private directory and point to the already-fsynced inode.
-        os.link(
+        # Linux/Android renameat2 publishes atomically without replacing an
+        # existing snapshot. Hosts without renameat2 retain the equivalent
+        # hard-link publication, followed by removal of the temporary name.
+        temporary_exists = _publish_noreplace(
+            parent_descriptor,
             temporary,
             SNAPSHOT_BASENAME,
-            src_dir_fd=parent_descriptor,
-            dst_dir_fd=parent_descriptor,
-            follow_symlinks=False,
         )
-        os.unlink(temporary, dir_fd=parent_descriptor)
-        temporary_exists = False
+        if temporary_exists:
+            os.unlink(temporary, dir_fd=parent_descriptor)
+            temporary_exists = False
         os.fsync(parent_descriptor)
     finally:
         if file_descriptor is not None:

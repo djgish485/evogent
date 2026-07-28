@@ -1756,17 +1756,18 @@ read_android_current_user() {
 }
 
 capture_android_role_backup() {
-  local home_raw assistant_raw digest
+  local home_raw assistant_raw digest role_backup role_user_id
   android_role_state_helper_safe || return 1
-  ANDROID_ROLE_BACKUP="$BACKUP_DIR/android-role-holders.json"
-  [ ! -e "$ANDROID_ROLE_BACKUP" ] \
-    && [ ! -L "$ANDROID_ROLE_BACKUP" ] || return 1
-  ANDROID_ROLE_USER_ID="$(read_android_current_user)" || return 1
+  role_backup="$BACKUP_DIR/android-role-holders.json"
+  [ "$ANDROID_ROLE_BACKUP" = "$role_backup" ] \
+    && [ ! -e "$role_backup" ] \
+    && [ ! -L "$role_backup" ] || return 1
+  role_user_id="$(read_android_current_user)" || return 1
   home_raw="$(
-    read_android_role_holders "$ANDROID_HOME_ROLE" "$ANDROID_ROLE_USER_ID"
+    read_android_role_holders "$ANDROID_HOME_ROLE" "$role_user_id"
   )" || return 1
   assistant_raw="$(
-    read_android_role_holders "$ANDROID_ASSISTANT_ROLE" "$ANDROID_ROLE_USER_ID"
+    read_android_role_holders "$ANDROID_ASSISTANT_ROLE" "$role_user_id"
   )" || return 1
   digest="$(
     {
@@ -1774,12 +1775,16 @@ capture_android_role_backup() {
       printf '%s\n' "$home_raw"
       printf '%s\n' "$assistant_raw"
     } | python3 "$ANDROID_ROLE_STATE_HELPER" capture \
-      --snapshot "$ANDROID_ROLE_BACKUP" \
-      --user-id "$ANDROID_ROLE_USER_ID"
+      --snapshot "$role_backup" \
+      --user-id "$role_user_id"
   )" || return 1
   [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
-  ANDROID_ROLE_BACKUP_SHA256="$digest"
-  ANDROID_ROLE_BACKUP_READY=1
+  # Publish the proof fields as one assignment command. A pending signal can
+  # therefore observe either a wholly unready state or the complete proof,
+  # never a user id without a ready digest.
+  ANDROID_ROLE_BACKUP_SHA256="$digest" \
+    ANDROID_ROLE_USER_ID="$role_user_id" \
+    ANDROID_ROLE_BACKUP_READY=1
   validate_android_role_backup
 }
 
@@ -7290,7 +7295,7 @@ rollback_release() {
 }
 
 cleanup() {
-  local rc=$? rearm_failed=0
+  local rc=$? rearm_failed=0 previous_boot=""
   trap - EXIT INT TERM HUP
   if [ "$rc" -ne 0 ] && [ "$COMMITTED" = 0 ] \
     && [ "$ROLLBACK_ATTEMPTED" = 0 ] \
@@ -7351,19 +7356,23 @@ cleanup() {
       && [ "$INSTALL_LOCK_HELD" = 0 ] \
       && { [ -n "$PREVIOUS_TARGET" ] \
         || [ "$LEGACY_CONTROL_PLANE_EXPECTED" = 1 ]; }; then
-    if [ -x "$HOME/phone-tools/evogent-boot.sh" ]; then
-      if [ -n "$PREVIOUS_TARGET" ]; then
+    if [ -n "$PREVIOUS_TARGET" ]; then
+      previous_boot="$PREVIOUS_TARGET/phone-tools/evogent-boot.sh"
+      if is_real_release_target "$PREVIOUS_TARGET" \
+          && safe_private_program "$previous_boot"; then
         set_tmux_control_release_root "$PREVIOUS_TARGET" \
           && EVOGENT_RELEASE_RECOVERY=1 EVOGENT_RELEASE_BOOT=1 \
             EVOGENT_CONTROL_RELEASE_ROOT="$PREVIOUS_TARGET" \
-            bash "$HOME/phone-tools/evogent-boot.sh" \
+            bash "$previous_boot" \
           && wait_for_authenticated_release_control_plane "$PREVIOUS_TARGET" \
           || rearm_failed=1
       else
-        rearm_legacy_server \
-          && rearm_legacy_control_plane \
-          || rearm_failed=1
+        rearm_failed=1
       fi
+    elif safe_private_program "$HOME/phone-tools/evogent-boot.sh"; then
+      rearm_legacy_server \
+        && rearm_legacy_control_plane \
+        || rearm_failed=1
     else
       rearm_failed=1
     fi
