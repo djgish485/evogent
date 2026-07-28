@@ -1079,6 +1079,21 @@ WHERE completed_at_ms IS NOT NULL
   );
 `;
 
+// Builds before the content-free source watermark stored notification title/body
+// inside model-facing browse-cache rows. Purge that bounded legacy shape at
+// startup so deploying the privacy fix does not leave old content available
+// until its normal cache expiry.
+const purgeLegacyNotificationBrowseSignalsSql = `
+DELETE FROM browse_cache_items
+WHERE source_id LIKE 'notif-%'
+  AND json_valid(payload_json)
+  AND json_extract(payload_json, '$.type') = 'notification-signal'
+  AND json_extract(payload_json, '$.captureMethod') = 'phone-notification-listener';
+
+DELETE FROM browse_cache_refresh_runs
+WHERE triggered_by = 'phone-notification-listener';
+`;
+
 const repairPrefixedTwitterBrowseCacheSourceIdsSql = `
 DELETE FROM browse_cache_items
 WHERE LOWER(source) = 'twitter'
@@ -1840,6 +1855,7 @@ export function ensureFeedSchema(db: Database.Database): void {
     db.exec(stmt);
   }
   db.exec(createSetupReadinessStateTableSql);
+  db.exec(purgeLegacyNotificationBrowseSignalsSql);
   db.exec(repairImpossibleBrowseCacheRefreshRunTimestampsSql);
   db.exec(repairPrefixedTwitterBrowseCacheSourceIdsSql);
   db.exec(repairStructurallyMisclassifiedTwitterRowsSql);

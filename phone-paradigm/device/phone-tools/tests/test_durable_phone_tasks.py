@@ -44,7 +44,12 @@ from scheduler_timing import (  # noqa: E402
     normalize_scheduler_bounds,
     watchdog_success_reference_overdue,
 )
-from source_cadence import cadence_decision  # noqa: E402
+import source_cadence  # noqa: E402
+from source_cadence import (  # noqa: E402
+    SOURCE_DUE_SIGNAL_MARKER,
+    acknowledge_browse_success,
+    cadence_decision,
+)
 import public_http  # noqa: E402
 from public_http import (  # noqa: E402
     PublicHttpLimitError,
@@ -324,12 +329,22 @@ class SourceCadenceTests(unittest.TestCase):
         self.live = self.root / "source-cadence.json"
         self.defaults = self.root / "source-cadence.default.json"
         self.stamp = self.root / "last-browse"
+        self.signal_ack = self.root / "last-source-signal-ack"
+        self.signal_directory = self.root / "source-due-signals"
+        self.signal_directory.mkdir(mode=0o700)
+        self.signal = self.signal_directory / "reddit.due"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
     def write_json(self, path: Path, value: object) -> None:
         path.write_text(json.dumps(value), encoding="utf-8")
+
+    def write_signal(self, timestamp: float, marker: bytes = SOURCE_DUE_SIGNAL_MARKER) -> None:
+        self.signal.write_bytes(marker)
+        self.signal.chmod(0o600)
+        timestamp_ns = int(timestamp * 1_000_000_000)
+        os.utime(self.signal, ns=(timestamp_ns, timestamp_ns))
 
     def test_fractional_hours_are_due_by_elapsed_seconds_without_shell_math(self) -> None:
         self.write_json(self.live, {"twitter": {"cadenceHours": 1.5}})
@@ -376,6 +391,360 @@ class SourceCadenceTests(unittest.TestCase):
         self.assertEqual(inherited["hours"], 2.25)
         self.assertTrue(invalid["due"])
         self.assertEqual(invalid["reason"], "invalid_live")
+
+    def test_success_acknowledges_only_the_generation_covered_at_browse_start(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (10_000, 10_000))
+        self.write_signal(10_001)
+
+        signaled = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=10_002,
+        )
+        self.assertTrue(signaled["due"])
+        self.assertEqual(signaled["reason"], "source_signal")
+        self.assertEqual(signaled["signalState"], "signal_unacknowledged")
+
+        browse_started_ns = 10_002 * 1_000_000_000
+        # This notification lands after retrieval starts but before successful
+        # post-processing would formerly have touched the completion stamp.
+        self.write_signal(10_003)
+        with patch("source_cadence.time.time_ns", return_value=10_004 * 1_000_000_000):
+            acknowledge_browse_success(
+                self.stamp,
+                self.signal_ack,
+                browse_started_ns,
+            )
+        still_due = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=10_005,
+        )
+        self.assertTrue(still_due["due"])
+        self.assertEqual(still_due["reason"], "source_signal")
+        self.assertEqual(self.stamp.stat().st_mtime_ns, 10_004 * 1_000_000_000)
+        self.assertEqual(self.signal_ack.stat().st_mtime_ns, browse_started_ns)
+
+        next_browse_started_ns = 10_006 * 1_000_000_000
+        with patch("source_cadence.time.time_ns", return_value=10_007 * 1_000_000_000):
+            acknowledge_browse_success(
+                self.stamp,
+                self.signal_ack,
+                next_browse_started_ns,
+            )
+        acknowledged = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=10_008,
+        )
+        self.assertFalse(acknowledged["due"])
+        self.assertLess(acknowledged["ageSeconds"], 2)
+        self.assertEqual(acknowledged["signalState"], "signal_obsolete")
+        self.assertTrue(self.signal.exists())
+
+    def test_completion_is_published_before_ack_and_missing_ack_is_migration_safe(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (15_000, 15_000))
+        self.write_signal(15_001)
+        original_write = source_cadence._write_private_stamp
+        writes: list[Path] = []
+
+        def fail_ack(path: Path, timestamp_ns: int) -> None:
+            writes.append(path)
+            if len(writes) == 2:
+                raise OSError("simulated ack failure")
+            original_write(path, timestamp_ns)
+
+        with (
+            patch("source_cadence.time.time_ns", return_value=15_004 * 1_000_000_000),
+            patch("source_cadence._write_private_stamp", side_effect=fail_ack),
+            self.assertRaises(OSError),
+        ):
+            acknowledge_browse_success(
+                self.stamp,
+                self.signal_ack,
+                15_002 * 1_000_000_000,
+            )
+        self.assertEqual(writes, [self.stamp, self.signal_ack])
+        self.assertEqual(self.stamp.stat().st_mtime_ns, 15_004 * 1_000_000_000)
+        self.assertFalse(self.signal_ack.exists())
+
+        # A deployment upgraded with a signal but no acknowledgement, or a
+        # crash between the two writes above, conservatively browses once.
+        unacknowledged = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=15_005,
+        )
+        self.assertTrue(unacknowledged["due"])
+        self.assertEqual(unacknowledged["signalState"], "signal_unacknowledged")
+
+    def test_invalid_or_future_signal_ack_cannot_suppress_a_valid_marker(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (17_000, 17_000))
+        self.write_signal(17_001)
+        self.signal_ack.touch()
+        self.signal_ack.chmod(0o644)
+        os.utime(self.signal_ack, (17_002, 17_002))
+
+        public_ack = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=17_003,
+        )
+        self.assertTrue(public_ack["due"])
+        self.assertEqual(public_ack["signalState"], "signal_unacknowledged")
+
+        self.signal_ack.chmod(0o600)
+        os.utime(self.signal_ack, (18_000, 18_000))
+        future_ack = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=17_004,
+        )
+        self.assertTrue(future_ack["due"])
+        self.assertEqual(future_ack["signalState"], "signal_unacknowledged")
+
+        self.signal_ack.unlink()
+        ack_target = self.root / "ack-target"
+        ack_target.touch()
+        ack_target.chmod(0o600)
+        os.utime(ack_target, (17_002, 17_002))
+        self.signal_ack.symlink_to(ack_target)
+        symlink_ack = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=17_005,
+        )
+        self.assertTrue(symlink_ack["due"])
+        self.assertEqual(symlink_ack["signalState"], "signal_unacknowledged")
+
+        self.signal_ack.unlink()
+        os.link(ack_target, self.signal_ack)
+        hardlink_ack = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=17_006,
+        )
+        self.assertTrue(hardlink_ack["due"])
+        self.assertEqual(hardlink_ack["signalState"], "signal_unacknowledged")
+
+    def test_ack_within_marker_skew_window_is_still_strictly_future_and_invalid(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (1_000, 1_000))
+        self.write_signal(1_060)
+        self.signal_ack.touch()
+        self.signal_ack.chmod(0o600)
+        os.utime(self.signal_ack, (1_120, 1_120))
+
+        decision = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=1_061,
+        )
+        self.assertTrue(decision["due"])
+        self.assertEqual(decision["reason"], "source_signal")
+        self.assertEqual(decision["signalState"], "signal_unacknowledged")
+
+        with (
+            patch("source_cadence.time.time_ns", return_value=1_000 * 1_000_000_000),
+            self.assertRaises(ValueError),
+        ):
+            acknowledge_browse_success(
+                self.stamp,
+                self.signal_ack,
+                1_001 * 1_000_000_000,
+            )
+
+    def test_signal_with_arbitrary_content_or_public_file_permissions_is_ignored(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (20_000, 20_000))
+        self.write_signal(20_001, b"PRIVATE notification text must never be a signal\n")
+
+        arbitrary_content = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=20_002,
+        )
+        self.assertFalse(arbitrary_content["due"])
+        self.assertEqual(arbitrary_content["signalState"], "signal_invalid")
+
+        self.write_signal(20_003)
+        self.signal.chmod(0o644)
+        public_marker = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=20_004,
+        )
+        self.assertFalse(public_marker["due"])
+        self.assertEqual(public_marker["signalState"], "signal_invalid")
+
+    def test_signal_requires_exact_private_real_parent_and_final_file(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (30_000, 30_000))
+        self.write_signal(30_001)
+
+        self.signal_directory.chmod(0o755)
+        public_parent = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=30_002,
+        )
+        self.assertFalse(public_parent["due"])
+        self.assertEqual(public_parent["signalState"], "signal_invalid")
+
+        self.signal_directory.chmod(0o700)
+        self.signal.unlink()
+        target = self.root / "marker-target"
+        target.write_bytes(SOURCE_DUE_SIGNAL_MARKER)
+        target.chmod(0o600)
+        self.signal.symlink_to(target)
+        symlink_file = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=30_003,
+        )
+        self.assertFalse(symlink_file["due"])
+        self.assertEqual(symlink_file["signalState"], "signal_invalid")
+
+        self.signal.unlink()
+        self.write_signal(30_004)
+        hardlink = self.root / "marker-hardlink"
+        os.link(self.signal, hardlink)
+        hardlinked_file = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=30_005,
+        )
+        self.assertFalse(hardlinked_file["due"])
+        self.assertEqual(hardlinked_file["signalState"], "signal_invalid")
+
+        hardlink.unlink()
+        with patch("source_cadence.os.getuid", return_value=os.getuid() + 1):
+            wrong_owner = cadence_decision(
+                "reddit",
+                stamp_path=self.stamp,
+                live_path=self.live,
+                default_path=self.defaults,
+                signal_path=self.signal,
+                signal_ack_path=self.signal_ack,
+                now_seconds=30_006,
+            )
+        self.assertFalse(wrong_owner["due"])
+        self.assertEqual(wrong_owner["signalState"], "signal_invalid")
+
+        wrong_name = self.signal_directory / "other.due"
+        self.signal.rename(wrong_name)
+        wrong_final = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=wrong_name,
+            signal_ack_path=self.signal_ack,
+            now_seconds=30_007,
+        )
+        self.assertFalse(wrong_final["due"])
+        self.assertEqual(wrong_final["signalState"], "signal_invalid")
+
+    def test_symlink_parent_and_far_future_marker_are_selectively_ignored(self) -> None:
+        self.write_json(self.live, {"reddit": {"cadenceHours": 24}})
+        self.stamp.touch()
+        os.utime(self.stamp, (40_000, 40_000))
+        self.write_signal(40_001)
+
+        real_directory = self.root / "real-source-due-signals"
+        self.signal_directory.rename(real_directory)
+        self.signal_directory.symlink_to(real_directory, target_is_directory=True)
+        symlink_parent = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=40_002,
+        )
+        self.assertFalse(symlink_parent["due"])
+        self.assertEqual(symlink_parent["signalState"], "signal_invalid")
+
+        self.signal_directory.unlink()
+        real_directory.rename(self.signal_directory)
+        self.write_signal(40_000 + 60 * 60)
+        future_marker = cadence_decision(
+            "reddit",
+            stamp_path=self.stamp,
+            live_path=self.live,
+            default_path=self.defaults,
+            signal_path=self.signal,
+            signal_ack_path=self.signal_ack,
+            now_seconds=40_003,
+        )
+        self.assertFalse(future_marker["due"])
+        self.assertEqual(future_marker["signalState"], "signal_future_skew")
 
 
 class SchedulerTimingTests(unittest.TestCase):

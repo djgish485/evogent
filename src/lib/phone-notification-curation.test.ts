@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, test } from 'node:test';
+import { afterEach, beforeEach, mock, test } from 'node:test';
 
 import {
   classifyPhoneNotification,
@@ -14,6 +14,10 @@ import {
   type PhoneNotificationIngestInput,
 } from './phone-notification-curation';
 import { getDb } from './db/client';
+import {
+  getSourceDueSignalPath,
+  SOURCE_DUE_SIGNAL_MARKER,
+} from './source-due-signal';
 
 const originalDataDir = process.env.DATA_DIR;
 let temporaryDataDir = '';
@@ -32,6 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mock.restoreAll();
   closeDatabase();
   if (originalDataDir === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = originalDataDir;
@@ -291,19 +296,159 @@ test('Paused mode stores no event and can never produce a cancellation receipt',
   assert.equal(count.count, 0);
 });
 
-test('eligible content-app notification keeps the existing lightweight browse signal', async () => {
+test('eligible content-app notification writes only a content-free source due marker', async () => {
+  const arbitraryPrivateText = 'PRIVATE_CANARY_notification_body_84219';
   const result = await ingestPhoneNotification(payload({
     packageName: 'com.reddit.frontpage',
-    appLabel: 'Reddit',
+    appLabel: 'Private reader app label',
+    title: 'Private canary title',
+    text: arbitraryPrivateText,
+    subText: 'Private canary subtext',
   }));
   assert.equal(result.receipt.persisted, true);
-  const row = getDb().prepare(`
-    SELECT source, payload_json
+  const browseCacheCount = getDb().prepare(`
+    SELECT COUNT(*) AS count
     FROM browse_cache_items
-    WHERE source = 'reddit'
-  `).get() as { source: string; payload_json: string };
-  assert.equal(row.source, 'reddit');
-  assert.match(row.payload_json, /phone-notification-listener/);
+  `).get() as { count: number };
+  assert.equal(browseCacheCount.count, 0);
+
+  const signalPath = getSourceDueSignalPath('reddit');
+  assert.equal(fs.readFileSync(signalPath, 'utf8'), SOURCE_DUE_SIGNAL_MARKER);
+  assert.equal(fs.statSync(signalPath).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(path.dirname(signalPath)).mode & 0o777, 0o700);
+  const signalFiles = fs.readdirSync(path.dirname(signalPath));
+  assert.deepEqual(signalFiles, ['reddit.due']);
+  const signalStorage = signalFiles
+    .map((name) => fs.readFileSync(path.join(path.dirname(signalPath), name), 'utf8'))
+    .join('\n');
+  assert.doesNotMatch(
+    signalStorage,
+    /PRIVATE_CANARY|notification_body|com\.reddit|Private (?:canary|reader)/i,
+  );
+});
+
+test('YouTube, X, and Substack notifications use canonical content-free source markers', async () => {
+  const mappings = [
+    ['com.google.android.youtube', 'youtube', 'c'],
+    ['com.twitter.android', 'twitter', 'd'],
+    ['com.substack.app', 'substack-app', 'e'],
+  ] as const;
+  for (const [packageName, source, eventCharacter] of mappings) {
+    const result = await ingestPhoneNotification(payload({
+      eventId: eventCharacter.repeat(64),
+      packageName,
+      appLabel: 'Private app label',
+      title: 'Private notification title',
+      text: 'Private notification body',
+    }));
+    assert.equal(result.receipt.persisted, true);
+    assert.equal(
+      fs.readFileSync(getSourceDueSignalPath(source), 'utf8'),
+      SOURCE_DUE_SIGNAL_MARKER,
+    );
+  }
+  const browseCacheCount = getDb().prepare(`
+    SELECT COUNT(*) AS count
+    FROM browse_cache_items
+  `).get() as { count: number };
+  assert.equal(browseCacheCount.count, 0);
+});
+
+test('source due publication fsyncs the renamed marker and its parent directory', async () => {
+  const originalFsync = fs.fsyncSync.bind(fs);
+  const synchronizedKinds: string[] = [];
+  mock.method(fs, 'fsyncSync', (descriptor: number) => {
+    synchronizedKinds.push(fs.fstatSync(descriptor).isDirectory() ? 'directory' : 'file');
+    originalFsync(descriptor);
+  });
+
+  await ingestPhoneNotification(payload({
+    packageName: 'com.reddit.frontpage',
+    appLabel: 'Private reader app label',
+  }));
+
+  assert.deepEqual(synchronizedKinds, ['file', 'file', 'directory']);
+  assert.equal(
+    fs.readFileSync(getSourceDueSignalPath('reddit'), 'utf8'),
+    SOURCE_DUE_SIGNAL_MARKER,
+  );
+});
+
+test('redacted or conversational content-app notifications write no due marker', async () => {
+  await ingestPhoneNotification(payload({
+    packageName: 'com.google.android.gm',
+    appLabel: 'Mail',
+    text: 'Your verification code is 123456',
+  }));
+  await ingestPhoneNotification(payload({
+    eventId: 'f'.repeat(64),
+    packageName: 'com.twitter.android',
+    appLabel: 'X',
+    category: 'message',
+    conversation: true,
+    title: 'Private conversation',
+    text: 'Private direct message',
+  }));
+  assert.equal(fs.existsSync(getSourceDueSignalPath('gmail')), false);
+  assert.equal(fs.existsSync(getSourceDueSignalPath('twitter')), false);
+  const browseCacheCount = getDb().prepare(`
+    SELECT COUNT(*) AS count
+    FROM browse_cache_items
+  `).get() as { count: number };
+  assert.equal(browseCacheCount.count, 0);
+});
+
+test('database startup purges legacy notification-content browse signals', () => {
+  const privateCanary = 'LEGACY_PRIVATE_NOTIFICATION_CANARY_9182';
+  const database = getDb();
+  database.prepare(`
+    INSERT INTO browse_cache_items (
+      source, source_id, title, payload_json, fetched_at_ms, expires_at_ms
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    'reddit',
+    'notif-legacy-content-signal',
+    privateCanary,
+    JSON.stringify({
+      type: 'notification-signal',
+      title: privateCanary,
+      text: privateCanary,
+      captureMethod: 'phone-notification-listener',
+    }),
+    Date.now(),
+    Date.now() + 60_000,
+  );
+  database.prepare(`
+    INSERT INTO browse_cache_refresh_runs (
+      id, source, triggered_by, started_at_ms, completed_at_ms,
+      status, items_added, error, metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'legacy-phone-notification-refresh',
+    'reddit',
+    'phone-notification-listener',
+    Date.now(),
+    Date.now(),
+    'completed',
+    1,
+    null,
+    null,
+  );
+  closeDatabase();
+
+  const reopened = getDb();
+  const cacheCount = reopened.prepare(`
+    SELECT COUNT(*) AS count
+    FROM browse_cache_items
+    WHERE source_id = 'notif-legacy-content-signal'
+  `).get() as { count: number };
+  const refreshCount = reopened.prepare(`
+    SELECT COUNT(*) AS count
+    FROM browse_cache_refresh_runs
+    WHERE triggered_by = 'phone-notification-listener'
+  `).get() as { count: number };
+  assert.equal(cacheCount.count, 0);
+  assert.equal(refreshCount.count, 0);
 });
 
 test('settings view exposes observed apps and immutable safeguards without notification content', async () => {

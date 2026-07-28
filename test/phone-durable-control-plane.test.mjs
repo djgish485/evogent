@@ -375,6 +375,12 @@ test('scheduled phone overseer reviews runtime state without doing host developm
 test('source cadence advances only after a completed terminal browse receipt', () => {
   const cycle = read('evogent-cycle.sh');
   assert.match(cycle, /source_cadence\.py/);
+  assert.match(cycle, /--signal "\$signal"/);
+  assert.match(cycle, /--signal-ack "\$signal_ack"/);
+  assert.match(cycle, /--signal-ack "\$TOOLS\/\.last-source-signal-ack-\$src"/);
+  assert.match(cycle, /source_browse_start_ns/);
+  assert.match(cycle, /content-free notification signal overrides cadence/);
+  assert.doesNotMatch(cycle, /payload_json LIKE.*phone-notification-listener/);
   assert.doesNotMatch(cycle, /\$\(\(\s*hours\s*\*\s*60/);
   assert.match(cycle, /Only a completed receipt can advance source cadence/);
   assert.match(cycle, /SELECT COUNT\(\*\) FROM browse_cache_items[\s\S]*fetched_at_ms>=\?/);

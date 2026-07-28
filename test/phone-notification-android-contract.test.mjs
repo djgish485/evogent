@@ -103,7 +103,8 @@ test('live notification lane uses one monotonic network deadline without changin
   assert.match(architectureProse, /Live `onNotificationPosted` callbacks always leapfrog reconnect history/);
   assert.match(architectureProse, /newest pending live callback is always selected next/);
   assert.match(architectureProse, /Historical completeness is best-effort/);
-  assert.match(architectureProse, /make that source due in the next normal scheduler-owned cycle/);
+  assert.match(architectureProse, /compares its modification time with a separate per-source acknowledgement/);
+  assert.match(architectureProse, /never enters the browse cache or another model-facing candidate store/);
   assert.match(architectureProse, /A push does not start its own cycle or model call/);
 });
 

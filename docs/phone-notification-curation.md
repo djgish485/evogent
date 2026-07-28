@@ -68,11 +68,19 @@ reversible.
    six-hour deduplication bucket, occurrence count, priority, expiry, and
    preservation reason. No runtime agent or external service receives the
    notification.
-6. Content-app events that are neither sensitive nor conversational retain the
-   existing short-lived browse-cache signal, so a new source notification can
-   make that source due in the next normal scheduler-owned cycle without making
-   notification text an editorial answer. A push does not start its own cycle
-   or model call.
+6. Content-app events that are neither sensitive nor conversational refresh one
+   fixed, content-free marker at
+   `data/source-due-signals/<canonical-source>.due`. The filename contains only
+   the canonical source name; the file body is a constant marker and contains
+   no title, text, subtext, package, app label, event identity, or account data.
+   It never enters the browse cache or another model-facing candidate store.
+   The next normal scheduler-owned cycle compares its modification time with a
+   separate per-source acknowledgement of the browse-start generation most
+   recently covered. Successful work records ordinary cadence at completion,
+   then acknowledges only that captured start generation. A notification
+   arriving during retrieval or post-processing therefore remains newer and
+   due; a missing or invalid acknowledgement fails conservatively to due. A
+   push does not start its own cycle or model call.
 7. In Curated shade only, the server may return a suppression request for a
    package on the user's explicit replacement list. The native service requires
    that permission in the response, publishes Evogent's digest, verifies that
@@ -148,6 +156,8 @@ and per-app choices are deployment-private:
 - notification cards and receipts live in the on-phone SQLite database;
 - settings live in the mode-`0600`, gitignored
   `data/phone-notification-curation.json`;
+- source-due markers live in a mode-`0700`, gitignored directory as at most one
+  mode-`0600` constant marker per canonical source;
 - ordinary cards expire after three days and high/critical cards after seven
   days unless normal feed lifecycle actions resolve them sooner;
 - no content or device observation belongs in committed intent ledgers, build
@@ -174,7 +184,8 @@ Automated checks must cover:
 - Android-original preservation by default plus explicit, reversible per-app
   best-effort replacement permission;
 - persistence and deduplication receipts;
-- content-app browse-signal continuity;
+- content-app source-due continuity, exact marker validation, and proof that
+  notification content cannot enter signal storage or browse-cache rows;
 - server failure, digest failure, missing permission, stale receipt, and changed
   generation preserving the original; and
 - accessible controls for modes, lock-screen preview, and per-app preservation.

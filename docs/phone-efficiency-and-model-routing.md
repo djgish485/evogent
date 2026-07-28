@@ -14,8 +14,11 @@ A full cycle is a curation opportunity, not an all-source sweep.
 
 1. Each source has an independent private cadence in
    `data/source-cadence.json`.
-2. A cycle browses only sources that are due. A relevant notification may make
-   its one source due early; it does not wake unrelated sources.
+2. A cycle browses only sources that are due. A relevant notification may
+   refresh one fixed, content-free per-source marker and make only that source
+   due early; it does not enter browse cache, wake a cycle, or wake unrelated
+   sources. Successful work keeps normal cadence completion-based and
+   separately acknowledges only signals covered when that source browse began.
 3. Deterministic retrieval and parsing run before agent-driven computer use
    where both can produce the same evidence.
 4. A failed, timed-out, or partial browse never advances the source's cadence
@@ -37,8 +40,9 @@ person's routine.
 | Feed curation | Strong editorial route with a truthful terminal receipt | Higher effort only after a measured quality gain or a difficult exceptional slate |
 | Cross-cycle review | One bounded high-reasoning overseer per service day | Max/Ultra only for an explicitly divisible, quality-first audit |
 
-Notification content never goes to the runtime brain. That keeps the push path
-fast, cheap, private, and available when the provider is offline.
+Notification content never goes to the runtime brain or a model-facing browse
+cache. Only a constant per-source due marker crosses into scheduling. That keeps
+the push path fast, cheap, private, and available when the provider is offline.
 
 ## Automatic source-diagnosis budget
 

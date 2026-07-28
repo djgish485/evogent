@@ -8,9 +8,9 @@ import {
   insertOrIgnoreFeedItem,
   updateFeedItemFields,
 } from '@/lib/db/feed';
-import { recordBrowseCacheRefresh } from '@/lib/db/browse-cache';
 import { getDb } from '@/lib/db/client';
 import { getDataPath } from '@/lib/data-dir';
+import { signalSourceDue } from '@/lib/source-due-signal';
 import type { FeedItem, FeedMetadata } from '@/types/feed';
 
 export type PhoneNotificationMode = 'observe' | 'curated' | 'paused';
@@ -106,11 +106,13 @@ const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const CONTENT_SOURCE_BY_PACKAGE: Readonly<Record<string, string>> = Object.freeze({
   'com.google.android.gm': 'gmail',
   'com.google.android.apps.magazines': 'googlenews',
+  'com.google.android.youtube': 'youtube',
   'com.instagram.android': 'instagram',
   'com.reddit.frontpage': 'reddit',
+  'com.twitter.android': 'twitter',
   'com.linkedin.android': 'linkedin',
   'com.medium.reader': 'medium',
-  'com.substack.app': 'substack',
+  'com.substack.app': 'substack-app',
   'flipboard.app': 'flipboard',
   'com.nytimes.android': 'nytimes',
 });
@@ -630,10 +632,9 @@ function persistNotificationFeedItem(
   return { sourceId, item: getFeedItemBySourceId(sourceId) };
 }
 
-function recordContentSourceSignal(
+function recordContentSourceDueSignal(
   input: PhoneNotificationIngestInput,
   classification: ServerClassification,
-  sourceId: string,
 ): void {
   const source = CONTENT_SOURCE_BY_PACKAGE[input.packageName];
   if (
@@ -645,35 +646,11 @@ function recordContentSourceSignal(
   ) {
     return;
   }
-  const now = Date.now();
   try {
-    recordBrowseCacheRefresh({
-      source,
-      triggeredBy: 'phone-notification-listener',
-      startedAtMs: now,
-      completedAtMs: now,
-      status: 'completed',
-      itemsAdded: 1,
-      items: [{
-        source,
-        sourceId: `notif-${sourceId.slice('phone-notification:'.length)}`,
-        title: input.title,
-        publishedAtMs: input.postedAtMs,
-        payload: {
-          type: 'notification-signal',
-          title: input.title,
-          text: input.text,
-          subText: input.subText,
-          postedAtMs: input.postedAtMs,
-          captureMethod: 'phone-notification-listener',
-        },
-        fetchedAtMs: now,
-        expiresAtMs: now + 3 * 24 * 60 * 60 * 1000,
-      }],
-    });
+    signalSourceDue(source);
   } catch {
-    // Feed persistence is the cancellation receipt. Optional source-refresh hints must never turn
-    // a successful local curation receipt into a false failure.
+    // Feed persistence is the cancellation receipt. An optional content-free due signal must
+    // never turn successful local notification curation into a false failure.
   }
 }
 
@@ -734,7 +711,7 @@ export async function ingestPhoneNotification(
     preserveReason,
   );
   if (persisted.item) {
-    recordContentSourceSignal(input, classification, persisted.sourceId);
+    recordContentSourceDueSignal(input, classification);
   }
   const suppressOriginal = Boolean(
     persisted.item && preserveReason === 'eligible_for_curated_digest',

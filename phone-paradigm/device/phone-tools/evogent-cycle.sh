@@ -106,36 +106,45 @@ is_on(){ echo "${1:-}" | grep -qiE '(^|[^a-z])on([^a-z]|$)|enabled|^yes$|^true$'
 
 # Source cadence is deployment-configurable; the public script carries no personal schedule.
 src_due(){
-  local src="$1" stamp="$TOOLS/.last-browse-$1" decision due hours reason
+  local src="$1" stamp="$TOOLS/.last-browse-$1"
+  local signal="$EVO/data/source-due-signals/$1.due"
+  local signal_ack="$TOOLS/.last-source-signal-ack-$1" decision due hours reason
   decision=$(python3 "$TOOLS/source_cadence.py" \
     --source "$src" \
     --stamp "$stamp" \
     --live "$EVO/data/source-cadence.json" \
-    --default "$EVO/data/source-cadence.default.json" 2>/dev/null) \
+    --default "$EVO/data/source-cadence.default.json" \
+    --signal "$signal" \
+    --signal-ack "$signal_ack" 2>/dev/null) \
     || decision=$'1\t0\tcadence_helper_failure'
   IFS=$'\t' read -r due hours reason <<< "$decision"
   if [ "${due:-1}" = 1 ]; then
+    if [ "$reason" = source_signal ]; then
+      say "source-browse[$src]: content-free notification signal overrides cadence — browsing now"
+      return 0
+    fi
     [ "$reason" = elapsed ] || [ "$reason" = stamp_missing ] || [ "$reason" = live_zero ] \
       || [ "$reason" = default_zero ] || [ "$reason" = missing_zero ] \
       || say "source-browse[$src]: cadence decision=$reason — browsing now"
     return 0
   fi
-  # notification signal since last browse?
-  local sig
-  sig=$(python3 -c "
-import sqlite3,os
-st=os.path.getmtime(os.path.expanduser('$stamp'))*1000
-db=sqlite3.connect(os.path.expanduser('~/evogent/data/media-agent.db'))
-n=db.execute(\"SELECT COUNT(*) FROM browse_cache_items WHERE source=? AND fetched_at_ms>? AND payload_json LIKE ?\",('$src',st,'%phone-notification-listener%')).fetchone()[0]
-print(n)" 2>/dev/null); sig="${sig:-0}"
-  if [ "$sig" -gt 0 ] 2>/dev/null; then
-    say "source-browse[$src]: notification signal ($sig) overrides cadence — browsing now"
-    return 0
-  fi
   say "source-browse[$src]: not due (cadence ${hours}h, no signals) — skipped"
   return 1
 }
-mark_browsed(){ touch "$TOOLS/.last-browse-$1"; }
+# Capture the exact source evidence boundary before retrieval. Successful work
+# stamps cadence at completion, then acknowledges only source signals at or
+# before this start generation. A notification arriving during retrieval or
+# post-processing remains newer and due.
+source_browse_start_ns(){ python3 -c 'import time; print(time.time_ns())'; }
+mark_browsed(){
+  local src="$1" browse_start_ns="$2"
+  [[ "$browse_start_ns" =~ ^[1-9][0-9]+$ ]] || return 1
+  python3 "$TOOLS/source_cadence.py" \
+    --mark-success \
+    --stamp "$TOOLS/.last-browse-$src" \
+    --signal-ack "$TOOLS/.last-source-signal-ack-$src" \
+    --browse-start-ns "$browse_start_ns" 2>>"$LOG"
+}
 
 # Count DIRECTLY in SQLite. An endpoint count capped by its limit can plateau and report zero
 # gain for healthy sources, drowning real starvation in false alarms. A yield tripwire must
@@ -291,11 +300,18 @@ A blank tree, login screen, timeout, navigation miss, or parser mismatch is neve
 # Run one prompt-driven source only when due. A cadence stamp is an acknowledgement of a
 # completed refresh, not an attempt marker, so failed and partial-fresh runs stay immediately due.
 browse_due_source(){
-  local src="$1" prompt_file="$2" budget="${3:-420}"
+  local src="$1" prompt_file="$2" budget="${3:-420}" browse_start_ns
   src_due "$src" || return 0
+  browse_start_ns=$(source_browse_start_ns) || {
+    say "source-browse[$src]: start generation unavailable — cadence remains due"
+    return 1
+  }
   if browse_source "$src" "$prompt_file" "$budget"; then
-    mark_browsed "$src"
-    return 0
+    if mark_browsed "$src" "$browse_start_ns"; then
+      return 0
+    fi
+    say "source-browse[$src]: success acknowledgement failed — cadence remains due"
+    return 1
   fi
   say "source-browse[$src]: incomplete terminal outcome — cadence remains due"
   return 1
@@ -584,55 +600,67 @@ if [ "$ONLINE" = 1 ] && is_on "$BG_BROWSE"; then
     ' >/dev/null 2>&1 ) || true
   fi
   if src_due hackernews; then
-    say "source-browse[hackernews]: HN API -> browse cache (no brain needed)"
-    hn_before=$(src_count hackernews)
-    hn_started_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
-    control_status_write sources hackernews running "" "" "" "runner=mechanics"
-    if python3 "$TOOLS/hn-fetch.py" >>"$LOG" 2>&1; then
-      hn_rc=0; say "source-browse[hackernews]: ok"
+    if ! hn_started_ns=$(source_browse_start_ns); then
+      say "source-browse[hackernews]: start generation unavailable — cadence remains due"
+      CYCLE_DEGRADED=1
     else
-      hn_rc=$?; say "source-browse[hackernews]: FAILED (rc=$hn_rc)"
-    fi
-    # The fetcher writes an outcome receipt and exits non-zero when every HN list request or
-    # the final submit fails. A cadence stamp acknowledges only a complete terminal outcome.
-    if harvest_watch hackernews "$hn_before" "$(src_count hackernews)" "$hn_rc" mechanics "$hn_started_ms"; then
-      mark_browsed hackernews
-    else
-      say "source-browse[hackernews]: incomplete terminal outcome — cadence remains due"
+      hn_started_ms=$((hn_started_ns / 1000000))
+      say "source-browse[hackernews]: HN API -> browse cache (no brain needed)"
+      hn_before=$(src_count hackernews)
+      control_status_write sources hackernews running "" "" "" "runner=mechanics"
+      if python3 "$TOOLS/hn-fetch.py" >>"$LOG" 2>&1; then
+        hn_rc=0; say "source-browse[hackernews]: ok"
+      else
+        hn_rc=$?; say "source-browse[hackernews]: FAILED (rc=$hn_rc)"
+      fi
+      # The fetcher writes an outcome receipt and exits non-zero when every HN list request or
+      # the final submit fails. A cadence stamp acknowledges only a complete terminal outcome.
+      if harvest_watch hackernews "$hn_before" "$(src_count hackernews)" "$hn_rc" mechanics "$hn_started_ms"; then
+        mark_browsed hackernews "$hn_started_ns" \
+          || say "source-browse[hackernews]: success acknowledgement failed — cadence remains due"
+      else
+        say "source-browse[hackernews]: incomplete terminal outcome — cadence remains due"
+      fi
     fi
   fi
   # Browse a bounded but deep enough window to recover older high-signal items.
   # Learned source affinity informs later curation; collection preserves novelty,
   # battery bounds, and source health without determining shipment rank.
   if src_due twitter; then
-    tw_before=$(src_count twitter)
-    say "source-browse[twitter]: deterministic scraper (had $tw_before)"
-    control_status_write sources twitter running "" "" "" "runner=mechanics budget=900s"
-    # The extraction pass is one codex text call over captured trees because aggregate
-    # accessibility descriptions are not stable. A bounded but configurable pass count supplies
-    # timeline depth; the 900s cap bounds battery cost and brain_extract batches per screen.
-    # Stamp a failure marker BEFORE the browse; the browse clears it only on clean exit. A
-    # timeout/crash leaves the stamp, so harvest_watch sees a true failure, not a silent zero.
-    x_started_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
-    printf '%s started owner=%s\n' "$(date +%s)" "$CONTROL_OWNER_ID" > "$TOOLS/.xbrowse-inflight"
-    run_owned_timeout 900 30 env \
-      EVOGENT_BROWSE_MODEL="$BROWSE_MODEL" \
-      EVOGENT_BROWSE_REASONING="$BROWSE_EFFORT" \
-      python3 "$TOOLS/browse-x-scrape.py" \
-      "${EVOGENT_X_BROWSE_PASSES:-30}" >>"$LOG" 2>&1
-    xrc=$?
-    [ "$xrc" -eq 0 ] && rm -f "$TOOLS/.xbrowse-inflight" \
-      || say "source-browse[twitter]: driver exited $xrc (timeout/launch-fail/crash) — recorded as a real failure, not a barren success"
-    # Tweet-text hygiene backstop: de-scaffold and deduplicate without editorial filtering.
-    # New captures are already cleaned at parse; this catches carry-forward/older rows.
-    python3 "$TOOLS/tweet_clean.py" >>"$LOG" 2>&1 || true
-    # Priority-thinker profile browse remains shelved until ProfileActivity is a11y-visible.
-    tw_after=$(src_count twitter)
-    say "source-browse[twitter]: cache ${tw_before} -> ${tw_after}"
-    if harvest_watch twitter "$tw_before" "$tw_after" "$xrc" mechanics "$x_started_ms"; then
-      mark_browsed twitter
+    if ! x_started_ns=$(source_browse_start_ns); then
+      say "source-browse[twitter]: start generation unavailable — cadence remains due"
+      CYCLE_DEGRADED=1
     else
-      say "source-browse[twitter]: incomplete terminal outcome — cadence remains due"
+      x_started_ms=$((x_started_ns / 1000000))
+      tw_before=$(src_count twitter)
+      say "source-browse[twitter]: deterministic scraper (had $tw_before)"
+      control_status_write sources twitter running "" "" "" "runner=mechanics budget=900s"
+      # The extraction pass is one codex text call over captured trees because aggregate
+      # accessibility descriptions are not stable. A bounded but configurable pass count supplies
+      # timeline depth; the 900s cap bounds battery cost and brain_extract batches per screen.
+      # Stamp a failure marker BEFORE the browse; the browse clears it only on clean exit. A
+      # timeout/crash leaves the stamp, so harvest_watch sees a true failure, not a silent zero.
+      printf '%s started owner=%s\n' "$(date +%s)" "$CONTROL_OWNER_ID" > "$TOOLS/.xbrowse-inflight"
+      run_owned_timeout 900 30 env \
+        EVOGENT_BROWSE_MODEL="$BROWSE_MODEL" \
+        EVOGENT_BROWSE_REASONING="$BROWSE_EFFORT" \
+        python3 "$TOOLS/browse-x-scrape.py" \
+        "${EVOGENT_X_BROWSE_PASSES:-30}" >>"$LOG" 2>&1
+      xrc=$?
+      [ "$xrc" -eq 0 ] && rm -f "$TOOLS/.xbrowse-inflight" \
+        || say "source-browse[twitter]: driver exited $xrc (timeout/launch-fail/crash) — recorded as a real failure, not a barren success"
+      # Tweet-text hygiene backstop: de-scaffold and deduplicate without editorial filtering.
+      # New captures are already cleaned at parse; this catches carry-forward/older rows.
+      python3 "$TOOLS/tweet_clean.py" >>"$LOG" 2>&1 || true
+      # Priority-thinker profile browse remains shelved until ProfileActivity is a11y-visible.
+      tw_after=$(src_count twitter)
+      say "source-browse[twitter]: cache ${tw_before} -> ${tw_after}"
+      if harvest_watch twitter "$tw_before" "$tw_after" "$xrc" mechanics "$x_started_ms"; then
+        mark_browsed twitter "$x_started_ns" \
+          || say "source-browse[twitter]: success acknowledgement failed — cadence remains due"
+      else
+        say "source-browse[twitter]: incomplete terminal outcome — cadence remains due"
+      fi
     fi
   fi
   browse_due_source youtube browse-youtube.txt || true
@@ -703,9 +731,14 @@ PYEOF
     rsrc=$(basename "${rf%.py}")
     src_opted_out "$rsrc" && continue
     src_due "$rsrc" || continue
+    r_started_ns=$(source_browse_start_ns) || {
+      say "source-browse[$rsrc]: start generation unavailable — cadence remains due"
+      CYCLE_DEGRADED=1
+      continue
+    }
+    r_started_ms=$((r_started_ns / 1000000))
     r_before=$(src_count "$rsrc")
     say "source-browse[$rsrc]: deterministic user recipe (had $r_before)"
-    r_started_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
     control_status_write sources "$rsrc" running "" "" "" "runner=mechanics budget=900s"
     # Preserve enough budget for recipes with vision and feed passes; each recipe is still
     # bounded by the shared cycle timeout.
@@ -720,7 +753,8 @@ PYEOF
     # This .py-recipe loop (instagram etc.) previously never ran harvest_watch — a recipe that
     # silently harvested zero (e.g. after an app update) had no tripwire, the exact X-scraper gap.
     if harvest_watch "$rsrc" "$r_before" "$r_after" "$r_rc" mechanics "$r_started_ms"; then
-      mark_browsed "$rsrc"
+      mark_browsed "$rsrc" "$r_started_ns" \
+        || say "source-browse[$rsrc]: success acknowledgement failed — cadence remains due"
     else
       say "source-browse[$rsrc]: incomplete terminal outcome — cadence remains due"
     fi

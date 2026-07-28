@@ -172,6 +172,7 @@ data/agent-receipts.jsonl
 data/.chat-task-suggestion.json
 data/task-logs/
 data/backups/
+data/source-due-signals/
 data/push-notifications.json
 data/restart-state.json
 data/pending-restart.json
