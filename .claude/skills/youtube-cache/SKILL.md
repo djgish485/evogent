@@ -19,7 +19,10 @@ Install this skill when you want YouTube to behave like the other browse-cache-b
 
 ## Behavior
 
-- Startup refresh runs automatically after install, and the cache refreshes again immediately before each curation cycle.
+- In the desktop/VM profile, startup refresh runs automatically after install and the cache
+  refreshes again immediately before each curation cycle. The canonical phone profile does
+  not inherit that schedule: it refreshes YouTube only when its nonzero source-specific
+  cadence is due or a source signal makes it due.
 - Refresh uses the shared browse-cache storage and query APIs. Cached videos are available through `GET /api/browse-cache?source=youtube`.
 - The refresh worker uses the configured brain provider's short-lived nested browser task against the authenticated shared desktop Chrome session instead of hard-coding one provider.
 - Source-specific YouTube browsing tactics and extraction expectations belong in the YouTube browser refresh prompt/skill boundary, while persistence, dedup, and diagnostics stay in product code.

@@ -4,9 +4,11 @@
 The public file describes mechanics and safe fallbacks.  A deployment may write
 ``data/model-routing.json`` with a candidate route, but an enabled routine route
 is used only when the phone-local receipt ledger proves enough recent paired
-passes. Global browse, YouTube browse, and curation are additionally pinned to
-their configured baselines until a safe qualifying harness exists. Receipts
-contain metrics and digests, never source text or model output.
+passes. Global browse, YouTube browse, curation, and source discovery are
+additionally pinned to their configured baselines until a safe qualifying
+harness exists. Automatic diagnosis is pinned to its public baseline unless an
+operator supplies a one-run environment override. Receipts contain metrics and
+digests, never source text or model output.
 """
 
 from __future__ import annotations
@@ -61,7 +63,73 @@ PERSISTENT_OVERRIDE_DISABLED_TASKS = frozenset({
     "browse",
     "browse_youtube",
     "curator",
+    "source_discovery",
+    "diagnosis",
 })
+PHONE_CONFIG_BOOTSTRAP_VERSION = 1
+PHONE_CONFIG_BOOTSTRAP_MARKER = ".phone-config-bootstrap.json"
+PHONE_CONFIG_MAX_BYTES = 1024 * 1024
+PHONE_CONFIG_MARKER_MAX_BYTES = 4096
+DEFAULT_CODEX_MODEL = "gpt-5.5"
+DEFAULT_CODEX_REASONING = "medium"
+# The phone helper is deployed independently of the host-side CommonJS module.
+# Keep this literal in sync with lib/brain-config.js; the fresh-phone regression
+# test compares the bytes.
+GENERIC_DEFAULT_CONFIG_CONTENT = """# Evogent Config
+
+## Agent Name
+Evogent
+
+## Time Zone
+<!-- IANA time zone, for example America/Denver. Leave blank to use the host timezone. -->
+
+## Interests
+
+## Brain Provider
+Claude Code
+
+## Codex Model
+gpt-5.5
+
+## Codex Reasoning Effort
+Medium
+
+## Code-Fix Reasoning Effort
+High
+
+## Usage Level
+Medium
+
+## Automatic Curation
+On
+
+## Background Source Browsing
+On
+
+## Curation Schedule
+<!-- Source caches refresh ahead of visible curation; Medium cache defaults are twitter 30m, Hacker News 60m, Substack 120m, YouTube 120m. -->
+- Minimum interval: 90 minutes
+- Maximum interval: 4 hours
+"""
+PHONE_CONFIG_DEFAULTS = (
+    ("Curator Model", "gpt-5.6-sol"),
+    ("Curator Reasoning", "High"),
+    ("Source Discovery Model", "gpt-5.6-sol"),
+    ("Source Discovery Reasoning", "High"),
+    ("Browse Model", "gpt-5.6-terra"),
+    ("Browse Reasoning", "Medium"),
+    ("Overseer Model", "gpt-5.6-sol"),
+    ("Overseer Reasoning", "High"),
+)
+LEGACY_CODEX_MODEL_HEADINGS = frozenset({
+    "Curator Model",
+    "Source Discovery Model",
+    "Browse Model",
+})
+LEGACY_FIXED_REASONING = {
+    "Source Discovery Reasoning": "Medium",
+    "Browse Reasoning": "Medium",
+}
 FULL_BROWSE_ROUTE_TASKS = frozenset({"browse", "browse_youtube"})
 FULL_BROWSE_MIN_OUTCOME_RATIO = 0.80
 FULL_BROWSE_MAX_ELAPSED_RATIO = 1.20
@@ -120,19 +188,106 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_private_json(path: Path) -> dict[str, Any]:
+def _read_bounded_private_bytes(
+    path: Path,
+    *,
+    maximum_bytes: int = 49_152,
+) -> bytes | None:
+    """Read one owner-held 0600 regular file without following its leaf."""
+
+    descriptor = -1
     try:
-        info = path.stat()
+        expected = path.lstat()
+        if (
+            stat.S_ISLNK(expected.st_mode)
+            or not stat.S_ISREG(expected.st_mode)
+            or stat.S_IMODE(expected.st_mode) != 0o600
+            or expected.st_uid != os.geteuid()
+            or expected.st_nlink != 1
+            or expected.st_size <= 0
+            or expected.st_size > maximum_bytes
+        ):
+            return None
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or stat.S_IMODE(opened.st_mode) != 0o600
+            or opened.st_uid != os.geteuid()
+            or opened.st_nlink != 1
+            or opened.st_size <= 0
+            or opened.st_size > maximum_bytes
+            or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)
+        ):
+            return None
+        chunks: list[bytes] = []
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 16_384))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(descriptor)
+        current = path.lstat()
+        signature = (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_mode,
+            opened.st_uid,
+            opened.st_nlink,
+            opened.st_size,
+            opened.st_mtime_ns,
+            opened.st_ctime_ns,
+        )
+        if (
+            remaining
+            or signature
+            != (
+                after.st_dev,
+                after.st_ino,
+                after.st_mode,
+                after.st_uid,
+                after.st_nlink,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            )
+            or signature
+            != (
+                current.st_dev,
+                current.st_ino,
+                current.st_mode,
+                current.st_uid,
+                current.st_nlink,
+                current.st_size,
+                current.st_mtime_ns,
+                current.st_ctime_ns,
+            )
+        ):
+            return None
+        return b"".join(chunks)
     except OSError:
+        return None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _read_private_json(path: Path) -> dict[str, Any]:
+    payload = _read_bounded_private_bytes(path)
+    if payload is None:
         return {}
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or stat.S_IMODE(info.st_mode) != 0o600
-        or info.st_size <= 0
-        or info.st_size > 49_152
-    ):
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
         return {}
-    return _read_json(path)
+    return value if isinstance(value, dict) else {}
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -166,14 +321,10 @@ def _read_private_jsonl(path: Path) -> list[dict[str, Any]]:
     return _read_jsonl(path)
 
 
-def _markdown_sections(path: Path) -> dict[str, str]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return {}
+def _markdown_sections_from_content(content: str) -> dict[str, str]:
     sections: dict[str, str] = {}
     heading = ""
-    for line in lines:
+    for line in content.splitlines():
         match = re.match(r"^##\s+(.+?)\s*$", line)
         if match:
             heading = match.group(1).strip().lower()
@@ -181,6 +332,290 @@ def _markdown_sections(path: Path) -> dict[str, str]:
         if heading and line.strip() and heading not in sections:
             sections[heading] = re.sub(r"^[-*]\s*", "", line.strip())
     return sections
+
+
+def _markdown_sections(path: Path) -> dict[str, str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return _markdown_sections_from_content(content)
+
+
+def _effective_legacy_codex_route(content: str) -> tuple[str, str]:
+    """Mirror the generic config's effective Codex defaults for old phones."""
+
+    sections = _markdown_sections_from_content(content)
+    model = _safe_model(sections.get("codex model")) or DEFAULT_CODEX_MODEL
+    effort = sections.get("codex reasoning effort", "").strip().lower()
+    if effort not in {"low", "medium", "high", "xhigh"}:
+        usage = sections.get("usage level", "").strip().lower()
+        effort = usage if usage in {"low", "medium", "high"} else DEFAULT_CODEX_REASONING
+    return model, effort
+
+
+def _format_codex_effort(value: str) -> str:
+    return {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "XHigh",
+    }.get(value, "Medium")
+
+
+def ensure_phone_config_defaults(path: Path) -> dict[str, Any]:
+    """Seed or migrate private phone config without changing owned sections.
+
+    A genuinely new phone receives the complete generic config before its
+    phone-specific routes. An existing config keeps the effective behavior each
+    lane had before the split: new model headings inherit its Codex model,
+    curator inherits Codex reasoning, and the two former medium-effort lanes
+    remain medium. Every heading already present, including a blank one,
+    remains user-owned.
+    """
+
+    path = path.expanduser()
+    if path.name in {"", ".", "..", PHONE_CONFIG_BOOTSTRAP_MARKER}:
+        raise ValueError("phone config path must name a non-reserved file")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Versioned phone releases deliberately expose runtime/data as a symlink to
+    # durable private state. Resolve that known directory indirection, then keep
+    # no-follow checks on the config file and every temporary file inside it.
+    config_directory = path.parent.resolve(strict=True)
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    file_read_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    directory = os.open(config_directory, directory_flags)
+    directory_info = os.fstat(directory)
+    if (
+        not stat.S_ISDIR(directory_info.st_mode)
+        or directory_info.st_uid != os.geteuid()
+    ):
+        os.close(directory)
+        raise ValueError("phone config directory is not private deployment state")
+
+    def identity(info: os.stat_result) -> tuple[int, ...]:
+        return (
+            info.st_dev,
+            info.st_ino,
+            info.st_mode,
+            info.st_uid,
+            info.st_nlink,
+            info.st_size,
+            info.st_mtime_ns,
+            info.st_ctime_ns,
+        )
+
+    def read_owned_file(
+        name: str,
+        *,
+        maximum_bytes: int,
+        label: str,
+        private_mode: bool = False,
+        require_content: bool = False,
+    ) -> tuple[bytes | None, tuple[int, ...] | None]:
+        try:
+            descriptor = os.open(name, file_read_flags, dir_fd=directory)
+        except FileNotFoundError:
+            return None, None
+        try:
+            before = os.fstat(descriptor)
+            named = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or not stat.S_ISREG(named.st_mode)
+                or (before.st_dev, before.st_ino) != (named.st_dev, named.st_ino)
+                or before.st_uid != os.geteuid()
+                or before.st_nlink != 1
+                or before.st_size < int(require_content)
+                or before.st_size > maximum_bytes
+                or (private_mode and stat.S_IMODE(before.st_mode) != 0o600)
+            ):
+                raise ValueError(f"{label} is not a bounded private regular file")
+            chunks: list[bytes] = []
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 64 * 1024))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(descriptor)
+            if remaining or identity(before) != identity(after):
+                raise RuntimeError(f"{label} changed while it was read")
+            return b"".join(chunks), identity(before)
+        finally:
+            os.close(descriptor)
+
+    def atomic_replace(
+        name: str,
+        encoded: bytes,
+        *,
+        original_identity: tuple[int, ...] | None,
+        label: str,
+    ) -> None:
+        temporary_name = f".{name}.{os.getpid()}.{time.time_ns()}"
+        temporary_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            temporary = os.open(
+                temporary_name,
+                temporary_flags,
+                stat.S_IRUSR | stat.S_IWUSR,
+                dir_fd=directory,
+            )
+            try:
+                offset = 0
+                while offset < len(encoded):
+                    written = os.write(temporary, encoded[offset:])
+                    if written <= 0:
+                        raise OSError(f"short {label} write")
+                    offset += written
+                os.fchmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
+                os.fsync(temporary)
+            finally:
+                os.close(temporary)
+
+            try:
+                current = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                if original_identity is not None:
+                    raise RuntimeError(f"{label} disappeared during update")
+            else:
+                if original_identity is None or identity(current) != original_identity:
+                    raise RuntimeError(f"{label} changed during update")
+
+            os.replace(
+                temporary_name,
+                name,
+                src_dir_fd=directory,
+                dst_dir_fd=directory,
+            )
+            temporary_name = ""
+            os.fsync(directory)
+        finally:
+            if temporary_name:
+                try:
+                    os.unlink(temporary_name, dir_fd=directory)
+                except FileNotFoundError:
+                    pass
+
+    try:
+        marker_bytes, marker_identity = read_owned_file(
+            PHONE_CONFIG_BOOTSTRAP_MARKER,
+            maximum_bytes=PHONE_CONFIG_MARKER_MAX_BYTES,
+            label="phone config bootstrap marker",
+            private_mode=True,
+            require_content=True,
+        )
+        marker_version = 0
+        if marker_bytes is not None:
+            try:
+                marker = json.loads(marker_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, ValueError) as error:
+                raise ValueError("phone config bootstrap marker is invalid") from error
+            marker_version = marker.get("bootstrapVersion") if isinstance(marker, dict) else None
+            if (
+                isinstance(marker_version, bool)
+                or not isinstance(marker_version, int)
+                or marker_version < 1
+            ):
+                raise ValueError("phone config bootstrap marker has no valid version")
+            if marker_version > PHONE_CONFIG_BOOTSTRAP_VERSION:
+                raise ValueError("phone config bootstrap marker is newer than this runtime")
+
+        config_bytes, original_identity = read_owned_file(
+            path.name,
+            maximum_bytes=PHONE_CONFIG_MAX_BYTES,
+            label="phone config",
+        )
+        fresh_config = config_bytes is None
+        if fresh_config:
+            content = GENERIC_DEFAULT_CONFIG_CONTENT
+        else:
+            try:
+                content = config_bytes.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise ValueError("phone config is not valid UTF-8") from error
+
+        present = {
+            match.group(1).strip().casefold()
+            for match in re.finditer(r"^##[ \t]+(.+?)[ \t]*$", content, flags=re.MULTILINE)
+        }
+        legacy_model, legacy_effort = _effective_legacy_codex_route(content)
+        missing: list[tuple[str, str]] = []
+        for heading, default_value in PHONE_CONFIG_DEFAULTS:
+            if heading.casefold() in present:
+                continue
+            value = default_value
+            if not fresh_config and heading in LEGACY_CODEX_MODEL_HEADINGS:
+                value = legacy_model
+            elif not fresh_config and heading == "Curator Reasoning":
+                value = _format_codex_effort(legacy_effort)
+            elif not fresh_config and heading in LEGACY_FIXED_REASONING:
+                value = LEGACY_FIXED_REASONING[heading]
+            missing.append((heading, value))
+
+        config_changed = bool(missing)
+        if config_changed:
+            next_content = content
+            if not next_content.endswith("\n"):
+                next_content += "\n"
+            if next_content.strip():
+                next_content += "\n"
+            next_content += "\n\n".join(
+                f"## {heading}\n{value}"
+                for heading, value in missing
+            )
+            next_content += "\n"
+            encoded = next_content.encode("utf-8")
+            if len(encoded) > PHONE_CONFIG_MAX_BYTES:
+                raise ValueError("phone config would exceed its private size bound")
+            atomic_replace(
+                path.name,
+                encoded,
+                original_identity=original_identity,
+                label="phone config",
+            )
+
+        marker_changed = marker_version < PHONE_CONFIG_BOOTSTRAP_VERSION
+        if marker_changed:
+            encoded_marker = (
+                json.dumps(
+                    {"bootstrapVersion": PHONE_CONFIG_BOOTSTRAP_VERSION},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+                + b"\n"
+            )
+            atomic_replace(
+                PHONE_CONFIG_BOOTSTRAP_MARKER,
+                encoded_marker,
+                original_identity=marker_identity,
+                label="phone config bootstrap marker",
+            )
+
+        return {
+            "changed": config_changed,
+            "added": [heading for heading, _value in missing],
+            "bootstrapVersion": PHONE_CONFIG_BOOTSTRAP_VERSION,
+            "markerChanged": marker_changed,
+        }
+    finally:
+        os.close(directory)
 
 
 def _safe_model(value: Any) -> str:
@@ -236,17 +671,18 @@ def live_route_file_valid(
     """Validate the bounded private route artifact without exposing its contents."""
 
     try:
-        info = path.stat()
+        path.lstat()
     except OSError:
         return allow_missing
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or stat.S_IMODE(info.st_mode) != 0o600
-        or info.st_size <= 0
-        or info.st_size > 49_152
-    ):
+    payload = _read_bounded_private_bytes(path)
+    if payload is None:
         return False
-    value = _read_json(path)
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    if not isinstance(value, dict):
+        return False
     routes = value.get("routes")
     if value.get("schemaVersion") != SCHEMA_VERSION or not isinstance(routes, dict):
         return False
@@ -892,6 +1328,9 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--live", required=True)
     validate.add_argument("--policy", required=True)
     validate.add_argument("--allow-missing", action="store_true")
+
+    phone_config = sub.add_parser("ensure-phone-config")
+    phone_config.add_argument("--config", required=True)
     return parser
 
 
@@ -932,6 +1371,10 @@ def main(argv: list[str] | None = None) -> int:
             policy_path=Path(args.policy),
             allow_missing=args.allow_missing,
         ) else 1
+    if args.command == "ensure-phone-config":
+        result = ensure_phone_config_defaults(Path(args.config))
+        print(json.dumps(result, separators=(",", ":")))
+        return 0
     receipt = json.loads(args.receipt_json)
     if not isinstance(receipt, dict):
         raise ValueError("receipt must be an object")

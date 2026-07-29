@@ -104,6 +104,94 @@ test('phone release shell entrypoints parse', () => {
   execFileSync('bash', ['-n', ...scripts], { cwd: root, stdio: 'pipe' });
 });
 
+test('phone release packaging derives deterministic valid live learning defaults', (t) => {
+  const builder = fs.readFileSync(
+    path.join(root, 'scripts/build-phone-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(builder, 'prepare_phone_live_defaults');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-live-defaults-'));
+  t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
+
+  const outputs = [];
+  for (const name of ['first', 'second']) {
+    const defaults = path.join(fixture, name);
+    fs.mkdirSync(defaults);
+    for (const template of [
+      'preference-insights.default.md',
+      'source-cadence.default.json',
+    ]) {
+      fs.copyFileSync(
+        path.join(root, 'data', template),
+        path.join(defaults, template),
+      );
+    }
+    const result = spawnSync(
+      'bash',
+      ['-c', `set -euo pipefail\n${helper}\nprepare_phone_live_defaults "$1"`, 'derive', defaults],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    outputs.push(defaults);
+  }
+
+  for (const liveName of ['preference-insights.md', 'source-cadence.json']) {
+    const first = path.join(outputs[0], liveName);
+    const second = path.join(outputs[1], liveName);
+    assert.deepEqual(fs.readFileSync(first), fs.readFileSync(second));
+    assert.equal(fs.statSync(first).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(second).mode & 0o777, 0o600);
+  }
+  assert.deepEqual(
+    fs.readFileSync(path.join(outputs[0], 'preference-insights.md')),
+    fs.readFileSync(path.join(root, 'data/preference-insights.default.md')),
+  );
+
+  const cadence = JSON.parse(
+    fs.readFileSync(path.join(outputs[0], 'source-cadence.json'), 'utf8'),
+  );
+  assert.ok(Object.keys(cadence).length > 1);
+  assert.equal(Object.keys(cadence).some((source) => source.startsWith('_')), false);
+  for (const [source, entry] of Object.entries(cadence)) {
+    assert.equal(source, source.trim());
+    assert.ok(Number.isFinite(entry.cadenceHours));
+    assert.ok(entry.cadenceHours >= 0.25 && entry.cadenceHours <= 168);
+    assert.ok(entry.why.trim().length > 0 && entry.why.length <= 240);
+  }
+
+  const privateArtifact = path.join(
+    root,
+    'phone-paradigm/device/phone-tools/private_artifact.py',
+  );
+  execFileSync(
+    'python3',
+    [
+      privateArtifact,
+      'validate',
+      '--path',
+      path.join(outputs[0], 'preference-insights.md'),
+      '--kind',
+      'preference',
+    ],
+    { stdio: 'pipe' },
+  );
+  execFileSync(
+    'python3',
+    [
+      privateArtifact,
+      'validate',
+      '--path',
+      path.join(outputs[0], 'source-cadence.json'),
+      '--kind',
+      'cadence',
+    ],
+    { stdio: 'pipe' },
+  );
+  assert.match(builder, /prepare_phone_live_defaults "\$RELEASE\/defaults\/data"/);
+  assert.match(builder, /"defaults\/data\/preference-insights\.md"/);
+  assert.match(builder, /"defaults\/data\/source-cadence\.json"/);
+});
+
 test('phone tmux selectors cannot prefix-match a sibling session', (t) => {
   const productionFiles = [
     'phone-paradigm/device/install-release.sh',
@@ -2321,6 +2409,139 @@ rollback_seeded_defaults
   assert.doesNotMatch(
     rollback,
     /os\.replace\([\s\S]*?src_dir_fd=intents_descriptor/,
+  );
+});
+
+test('installer transaction seeds missing live learning defaults without replacing private state', (t) => {
+  const builder = fs.readFileSync(
+    path.join(root, 'scripts/build-phone-release.sh'),
+    'utf8',
+  );
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-live-seed-'));
+  t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
+  const defaults = path.join(fixture, 'defaults');
+  const state = path.join(fixture, 'state');
+  const backup = path.join(fixture, 'backup');
+  fs.mkdirSync(defaults);
+  fs.mkdirSync(path.join(state, 'data'), { recursive: true });
+  fs.mkdirSync(backup);
+  for (const template of [
+    'preference-insights.default.md',
+    'source-cadence.default.json',
+  ]) {
+    fs.copyFileSync(
+      path.join(root, 'data', template),
+      path.join(defaults, template),
+    );
+  }
+
+  const helpers = [
+    shellFunction(builder, 'prepare_phone_live_defaults'),
+    shellFunction(installer, 'record_default_seed_intent'),
+    shellFunction(installer, 'publish_recorded_default_seed'),
+    shellFunction(installer, 'seed_missing_public_defaults'),
+    shellFunction(installer, 'rollback_seeded_defaults'),
+  ].join('\n');
+  const run = (command, runState = state, runBackup = backup) => spawnSync(
+    'bash',
+    [
+      '-c',
+      `set -euo pipefail
+${helpers}
+say() { :; }
+STATE="$1"
+BACKUP_DIR="$2"
+defaults="$3"
+${command}
+`,
+      'live-seed',
+      runState,
+      runBackup,
+      defaults,
+    ],
+    { encoding: 'utf8' },
+  );
+
+  let result = run(
+    'prepare_phone_live_defaults "$defaults"\nseed_missing_public_defaults "$defaults"',
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const livePreference = path.join(state, 'data/preference-insights.md');
+  const liveCadence = path.join(state, 'data/source-cadence.json');
+  assert.equal(fs.statSync(livePreference).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(liveCadence).mode & 0o777, 0o600);
+  assert.deepEqual(
+    fs.readFileSync(livePreference),
+    fs.readFileSync(path.join(defaults, 'preference-insights.md')),
+  );
+  assert.deepEqual(
+    fs.readFileSync(liveCadence),
+    fs.readFileSync(path.join(defaults, 'source-cadence.json')),
+  );
+
+  const liveIntents = fs.readdirSync(path.join(backup, 'seeded-defaults'))
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => JSON.parse(
+      fs.readFileSync(path.join(backup, 'seeded-defaults', name), 'utf8'),
+    ))
+    .filter((intent) => [
+      'preference-insights.md',
+      'source-cadence.json',
+    ].includes(intent.relative));
+  assert.deepEqual(
+    liveIntents.map((intent) => intent.relative).sort(),
+    ['preference-insights.md', 'source-cadence.json'],
+  );
+  assert.ok(liveIntents.every((intent) => (
+    intent.schema === 'evogent.phone.seeded-default.v3'
+    && intent.phase === 'published'
+  )));
+
+  const privatePreference = 'owner-specific preference evidence\n';
+  const privateCadence = '{"private":{"cadenceHours":24,"why":"owner-specific evidence"}}\n';
+  fs.writeFileSync(livePreference, privatePreference, { mode: 0o600 });
+  fs.writeFileSync(liveCadence, privateCadence, { mode: 0o600 });
+  result = run('seed_missing_public_defaults "$defaults"\nrollback_seeded_defaults');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(livePreference, 'utf8'), privatePreference);
+  assert.equal(fs.readFileSync(liveCadence, 'utf8'), privateCadence);
+
+  const protectedState = path.join(fixture, 'protected-state');
+  const protectedBackup = path.join(fixture, 'protected-backup');
+  const outsideCadence = path.join(fixture, 'outside-cadence.json');
+  fs.mkdirSync(path.join(protectedState, 'data'), { recursive: true });
+  fs.mkdirSync(protectedBackup);
+  fs.writeFileSync(outsideCadence, 'outside sentinel\n', { mode: 0o600 });
+  fs.symlinkSync(
+    outsideCadence,
+    path.join(protectedState, 'data/source-cadence.json'),
+  );
+  fs.writeFileSync(
+    path.join(protectedState, 'data/preference-insights.md'),
+    privatePreference,
+    { mode: 0o600 },
+  );
+  result = run(
+    'seed_missing_public_defaults "$defaults"',
+    protectedState,
+    protectedBackup,
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.lstatSync(path.join(protectedState, 'data/source-cadence.json')).isSymbolicLink(),
+    true,
+  );
+  assert.equal(fs.readFileSync(outsideCadence, 'utf8'), 'outside sentinel\n');
+  assert.equal(
+    fs.readFileSync(
+      path.join(protectedState, 'data/preference-insights.md'),
+      'utf8',
+    ),
+    privatePreference,
   );
 });
 

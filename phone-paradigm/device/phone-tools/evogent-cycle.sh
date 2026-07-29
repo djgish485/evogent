@@ -191,6 +191,12 @@ MODEL_ROUTER="$TOOLS/model_routing.py"
 MODEL_POLICY="$TOOLS/model-routing.default.json"
 MODEL_LIVE="$EVO/data/model-routing.json"
 MODEL_RECEIPTS="$TOOLS/model-benchmark-results.jsonl"
+if ! python3 "$MODEL_ROUTER" ensure-phone-config \
+    --config "$EVO/data/config.md" >/dev/null 2>>"$LOG"; then
+  CYCLE_PHASE="phone_model_config"
+  say "model-routing: additive phone defaults unavailable — provider cycle deferred"
+  exit 70
+fi
 resolve_model_route(){
   local task="$1" model_override="${2:-}" effort_override="${3:-}" fallback="$4"
   python3 "$MODEL_ROUTER" resolve \

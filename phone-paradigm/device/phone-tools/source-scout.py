@@ -156,7 +156,8 @@ def main():
                 "title": f"Adding {meta['name']} as a source",
                 "text": (f"Evogent noticed {why} and is setting {meta['name']} up as a source: a one-time "
                          f"background pass learns how to browse it (hidden display, read-only — never posting, "
-                         f"liking, or opening private messages), then it feeds the curator every cycle. "
+                         f"liking, or opening private messages), then it feeds the curator only when its "
+                         f"source-specific cadence is due or a source signal makes it due. "
                          f"A notification will show what the first browse found. "
                          f"Dismiss this card (✕) to cancel and keep {meta['name']} out of Evogent."),
                 "metadata": {

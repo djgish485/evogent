@@ -178,10 +178,11 @@ source schedule.
 - Tune sources independently from that evidence. Product code launches and records work; it
   does not decide which source deserves more of the deployment's attention budget.
 - A notification-driven source may use a slower baseline because a relevant notification can
-  still override its clock. A high-yield source may run every cycle (`cadenceHours: 0`).
+  still override its clock. A high-yield source may use the minimum finite cadence, but zero
+  is never valid and no source is automatically due on every cycle.
 - Preserve unknown sources and existing reasons unless current evidence warrants a change.
-- Write valid JSON atomically with mode `0600`. Each source entry must contain a non-negative
-  numeric `cadenceHours` and a short synthesized `why`; never copy raw private evidence into
-  the reason.
+- Write valid JSON atomically with mode `0600`. Each source entry must contain a finite numeric
+  `cadenceHours` from `0.25` through `168` and a short synthesized `why`; never copy raw private
+  evidence into the reason.
 - Apply reversible evidence-backed tuning directly. Mention only material cadence changes in
   the reflection card, with the reason and how to undo them.

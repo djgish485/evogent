@@ -122,9 +122,14 @@ test('independent and deterministic lanes do not acquire browse-route authority'
   assert.match(curation, /"codexModel":sys\.argv\[5\]/);
   assert.doesNotMatch(curation, /--model "\$BROWSE_MODEL"/);
 
-  assert.match(discovery, /independently configured Codex route/);
-  assert.match(discovery, /EVOGENT_CODEX_MODEL/);
-  assert.doesNotMatch(discovery, /EVOGENT_BROWSE_(?:MODEL|REASONING)/);
+  assert.match(discovery, /independently configured source-discovery Codex route/);
+  assert.match(discovery, /--task source_discovery/);
+  assert.match(discovery, /EVOGENT_SOURCE_DISCOVERY_MODEL/);
+  assert.match(discovery, /EVOGENT_SOURCE_DISCOVERY_REASONING/);
+  assert.doesNotMatch(
+    discovery,
+    /EVOGENT_(?:BROWSE|CURATOR|CODEX)_(?:MODEL|REASONING)/,
+  );
 
   for (const deterministic of ['hn-fetch.py', 'source-scout.py']) {
     assert.doesNotMatch(read(deterministic), /codex|EVOGENT_BROWSE_/i);

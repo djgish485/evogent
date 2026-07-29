@@ -2,7 +2,8 @@ One-time SOURCE DISCOVERY for __NAME__ (package __PKG__, source name "__SRC__").
 
 Your job: learn how to browse this app's content on the HIDDEN display with computer use,
 prove it works by caching real items, and write a repeatable browse recipe. This runs ONCE;
-the recipe you write runs every cycle afterward, so make it deterministic and cheap.
+the recipe you write runs only when this source's finite cadence is due or a content-free
+source signal makes it due, so make each invocation deterministic and cheap.
 
 HARD RULES (non-negotiable):
 - READ-ONLY. Never like, follow, post, comment, subscribe, vote, or reply. Never open
@@ -39,7 +40,8 @@ PROCESS:
    summaries, no invention. If you cannot extract clean items, submit status="failed" with an
    honest error instead of fabricating.
 6. Write the recipe to ~/evogent/data/phone-sources/__SRC__.txt — a concise browse prompt a
-   future (cheaper) agent follows every cycle. It must contain: the launch command; how to
+   future (cheaper) agent follows only when "__SRC__" is due or signalled. It must contain:
+   the launch command; how to
    reach the right surface (exact semantic tap targets); the relative scroll gesture that
    works; the node shape
    to parse (with a real example desc/text string you saw); the submit contract above; the

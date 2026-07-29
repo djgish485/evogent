@@ -3034,6 +3034,30 @@ finally:
 PY
 }
 
+seed_missing_public_defaults() {
+  local defaults_root="$1" relative destination
+  if [ ! -e "$defaults_root" ] && [ ! -L "$defaults_root" ]; then
+    return 0
+  fi
+  [ -d "$defaults_root" ] && [ ! -L "$defaults_root" ] || {
+    say "phone release default-data root is unsafe"
+    return 1
+  }
+  while IFS= read -r -d '' relative; do
+    destination="$STATE/data/${relative#./}"
+    # Existing private state, including a defensive dangling symlink, is never
+    # followed or replaced by a public bootstrap. Its consumer remains
+    # responsible for rejecting unsafe or invalid private artifacts.
+    if [ -e "$destination" ] || [ -L "$destination" ]; then
+      continue
+    fi
+    record_default_seed_intent \
+      "$defaults_root/${relative#./}" "${relative#./}" >/dev/null
+    publish_recorded_default_seed \
+      "$defaults_root/${relative#./}" "${relative#./}"
+  done < <(cd "$defaults_root" && find . -type f -print0)
+}
+
 rollback_seeded_defaults() {
   local intents="$BACKUP_DIR/seeded-defaults"
   [ -n "$BACKUP_DIR" ] || return 0
@@ -9611,17 +9635,7 @@ fsync_directory "$STATE"
 fsync_directory "$STATE/next-cache"
 
 # Public defaults seed only missing private files.
-if [ -d "$NEW_RELEASE/defaults/data" ]; then
-  while IFS= read -r -d '' relative; do
-    destination="$STATE/data/${relative#./}"
-    if [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
-      record_default_seed_intent \
-        "$NEW_RELEASE/defaults/data/${relative#./}" "${relative#./}" >/dev/null
-      publish_recorded_default_seed \
-        "$NEW_RELEASE/defaults/data/${relative#./}" "${relative#./}"
-    fi
-  done < <(cd "$NEW_RELEASE/defaults/data" && find . -type f -print0)
-fi
+seed_missing_public_defaults "$NEW_RELEASE/defaults/data"
 fsync_tree "$STATE/data" || {
   say "phone data state could not be made durable before release publication"
   exit 70

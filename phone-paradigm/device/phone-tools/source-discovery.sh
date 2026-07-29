@@ -112,6 +112,25 @@ if opted_out; then
   exit 0
 fi
 
+# Source discovery is allowed to author a durable recipe, so it uses a strong
+# independently configured source-discovery Codex route rather than inheriting
+# ordinary chat, browse, curation, or overseer authority. Populate only missing
+# phone headings; never rewrite a deployment choice.
+MODEL_ROUTER="$TOOLS/model_routing.py"
+MODEL_POLICY="$TOOLS/model-routing.default.json"
+MODEL_LIVE="$EVO/data/model-routing.json"
+MODEL_RECEIPTS="$TOOLS/model-benchmark-results.jsonl"
+if ! python3 "$MODEL_ROUTER" ensure-phone-config \
+    --config "$EVO/data/config.md" >/dev/null 2>>"$LOG"; then
+  say "additive phone model defaults unavailable — discovery deferred"
+  control_status_write sources "$SRC" failed discovery_model_config 0 70 \
+    "phone model-route defaults unavailable"
+  finish_request retry discovery_model_config \
+    "phone model-route defaults unavailable" || true
+  DISC_REPORTED=1
+  exit 70
+fi
+
 # App-specific notes from the catalog (best-effort).
 NOTES=$(python3 - "$PKG" <<'PYEOF'
 import json, sys, os
@@ -127,21 +146,40 @@ PROMPT=$(sed -e "s|__PKG__|$PKG|g" -e "s|__NAME__|$NAME|g" -e "s|__SRC__|$SRC|g"
              -e "s|__NOTES__|$NOTES|g" "$TOOLS/source-discovery-prompt.txt")
 
 # Source discovery is a one-time instruction-authoring/research task, not routine extraction.
-# It deliberately keeps the independently configured Codex route; a browse benchmark must not
-# silently change the model that writes a new durable source recipe.
+# Its independent route prevents a browse or curator benchmark from silently
+# changing the model that writes a new durable source recipe.
 # Brain provider from data/config.md, same convention as evogent-cycle.sh.
 BRAIN=$(awk '/^## Brain Provider/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' \
         "$EVO/data/config.md" 2>/dev/null | grep -qi codex && echo codex || echo claude)
-CODEX_MODEL="${EVOGENT_CODEX_MODEL:-$(awk '/^## Codex Model/{f=1;next} f&&/^##[[:space:]]/{exit} f&&NF{print;exit}' "$EVO/data/config.md" 2>/dev/null)}"; CODEX_MODEL="${CODEX_MODEL:-gpt-5.5}"
+SOURCE_DISCOVERY_ROUTE=$(python3 "$MODEL_ROUTER" resolve \
+  --task source_discovery \
+  --config "$EVO/data/config.md" \
+  --policy "$MODEL_POLICY" \
+  --live "$MODEL_LIVE" \
+  --receipts "$MODEL_RECEIPTS" \
+  --model-override "${EVOGENT_SOURCE_DISCOVERY_MODEL:-}" \
+  --effort-override "${EVOGENT_SOURCE_DISCOVERY_REASONING:-}" \
+  2>>"$LOG") || SOURCE_DISCOVERY_ROUTE=$'gpt-5.6-sol\thigh\tfallback'
+IFS=$'\t' read -r CODEX_MODEL CODEX_EFFORT CODEX_ROUTE_ORIGIN \
+  <<< "$SOURCE_DISCOVERY_ROUTE"
+case "$CODEX_EFFORT" in
+  low|medium|high|xhigh) ;;
+  *) CODEX_MODEL="gpt-5.6-sol"; CODEX_EFFORT=high; CODEX_ROUTE_ORIGIN=fallback ;;
+esac
+if ! [[ "$CODEX_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,159}$ ]]; then
+  CODEX_MODEL="gpt-5.6-sol"
+  CODEX_EFFORT=high
+  CODEX_ROUTE_ORIGIN=fallback
+fi
 
 # Self-heal the a11y service: a disabled service reads as "app did not land on any display".
 EVOGENT_TASK_OWNER="$CONTROL_OWNER_ID" bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 \
   || say "a11y-heal: service unresponsive — discovery will likely fail"
 
-say "discovery starting (brain=$BRAIN, budget 900s) — $NAME ($PKG) -> $SRC"
+say "discovery starting (brain=$BRAIN, route=$CODEX_ROUTE_ORIGIN, budget 900s) — $NAME ($PKG) -> $SRC"
 if [ "$BRAIN" = "codex" ]; then
   # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
-  ( cd "$EVO" && run_owned_timeout 900 30 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort=medium \
+  ( cd "$EVO" && run_owned_timeout 900 30 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" \
       --dangerously-bypass-approvals-and-sandbox -- "$PROMPT" >>"$LOG" 2>&1 )
 else
   ( cd "$EVO" && run_owned_timeout 900 30 env -u ANTHROPIC_API_KEY \

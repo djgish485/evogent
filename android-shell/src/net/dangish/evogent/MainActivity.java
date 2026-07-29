@@ -239,6 +239,15 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private boolean isExplicitEvogentIntent(Intent intent) {
+        if (intent == null) return false;
+        return EvogentHomeChoicePolicy.explicitlyChoosesEvogent(
+                Intent.ACTION_MAIN.equals(intent.getAction()),
+                intent.hasCategory(Intent.CATEGORY_LAUNCHER),
+                intent.hasCategory(Intent.CATEGORY_HOME),
+                ACTION_OPEN_EVOGENT_HOME.equals(intent.getAction()));
+    }
+
     private EvogentHomeChoicePolicy.Choice rememberedHomeChoice() {
         return EvogentHomeChoicePolicy.decode(homeChoicePreferences()
                 .getString(HOME_CHOICE_KEY, EvogentHomeChoicePolicy.VALUE_EVOGENT));
@@ -319,6 +328,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         captureNotificationViewIntent(intent);
+        boolean explicitEvogent = isHomeSurface() && isExplicitEvogentIntent(intent);
         if (isHomeSurface() && routeHomeIntent(intent)) {
             cancelSystemHomeAvailabilityWait();
             return;
@@ -330,6 +340,10 @@ public class MainActivity extends Activity {
             // In particular, an explicit Evogent icon/action launch must not be redirected by a
             // stale timeout from an earlier system-HOME invocation.
             cancelSystemHomeAvailabilityWait();
+        }
+        if (explicitEvogent) {
+            refreshExplicitEvogentLaunch();
+            return;
         }
         dispatchPendingNotificationView();
         if (intent == null || !Intent.ACTION_MAIN.equals(intent.getAction())
@@ -351,6 +365,8 @@ public class MainActivity extends Activity {
                     // A timeout, a repeated HOME, or an explicit icon launch may have superseded
                     // this proof. Never dispatch JS for a stale availability request.
                     if (markSystemHomeUsable(availabilityRequest)) {
+                        homeNavigation.markAuthenticatedDocumentReady();
+                        renderRecoverySurface();
                         dispatchHomeGesture(fullReset);
                     }
                 }
@@ -366,6 +382,29 @@ public class MainActivity extends Activity {
             return;
         }
         dispatchHomeGesture(fullReset);
+    }
+
+    /**
+     * A singleTask launcher icon can return to an already-loaded WebView. Cover that cached
+     * document and require a fresh process proof even when its previous proof is still inside the
+     * ordinary foreground-age window. Otherwise a server that died while Pixel HOME was visible
+     * could leave an explicit Evogent launch on stale web UI instead of native recovery.
+     */
+    private void refreshExplicitEvogentLaunch() {
+        if (destroyed || webView == null) return;
+        if (!isCurrentFeedDocumentTrusted()) {
+            loadFeedRoot();
+            return;
+        }
+        showRecoveryStarting();
+        refreshCurrentDocumentAuthentication(new Runnable() {
+            @Override public void run() {
+                if (destroyed || webView == null || !isCurrentFeedDocumentTrusted()) return;
+                homeNavigation.markAuthenticatedDocumentReady();
+                renderRecoverySurface();
+                dispatchPendingNotificationView();
+            }
+        });
     }
 
     private boolean isSystemHomeIntent(Intent intent) {

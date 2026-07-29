@@ -17,7 +17,11 @@ If you later switch this deployment to Bird-backed fetching, uninstall this skil
 
 ## Behavior
 
-- Startup refresh runs automatically after install, and the cache refreshes again immediately before each curation cycle through the configured brain provider's short-lived nested browser task against the shared authenticated desktop Chrome session.
+- In the desktop/VM profile, startup refresh runs automatically after install and the cache
+  refreshes again immediately before each curation cycle through the configured brain
+  provider's short-lived nested browser task against the shared authenticated desktop Chrome
+  session. The canonical phone profile does not inherit that schedule: it refreshes X only
+  when its nonzero source-specific cadence is due or a source signal makes it due.
 - Refresh reads `data/tweet-cache-policy.json`, `data/cache-hints.json`, `data/preferences-context.md`, `data/preference-insights.md`, and `data/curation-prompt.md` on each run so policy and preference changes are picked up automatically.
 - Cached tweets are available at `GET /api/tweet-cache`.
 - The curation worker should start with `/api/tweet-cache` for Twitter/X data. It must never call Bird CLI directly and must never call the x-browser CLI directly.
@@ -55,7 +59,8 @@ See the OpenClaw curator memory for the cache-first curation workflow.
 - Do not invent a reduced extractor. If Curation Task would capture a field, Cacher Mode captures the same field into `payload`.
 - External linked-page cards are part of that field shape. When visible, preserve them in `payload.linkCard`, `payload.linkPreviews`, and `payload.urlEntities` using the shapes named in `data/tweet-cache-policy.json`.
 - Persist items through `/api/internal/browse-cache/submit` with source `twitter`.
-- Default cadence: every 15 minutes.
+- Desktop/VM default cadence: every 15 minutes. The canonical phone cadence remains
+  source-specific and nonzero.
 - Auth/session requirement is unchanged: use the shared authenticated Chrome browse profile.
 - Never pre-judge `/root/.config/x-auth-cookies.json` or `.env.local` `AUTH_TOKEN`/`CT0` as stale based on file age, mtime, context labels, or other a-priori freshness heuristics; if the shared session is signed out and the repair fallback is available, attempt it and let the post-import `https://x.com/home` probe be the basis for declaring credentials stale.
 

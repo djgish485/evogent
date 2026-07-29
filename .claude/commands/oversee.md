@@ -55,7 +55,10 @@ Prefer no change over a weakly supported change.
   relevant signal can wake that source early. Keep `data/source-cadence.json`
   nonempty; every `cadenceHours` must be finite and between `0.25` and `168`.
   Zero is never a bootstrap value because it would make every cycle browse that
-  source.
+  source. Its top-level object contains source records only: do not copy the
+  public default's `_comment` into the live file. Every source record has a
+  nonempty `why` of at most 240 characters. Preserve unknown fields within an
+  otherwise valid source record.
 - Do not write any model route in the current system. No current browse harness
   qualifies: `browse_youtube` and global `browse` reject persistent overrides
   in both policy and code. `browse_youtube_smoke_v1` /
@@ -101,12 +104,29 @@ Prefer no change over a weakly supported change.
   desired outcome, and hard boundaries. Do not prescribe or apply a diff.
 
 Write private JSON or Markdown through a mode-`0600` temporary file, flush it,
-then rename it over the destination. Preserve unknown keys. Before reporting
-completion, atomically rewrite both `data/preference-insights.md` and
-`data/source-cadence.json` even when their values remain unchanged; the
-scheduler uses those two bounded replacements as a durable postcondition. Keep
-raw evidence in its existing private store; reasons in cadence/routing files
-are short synthesis, never excerpts.
+then rename it over the destination. Preserve unknown keys. After the final
+content edits and before reporting completion, atomically rewrite both `data/preference-insights.md` and
+`data/source-cadence.json` even when their values remain unchanged:
+
+```bash
+python3 "$EVOGENT_PRIVATE_ARTIFACT_TOOL" rewrite \
+  --path data/preference-insights.md --kind preference \
+  --trusted-data-root "$EVOGENT_PRIVATE_DATA_ROOT"
+python3 "$EVOGENT_PRIVATE_ARTIFACT_TOOL" rewrite \
+  --path data/source-cadence.json --kind cadence \
+  --trusted-data-root "$EVOGENT_PRIVATE_DATA_ROOT"
+```
+
+Each command validates the bounded private artifact, preserves its exact valid
+bytes, and performs the required mode-`0600`, fsync'd atomic replacement even
+when the content is unchanged. Both commands must succeed before the terminal
+line. The scheduler supplies both absolute environment paths and binds the
+release's exact `runtime/data` link to its canonical private state directory;
+do not substitute another helper or root. Correct an invalid artifact and rerun
+its finalizer, or report failure.
+The scheduler independently verifies those two replacements as its durable
+postcondition. Keep raw evidence in its existing private store; reasons in
+cadence/routing files are short synthesis, never excerpts.
 
 ## Report
 

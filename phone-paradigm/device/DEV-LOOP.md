@@ -55,12 +55,21 @@ Termux SSH normally listens on device port 8022. Bridge it through ADB with loca
 values from the private notes file:
 
 ```bash
-adb -s <DEVICE_SERIAL> forward tcp:<LOCAL_PORT> tcp:8022
+if adb -s <DEVICE_SERIAL> forward --no-rebind tcp:<LOCAL_PORT> tcp:8022; then
+  trap 'adb -s <DEVICE_SERIAL> forward --remove tcp:<LOCAL_PORT> >/dev/null 2>&1 || true' EXIT
+else
+  echo "The local ADB endpoint is already owned or unavailable." >&2
+  exit 1
+fi
 ssh -p <LOCAL_PORT> \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
   <TERMUX_USER>@127.0.0.1
 ```
+
+The release deployer likewise refuses to reuse an existing local endpoint and
+removes the exact forward it owns on every terminal path. Do not accumulate a
+new forwarding port for each probe.
 
 Typical on-phone layout:
 

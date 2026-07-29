@@ -36,6 +36,133 @@ require_command unzip
 require_command openssl
 require_command ps
 
+prepare_phone_live_defaults() {
+  local defaults_data="$1"
+  python3 - "$defaults_data" <<'PY'
+import json
+import math
+import os
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+cadence_template = root / "source-cadence.default.json"
+preference_template = root / "preference-insights.default.md"
+
+for source in (cadence_template, preference_template):
+    metadata = source.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or source.is_symlink():
+        raise SystemExit(f"phone release: unsafe live-default template: {source.name}")
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+cadence = json.loads(
+    cadence_template.read_text(encoding="utf-8"),
+    object_pairs_hook=unique_object,
+)
+if not isinstance(cadence, dict):
+    raise SystemExit("phone release: cadence default must be an object")
+
+live_cadence = {}
+for source, entry in cadence.items():
+    # Underscore-prefixed fields explain the public template but are not live
+    # source records. In particular, the private-artifact contract rejects
+    # _comment so metadata can never deadlock a first daily review.
+    if isinstance(source, str) and source.startswith("_"):
+        continue
+    if (
+        not isinstance(source, str)
+        or not source
+        or source != source.strip()
+        or not isinstance(entry, dict)
+    ):
+        raise SystemExit("phone release: cadence default has an invalid source")
+    hours = entry.get("cadenceHours")
+    why = entry.get("why")
+    if (
+        isinstance(hours, bool)
+        or not isinstance(hours, (int, float))
+        or not math.isfinite(float(hours))
+        or float(hours) < 0.25
+        or float(hours) > 168
+        or not isinstance(why, str)
+        or not why.strip()
+        or len(why) > 240
+    ):
+        raise SystemExit(
+            f"phone release: cadence default has an invalid record: {source}"
+        )
+    live_cadence[source] = entry
+if not live_cadence:
+    raise SystemExit("phone release: cadence default has no live source records")
+
+preference_bytes = preference_template.read_bytes()
+if (
+    not preference_bytes.strip()
+    or len(preference_bytes) > 49_152
+    or b"\0" in preference_bytes
+):
+    raise SystemExit("phone release: preference-insights default is invalid")
+try:
+    preference_bytes.decode("utf-8")
+except UnicodeDecodeError as error:
+    raise SystemExit(
+        "phone release: preference-insights default is not UTF-8"
+    ) from error
+
+outputs = {
+    "preference-insights.md": preference_bytes,
+    "source-cadence.json": (
+        json.dumps(
+            live_cadence,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8"),
+}
+for name, payload in outputs.items():
+    destination = root / name
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(destination, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("live-default write stopped")
+            view = view[written:]
+        os.fsync(descriptor)
+    except Exception:
+        os.close(descriptor)
+        destination.unlink(missing_ok=True)
+        raise
+    else:
+        os.close(descriptor)
+
+directory = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+}
+
 OUTPUT_DIR="$(python3 - "$OUTPUT_DIR" "$ROOT" <<'PY'
 import pathlib
 import sys
@@ -1278,6 +1405,7 @@ rm -rf "$RUNTIME/scripts/agents"
 # travel beside the runtime, while runtime/data is created as a state link by the
 # installer.
 mv "$RUNTIME/data" "$RELEASE/defaults/data"
+prepare_phone_live_defaults "$RELEASE/defaults/data"
 
 # Copy the build output without its disposable host cache.
 mkdir -p "$RUNTIME/.next"
@@ -1549,6 +1677,8 @@ manifest = {
         "runtime/.intent/contracts.jsonl",
         "runtime/.intent/failure-modes.jsonl",
         "runtime/skills-library",
+        "defaults/data/preference-insights.md",
+        "defaults/data/source-cadence.json",
         "phone-tools/evo-curl",
         "phone-tools/evo-health",
         "phone-tools/evo_curl_transport.py",

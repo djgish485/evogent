@@ -48,7 +48,12 @@ if [ "$(adb shell 'ps -A 2>/dev/null | grep -c sshd' | tr -d '\r')" = "0" ]; the
   adb shell "am start -n com.termux/.app.TermuxActivity" >/dev/null 2>&1; sleep 6
   adb shell input text 'sshd' >/dev/null 2>&1; adb shell input keyevent 66 >/dev/null 2>&1; sleep 3
 fi
-adb forward tcp:8022 tcp:8022 >/dev/null 2>&1
+if adb forward --no-rebind tcp:8022 tcp:8022 >/dev/null 2>&1; then
+  trap 'adb forward --remove tcp:8022 >/dev/null 2>&1 || true' EXIT
+else
+  echo "ERROR: local ADB endpoint tcp:8022 is already owned or unavailable" >&2
+  exit 1
+fi
 
 SVC="net.dangish.evogent/net.dangish.evogent.EvogentAccessibilityService"
 

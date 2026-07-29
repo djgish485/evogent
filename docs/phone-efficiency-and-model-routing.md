@@ -36,8 +36,9 @@ person's routine.
 |---|---|---|
 | Notification capture, redaction, dedup, and digest | Deterministic, local, no model | Preserve the Android original and surface a health receipt |
 | API fetches, timestamps, counts, locks, and validation | Deterministic | Diagnosis agent only after an outcome tripwire |
-| Routine hidden-display browse | Explicit Browse Model, otherwise the existing Codex Model | One-run candidate screening; diagnosis route after repeated anomalous yield |
-| Feed curation | Strong editorial route with a truthful terminal receipt | Higher effort only after a measured quality gain or a difficult exceptional slate |
+| Routine hidden-display browse | Terra/medium on a fresh phone; an existing explicit Browse Model is preserved | One-run candidate screening; diagnosis route after repeated anomalous yield |
+| One-time source discovery | Independent Sol/high recipe-authoring route on a fresh phone | Explicit supervised candidate only; never inherit browse or curator promotion |
+| Feed curation | Sol/high on a fresh phone, independently of ordinary chat | Higher effort only after a measured quality gain or a difficult exceptional slate |
 | Cross-cycle review | One bounded high-reasoning overseer per service day | Max/Ultra only for an explicitly divisible, quality-first audit |
 
 The supported runtime-brain APIs and model-facing browse caches exclude
@@ -116,15 +117,38 @@ the deployment's existing `Codex Model`; Terra is only the public model fallback
 when neither heading exists. Browse reasoning remains independently selectable
 through `Browse Reasoning`, with medium as its fallback.
 
-Persistent overrides for global browse, YouTube browse, and curation are
-disabled in both the policy and the resolver. Existing entries in the private
-mode-`0600` `data/model-routing.json` are ignored for those routes, regardless
-of how many current receipts exist. This is deliberate: none of today's
-computer-use receipt versions binds workload identity to a frozen, blinded
-private-relevance review, and the curator harness cannot yet isolate every
-production side effect. Explicit environment overrides remain one-run only, so
-supervised benchmarks can compare candidates without silently changing routine
-behavior.
+Before phone-owned provider work, `model_routing.py ensure-phone-config` seeds
+a genuinely absent config with the complete generic config baseline, then adds
+fresh-phone routes: curator/Sol-high, source-discovery/Sol-high,
+browse/Terra-medium, and overseer/Sol-high. The on-phone generic baseline is
+regression-checked against the shared desktop/VM template.
+
+For an existing config, missing curator, source-discovery, and browse model
+headings instead inherit its effective `Codex Model`. Curator reasoning
+inherits effective Codex reasoning, including reasoning derived from
+`Usage Level`; the browse and source-discovery lanes preserve their prior
+medium effort, and overseer preserves Sol/high. Existing headings—including
+intentionally blank headings—are never rewritten, so an upgrade cannot
+silently replace a deployment choice. A version-only private
+`.phone-config-bootstrap.json`, atomically written mode-`0600` beside
+`config.md`, records the applied migration through the production
+`runtime/data` symlink without storing route values.
+
+Automatic diagnosis is a separate bounded lane. Its policy has no config
+inheritance and stays on Sol/high; it cannot inherit an overseer Max/Ultra
+choice or consume a private persistent override. A one-run
+`EVOGENT_DIAGNOSIS_MODEL` / `EVOGENT_DIAGNOSIS_REASONING` override remains
+available for an explicit supervised run, without changing future routing.
+
+Persistent overrides for global browse, YouTube browse, curation, source
+discovery, and automatic diagnosis are disabled in both the policy and the
+resolver. Existing entries in the private mode-`0600`
+`data/model-routing.json` are ignored for those routes, regardless of how many
+current receipts exist. This is deliberate: none of today's computer-use
+receipt versions binds workload identity to a frozen, blinded private-relevance
+review, and the curator harness cannot yet isolate every production side
+effect. Explicit environment overrides remain one-run only, so supervised
+benchmarks can compare candidates without silently changing routine behavior.
 
 ## Benchmark protocol
 

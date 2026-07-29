@@ -135,9 +135,10 @@ Subscription guidance:
 - Do not infer an affordable cadence from a public example or another deployment's
   usage. On the canonical phone profile, private runtime evidence and the selected
   usage level drive source-specific cadence.
-- Source caches refresh ahead of visible curation so each cycle has a fresh pool to
-  draw from. Verify a fresh install produces a visible update within its configured
-  maximum interval.
+- Desktop/VM source caches refresh ahead of visible curation. On the canonical phone
+  profile, each source refreshes only when its nonzero source-specific cadence is due or a
+  source signal makes it due; curation uses the resulting cache pool. Verify a fresh install
+  produces a visible update within its configured maximum interval.
 
 Write the chosen value to `data/config.md`:
 

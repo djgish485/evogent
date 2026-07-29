@@ -62,9 +62,18 @@ changing the model used by ordinary chat:
 
 ```markdown
 ## Codex Model
-<curator baseline>
+<ordinary Codex chat model>
+
+## Curator Model
+<phone curation baseline>
 
 ## Curator Reasoning
+low|medium|high|xhigh
+
+## Source Discovery Model
+<one-time source-recipe authoring baseline>
+
+## Source Discovery Reasoning
 low|medium|high|xhigh
 
 ## Browse Model
@@ -80,15 +89,38 @@ low|medium|high|xhigh
 high|xhigh|max|ultra
 ```
 
-These are private deployment choices, not setup-time public defaults. Use the
-lowest route that passes the representative workload. An explicit
-`Browse Model` wins; otherwise browse preserves the deployment's existing
-`Codex Model`. Terra/medium is only the public fallback when neither model
-heading is configured. Persistent overrides for global browse, YouTube browse,
-and curation are currently disabled: the available computer-use receipts do not
-bind a frozen, blinded private-relevance review, and the curator harness cannot
-yet isolate every production side effect. One-run environment overrides remain
-available for supervised screening; see
+These values remain private deployment choices. Use the lowest route that
+passes the representative workload. Before provider work, a phone with no
+config receives the complete generic config baseline, followed by
+curator/Sol-high, source-discovery/Sol-high, browse/Terra-medium, and
+overseer/Sol-high task headings.
+
+An existing config is migrated differently: missing curator, source-discovery,
+and browse model headings inherit its effective `Codex Model`. Curator
+reasoning inherits its effective Codex reasoning (including the Usage Level
+fallback), while the previously medium-effort browse and source-discovery lanes
+remain medium and overseer remains Sol/high. Existing headings—including
+intentionally blank ones—are never rewritten. A version-only mode-`0600`
+`.phone-config-bootstrap.json` beside the private config makes this migration
+explicit and repeatable through the production `runtime/data` symlink without
+recording private choices.
+
+`Curator Model` is authoritative for phone curation. `Codex Model` remains its
+compatibility fallback when the phone bootstrap has not run. An explicit
+`Browse Model` wins; otherwise browse similarly preserves an older
+deployment's `Codex Model`, with Terra/medium as the public fallback when
+neither model heading is configured.
+
+Automatic diagnosis is independently pinned to Sol/high. It does not inherit
+`Codex Model`, `Overseer Model`, or `Overseer Reasoning`, and no private
+persistent route can change it. A one-run explicit diagnosis environment
+override remains available for supervised diagnosis.
+
+Persistent overrides for global browse, YouTube browse, curation, source
+discovery, and automatic diagnosis are currently disabled: the available
+computer-use receipts do not bind a frozen, blinded private-relevance review,
+and the curator harness cannot yet isolate every production side effect.
+One-run environment overrides remain available for supervised screening; see
 [`phone-efficiency-and-model-routing.md`](phone-efficiency-and-model-routing.md).
 The daily overseer defaults to one bounded Sol/high run. Max or Ultra is an
 explicit operator setting only and belongs on a measured, quality-first review

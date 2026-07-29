@@ -114,6 +114,18 @@ if [ "${EVOGENT_RELEASE_BOOT:-0}" != 1 ]; then
   BOOT_MUTATION_GATE_HELD=1
 fi
 
+# The generic app config is shared with desktop deployments. Before any
+# phone-owned provider work can start, add only absent phone route headings.
+# Existing headings (including intentionally blank ones) remain user-owned.
+if python3 "$TOOLS/model_routing.py" ensure-phone-config \
+    --config "$HOME/evogent/data/config.md" >/dev/null 2>&1; then
+  say "phone model-route defaults verified"
+else
+  # Keep the native/server recovery path available. The cycle and discovery
+  # dispatchers independently fail closed before spending provider work.
+  say "WARN: phone model-route defaults could not be verified; provider cycles will defer"
+fi
+
 # Retire the old permanent Termux wakelock. Cycles/discoveries now acquire a reference-counted
 # lock only for their bounded work and release it from EXIT/TERM cleanup.
 control_release_legacy_wake_if_idle

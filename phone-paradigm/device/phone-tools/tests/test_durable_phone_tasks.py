@@ -37,8 +37,12 @@ from interest_browse_runtime import (  # noqa: E402
     png_dimensions,
 )
 from private_artifact import (  # noqa: E402
+    MAX_PRIVATE_ARTIFACT_BYTES,
     artifact_identity,
     artifact_was_atomically_rewritten,
+    atomic_rewrite_private_artifact,
+    main as private_artifact_main,
+    preference_insights_valid,
     source_cadence_valid,
 )
 from scheduler_timing import (  # noqa: E402
@@ -1244,6 +1248,43 @@ class SchedulerTimingTests(unittest.TestCase):
 
 
 class PrivateArtifactPostconditionTests(unittest.TestCase):
+    def test_preference_memory_rejects_binary_or_non_text_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "preference-insights.md"
+            for payload in (
+                b"\xff\xfe not utf-8\n",
+                b"# Preference Insights\x00hidden\n",
+                b"# Preference Insights\x01hidden\n",
+                b" \n\t",
+            ):
+                path.write_bytes(payload)
+                path.chmod(0o600)
+                self.assertFalse(preference_insights_valid(path))
+                self.assertFalse(
+                    atomic_rewrite_private_artifact(path, kind="preference")
+                )
+
+    def test_snapshot_requires_a_stable_bounded_private_regular_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "preference-insights.md"
+            path.write_text("# Preference Insights\n", encoding="utf-8")
+            path.chmod(0o600)
+            self.assertRegex(artifact_identity(path), r"^[0-9]+:[0-9]+$")
+
+            path.chmod(0o644)
+            self.assertEqual(artifact_identity(path), "missing")
+            path.chmod(0o600)
+
+            alias = root / "preference-alias.md"
+            alias.symlink_to(path.name)
+            self.assertEqual(artifact_identity(alias), "missing")
+
+            oversized = root / "oversized.md"
+            oversized.write_bytes(b"x" * (MAX_PRIVATE_ARTIFACT_BYTES + 1))
+            oversized.chmod(0o600)
+            self.assertEqual(artifact_identity(oversized), "missing")
+
     def test_empty_or_zero_cadence_cannot_ack_the_daily_overseer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "source-cadence.json"
@@ -1251,6 +1292,198 @@ class PrivateArtifactPostconditionTests(unittest.TestCase):
                 path.write_text(json.dumps(value), encoding="utf-8")
                 path.chmod(0o600)
                 self.assertFalse(source_cadence_valid(path))
+
+    def test_live_cadence_rejects_public_comment_and_long_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "source-cadence.json"
+            invalid_values = (
+                {
+                    "_comment": "public bootstrap explanation",
+                    "twitter": {"cadenceHours": 4, "why": "bounded evidence cost"},
+                },
+                {
+                    "_comment": {
+                        "cadenceHours": 4,
+                        "why": "a public comment shaped like a source is still not a source",
+                    },
+                    "twitter": {"cadenceHours": 4, "why": "bounded evidence cost"},
+                },
+                {"twitter": {"cadenceHours": 4, "why": "x" * 241}},
+            )
+            for value in invalid_values:
+                path.write_text(json.dumps(value), encoding="utf-8")
+                path.chmod(0o600)
+                before = artifact_identity(path)
+                self.assertFalse(source_cadence_valid(path))
+                self.assertFalse(atomic_rewrite_private_artifact(path, kind="cadence"))
+                self.assertEqual(artifact_identity(path), before)
+
+    def test_safe_no_change_rewrite_preserves_bytes_and_changes_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cases = (
+                (
+                    root / "preference-insights.md",
+                    b"# Durable private synthesis\n\nNo change today.\n",
+                    "preference",
+                ),
+                (
+                    root / "source-cadence.json",
+                    (
+                        b'{\n  "twitter": {"cadenceHours": 4, '
+                        b'"why": "bounded evidence cost", '
+                        b'"futurePrivateField": {"keep": true}}\n}\n'
+                    ),
+                    "cadence",
+                ),
+            )
+            for path, payload, kind in cases:
+                path.write_bytes(payload)
+                path.chmod(0o600)
+                before = artifact_identity(path)
+                with patch("private_artifact.os.fsync", wraps=os.fsync) as fsync:
+                    self.assertEqual(
+                        private_artifact_main([
+                            "rewrite",
+                            "--path",
+                            str(path),
+                            "--kind",
+                            kind,
+                        ]),
+                        0,
+                    )
+                self.assertGreaterEqual(fsync.call_count, 2)
+                self.assertNotEqual(artifact_identity(path), before)
+                self.assertEqual(path.read_bytes(), payload)
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_rewrite_rejects_symlink_file_and_symlink_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            real = root / "real"
+            real.mkdir()
+            target = real / "source-cadence.json"
+            payload = b'{"twitter":{"cadenceHours":4,"why":"bounded evidence cost"}}\n'
+            target.write_bytes(payload)
+            target.chmod(0o600)
+
+            alias = root / "source-cadence.json"
+            alias.symlink_to(target)
+            self.assertFalse(source_cadence_valid(alias))
+            self.assertFalse(atomic_rewrite_private_artifact(alias, kind="cadence"))
+            self.assertTrue(alias.is_symlink())
+            self.assertEqual(target.read_bytes(), payload)
+
+            linked_parent = root / "linked-data"
+            linked_parent.symlink_to(real, target_is_directory=True)
+            linked_path = linked_parent / target.name
+            self.assertFalse(source_cadence_valid(linked_path))
+            self.assertFalse(atomic_rewrite_private_artifact(linked_path, kind="cadence"))
+            self.assertFalse(source_cadence_valid(
+                linked_path,
+                trusted_data_root=real,
+            ))
+            self.assertFalse(atomic_rewrite_private_artifact(
+                linked_path,
+                kind="cadence",
+                trusted_data_root=real,
+            ))
+            self.assertEqual(target.read_bytes(), payload)
+
+    def test_release_runtime_data_link_binds_to_canonical_private_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            # macOS exposes /var through a symlink to /private/var. The
+            # production trust contract requires the caller to provide the
+            # canonical root rather than an ancestor-symlink alias.
+            release_root = Path(temporary).resolve() / "evogent"
+            private_data = release_root / "state" / "data"
+            runtime = release_root / "releases" / "release-id" / "runtime"
+            private_data.mkdir(parents=True)
+            runtime.mkdir(parents=True)
+            (runtime / "data").symlink_to("../../../state/data")
+
+            payload = (
+                b'{"twitter":{"cadenceHours":4,'
+                b'"why":"bounded evidence cost"}}\n'
+            )
+            target = private_data / "source-cadence.json"
+            target.write_bytes(payload)
+            target.chmod(0o600)
+            linked_path = runtime / "data" / target.name
+
+            self.assertFalse(source_cadence_valid(linked_path))
+            self.assertTrue(source_cadence_valid(
+                linked_path,
+                trusted_data_root=private_data,
+            ))
+            previous_directory = Path.cwd()
+            try:
+                os.chdir(runtime)
+                self.assertTrue(source_cadence_valid(
+                    Path("data") / target.name,
+                    trusted_data_root=private_data,
+                ))
+            finally:
+                os.chdir(previous_directory)
+            before = artifact_identity(
+                linked_path,
+                trusted_data_root=private_data,
+            )
+            self.assertEqual(
+                private_artifact_main([
+                    "rewrite",
+                    "--path",
+                    str(linked_path),
+                    "--kind",
+                    "cadence",
+                    "--trusted-data-root",
+                    str(private_data),
+                ]),
+                0,
+            )
+            self.assertTrue(artifact_was_atomically_rewritten(
+                linked_path,
+                before_identity=before,
+                kind="cadence",
+                trusted_data_root=private_data,
+            ))
+            self.assertEqual(linked_path.read_bytes(), payload)
+            self.assertEqual(linked_path.stat().st_mode & 0o777, 0o600)
+
+            leaf_alias = private_data / "leaf-alias.json"
+            leaf_alias.symlink_to(target.name)
+            linked_leaf_alias = runtime / "data" / leaf_alias.name
+            self.assertFalse(source_cadence_valid(
+                linked_leaf_alias,
+                trusted_data_root=private_data,
+            ))
+            self.assertFalse(atomic_rewrite_private_artifact(
+                linked_leaf_alias,
+                kind="cadence",
+                trusted_data_root=private_data,
+            ))
+
+            untrusted_root = release_root / "other-data"
+            untrusted_root.mkdir()
+            self.assertFalse(source_cadence_valid(
+                linked_path,
+                trusted_data_root=untrusted_root,
+            ))
+
+            trusted_root_alias = release_root / "data-root-alias"
+            trusted_root_alias.symlink_to(private_data, target_is_directory=True)
+            self.assertFalse(source_cadence_valid(
+                linked_path,
+                trusted_data_root=trusted_root_alias,
+            ))
+
+            decoy_runtime = release_root / "releases" / "release-id" / "not-runtime"
+            decoy_runtime.mkdir()
+            (decoy_runtime / "data").symlink_to("../../../state/data")
+            self.assertFalse(source_cadence_valid(
+                decoy_runtime / "data" / target.name,
+                trusted_data_root=private_data,
+            ))
 
     def test_exit_zero_without_atomic_rewrite_cannot_pass_postcondition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -183,6 +183,67 @@ test('wake and lockscreen parsers normalize variants and reject contradictory or
   );
 });
 
+test('lockscreen parser accepts Android 16 state only in its exact keyguard hierarchy', () => {
+  const locked = `PhoneWindowManager
+  KeyguardServiceDelegate
+    showing=true
+    inputRestricted=true
+    KeyguardStateMonitor
+      mIsShowing=true
+      mInputRestricted=true
+`;
+  assert.equal(
+    runControlFunction('control_lockscreen_state_from_dump', locked).stdout.trim(),
+    'locked',
+  );
+
+  const unlocked = `KeyguardServiceDelegate
+  showing=false
+  KeyguardStateMonitor
+    mIsShowing=false
+`;
+  assert.equal(
+    runControlFunction('control_lockscreen_state_from_dump', unlocked).stdout.trim(),
+    'unlocked',
+  );
+
+  const unrelated = `SomeOtherService
+  showing=true
+  KeyguardStateMonitor
+    mIsShowing=true
+`;
+  assert.equal(
+    runControlFunction('control_lockscreen_state_from_dump', unrelated).stdout.trim(),
+    'unknown',
+  );
+  assert.equal(
+    runControlFunction(
+      'control_lockscreen_state_from_dump',
+      'showing=true\nmIsShowing=true\n',
+    ).stdout.trim(),
+    'unknown',
+  );
+
+  const nestedDecoy = `KeyguardServiceDelegate
+  SomeOtherState
+    showing=true
+`;
+  assert.equal(
+    runControlFunction('control_lockscreen_state_from_dump', nestedDecoy).stdout.trim(),
+    'unknown',
+  );
+
+  const conflicting = `KeyguardServiceDelegate
+  showing=true
+  KeyguardStateMonitor
+    mIsShowing=false
+`;
+  assert.equal(
+    runControlFunction('control_lockscreen_state_from_dump', conflicting).stdout.trim(),
+    'unknown',
+  );
+});
+
 test('hidden launch verdict permits only proved unattended or exact different-package states', () => {
   const verdict = (...args) =>
     runControlFunction('control_hidden_launch_verdict', '', args).stdout.trim();
@@ -376,11 +437,23 @@ test('one daily overseer replaces dream and reflection as the durable private du
   assert.match(scheduler, /finish --root "\$SCHEDULED_TASK_ROOT".*--result ack/s);
   assert.match(
     scheduler,
-    /run_owned_timeout 1200 30 codex exec[\s\S]*--result quarantine --outcome overseer_failure/,
+    /run_owned_timeout 1200 30 env[\s\S]{0,300}codex exec[\s\S]*--result quarantine --outcome overseer_failure/,
   );
   const spendMark = scheduler.indexOf('mark-provider-launch-spent');
-  const providerCall = scheduler.indexOf('run_owned_timeout 1200 30 codex exec');
+  const providerCall = scheduler.indexOf('codex exec --model "$model"');
   assert.ok(spendMark >= 0 && providerCall > spendMark);
+  const overseer = shellFunction(scheduler, 'run_due_overseer');
+  const configGate = overseer.indexOf('ensure-phone-config');
+  const liveRouteGate = overseer.indexOf('validate-live');
+  const durableClaim = overseer.indexOf('claim --root "$SCHEDULED_TASK_ROOT"');
+  const overseerSpend = overseer.indexOf('mark-provider-launch-spent');
+  const overseerProvider = overseer.indexOf('codex exec --model "$model"');
+  assert.ok(configGate >= 0 && configGate < durableClaim);
+  assert.ok(liveRouteGate >= 0 && liveRouteGate < durableClaim);
+  assert.ok(durableClaim >= 0 && durableClaim < overseerSpend);
+  assert.ok(overseerSpend >= 0 && overseerSpend < overseerProvider);
+  assert.match(overseer, /config_bootstrap[\s\S]*provider not launched/);
+  assert.match(overseer, /model_route_precondition[\s\S]*provider not launched/);
   assert.match(scheduler, /\[ "\$provider_spend_action" != "marked" \]/);
   assert.equal((scheduler.match(/codex exec --model "\$model"/g) || []).length, 1);
   assert.match(scheduler, /\[ "\$terminal_result" = "OVERSEER_RESULT completed" \]/);
@@ -425,8 +498,23 @@ test('phone-native preference memory is canonical and overseer postconditions ar
   assert.match(scheduler, /private_artifact\.py" snapshot[\s\S]*preference-insights\.md/);
   assert.match(scheduler, /private_artifact\.py" verify[\s\S]*--kind preference/);
   assert.match(scheduler, /source-cadence\.json[\s\S]*--kind cadence/);
+  assert.match(scheduler, /PRIVATE_DATA_ROOT="\$\(readlink -f "\$RELEASE_ROOT\/state\/data"/);
+  assert.match(scheduler, /EVOGENT_PRIVATE_ARTIFACT_TOOL="\$TOOLS\/private_artifact\.py"/);
+  assert.match(scheduler, /EVOGENT_PRIVATE_DATA_ROOT="\$PRIVATE_DATA_ROOT"/);
+  assert.equal((scheduler.match(/--trusted-data-root "\$PRIVATE_DATA_ROOT"/g) || []).length, 4);
+  const artifactGate = scheduler.indexOf('--outcome overseer_artifact_precondition');
+  const providerSpend = scheduler.indexOf('mark-provider-launch-spent');
+  assert.ok(artifactGate >= 0 && providerSpend > artifactGate);
+  assert.match(scheduler, /insights_before=missing[\s\S]{0,80}cadence_before=missing/);
+  assert.match(scheduler, /if \[ -n "\$PRIVATE_DATA_ROOT" \]; then/);
+  assert.match(
+    scheduler,
+    /--result retry --outcome overseer_artifact_precondition[\s\S]{0,800}control_status_write overseer - failed artifact_precondition[\s\S]{0,300}scheduled_task_wake_release[\s\S]{0,80}return 2/,
+  );
   assert.match(oversee, /atomically rewrite both `data\/preference-insights\.md` and/);
   assert.match(oversee, /`data\/source-cadence\.json` even when their values remain unchanged/);
+  assert.match(oversee, /"\$EVOGENT_PRIVATE_ARTIFACT_TOOL" rewrite/);
+  assert.equal((oversee.match(/--trusted-data-root "\$EVOGENT_PRIVATE_DATA_ROOT"/g) || []).length, 2);
 });
 
 test('scheduled phone overseer reviews runtime state without doing host development work', () => {

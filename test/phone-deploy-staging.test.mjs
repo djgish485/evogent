@@ -31,6 +31,12 @@ function createHarness() {
     `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$DEPLOY_ADB_LOG"
+if [[ "$*" == *" forward --list" ]] && [ -n "\${DEPLOY_ADB_EXISTING_ENDPOINT:-}" ]; then
+  printf 'TEST-SERIAL %s tcp:8022\\n' "$DEPLOY_ADB_EXISTING_ENDPOINT"
+fi
+if [[ "$*" == *" forward --no-rebind "* ]] && [ "\${DEPLOY_ADB_FORWARD_FAIL:-0}" = 1 ]; then
+  exit 1
+fi
 `,
   );
   executable(
@@ -457,6 +463,51 @@ function createCleanupSiblings(harness, leaf) {
   fs.writeFileSync(path.join(remoteSibling, 'sentinel'), 'keep-remote\n');
   return { localSibling, remoteSibling };
 }
+
+test('deployer owns one collision-free ADB forward and removes it', () => {
+  const harness = createHarness();
+  const release = createRelease(
+    harness,
+    'evogent-phone-forward-lifecycle.tar.gz',
+    'forward-lifecycle',
+  );
+
+  const result = deploy(harness, release);
+  assert.equal(result.status, 0, result.stderr);
+  const calls = fs.readFileSync(harness.env.DEPLOY_ADB_LOG, 'utf8')
+    .trim()
+    .split('\n');
+  assert.deepEqual(calls, [
+    '-s TEST-SERIAL forward --list',
+    '-s TEST-SERIAL forward --no-rebind tcp:2222 tcp:8022',
+    '-s TEST-SERIAL forward --remove tcp:2222',
+  ]);
+
+  fs.rmSync(harness.env.DEPLOY_ADB_LOG);
+  const collision = deploy(harness, release, [], {
+    DEPLOY_ADB_EXISTING_ENDPOINT: 'tcp:2222',
+  });
+  assert.equal(collision.status, 73);
+  assert.match(collision.stderr, /configured SSH port is already forwarded/);
+  assert.deepEqual(
+    fs.readFileSync(harness.env.DEPLOY_ADB_LOG, 'utf8').trim().split('\n'),
+    ['-s TEST-SERIAL forward --list'],
+  );
+
+  fs.rmSync(harness.env.DEPLOY_ADB_LOG);
+  const raced = deploy(harness, release, [], {
+    DEPLOY_ADB_FORWARD_FAIL: '1',
+  });
+  assert.equal(raced.status, 69);
+  assert.match(raced.stderr, /device forwarding failed/);
+  assert.deepEqual(
+    fs.readFileSync(harness.env.DEPLOY_ADB_LOG, 'utf8').trim().split('\n'),
+    [
+      '-s TEST-SERIAL forward --list',
+      '-s TEST-SERIAL forward --no-rebind tcp:2222 tcp:8022',
+    ],
+  );
+});
 
 test('deploy rejects local symlinks and multiply-linked artifacts before transport', () => {
   const harness = createHarness();

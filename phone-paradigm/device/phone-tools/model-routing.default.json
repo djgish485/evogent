@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_comment": "Public routing mechanics only. A deployment's selected models, benchmark receipts, source cadence, and usage evidence stay private on the phone. Explicit environment overrides are one-run diagnostics. Global browse, YouTube browse, and curator persistent overrides remain disabled until their safe qualifying harnesses exist.",
+  "_comment": "Public routing mechanics only. A deployment's selected models, benchmark receipts, source cadence, and usage evidence stay private on the phone. Explicit environment overrides are one-run diagnostics. Global browse, YouTube browse, curator, source discovery, and automatic diagnosis persistent overrides remain disabled until their safe qualifying harnesses exist.",
   "minimumPairedPasses": 3,
   "qualificationMaxAgeHours": 720,
   "routes": {
@@ -26,12 +26,22 @@
     },
     "curator": {
       "execution": "agent",
-      "modelSections": ["Codex Model"],
+      "modelSections": ["Curator Model", "Codex Model"],
       "effortSections": ["Curator Reasoning", "Codex Reasoning Effort"],
       "fallbackModel": "gpt-5.6-sol",
       "fallbackEffort": "high",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
       "qualificationRequired": true,
+      "persistentOverrideAllowed": false
+    },
+    "source_discovery": {
+      "execution": "agent",
+      "modelSections": ["Source Discovery Model"],
+      "effortSections": ["Source Discovery Reasoning"],
+      "fallbackModel": "gpt-5.6-sol",
+      "fallbackEffort": "high",
+      "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "qualificationRequired": false,
       "persistentOverrideAllowed": false
     },
     "overseer": {
@@ -47,12 +57,13 @@
     },
     "diagnosis": {
       "execution": "agent",
-      "modelSections": ["Overseer Model", "Codex Model"],
-      "effortSections": ["Overseer Reasoning"],
+      "modelSections": [],
+      "effortSections": [],
       "fallbackModel": "gpt-5.6-sol",
       "fallbackEffort": "high",
-      "allowedEfforts": ["medium", "high", "xhigh", "max"],
-      "qualificationRequired": false
+      "allowedEfforts": ["high", "xhigh", "max", "ultra"],
+      "qualificationRequired": false,
+      "persistentOverrideAllowed": false
     },
     "notification": {
       "execution": "deterministic"

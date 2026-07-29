@@ -19,7 +19,10 @@ Install this skill when you want Hacker News to behave like the other browse-cac
 
 ## Behavior
 
-- Startup refresh runs automatically after install, and the cache refreshes again immediately before each curation cycle.
+- In the desktop/VM profile, startup refresh runs automatically after install and the cache
+  refreshes again immediately before each curation cycle. The canonical phone profile does
+  not inherit that schedule: it refreshes Hacker News only when its nonzero source-specific
+  cadence is due or a source signal makes it due.
 - Refresh uses the shared browse-cache storage and query APIs. Cached HN stories are available through `GET /api/browse-cache?source=hackernews`.
 - Product code handles persistence, dedup, deadlines, and diagnostics. The source itself is public API work, not browser automation.
 - Cache hints may use the `hackernews` source namespace in `data/cache-hints.json`, but refresh still works without hints because it fetches top-ranked HN stories directly.

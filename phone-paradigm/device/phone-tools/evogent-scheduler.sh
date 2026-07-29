@@ -80,6 +80,7 @@ MODEL_ROUTER="$TOOLS/model_routing.py"
 MODEL_POLICY="$TOOLS/model-routing.default.json"
 MODEL_LIVE="$EVO/data/model-routing.json"
 MODEL_RECEIPTS="$TOOLS/model-benchmark-results.jsonl"
+PRIVATE_DATA_ROOT="$(readlink -f "$RELEASE_ROOT/state/data" 2>/dev/null || true)"
 SCHEDULED_WAKE_HELD=0
 SCHEDULED_TASK_GATE="$TOOLS/.cycle.lock"
 SCHEDULED_TASK_GATE_HELD=0
@@ -211,6 +212,27 @@ run_due_overseer() {
   local transition action review_hour insights_before cadence_before output terminal_result
   local provider_spend provider_spend_action
   review_hour=$(maintenance_hour)
+  # Boot deliberately keeps the native recovery surface and local web server
+  # available when private config bootstrap fails. Every provider lane must
+  # still re-prove that bootstrap independently before claiming or spending.
+  if ! python3 "$MODEL_ROUTER" ensure-phone-config \
+      --config "$EVO/data/config.md" >/dev/null 2>>"$LOG"; then
+    say "overseer: phone config bootstrap unavailable — provider not launched"
+    control_status_write overseer - failed config_bootstrap 0 2 \
+      "private phone config bootstrap failed; provider not launched"
+    return 2
+  fi
+  # The overseer is forbidden to edit model routes. A malformed private route
+  # artifact is therefore pre-known unrepairable by this task and must not
+  # consume the one strong daily provider call.
+  if ! python3 "$MODEL_ROUTER" validate-live \
+      --live "$MODEL_LIVE" --policy "$MODEL_POLICY" --allow-missing \
+      >>"$LOG" 2>&1; then
+    say "overseer: private model route invalid — provider not launched"
+    control_status_write overseer - failed model_route_precondition 0 2 \
+      "private model route invalid; provider not launched"
+    return 2
+  fi
   ensured=$(python3 "$TASK_QUEUE" ensure-nightly --root "$SCHEDULED_TASK_ROOT" \
     --task oversee --hour "$review_hour" \
     --legacy-stamp "$OVERSEER_STAMP" \
@@ -271,10 +293,37 @@ run_due_overseer() {
   prompt="Execute the following single scheduled Evogent private overseer review NOW, end to end, exactly as written. MEDIA_AGENT_INTERNAL_BASE_URL is $BASE.
 
 $(cat "$instruction")"
-  insights_before=$(python3 "$TOOLS/private_artifact.py" snapshot \
-    --path "$EVO/data/preference-insights.md")
-  cadence_before=$(python3 "$TOOLS/private_artifact.py" snapshot \
-    --path "$EVO/data/source-cadence.json")
+  insights_before=missing
+  cadence_before=missing
+  if [ -n "$PRIVATE_DATA_ROOT" ]; then
+    # snapshot performs a stable, bounded, no-follow read. Cadence semantics are
+    # intentionally checked after the worker: repairing malformed but safely
+    # held cadence is part of this task's contract.
+    insights_before=$(python3 "$TOOLS/private_artifact.py" snapshot \
+      --path "$EVO/data/preference-insights.md" \
+      --trusted-data-root "$PRIVATE_DATA_ROOT") || insights_before=missing
+    cadence_before=$(python3 "$TOOLS/private_artifact.py" snapshot \
+      --path "$EVO/data/source-cadence.json" \
+      --trusted-data-root "$PRIVATE_DATA_ROOT") || cadence_before=missing
+  fi
+  if ! [[ "$insights_before" =~ ^[0-9]+:[0-9]+$ ]] \
+      || ! [[ "$cadence_before" =~ ^[0-9]+:[0-9]+$ ]]; then
+    transition=$(python3 "$TASK_QUEUE" finish --root "$SCHEDULED_TASK_ROOT" --lease "$lease" \
+      --result retry --outcome overseer_artifact_precondition \
+      --detail "trusted private artifact snapshots unavailable before provider launch" 2>>"$LOG") || {
+        say "overseer: artifact precondition failed and retry transition failed; lease retained"
+        control_status_write overseer - failed ledger_retry_failure 0 2 \
+          "lease retained; provider not launched"
+        scheduled_task_wake_release
+        return 2
+      }
+    action=$(printf '%s' "$transition" | python3 -c 'import json,sys;print((json.load(sys.stdin) or {}).get("action") or "retry")' 2>/dev/null)
+    say "overseer: private artifact precondition unavailable — provider not launched; ledger action=$action"
+    control_status_write overseer - failed artifact_precondition 0 2 \
+      "trusted private artifact snapshots unavailable; provider not launched"
+    scheduled_task_wake_release
+    return 2
+  fi
   output=$(umask 077; mktemp "$TOOLS/.overseer-output.XXXXXX" 2>/dev/null) || output=""
   PRIVATE_TASK_OUTPUT="$output"
   if [ -z "$output" ] || [ ! -f "$output" ] || ! chmod 600 "$output"; then
@@ -312,7 +361,10 @@ $(cat "$instruction")"
     return 2
   fi
   say "overseer: starting model route=$route_origin effort=$effort"
-  ( cd "$EVO" && run_owned_timeout 1200 30 codex exec --model "$model" \
+  ( cd "$EVO" && run_owned_timeout 1200 30 env \
+      EVOGENT_PRIVATE_ARTIFACT_TOOL="$TOOLS/private_artifact.py" \
+      EVOGENT_PRIVATE_DATA_ROOT="$PRIVATE_DATA_ROOT" \
+      codex exec --model "$model" \
       -c model_reasoning_effort="$effort" --dangerously-bypass-approvals-and-sandbox \
       -- "$prompt" >"$output" 2>>"$LOG" )
   rc=$?
@@ -324,9 +376,11 @@ $(cat "$instruction")"
   if [ "$rc" -eq 0 ] \
     && [ "$terminal_result" = "OVERSEER_RESULT completed" ] \
     && python3 "$TOOLS/private_artifact.py" verify \
-      --path "$EVO/data/preference-insights.md" --before "$insights_before" --kind preference \
+      --path "$EVO/data/preference-insights.md" --before "$insights_before" \
+      --kind preference --trusted-data-root "$PRIVATE_DATA_ROOT" \
     && python3 "$TOOLS/private_artifact.py" verify \
-      --path "$EVO/data/source-cadence.json" --before "$cadence_before" --kind cadence \
+      --path "$EVO/data/source-cadence.json" --before "$cadence_before" \
+      --kind cadence --trusted-data-root "$PRIVATE_DATA_ROOT" \
     && python3 "$MODEL_ROUTER" validate-live \
       --live "$MODEL_LIVE" --policy "$MODEL_POLICY" --allow-missing; then
     transition=$(python3 "$TASK_QUEUE" finish --root "$SCHEDULED_TASK_ROOT" --lease "$lease" \

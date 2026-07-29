@@ -636,22 +636,68 @@ control_screen_wake_state_from_dump() {
   '
 }
 
-# WindowManager has used several names for the keyguard-visible bit. Treat disagreement or absence
-# as unknown rather than guessing that the phone is unattended.
+# WindowManager has used several names for the keyguard-visible bit. Android 16 also emits generic
+# showing/mIsShowing fields, so accept those only at their exact AOSP-owned indentation beneath
+# KeyguardServiceDelegate and its nested KeyguardStateMonitor. Treat disagreement or absence as
+# unknown rather than guessing that the phone is unattended.
 control_lockscreen_state_from_dump() {
   awk '
+    function observe(value) {
+      if (value == "true") locked = 1
+      else if (value == "false") unlocked = 1
+      else unknown = 1
+    }
     {
+      raw = $0
+      prefix = raw
+      sub(/[^[:space:]].*$/, "", prefix)
+      indent = length(prefix)
+      trimmed = raw
+      sub(/^[[:space:]]*/, "", trimmed)
+      sub(/[[:space:]]*$/, "", trimmed)
+
+      if (trimmed == "KeyguardServiceDelegate") {
+        delegate_indent = indent
+        in_delegate = 1
+        in_monitor = 0
+        next
+      }
+      if (in_delegate && trimmed != "" && indent <= delegate_indent) {
+        in_delegate = 0
+        in_monitor = 0
+      }
+      if (in_delegate && trimmed == "KeyguardStateMonitor" \
+          && indent == delegate_indent + 2) {
+        monitor_indent = indent
+        in_monitor = 1
+        next
+      }
+      if (in_monitor && trimmed != "" && indent <= monitor_indent) {
+        in_monitor = 0
+      }
+      if (in_delegate && indent == delegate_indent + 2 \
+          && trimmed ~ /^showing=(true|false)$/) {
+        field = trimmed
+        sub(/^[^=]*=/, "", field)
+        observe(field)
+      }
+      if (in_monitor && indent == monitor_indent + 2 \
+          && trimmed ~ /^mIsShowing=(true|false)$/) {
+        field = trimmed
+        sub(/^[^=]*=/, "", field)
+        observe(field)
+      }
+
       line = $0
       while (match(line, /(mDreamingLockscreen|mShowingLockscreen|mKeyguardShowing|isKeyguardShowing)=(true|false)/)) {
         field = substr(line, RSTART, RLENGTH)
         sub(/^[^=]*=/, "", field)
-        if (field == "true") locked = 1
-        else unlocked = 1
+        observe(field)
         line = substr(line, RSTART + RLENGTH)
       }
     }
     END {
-      if ((locked && unlocked) || (!locked && !unlocked)) print "unknown"
+      if (unknown || (locked && unlocked) || (!locked && !unlocked)) print "unknown"
       else if (locked) print "locked"
       else print "unlocked"
     }
@@ -1074,9 +1120,9 @@ control_status_write() {
   local section="$1" key="$2" state="$3" outcome="${4:-}" gain="${5:-}" rc="${6:-}" detail="${7:-}"
   local registry="$HOME/evogent/data/phone-control-status.json" status=0
   mkdir -p "$(dirname "$registry")"
+  {
   python3 - "$registry" "$section" "$key" "$state" "$outcome" "$gain" "$rc" "$detail" \
-    "${CONTROL_OWNER_ID:-}" "$$" "${CONTROL_SELF_START:-}" <<'PYEOF' \
-    >/dev/null 2>&1 || status=$?
+    "${CONTROL_OWNER_ID:-}" "$$" "${CONTROL_SELF_START:-}" <<'PYEOF'
 import fcntl, json, math, os, signal, sys, time
 
 path, section, key, state, outcome, gain, rc, detail, owner, pid, start = sys.argv[1:]
@@ -1184,9 +1230,15 @@ with open(lock_path, "a+", encoding="utf-8") as lock:
     os.replace(tmp, path)
     fcntl.flock(lock, fcntl.LOCK_UN)
 PYEOF
+  } >/dev/null 2>&1 || status=$?
   case "$status" in
     0) return 0 ;;
-    75)
+    # CPython normally translates our SIGALRM handler to 75. Under severe host
+    # scheduling pressure it can still surface the underlying signal status
+    # (128 + SIGALRM). Both prove the same bounded timeout, never a hard write
+    # failure. The group redirection also keeps Bash's signal diagnostic out of
+    # the phone control log.
+    75|142)
       printf 'control status: %s publication timed out; retry deferred\n' \
         "$section" >&2
       return 75

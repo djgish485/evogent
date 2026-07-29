@@ -340,6 +340,7 @@ if grep -Fq '.apply()' src/net/dangish/evogent/MainActivity.java \
         || ! grep -Fq 'SYSTEM_HOME_READY_TIMEOUT_MS = 2500L' \
             src/net/dangish/evogent/MainActivity.java \
         || ! grep -Fq 'EvogentHomeAvailabilityGate' build/classes.strings \
+        || ! grep -Fq 'refreshExplicitEvogentLaunch' build/classes.strings \
         || ! grep -Fq 'chooseAndLaunchAndroidHome' build/classes.strings \
         || ! grep -Fq 'launchRememberedAndroidHome' build/classes.strings \
         || ! grep -Fq 'launchAndroidHomeWithoutChangingChoice' build/classes.strings \

@@ -1007,6 +1007,9 @@ primary_message = None
 cleanup_failed = False
 archive_fd = None
 sidecar_fd = None
+device_selector = None
+ssh_port = None
+forward_owned = False
 try:
     install_mode, raw_archive = sys.argv[1:]
     if install_mode not in {"normal", "--forward-supersede"}:
@@ -1076,13 +1079,34 @@ try:
     archive_fd, archive_info = open_snapshot(archive_name)
     os.fsync(local_stage_fd)
 
+    local_endpoint = f"tcp:{ssh_port}"
+    adb_list = subprocess.run(
+        [
+            "adb",
+            "-s",
+            device_selector,
+            "forward",
+            "--list",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if adb_list.returncode != 0:
+        fail(69, "phone deploy: device forwarding state was unavailable")
+    for raw_line in adb_list.stdout.splitlines():
+        fields = raw_line.split()
+        if len(fields) >= 3 and fields[1] == local_endpoint.encode("ascii"):
+            fail(73, "phone deploy: configured SSH port is already forwarded")
+
     adb_result = subprocess.run(
         [
             "adb",
             "-s",
             device_selector,
             "forward",
-            f"tcp:{ssh_port}",
+            "--no-rebind",
+            local_endpoint,
             "tcp:8022",
         ],
         stdout=subprocess.DEVNULL,
@@ -1091,6 +1115,7 @@ try:
     )
     if adb_result.returncode != 0:
         fail(69, "phone deploy: device forwarding failed")
+    forward_owned = True
 
     remote_command = (
         "python3 -c "
@@ -1183,6 +1208,24 @@ finally:
                 active_child.wait(timeout=2)
             except Exception:
                 pass
+    if forward_owned and device_selector is not None and ssh_port is not None:
+        removed = subprocess.run(
+            [
+                "adb",
+                "-s",
+                device_selector,
+                "forward",
+                "--remove",
+                f"tcp:{ssh_port}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if removed.returncode != 0:
+            cleanup_failed = True
+        else:
+            forward_owned = False
     for descriptor in (archive_fd, sidecar_fd):
         if descriptor is not None:
             try:

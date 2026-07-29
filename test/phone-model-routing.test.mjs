@@ -3,9 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
 const root = path.resolve(import.meta.dirname, '..');
+const require = createRequire(import.meta.url);
+const { DEFAULT_CONFIG_CONTENT } = require('../lib/brain-config.js');
 const tool = path.join(
   root,
   'phone-paradigm/device/phone-tools/model_routing.py',
@@ -82,6 +85,17 @@ function resolve(paths, task = 'browse', {
   if (modelOverride) args.push('--model-override', modelOverride);
   if (effortOverride) args.push('--effort-override', effortOverride);
   return JSON.parse(execFileSync('python3', args, { encoding: 'utf8' }));
+}
+
+function ensurePhoneConfig(configPath) {
+  return JSON.parse(execFileSync('python3', [
+    tool,
+    'ensure-phone-config',
+    '--config', configPath,
+  ], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }));
 }
 
 // The production resolver deliberately cannot consume today's browse or
@@ -357,6 +371,338 @@ test('Terra remains the browse fallback only when no browse or Codex model is co
     assert.equal(browse.model, 'gpt-5.6-terra');
     assert.equal(browse.effort, 'medium');
     assert.equal(browse.origin, 'policy');
+  });
+});
+
+test('fresh phone config receives production routes before its first provider task', () => {
+  withFixture((paths) => {
+    const durableData = path.join(paths.directory, 'state-data');
+    const runtime = path.join(paths.directory, 'runtime');
+    fs.mkdirSync(durableData);
+    fs.mkdirSync(runtime);
+    fs.symlinkSync(durableData, path.join(runtime, 'data'), 'dir');
+    paths.config = path.join(runtime, 'data', 'config.md');
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const migration = ensurePhoneConfig(paths.config);
+    assert.deepEqual(migration, {
+      changed: true,
+      added: [
+        'Curator Model',
+        'Curator Reasoning',
+        'Source Discovery Model',
+        'Source Discovery Reasoning',
+        'Browse Model',
+        'Browse Reasoning',
+        'Overseer Model',
+        'Overseer Reasoning',
+      ],
+      bootstrapVersion: 1,
+      markerChanged: true,
+    });
+    assert.equal(fs.statSync(paths.config).mode & 0o777, 0o600);
+    const migratedContent = fs.readFileSync(paths.config, 'utf8');
+    assert.equal(
+      migratedContent.slice(0, DEFAULT_CONFIG_CONTENT.length),
+      DEFAULT_CONFIG_CONTENT,
+      'the on-phone copy of the generic default must stay byte-identical',
+    );
+    for (const heading of [
+      'Agent Name',
+      'Time Zone',
+      'Interests',
+      'Brain Provider',
+      'Codex Model',
+      'Codex Reasoning Effort',
+      'Code-Fix Reasoning Effort',
+      'Usage Level',
+      'Automatic Curation',
+      'Background Source Browsing',
+      'Curation Schedule',
+    ]) {
+      assert.match(migratedContent, new RegExp(`^## ${heading}$`, 'm'));
+    }
+    assert.match(migratedContent, /## Codex Model\ngpt-5\.5\n/);
+    assert.match(migratedContent, /## Curator Model\ngpt-5\.6-sol\n/);
+    assert.match(migratedContent, /## Source Discovery Model\ngpt-5\.6-sol\n/);
+
+    const markerPath = path.join(durableData, '.phone-config-bootstrap.json');
+    assert.deepEqual(JSON.parse(fs.readFileSync(markerPath, 'utf8')), {
+      bootstrapVersion: 1,
+    });
+    assert.equal(fs.statSync(markerPath).mode & 0o777, 0o600);
+
+    const browse = resolve(paths, 'browse');
+    assert.equal(browse.model, 'gpt-5.6-terra');
+    assert.equal(browse.effort, 'medium');
+    const curator = resolve(paths, 'curator');
+    assert.equal(curator.model, 'gpt-5.6-sol');
+    assert.equal(curator.effort, 'high');
+    const sourceDiscovery = resolve(paths, 'source_discovery');
+    assert.equal(sourceDiscovery.model, 'gpt-5.6-sol');
+    assert.equal(sourceDiscovery.effort, 'high');
+    const overseer = resolve(paths, 'overseer');
+    assert.equal(overseer.model, 'gpt-5.6-sol');
+    assert.equal(overseer.effort, 'high');
+
+    const afterFirstRun = fs.readFileSync(paths.config, 'utf8');
+    const markerAfterFirstRun = fs.readFileSync(markerPath, 'utf8');
+    assert.deepEqual(ensurePhoneConfig(paths.config), {
+      changed: false,
+      added: [],
+      bootstrapVersion: 1,
+      markerChanged: false,
+    });
+    assert.equal(fs.readFileSync(paths.config, 'utf8'), afterFirstRun);
+    assert.equal(fs.readFileSync(markerPath, 'utf8'), markerAfterFirstRun);
+  });
+});
+
+test('phone config bootstrap fills only absent headings and preserves selected routes', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '# Existing private config',
+      '',
+      '## Codex Model',
+      'user-selected-chat',
+      '',
+      '## Codex Reasoning Effort',
+      'XHigh',
+      '',
+      '## Curator Model',
+      'user-selected-curator',
+      '',
+      '## Source Discovery Model',
+      '',
+      '## Source Discovery Reasoning',
+      '',
+      '## Overseer Model',
+      '',
+      '## Unrelated Setting',
+      'leave this exactly alone',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const migration = ensurePhoneConfig(paths.config);
+    assert.deepEqual(migration, {
+      changed: true,
+      added: [
+        'Curator Reasoning',
+        'Browse Model',
+        'Browse Reasoning',
+        'Overseer Reasoning',
+      ],
+      bootstrapVersion: 1,
+      markerChanged: true,
+    });
+    const content = fs.readFileSync(paths.config, 'utf8');
+    assert.match(content, /## Codex Model\nuser-selected-chat\n/);
+    assert.match(content, /## Curator Model\nuser-selected-curator\n/);
+    assert.match(content, /## Curator Reasoning\nXHigh\n/);
+    assert.match(content, /## Source Discovery Model\n\n## Source Discovery Reasoning\n\n## Overseer Model/);
+    assert.match(content, /## Overseer Model\n\n## Unrelated Setting/);
+    assert.match(content, /## Unrelated Setting\nleave this exactly alone\n/);
+    assert.equal((content.match(/^## Overseer Model$/gm) ?? []).length, 1);
+    assert.equal((content.match(/^## Source Discovery Model$/gm) ?? []).length, 1);
+
+    const curator = resolve(paths, 'curator');
+    assert.equal(curator.model, 'user-selected-curator');
+    assert.equal(curator.effort, 'xhigh');
+    const browse = resolve(paths, 'browse');
+    assert.equal(browse.model, 'user-selected-chat');
+    assert.equal(browse.effort, 'medium');
+  });
+});
+
+test('legacy bootstrap carries effective Codex routing into every new split lane', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '# Existing private config',
+      '',
+      '## Codex Model',
+      'legacy-phone-model',
+      '',
+      '## Usage Level',
+      'High',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const migration = ensurePhoneConfig(paths.config);
+    assert.deepEqual(migration.added, [
+      'Curator Model',
+      'Curator Reasoning',
+      'Source Discovery Model',
+      'Source Discovery Reasoning',
+      'Browse Model',
+      'Browse Reasoning',
+      'Overseer Model',
+      'Overseer Reasoning',
+    ]);
+    const content = fs.readFileSync(paths.config, 'utf8');
+    for (const heading of [
+      'Curator Model',
+      'Source Discovery Model',
+      'Browse Model',
+    ]) {
+      assert.match(content, new RegExp(`## ${heading}\\nlegacy-phone-model\\n`));
+    }
+    assert.match(content, /## Curator Reasoning\nHigh\n/);
+    assert.match(content, /## Source Discovery Reasoning\nMedium\n/);
+    assert.match(content, /## Browse Reasoning\nMedium\n/);
+    assert.match(content, /## Overseer Model\ngpt-5\.6-sol\n/);
+    assert.match(content, /## Overseer Reasoning\nHigh\n/);
+
+    const curator = resolve(paths, 'curator');
+    assert.equal(curator.model, 'legacy-phone-model');
+    assert.equal(curator.effort, 'high');
+    for (const task of ['source_discovery', 'browse']) {
+      const route = resolve(paths, task);
+      assert.equal(route.model, 'legacy-phone-model');
+      assert.equal(route.effort, 'medium');
+    }
+  });
+});
+
+test('phone bootstrap marker rejects symlink state without touching the config', () => {
+  withFixture((paths) => {
+    const originalConfig = `${DEFAULT_CONFIG_CONTENT}\n`;
+    const markerTarget = path.join(paths.directory, 'marker-target.json');
+    const markerPath = path.join(paths.directory, '.phone-config-bootstrap.json');
+    fs.writeFileSync(paths.config, originalConfig);
+    fs.writeFileSync(markerTarget, '{"bootstrapVersion":1}\n', { mode: 0o600 });
+    fs.symlinkSync(markerTarget, markerPath);
+
+    assert.throws(() => ensurePhoneConfig(paths.config));
+    assert.equal(fs.readFileSync(paths.config, 'utf8'), originalConfig);
+    assert.equal(fs.readFileSync(markerTarget, 'utf8'), '{"bootstrapVersion":1}\n');
+  });
+});
+
+test('phone bootstrap refuses a future marker before changing legacy config', () => {
+  withFixture((paths) => {
+    const originalConfig = [
+      '## Codex Model',
+      'legacy-phone-model',
+      '',
+    ].join('\n');
+    const markerPath = path.join(paths.directory, '.phone-config-bootstrap.json');
+    fs.writeFileSync(paths.config, originalConfig);
+    fs.writeFileSync(markerPath, '{"bootstrapVersion":2}\n', { mode: 0o600 });
+
+    assert.throws(() => ensurePhoneConfig(paths.config));
+    assert.equal(fs.readFileSync(paths.config, 'utf8'), originalConfig);
+    assert.equal(fs.readFileSync(markerPath, 'utf8'), '{"bootstrapVersion":2}\n');
+  });
+});
+
+test('automatic diagnosis is pinned to Sol high while one-run overrides stay explicit', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '## Codex Model',
+      'user-selected-curator',
+      '',
+      '## Overseer Model',
+      'user-selected-overseer',
+      '',
+      '## Overseer Reasoning',
+      'ultra',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({
+      schemaVersion: 1,
+      routes: {
+        diagnosis: {
+          model: 'persistent-diagnosis-model',
+          effort: 'ultra',
+        },
+      },
+    }));
+    fs.chmodSync(paths.live, 0o600);
+
+    let result = resolve(paths, 'diagnosis');
+    assert.equal(result.model, 'gpt-5.6-sol');
+    assert.equal(result.effort, 'high');
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+
+    const unsafePolicy = path.join(paths.directory, 'unsafe-diagnosis-policy.json');
+    const policyValue = JSON.parse(fs.readFileSync(policy, 'utf8'));
+    policyValue.routes.diagnosis.persistentOverrideAllowed = true;
+    fs.writeFileSync(unsafePolicy, JSON.stringify(policyValue));
+    result = resolve(paths, 'diagnosis', { policyPath: unsafePolicy });
+    assert.equal(result.model, 'gpt-5.6-sol');
+    assert.equal(result.effort, 'high');
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+
+    result = resolve(paths, 'diagnosis', {
+      modelOverride: 'explicit-diagnosis-model',
+      effortOverride: 'ultra',
+    });
+    assert.equal(result.model, 'explicit-diagnosis-model');
+    assert.equal(result.effort, 'ultra');
+    assert.equal(result.origin, 'environment');
+  });
+});
+
+test('source discovery owns a strong independent route with no durable auto-promotion', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '## Codex Model',
+      'ordinary-chat-model',
+      '',
+      '## Curator Model',
+      'editorial-model',
+      '',
+      '## Source Discovery Model',
+      'recipe-author-model',
+      '',
+      '## Source Discovery Reasoning',
+      'xhigh',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    let result = resolve(paths, 'source_discovery');
+    assert.equal(result.model, 'recipe-author-model');
+    assert.equal(result.effort, 'xhigh');
+    assert.equal(result.origin, 'config');
+
+    fs.writeFileSync(paths.live, JSON.stringify({
+      schemaVersion: 1,
+      routes: {
+        source_discovery: {
+          model: 'unreviewed-cheap-model',
+          effort: 'low',
+        },
+      },
+    }));
+    fs.chmodSync(paths.live, 0o600);
+    result = resolve(paths, 'source_discovery');
+    assert.equal(result.model, 'recipe-author-model');
+    assert.equal(result.effort, 'xhigh');
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+
+    const unsafePolicy = path.join(paths.directory, 'unsafe-source-discovery-policy.json');
+    const policyValue = JSON.parse(fs.readFileSync(policy, 'utf8'));
+    policyValue.routes.source_discovery.persistentOverrideAllowed = true;
+    fs.writeFileSync(unsafePolicy, JSON.stringify(policyValue));
+    result = resolve(paths, 'source_discovery', { policyPath: unsafePolicy });
+    assert.equal(result.model, 'recipe-author-model');
+    assert.equal(result.effort, 'xhigh');
+    assert.equal(result.origin, 'baseline_persistent_override_disabled');
+
+    result = resolve(paths, 'source_discovery', {
+      modelOverride: 'supervised-candidate',
+      effortOverride: 'medium',
+    });
+    assert.equal(result.model, 'supervised-candidate');
+    assert.equal(result.effort, 'medium');
+    assert.equal(result.origin, 'environment');
   });
 });
 
@@ -1367,6 +1713,18 @@ test('private route artifact validator is mode-bounded and permits first-run abs
       '--policy', policy,
       '--allow-missing',
     ]));
+
+    const target = path.join(paths.directory, 'route-target.json');
+    fs.writeFileSync(target, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(target, 0o600);
+    fs.symlinkSync(target, paths.live);
+    assert.throws(() => execFileSync('python3', [
+      tool,
+      'validate-live',
+      '--live', paths.live,
+      '--policy', policy,
+      '--allow-missing',
+    ]));
   });
 });
 
@@ -1375,7 +1733,16 @@ test('phone cycle routes browse and curator independently and passes the curator
     path.join(root, 'phone-paradigm/device/phone-tools/evogent-cycle.sh'),
     'utf8',
   );
+  const boot = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/evogent-boot.sh'),
+    'utf8',
+  );
+  const discovery = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/source-discovery.sh'),
+    'utf8',
+  );
   assert.match(cycle, /model_routing\.py/);
+  assert.match(cycle, /ensure-phone-config/);
   assert.match(cycle, /resolve_model_route browse/);
   assert.match(cycle, /resolve_model_route browse_youtube/);
   assert.match(cycle, /resolve_model_route curator/);
@@ -1383,6 +1750,46 @@ test('phone cycle routes browse and curator independently and passes the curator
   assert.match(cycle, /"codexModel":sys\.argv\[5\]/);
   assert.match(cycle, /EVOGENT_BACKGROUND_SOURCE_BROWSING/);
   assert.doesNotMatch(cycle, /model_reasoning_effort=medium[\s\\]*--dangerously-bypass[\s\S]{0,120}"\$prompt"/);
+  assert.match(boot, /model_routing\.py" ensure-phone-config/);
+  assert.ok(
+    boot.indexOf('ensure-phone-config') < boot.indexOf('# Start the production server'),
+    'phone defaults must be checked before server-owned provider work can start',
+  );
+  assert.match(discovery, /model_routing\.py/);
+  assert.match(discovery, /ensure-phone-config/);
+  assert.match(discovery, /--task source_discovery/);
+  assert.match(discovery, /model_reasoning_effort="\$CODEX_EFFORT"/);
+  assert.doesNotMatch(discovery, /gpt-5\.5|model_reasoning_effort=medium/);
+});
+
+test('phone cadence instructions reject zero and scope pre-curation refresh to desktop or VM', () => {
+  const reflect = fs.readFileSync(path.join(root, '.claude/commands/reflect.md'), 'utf8');
+  const discoveryPrompt = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/source-discovery-prompt.txt'),
+    'utf8',
+  );
+  const scout = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/phone-tools/source-scout.py'),
+    'utf8',
+  );
+  assert.match(reflect, /`cadenceHours` from `0\.25` through `168`/);
+  assert.match(reflect, /zero\s+is never valid/);
+  assert.doesNotMatch(reflect, /cadenceHours:\s*0/);
+  assert.match(discoveryPrompt, /only when this source's finite cadence is due/);
+  assert.match(scout, /source-specific cadence is due/);
+  assert.doesNotMatch(discoveryPrompt, /runs every cycle afterward/);
+  assert.doesNotMatch(scout, /feeds the curator every cycle/);
+
+  for (const skill of [
+    '.claude/skills/hackernews-cache/SKILL.md',
+    '.claude/skills/tweet-cache/SKILL.md',
+    '.claude/skills/youtube-cache/SKILL.md',
+  ]) {
+    const content = fs.readFileSync(path.join(root, skill), 'utf8');
+    assert.match(content, /desktop\/VM profile/i);
+    assert.match(content, /canonical phone profile/i);
+    assert.match(content, /source-specific\s+cadence/i);
+  }
 });
 
 test('computer-use benchmarks persist downgrade-safe content-free receipts', () => {
@@ -1465,7 +1872,23 @@ test('daily overseer is one bounded review and cannot become a phone-side develo
     ['YouTube Browse Model', 'Browse Model', 'Codex Model'],
   );
   assert.equal(policyValue.routes.browse_youtube.persistentOverrideAllowed, false);
+  assert.deepEqual(
+    policyValue.routes.curator.modelSections,
+    ['Curator Model', 'Codex Model'],
+  );
   assert.equal(policyValue.routes.curator.persistentOverrideAllowed, false);
+  assert.deepEqual(
+    policyValue.routes.source_discovery.modelSections,
+    ['Source Discovery Model'],
+  );
+  assert.deepEqual(
+    policyValue.routes.source_discovery.effortSections,
+    ['Source Discovery Reasoning'],
+  );
+  assert.equal(policyValue.routes.source_discovery.persistentOverrideAllowed, false);
+  assert.deepEqual(policyValue.routes.diagnosis.modelSections, []);
+  assert.deepEqual(policyValue.routes.diagnosis.effortSections, []);
+  assert.equal(policyValue.routes.diagnosis.persistentOverrideAllowed, false);
   assert.match(instruction, /Do not edit product code/);
   assert.match(instruction, /Do not change the `overseer` route/);
   assert.match(instruction, /Do not launch a\s+development agent on the phone/);

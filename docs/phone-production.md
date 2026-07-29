@@ -62,13 +62,26 @@ server process and an HTTP-success document, the WebView stays invisible behind
 an opaque native Starting/Error surface with Retry and stock-app escape actions.
 
 Model routing follows the same scope law. Notifications are deterministic and
-model-free. An explicit `Browse Model` wins; otherwise routine browsing
-preserves the deployment's existing `Codex Model`, with Terra only as the
-public fallback when neither is configured. Persistent overrides for global
-browse, YouTube browse, and curation are disabled in policy and code. The
-current computer-use harnesses are screening only: the YouTube feed changes
-between sequential runs, successful sharing does not prove private relevance,
-and the existing mixed-browse receipt does not bind a frozen, blinded review.
+model-free. Before provider work, a phone with no config receives the complete
+generic config baseline plus curator/Sol-high, source-discovery/Sol-high,
+browse/Terra-medium, and overseer/Sol-high headings. On an existing phone,
+missing curator, source-discovery, and browse model headings inherit the
+effective Codex model. Curator inherits effective Codex reasoning, while browse
+and source discovery retain their prior medium effort; existing or blank
+headings remain untouched. The version-only bootstrap marker is private,
+mode-`0600`, and written in durable data behind the production `runtime/data`
+symlink.
+
+`Curator Model` is preferred by the phone curation route. An explicit
+`Browse Model` wins; otherwise the resolver preserves an older deployment's
+existing `Codex Model`, with Terra as the public fallback when neither is
+configured. Automatic diagnosis is separately pinned to Sol/high, never
+inherits overseer Max/Ultra, and accepts no private persistent override.
+Persistent overrides for global browse, YouTube browse, curation, source
+discovery, and automatic diagnosis are disabled in policy and code. The current
+computer-use harnesses are screening only: the YouTube feed changes between
+sequential runs, successful sharing does not prove private relevance, and the
+existing mixed-browse receipt does not bind a frozen, blinded review.
 The curator harness is unavailable until it can isolate every production side
 effect. The harnesses retain content-free mechanics, yield, latency, and token
 metrics while raw source text and model output remain in short-lived private
