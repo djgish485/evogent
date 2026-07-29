@@ -36,6 +36,54 @@ require_command unzip
 require_command openssl
 require_command ps
 
+java_home_has_build_tools() {
+  local candidate="$1"
+  [ -x "$candidate/bin/java" ] \
+    && [ -x "$candidate/bin/javac" ] \
+    && [ -x "$candidate/bin/keytool" ]
+}
+
+resolve_java_home() {
+  local candidate="" javac_path="" formula=""
+  if [ "${EVOGENT_JAVA_HOME+x}" = x ]; then
+    java_home_has_build_tools "$EVOGENT_JAVA_HOME" || return 1
+    (cd "$EVOGENT_JAVA_HOME" && pwd -P)
+    return
+  fi
+  if [ "${JAVA_HOME+x}" = x ] && [ -n "$JAVA_HOME" ]; then
+    java_home_has_build_tools "$JAVA_HOME" || return 1
+    (cd "$JAVA_HOME" && pwd -P)
+    return
+  fi
+  if [ -x /usr/libexec/java_home ]; then
+    candidate="$(/usr/libexec/java_home 2>/dev/null || true)"
+    if [ -n "$candidate" ] && java_home_has_build_tools "$candidate"; then
+      (cd "$candidate" && pwd -P)
+      return
+    fi
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    for formula in openjdk@17 openjdk@11 openjdk; do
+      candidate="$(brew --prefix "$formula" 2>/dev/null || true)"
+      if [ -n "$candidate" ] && java_home_has_build_tools "$candidate"; then
+        (cd "$candidate" && pwd -P)
+        return
+      fi
+    done
+  fi
+  javac_path="$(command -v javac 2>/dev/null || true)"
+  [ -n "$javac_path" ] || return 1
+  candidate="$(python3 - "$javac_path" <<'PY'
+import pathlib
+import sys
+
+print(pathlib.Path(sys.argv[1]).resolve().parent.parent)
+PY
+)"
+  java_home_has_build_tools "$candidate" || return 1
+  (cd "$candidate" && pwd -P)
+}
+
 file_mode() {
   python3 - "$1" <<'PY'
 import os
@@ -1291,6 +1339,13 @@ else
     "${ANDROID_VERSION_ARGUMENTS[@]}")"
   export EVOGENT_ANDROID_VERSION_CODE="$ANDROID_VERSION_CODE"
 fi
+
+JAVA_HOME="$(resolve_java_home)" || {
+  echo "phone release: JDK not found; set EVOGENT_JAVA_HOME or JAVA_HOME" >&2
+  exit 69
+}
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
 
 echo "phone release: building web application at $SOURCE_SHORT"
 npm run build

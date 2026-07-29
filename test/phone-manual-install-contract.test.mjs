@@ -116,6 +116,11 @@ test('Android SDK and JDK inputs are discoverable and explicitly overrideable', 
   assert.match(androidBuild, /EVOGENT_ANDROID_PLATFORM_API/);
   assert.match(releaseBuild, /resolve_android_sdk_root/);
   assert.match(releaseBuild, /EVOGENT_ANDROID_BUILD_TOOLS_DIR/);
+  assert.match(releaseBuild, /EVOGENT_JAVA_HOME/);
+  assert.match(
+    releaseBuild,
+    /JAVA_HOME="\$\(resolve_java_home\)"[\s\S]*?export JAVA_HOME[\s\S]*?"\$APKSIGNER" verify/,
+  );
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-toolchain-'));
   const sdk = path.join(fixture, 'sdk');
@@ -148,6 +153,22 @@ ${shellFunction(androidBuild, 'resolve_java_home')}
 resolve_java_home
 `;
   result = spawnSync('bash', ['-c', javaHarness], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      EVOGENT_JAVA_HOME: jdk,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), fs.realpathSync(jdk));
+
+  const releaseJavaHarness = `
+set -euo pipefail
+${shellFunction(releaseBuild, 'java_home_has_build_tools')}
+${shellFunction(releaseBuild, 'resolve_java_home')}
+resolve_java_home
+`;
+  result = spawnSync('bash', ['-c', releaseJavaHarness], {
     encoding: 'utf8',
     env: {
       ...process.env,
