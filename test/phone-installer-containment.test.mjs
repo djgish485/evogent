@@ -277,19 +277,23 @@ printf 'released=%s active=%s attempts=%s\\n' \
   }
 });
 
-test('rollback decision precedes predecessor exposure and journal retirement follows proof', () => {
+test('rollback decision precedes predecessor exposure and the install lease spans retirement', () => {
   const installer = fs.readFileSync(installerPath, 'utf8');
   const rollback = shellFunction(installer, 'rollback_release');
   const cleanup = shellFunction(installer, 'cleanup');
   assert.match(rollback, /commit_rolled_back_decision/);
   assert.doesNotMatch(rollback, /restart-evo|rearm_legacy_server|evogent-boot/);
   assert.ok(
-    cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"')
-      < cleanup.indexOf('rearm_legacy_server'),
+    cleanup.indexOf('rearm_legacy_server')
+      < cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"'),
   );
   assert.ok(
     cleanup.indexOf('wait_for_authenticated_release_control_plane')
       < cleanup.indexOf('retire_rolled_back_transaction_journal'),
+  );
+  assert.ok(
+    cleanup.indexOf('retire_rolled_back_transaction_journal')
+      < cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"'),
   );
   assert.match(
     shellFunction(installer, 'commit_rolled_back_decision'),

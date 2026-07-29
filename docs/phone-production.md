@@ -6,8 +6,11 @@ and brain CLI all run on the device. A host computer is a development and releas
 tool only.
 
 The current technical-user path uses a stock Android phone, the Evogent shell APK,
-Termux, and Shizuku. A future system-image distribution may remove that setup
-friction without changing the product architecture below.
+Termux, Shizuku, and a local coding agent for installation or recovery. A later
+managed-app, device-owner, OEM, or system-image channel may remove that setup
+friction for nontechnical fleets without changing the product architecture
+below. The two-channel contract and its Android-security boundaries live in
+`docs/phone-installation-and-provisioning.md`.
 
 ## The five layers
 
@@ -277,6 +280,7 @@ scroll; initial viewport depth and restored/programmatic position do not qualify
 
 ## Related documents
 
+- `docs/phone-installation-and-provisioning.md` — technical-user and managed-fleet installation contract
 - `phone-paradigm/README.md` — phone runtime components and status
 - `phone-paradigm/device/DEV-LOOP.md` — host-to-phone development workflow
 - `phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md` — private-data-safe migration

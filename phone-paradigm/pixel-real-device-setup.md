@@ -4,6 +4,7 @@ This document records the technical-user setup constraints proven on stock arm64
 Android phones. It complements, but does not replace:
 
 - [`docs/phone-production.md`](../docs/phone-production.md) — architecture
+- [`docs/phone-installation-and-provisioning.md`](../docs/phone-installation-and-provisioning.md) — manual and managed installation channels
 - [`device/MIGRATE-TO-NEW-PHONE.md`](device/MIGRATE-TO-NEW-PHONE.md) — procedure
 - [`device/DEV-LOOP.md`](device/DEV-LOOP.md) — host development workflow
 
@@ -28,9 +29,13 @@ versioned component set and restore compatible private data separately.
 ## Bring-up sequence
 
 1. Install and open Termux and Shizuku from trusted sources.
-2. Install the current Evogent APK and launch it once. During initial bootstrap
-   before the versioned installer is available, select Evogent as both the Home
-   app and digital assistant through Android's role UI.
+2. Install the current Evogent APK and launch it once. A Play Protect scan,
+   package-installer confirmation, or developer-verification screen is a
+   foreground `user_action_required` step. Preserve the release transaction and
+   resume it after fresh package proof; never disable or bypass the platform
+   control. During initial bootstrap before the versioned installer is
+   available, select Evogent as both the Home app and digital assistant through
+   Android's role UI.
 3. Enable the accessibility service, notification access, and any restricted
    settings Android requires for a sideloaded accessibility tool. On Android
    13+, return to the Evogent HOME surface after notification access is enabled:
@@ -167,10 +172,15 @@ Some operations require Android shell privilege through ADB or Shizuku, such as
 APK installation, HOME/ASSISTANT/service repair, and device-level diagnostics.
 Normal source browsing and curation run on-device without the host.
 
-## Consumer path
+## Managed fleet path
 
-A future privileged/system-image distribution can remove much of the
-Termux/Shizuku setup friction, preconfigure required grants, and integrate
-provider sign-in. It must preserve the same local-data boundary, single scheduler
-owner, agent/mechanics separation, and host-built release contract. It is a
-roadmap, not a currently shipped installer.
+A future verified managed-app distribution with Android
+Enterprise/device-owner, OEM, or system-image provisioning can remove much of
+the Termux/Shizuku setup friction for nontechnical users. It may apply only
+grants that its platform management mode authorizes; unavoidable consent and
+account sign-in remain visible setup actions. It must preserve per-device
+private state, the same local-data boundary, one scheduler owner,
+agent/mechanics separation, and the host-built release contract.
+
+This is a roadmap, not a currently shipped installer. Repeating ADB sideloads or
+automating Settings taps across phones does not qualify as fleet provisioning.

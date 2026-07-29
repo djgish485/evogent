@@ -19,6 +19,7 @@ from automatic_diagnosis_budget import (  # noqa: E402
     DiagnosisBudgetError,
     claim_automatic_diagnosis,
     clear_source_state,
+    observe_mechanics_failure,
     reset_source_streak,
 )
 
@@ -39,6 +40,7 @@ class AutomaticDiagnosisBudgetTests(unittest.TestCase):
         *,
         available: bool = True,
         stamp: int = 1_800_000_000_000,
+        lane: str = "barren",
     ):
         return claim_automatic_diagnosis(
             self.state,
@@ -47,6 +49,7 @@ class AutomaticDiagnosisBudgetTests(unittest.TestCase):
             dispatcher_available=available,
             service_date=service_date,
             stamp_ms=stamp,
+            lane=lane,
         )
 
     def test_one_global_attempt_per_service_date_and_deferred_source_runs_later(self) -> None:
@@ -139,6 +142,40 @@ class AutomaticDiagnosisBudgetTests(unittest.TestCase):
 
         self.assertTrue(old_pending["claimed"])
         self.assertTrue(new_streak["claimed"])
+
+    def test_mechanics_incidents_are_durable_and_independent_from_barren_state(self) -> None:
+        counts = [
+            observe_mechanics_failure(
+                self.state,
+                source="source-a",
+                stamp_ms=1_800_000_000_000 + index,
+            )
+            for index in range(3)
+        ]
+        mechanics = self.claim(
+            "source-a",
+            counts[-1],
+            "2027-04-25",
+            lane="mechanics",
+        )
+        barren = self.claim("source-a", 3, "2027-04-26")
+
+        self.assertEqual(counts, [1, 2, 3])
+        self.assertTrue(mechanics["claimed"])
+        self.assertTrue(barren["claimed"])
+
+        state = json.loads(self.state.read_text(encoding="utf-8"))
+        self.assertEqual(state["mechanicsSources"]["source-a"]["streakCount"], 3)
+        self.assertEqual(state["sources"]["source-a"]["handledThrough"], 3)
+        self.assertEqual(state["claims"]["2027-04-25"]["lane"], "mechanics")
+        self.assertNotIn("lane", state["claims"]["2027-04-26"])
+
+        self.assertTrue(
+            clear_source_state(self.state, source="source-a", lane="mechanics")
+        )
+        state = json.loads(self.state.read_text(encoding="utf-8"))
+        self.assertNotIn("source-a", state["mechanicsSources"])
+        self.assertIn("source-a", state["sources"])
 
     def test_corrupt_or_symlinked_state_fails_closed(self) -> None:
         self.state.write_text("{not-json", encoding="utf-8")

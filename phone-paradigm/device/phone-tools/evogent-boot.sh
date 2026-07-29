@@ -179,10 +179,10 @@ fi
 
 # Start the production server (tmux 'evo'). The scoped restart never touches the
 # scheduler, watchdog, active cycle, or unrelated Node/agent processes.
-if ! tmux has-session -t evo 2>/dev/null || [ "$(server_code)" != 200 ]; then
+if ! tmux has-session -t '=evo' 2>/dev/null || [ "$(server_code)" != 200 ]; then
   if control_lock_live "$TOOLS/.cycle.lock"; then
     # Preserve a live cycle and replace only the production-server session.
-    tmux kill-session -t evo 2>/dev/null || true
+    tmux kill-session -t '=evo' 2>/dev/null || true
     tmux new-session -d -s evo "bash $HOME/start-prod.sh >> $HOME/evogent-server.log 2>&1"
   else
     bash "$HOME/restart-evo.sh"
@@ -212,7 +212,7 @@ fi
 if control_lock_live "$TOOLS/.scheduler.lock"; then
   say "scheduler owner lock already live"
 else
-  tmux kill-session -t evo-sched 2>/dev/null || true
+  tmux kill-session -t '=evo-sched' 2>/dev/null || true
   tmux new -d -s evo-sched "exec bash '$TOOLS/evogent-scheduler.sh'"
   say "scheduler launch requested"
 fi

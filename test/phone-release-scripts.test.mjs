@@ -104,6 +104,80 @@ test('phone release shell entrypoints parse', () => {
   execFileSync('bash', ['-n', ...scripts], { cwd: root, stdio: 'pipe' });
 });
 
+test('phone tmux selectors cannot prefix-match a sibling session', (t) => {
+  const productionFiles = [
+    'phone-paradigm/device/install-release.sh',
+    'phone-paradigm/device/restart-evo.sh',
+    'phone-paradigm/device/phone-tools/evogent-boot.sh',
+    'phone-paradigm/device/phone-tools/evogent-watchdog.sh',
+    'phone-paradigm/device/phone-tools/evogent-cycle.sh',
+    'phone-paradigm/restore-device.sh',
+  ];
+  for (const relative of productionFiles) {
+    const source = fs.readFileSync(path.join(root, relative), 'utf8');
+    assert.doesNotMatch(
+      source,
+      /tmux (?:has-session|kill-session) -t (?!['"]?=)/,
+      relative,
+    );
+  }
+
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  assert.match(
+    shellFunction(installer, 'single_tmux_pane_pid'),
+    /tmux list-panes -t "=\$1:"/,
+  );
+  const forwardRescue = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/forward-rescue.sh'),
+    'utf8',
+  );
+  assert.match(
+    forwardRescue,
+    /"has-session", "-t", f"=\{name\}"/,
+  );
+  assert.match(
+    forwardRescue,
+    /"kill-session", "-t", f"=\{name\}"/,
+  );
+
+  if (spawnSync('tmux', ['-V'], { encoding: 'utf8' }).status !== 0) {
+    t.skip('tmux is unavailable');
+    return;
+  }
+  const socket = `evogent-exact-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  const harness = `
+set -euo pipefail
+tmux() { command tmux -L "$SOCKET" "$@"; }
+${shellFunction(installer, 'stop_tmux_session')}
+${shellFunction(installer, 'single_tmux_pane_pid')}
+cleanup_tmux() { command tmux -L "$SOCKET" kill-server 2>/dev/null || true; }
+trap cleanup_tmux EXIT
+tmux new-session -d -s evo-sched "exec sleep 30"
+stop_tmux_session evo
+tmux has-session -t '=evo-sched'
+if single_tmux_pane_pid evo >/dev/null 2>&1; then
+  exit 71
+fi
+tmux new-session -d -s evo "exec sleep 30"
+pane="$(single_tmux_pane_pid evo)"
+[[ "$pane" =~ ^[0-9]+$ ]]
+stop_tmux_session evo
+! tmux has-session -t '=evo' 2>/dev/null
+tmux has-session -t '=evo-sched'
+printf 'exact_tmux_scope=ok\\n'
+`;
+  const result = spawnSync(
+    'bash',
+    ['-c', harness],
+    { encoding: 'utf8', env: { ...process.env, SOCKET: socket } },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'exact_tmux_scope=ok\n');
+});
+
 test('scheduler gates every private-task and cycle dispatch behind release commit', () => {
   const scheduler = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/phone-tools/evogent-scheduler.sh'),
@@ -1327,6 +1401,115 @@ fi
   assert.equal(fs.statSync(lock).isDirectory(), true);
 });
 
+test('rollback retires only exact dead background-control locks', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-background-lock-reap-'),
+  );
+  const home = path.join(fixture, 'home');
+  const tools = path.join(home, 'phone-tools');
+  const lock = path.join(tools, '.watchdog.lock');
+  fs.mkdirSync(tools, { recursive: true });
+
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'pid_matches')}
+${shellFunction(installer, 'meta_field')}
+${shellFunction(installer, 'lock_live')}
+${shellFunction(installer, 'reap_dead_lock_dir')}
+${shellFunction(installer, 'reap_dead_background_control_lock')}
+proc_start() {
+  [ "$1" = "$$" ] || return 1
+  printf '1\\n'
+}
+fsync_directory() { :; }
+HOME="$1"
+LOCK="$HOME/phone-tools/.watchdog.lock"
+if [ "$2" = live ]; then
+  printf 'pid=%s\\nstart=%s\\nlabel=watchdog\\n' \
+    "$$" "$(proc_start "$$")" > "$LOCK/owner"
+fi
+status=0
+reap_dead_background_control_lock "$LOCK" || status=$?
+if [ -e "$LOCK" ] || [ -L "$LOCK" ]; then present=yes; else present=no; fi
+printf 'status=%s present=%s\\n' "$status" "$present"
+`;
+
+  function makeLock(payload) {
+    fs.rmSync(lock, { recursive: true, force: true });
+    fs.mkdirSync(lock, { mode: 0o700 });
+    fs.writeFileSync(path.join(lock, 'owner'), payload, { mode: 0o600 });
+  }
+  function run(mode) {
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'background-lock-reap', home, mode],
+      { encoding: 'utf8' },
+    );
+  }
+
+  makeLock('pid=999999999\nstart=1\nlabel=watchdog\n');
+  let result = run('dead');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'status=0 present=no\n');
+  assert.equal(
+    fs.readdirSync(tools).some((name) => name.includes('rollback-stale')),
+    false,
+  );
+
+  makeLock('pid=1\nstart=1\nlabel=watchdog\n');
+  result = run('live');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'status=1 present=yes\n');
+  assert.equal(fs.statSync(lock).isDirectory(), true);
+
+  fs.rmSync(lock, { recursive: true });
+  const outside = path.join(fixture, 'outside');
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, lock);
+  result = run('symlink');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'status=1 present=yes\n');
+  assert.equal(fs.lstatSync(lock).isSymbolicLink(), true);
+
+  const rejectHarness = `
+set -uo pipefail
+${shellFunction(installer, 'reap_dead_background_control_lock')}
+HOME="$1"
+status=0
+reap_dead_background_control_lock "$HOME/phone-tools/.cycle.lock" || status=$?
+printf 'status=%s\\n' "$status"
+`;
+  result = spawnSync(
+    'bash',
+    ['-c', rejectHarness, 'background-lock-scope', home],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'status=2\n');
+
+  const rollback = shellFunction(installer, 'rollback_release');
+  assert.match(
+    rollback,
+    /rollback_apk_native[\s\S]*reap_dead_background_control_locks[\s\S]*restored_background_control_stopped[\s\S]*commit_rolled_back_decision/,
+  );
+  assert.match(
+    rollback,
+    /rollback_apk_native[\s\S]*restore_android_roles[\s\S]*quiesce_control_plane[\s\S]*restore_database/,
+  );
+  const recovery = shellFunction(
+    installer,
+    'recover_interrupted_transaction',
+  );
+  assert.match(
+    recovery,
+    /release_dispatch_matches_target[\s\S]*reap_dead_background_control_locks[\s\S]*restored_background_control_stopped/,
+  );
+});
+
 test('owned lock retirement removes the live path before recursive cleanup', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -1758,6 +1941,12 @@ APK_BACKUP_READY=1
 APK_CHANGED=1
 APK_INSTALL_ATTEMPTED=0
 PACKAGE_OPERATION=""
+APK_USER_ACTION_KIND=""
+APK_USER_ACTION_PURPOSE=""
+APK_USER_ACTION_EVIDENCE=""
+APK_USER_ACTION_TARGET_SHA256=""
+APK_USER_ACTION_TARGET_VERSION_CODE=""
+APK_USER_ACTION_TARGET_SIGNER_SHA256=""
 PREVIOUS_APK_CODE=7
 PREVIOUS_APK_SIGNER=signer
 INITIAL_MIGRATION=0
@@ -1802,7 +1991,9 @@ write_transaction_journal quiesce_pending
   assert.equal(payload.legacyPlanSha256, '');
   assert.equal(payload.androidRoleBackupReady, 0);
   assert.equal(payload.androidRoleUserId, -1);
-  assert.equal(payload.schema, 'evogent.phone.install-transaction.v3');
+  assert.equal(payload.apkUserActionKind, '');
+  assert.equal(payload.apkUserActionTargetVersionCode, -1);
+  assert.equal(payload.schema, 'evogent.phone.install-transaction.v4');
 });
 
 test('durable committed decisions can never fall back into rollback', () => {
@@ -1896,6 +2087,7 @@ set -euo pipefail
 ${shellFunction(installer, 'restore_database')}
 say() { :; }
 fsync_regular_file_and_parent() { :; }
+reconcile_android_install_user_action() { return 1; }
 STATE="$1"
 DB_BACKUP="$2"
 DB_BACKUP_READY="$3"
@@ -2668,6 +2860,152 @@ validate_transaction_journal "$3"
   assert.notEqual(validate().status, 0);
 });
 
+test('v4 journal binds a foreground install action to one exact APK target', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'validate_transaction_journal');
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-v4-action-'));
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const releases = path.join(releaseRoot, 'releases');
+  const backup = path.join(releaseRoot, 'backups/backup');
+  const migrations = path.join(releaseRoot, 'migrations');
+  const migration = path.join(migrations, 'install-fixture');
+  const phoneState = path.join(releaseRoot, 'state/phone-tools');
+  const next = path.join(releases, 'release-new');
+  const previous = path.join(releases, 'release-old');
+  const journal = path.join(fixture, 'journal.json');
+  for (const directory of [
+    next,
+    previous,
+    backup,
+    migration,
+    phoneState,
+    path.join(releaseRoot, 'state/data'),
+    path.join(home, 'phone-tools'),
+  ]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+  const candidateSha = 'a'.repeat(64);
+  const candidateSigner = 'b'.repeat(64);
+  const previousSigner = 'c'.repeat(64);
+  fs.writeFileSync(
+    path.join(next, 'manifest.json'),
+    `${JSON.stringify({
+      android: {
+        sha256: candidateSha,
+        signerSha256: candidateSigner,
+        versionCode: 8,
+      },
+    })}\n`,
+  );
+  const apkBackup = path.join(backup, 'evogent.apk');
+  fs.writeFileSync(apkBackup, 'prior apk fixture\n', { mode: 0o600 });
+  fs.chmodSync(apkBackup, 0o600);
+  const roleBackup = path.join(backup, 'android-role-holders.json');
+  fs.writeFileSync(roleBackup, '{}\n', { mode: 0o600 });
+  fs.chmodSync(roleBackup, 0o600);
+  const roleDigest = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(roleBackup))
+    .digest('hex');
+  fs.writeFileSync(path.join(backup, 'previous-release'), `${previous}\n`, {
+    mode: 0o600,
+  });
+
+  const payload = {
+    androidRoleBackup: roleBackup,
+    androidRoleBackupReady: 1,
+    androidRoleBackupSha256: roleDigest,
+    androidRoleMutationAttempted: 0,
+    androidRoleRestoreRequired: 1,
+    androidRoleUserId: 0,
+    androidRolesApplied: 0,
+    apkBackup,
+    apkBackupReady: 1,
+    apkChanged: 1,
+    apkInstallAttempted: 1,
+    apkUserActionEvidence: 'trusted_system_installer_foreground_v1',
+    apkUserActionKind: 'android_install_review',
+    apkUserActionPurpose: 'candidate_install',
+    apkUserActionTargetSha256: candidateSha,
+    apkUserActionTargetSignerSha256: candidateSigner,
+    apkUserActionTargetVersionCode: 8,
+    backupDir: backup,
+    controlToken: path.join(releaseRoot, 'state/data/control-token.txt'),
+    controlTokenBackup: path.join(backup, 'control-token.txt'),
+    controlTokenBackupReady: 1,
+    controlTokenBridge: '',
+    controlTokenExisted: 1,
+    cycleGate: path.join(home, 'phone-tools/.cycle.lock'),
+    dbBackup: path.join(backup, 'media-agent.db'),
+    dbBackupReady: 1,
+    dbExisted: 1,
+    initialMigration: 0,
+    legacyControlPlaneExpected: 0,
+    legacyPlanSha256: '',
+    legacyRuntimeExpected: 0,
+    legacySnapshotReady: 0,
+    migrationDir: migration,
+    migrationStarted: 0,
+    newRelease: next,
+    packageOperation: '',
+    phase: 'apk_user_action_required',
+    previousApkCode: '7',
+    previousApkSigner: previousSigner,
+    previousTarget: previous,
+    releaseId: 'release-new',
+    root: releaseRoot,
+    schema: 'evogent.phone.install-transaction.v4',
+    switchStarted: 0,
+  };
+  const harness = `
+set -euo pipefail
+${helper}
+HOME="$1"
+ROOT="$2"
+RELEASES="$ROOT/releases"
+BACKUPS="$ROOT/backups"
+MIGRATIONS="$ROOT/migrations"
+PHONE_STATE="$ROOT/state/phone-tools"
+TRANSACTION_DIR="$ROOT/install-transaction"
+CONTROL_TOKEN="$ROOT/state/data/control-token.txt"
+validate_transaction_journal "$3"
+`;
+  function validate() {
+    fs.writeFileSync(journal, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'v4-action', home, releaseRoot, journal],
+      { encoding: 'utf8' },
+    );
+  }
+
+  let result = validate();
+  assert.equal(result.status, 0, result.stderr);
+  payload.apkUserActionTargetSha256 = 'd'.repeat(64);
+  assert.notEqual(validate().status, 0);
+  payload.apkUserActionTargetSha256 = candidateSha;
+
+  payload.apkUserActionPurpose = 'rollback_restore';
+  payload.apkUserActionTargetSha256 = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(apkBackup))
+    .digest('hex');
+  payload.apkUserActionTargetVersionCode = 7;
+  payload.apkUserActionTargetSignerSha256 = previousSigner;
+  result = validate();
+  assert.equal(result.status, 0, result.stderr);
+
+  payload.apkUserActionKind = '';
+  assert.notEqual(validate().status, 0);
+  payload.apkUserActionKind = 'android_install_review';
+  payload.schema = 'evogent.phone.install-transaction.v3';
+  assert.notEqual(validate().status, 0);
+});
+
 test('package install result parser accepts only one bounded versioned status', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -2714,6 +3052,241 @@ read_package_result_status "$1"
     encoding: 'utf8',
   });
   assert.notEqual(result.status, 0);
+});
+
+test('install review foreground parser is display-0-only and fails closed', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(
+    installer,
+    'display_zero_top_resumed_package_from_dump',
+  );
+  function parse(payload) {
+    return spawnSync(
+      'bash',
+      ['-c', `${helper}\ndisplay_zero_top_resumed_package_from_dump`],
+      { encoding: 'utf8', input: payload },
+    );
+  }
+
+  let result = parse(`Display #0 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{123 u0 com.google.android.permissioncontroller/.ReviewActivity t42}
+Display #7 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{456 u0 com.example.hidden/.MainActivity t91}
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'com.google.android.permissioncontroller\n');
+
+  result = parse(`Display 0:
+  mResumedActivity: ActivityRecord{abc u0 com.android.vending/.AssetBrowserActivity t8}
+Display 12:
+  mResumedActivity: ActivityRecord{def u0 com.example.hidden/.MainActivity t9}
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'com.android.vending\n');
+
+  for (const payload of [
+    `Display #0 (activities from top to bottom):
+  topDisplayFocusedRootTask=Task{123 type=home}
+`,
+    `Display #0 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{123 u0 com.example.one/.MainActivity t42}
+  mResumedActivity: ActivityRecord{456 u0 com.example.two/.MainActivity t43}
+`,
+    `Display #9 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{123 u0 com.android.vending/.MainActivity t42}
+`,
+  ]) {
+    assert.notEqual(parse(payload).status, 0);
+  }
+});
+
+test('foreground Android install review is typed, identity-bound, and resumable in place', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-install-user-action-'),
+  );
+  const retained = path.join(fixture, 'package-manager.log');
+  fs.writeFileSync(retained, 'private fixture\n', { mode: 0o600 });
+  const targetSha = 'a'.repeat(64);
+  const targetSigner = 'b'.repeat(64);
+  const priorSha = 'c'.repeat(64);
+  const priorSigner = 'd'.repeat(64);
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'clear_apk_user_action_state')}
+${shellFunction(installer, 'reconcile_android_install_user_action')}
+say() { printf 'status=%s\\n' "$*"; }
+stat() { printf '600\\n'; }
+sha256_file() {
+  if [ "$1" = /candidate.apk ]; then
+    printf '%s\\n' "$TARGET_SHA"
+  else
+    printf '%s\\n' "$PRIOR_SHA"
+  fi
+}
+installed_apk_identity_stable() {
+  if [ "$2" = "$EXPECTED_APK_CODE" ]; then
+    [ "$TARGET_ALREADY" = 1 ] || [ "$ACTION_WRITTEN" = 1 ]
+  else
+    [ "$COUNTERPART_KNOWN" = 1 ]
+  fi
+}
+installed_apk_matches_identity() {
+  [ "$ACTION_WRITTEN" = 1 ] && [ "$2" = "$EXPECTED_APK_CODE" ]
+}
+wait_for_package_manager_idle() { return 0; }
+trusted_android_install_foreground() { [ "$TRUSTED_FOREGROUND" = 1 ]; }
+write_transaction_journal() {
+  printf 'phase=%s\\n' "$1" >> "$TRACE"
+  TRANSACTION_PHASE="$1"
+  [ "$1" != apk_user_action_required ] || ACTION_WRITTEN=1
+}
+date() { command date "$@"; }
+sleep() { :; }
+STAGE="$1"
+TRACE="$2"
+RETAINED="$3"
+TRANSACTION_JOURNAL_WRITTEN=1
+TRANSACTION_PHASE=apk_install_pending
+APK_BACKUP=/backup.apk
+EXPECTED_APK_CODE=8
+EXPECTED_APK_SIGNER="$TARGET_SIGNER"
+EXPECTED_APK_SHA256="$TARGET_SHA"
+PREVIOUS_APK_CODE=7
+PREVIOUS_APK_SIGNER="$PRIOR_SIGNER"
+INSTALL_USER_ACTION_WAIT_SECONDS=2
+ACTION_WRITTEN=0
+clear_apk_user_action_state
+if reconcile_android_install_user_action \
+    /candidate.apk upgrade "$RETAINED"; then
+  rc=0
+else
+  rc=$?
+fi
+printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
+  "$rc" "$APK_USER_ACTION_KIND" "$APK_USER_ACTION_PURPOSE" \
+  "$APK_USER_ACTION_EVIDENCE"
+`;
+  function run(env) {
+    const trace = path.join(fixture, `trace-${crypto.randomBytes(4).toString('hex')}`);
+    const result = spawnSync(
+      'bash',
+      ['-c', harness, 'install-user-action', fixture, trace, retained],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ACTION_WRITTEN: '0',
+          COUNTERPART_KNOWN: '1',
+          PRIOR_SHA: priorSha,
+          PRIOR_SIGNER: priorSigner,
+          TARGET_ALREADY: '0',
+          TARGET_SHA: targetSha,
+          TARGET_SIGNER: targetSigner,
+          TRACE: trace,
+          TRUSTED_FOREGROUND: '1',
+          ...env,
+        },
+      },
+    );
+    return {
+      result,
+      trace: fs.existsSync(trace) ? fs.readFileSync(trace, 'utf8') : '',
+    };
+  }
+
+  let outcome = run({});
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /USER_ACTION_REQUIRED/);
+  assert.match(outcome.result.stdout, /foreground installation action completed/);
+  assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_install_pending\n',
+  );
+  assert.doesNotMatch(outcome.result.stdout, /private fixture|package-manager/);
+
+  outcome = run({ TRUSTED_FOREGROUND: '0' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1 action= purpose= evidence=/);
+  assert.equal(outcome.trace, '');
+
+  outcome = run({ TARGET_ALREADY: '1', COUNTERPART_KNOWN: '0' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
+  assert.equal(outcome.trace, '');
+
+  assert.match(
+    shellFunction(installer, 'install_apk'),
+    /completionPublished[\s\S]*reconcile_android_install_user_action/,
+  );
+  assert.match(
+    installer,
+    /"schema": "evogent[.]phone[.]install-transaction[.]v4"/,
+  );
+});
+
+test('foreground install polling reads version before copying the installed APK', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'installed_apk_matches_identity');
+  const harness = `
+set -uo pipefail
+${helper}
+installed_apk_version_code() {
+  printf 'version\\n' >> "$TRACE"
+  printf '%s\\n' "$INSTALLED_CODE"
+}
+backup_installed_apk() {
+  printf 'backup\\n' >> "$TRACE"
+}
+apk_signer_sha256() {
+  printf 'signer\\n' >> "$TRACE"
+  printf '%s\\n' "$EXPECTED_SIGNER"
+}
+sha256_file() {
+  printf 'hash\\n' >> "$TRACE"
+  printf '%s\\n' "$EXPECTED_SHA"
+}
+installed_apk_matches_identity \
+  /probe.apk 8 "$EXPECTED_SIGNER" "$EXPECTED_SHA"
+`;
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-install-version-first-'),
+  );
+  function run(installedCode) {
+    const trace = path.join(fixture, `trace-${installedCode}`);
+    const result = spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EXPECTED_SHA: 'a'.repeat(64),
+        EXPECTED_SIGNER: 'b'.repeat(64),
+        INSTALLED_CODE: installedCode,
+        TRACE: trace,
+      },
+    });
+    return {
+      result,
+      trace: fs.readFileSync(trace, 'utf8'),
+    };
+  }
+
+  let outcome = run('7');
+  assert.notEqual(outcome.result.status, 0);
+  assert.equal(outcome.trace, 'version\n');
+
+  outcome = run('8');
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.equal(outcome.trace, 'version\nbackup\nsigner\nhash\n');
 });
 
 test('filesystem bridge waits for a regular read-only shell publication', () => {
@@ -2845,6 +3418,7 @@ QUIESCED=0
 REARM_PRIOR_CONTROL_PLANE=0
 ROLLBACK_ATTEMPTED=0
 ROLLBACK_FAILED=0
+TRANSACTION_PHASE=prepared
 LEGACY_RUNTIME_EXPECTED=1
 LEGACY_CONTROL_PLANE_EXPECTED=1
 LEGACY_EXPECTATION_COMPAT=0
@@ -5013,6 +5587,127 @@ phone_server_owner_fingerprint 100 "$1" "$2" "" "$2" "$3"
   }
 });
 
+test('control-plane health waits for consecutive exact proofs after transient misses', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const probe = shellFunction(
+    installer,
+    'authenticated_release_control_plane_live',
+  );
+  const wait = shellFunction(
+    installer,
+    'wait_for_authenticated_release_control_plane',
+  );
+  const harness = `
+set -uo pipefail
+${wait}
+PROBE_CALLS=0
+SLEEP_TOTAL=0
+RELEASE_CONTROL_PROBE_REASON=not_run
+authenticated_release_control_plane_live() {
+  PROBE_CALLS=$((PROBE_CALLS + 1))
+  case "$SCENARIO:$PROBE_CALLS" in
+    transient:1)
+      RELEASE_CONTROL_PROBE_REASON=server_proof
+      return 1
+      ;;
+    transient:2|transient:4|transient:5|transient:6|immediate:*)
+      RELEASE_CONTROL_PROBE_REASON=healthy
+      return 0
+      ;;
+    transient:3)
+      RELEASE_CONTROL_PROBE_REASON=watchdog_owner
+      return 1
+      ;;
+    unknown:1)
+      RELEASE_CONTROL_PROBE_REASON=private-runtime-detail
+      return 1
+      ;;
+    unknown:*)
+      RELEASE_CONTROL_PROBE_REASON=healthy
+      return 0
+      ;;
+    permanent:*)
+      RELEASE_CONTROL_PROBE_REASON=server_proof
+      return 1
+      ;;
+    *)
+      RELEASE_CONTROL_PROBE_REASON=unexpected-fixture-state
+      return 1
+      ;;
+  esac
+}
+sleep() {
+  SLEEP_TOTAL=$((SLEEP_TOTAL + $1))
+}
+say() {
+  printf 'diagnostic=%s\\n' "$*"
+}
+SCENARIO="$1"
+wait_for_authenticated_release_control_plane /fixture/release
+rc=$?
+printf 'result=%s calls=%s sleep=%s\\n' "$rc" "$PROBE_CALLS" "$SLEEP_TOTAL"
+exit 0
+`;
+  function run(scenario) {
+    return spawnSync(
+      'bash',
+      ['-c', harness, 'control-health-wait', scenario],
+      { encoding: 'utf8' },
+    );
+  }
+
+  let result = run('transient');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /diagnostic=.*server_proof/);
+  assert.match(result.stdout, /diagnostic=.*watchdog_owner/);
+  assert.match(result.stdout, /result=0 calls=6 sleep=7/);
+  assert.doesNotMatch(result.stdout, /did not stabilize/);
+
+  result = run('immediate');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'result=0 calls=3 sleep=2\n');
+
+  result = run('permanent');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout.split('diagnostic=').length - 1,
+    2,
+    result.stdout,
+  );
+  assert.match(result.stdout, /did not stabilize \(server_proof\)/);
+  assert.match(result.stdout, /result=1 calls=60 sleep=120/);
+
+  result = run('unknown');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /diagnostic=.*unknown/);
+  assert.doesNotMatch(result.stdout, /private-runtime-detail/);
+  assert.match(result.stdout, /result=0 calls=4 sleep=4/);
+
+  assert.match(
+    probe,
+    /RELEASE_CONTROL_PROBE_REASON=server_proof[\s\S]*authenticated_release_server_live/,
+  );
+  assert.match(
+    probe,
+    /RELEASE_CONTROL_PROBE_REASON=scheduler_owner[\s\S]*scheduler_owner_live/,
+  );
+  assert.match(
+    probe,
+    /RELEASE_CONTROL_PROBE_REASON=watchdog_owner[\s\S]*watchdog_owner_live/,
+  );
+  assert.match(
+    probe,
+    /RELEASE_CONTROL_PROBE_REASON=release_identity[\s\S]*"\$health_client"/,
+  );
+  assert.match(
+    probe,
+    /RELEASE_CONTROL_PROBE_REASON=control_health_payload[\s\S]*health\["ok"\] is True/,
+  );
+});
+
 test('package install trusts a complete private marker, not rish transport output', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -5094,7 +5789,10 @@ printf 'rc=%s\\n' "$rc"
   } = {}) {
     fs.rmSync(operation, { recursive: true, force: true });
     fs.rmSync(trace, { force: true });
-    fs.rmSync(`${log.slice(0, -4)}-package-manager.log`, { force: true });
+    fs.rmSync(
+      `${log.slice(0, -4)}-package-manager-${installMode}.log`,
+      { force: true },
+    );
     return spawnSync('bash', ['-c', harness], {
       encoding: 'utf8',
       env: {
@@ -5125,7 +5823,7 @@ printf 'rc=%s\\n' "$rc"
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /rc=1/);
   assert.doesNotMatch(result.stdout + result.stderr, /diagnostic that must stay private/);
-  const retained = `${log.slice(0, -4)}-package-manager.log`;
+  const retained = `${log.slice(0, -4)}-package-manager-upgrade.log`;
   assert.match(fs.readFileSync(retained, 'utf8'), /diagnostic that must stay private/);
   assert.equal(fs.statSync(retained).mode & 0o777, 0o600);
   assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\ncleanup\n');
@@ -5339,6 +6037,7 @@ printf 'rc=%s failed=%s rearm=%s\\n' "$rc" "$ROLLBACK_FAILED" "$REARM_PRIOR_CONT
         ROLLBACK_FAILED: '0',
         STOP_RESULT: '0',
         SWITCH_STARTED: scenario.switchStarted,
+        TRANSACTION_PHASE: 'prepared',
         TRACE: trace,
       },
     });
@@ -5362,9 +6061,16 @@ printf 'rc=%s failed=%s rearm=%s\\n' "$rc" "$ROLLBACK_FAILED" "$REARM_PRIOR_CONT
   const releaseInstallLock = cleanup.indexOf('release_lock_dir "$INSTALL_LOCK"');
   const rearm = cleanup.indexOf(
     'if [ "$REARM_PRIOR_CONTROL_PLANE" = 1 ]',
-    releaseInstallLock,
   );
-  assert.ok(releaseInstallLock !== -1 && releaseInstallLock < rearm);
+  const retire = cleanup.indexOf(
+    'if retire_rolled_back_transaction_journal; then',
+    rearm,
+  );
+  assert.ok(
+    rearm !== -1
+      && retire > rearm
+      && releaseInstallLock > retire,
+  );
 });
 
 test('cleanup rearms legacy and versioned predecessors through their exact safe boot programs', () => {
@@ -5394,8 +6100,15 @@ ${cleanup}
 record() { printf '%s\\n' "$1" >> "$TRACE"; }
 say() { :; }
 is_real_release_target() { record "target:$1"; return 0; }
-set_tmux_control_release_root() { record "release-root:$1"; return 0; }
-bash() { record "bash:$1"; return 0; }
+SERVER=0
+set_tmux_control_release_root() {
+  [ "$SERVER" = 1 ] || return 1
+  record "release-root:$1"
+}
+bash() {
+  record "bash:$1"
+  SERVER=1
+}
 wait_for_authenticated_release_control_plane() {
   record "wait:$1"
   return 0
@@ -5403,16 +6116,19 @@ wait_for_authenticated_release_control_plane() {
 rearm_legacy_server() { record legacy-server; return 0; }
 rearm_legacy_control_plane() { record legacy-control; return 0; }
 retire_rolled_back_transaction_journal() { record retire; return 0; }
+release_lock_dir() { record unlock; return 0; }
 remove_transaction_recoverer() { :; }
 prune_orphan_migrations() { :; }
 HOME="$1"
 TRACE="$2"
 TRANSACTION_JOURNAL="$3"
 PREVIOUS_TARGET="$4"
+INSTALL_LOCK="$HOME/install.lock"
 CYCLE_GATE_HELD=0
 CONTROL_MUTATION_GATE_HELD=0
 STAGE=""
-INSTALL_LOCK_HELD=0
+INSTALL_LOCK_HELD=1
+DEPENDENCY_STATE_HELPER=""
 DEPENDENCY_BUILD=""
 REARM_PRIOR_CONTROL_PLANE=1
 ROLLBACK_DECISION_DURABLE=1
@@ -5436,10 +6152,11 @@ cleanup
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
     `target:${previous}\n`
-      + `release-root:${previous}\n`
       + `bash:${previousBoot}\n`
+      + `release-root:${previous}\n`
       + `wait:${previous}\n`
-      + 'retire\n',
+      + 'retire\n'
+      + 'unlock\n',
   );
 
   fs.writeFileSync(legacyBoot, 'legacy boot fixture\n', { mode: 0o600 });
@@ -5448,7 +6165,7 @@ cleanup
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'legacy-server\nlegacy-control\nretire\n',
+    'legacy-server\nlegacy-control\nretire\nunlock\n',
   );
 });
 

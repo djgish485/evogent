@@ -22,6 +22,7 @@ test('every automatic barren-source diagnosis passes through one durable daily c
   );
   const dispatch = harvest.indexOf(
     'codex exec --model "$DIAGNOSIS_MODEL"',
+    claim,
   );
 
   assert.ok(claim >= 0);
@@ -50,6 +51,41 @@ test('warning stays truthful when no new threshold is due or the ledger fails cl
   );
   assert.doesNotMatch(cycle, /has queued a bounded diagnosis/);
   assert.match(cycle, /budget_unavailable/);
+});
+
+test('repeated mechanics failures escalate in a separate durable incident lane', () => {
+  const harvest = cycle.slice(
+    cycle.indexOf('harvest_watch(){'),
+    cycle.indexOf('AUTO_CUR="$(cfg'),
+  );
+  const mechanics = harvest.slice(
+    harvest.indexOf('mechanics_failure|mechanics_no_receipt)'),
+    harvest.indexOf(';;', harvest.indexOf('mechanics_failure|mechanics_no_receipt)')),
+  );
+  const observe = mechanics.indexOf(
+    'automatic_mechanics_failure_observe "$src"',
+  );
+  const claim = mechanics.indexOf(
+    '"$src" "$mechanics_count" mechanics',
+  );
+  const dispatch = mechanics.indexOf(
+    'codex exec --model "$DIAGNOSIS_MODEL"',
+  );
+
+  assert.ok(observe >= 0);
+  assert.ok(claim > observe, 'the durable mechanics count must precede its claim');
+  assert.ok(dispatch > claim, 'the shared daily claim must precede provider launch');
+  assert.match(mechanics, /sourceId\\":\\"browse-mechanics-\$src/);
+  assert.match(mechanics, /not evidence that the source is empty/i);
+  assert.match(mechanics, /This is a retrieval or receipt problem/i);
+  assert.doesNotMatch(mechanics, /\.barren-/);
+  assert.match(
+    harvest,
+    /fresh\|dedup\|empty\)[\s\S]{0,280}clear_mechanics_warning "\$src"/,
+  );
+  assert.match(helper, /"mechanicsSources"/);
+  assert.match(helper, /def observe_mechanics_failure\(/);
+  assert.match(helper, /_atomic_write_state\(state_path, state\)/);
 });
 
 test('diagnosis ledger uses a bounded, atomic, private, fail-closed history', () => {

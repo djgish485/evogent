@@ -89,39 +89,94 @@ test('forward rescue has equivalent Bash, Python, and direct entrypoints', () =>
   assert.match(invocations[0].stderr, /--activate.*--recover/);
 });
 
-test('new recoverer treats a retained v3 predecision crash as inert', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-old-v3-'));
-  const privateRoot = path.join(home, '.local/share/evogent');
-  const transaction = path.join(privateRoot, 'install-transaction');
-  for (const relative of ['releases', 'state', 'migrations', 'install-transaction']) {
-    fs.mkdirSync(path.join(privateRoot, relative), { recursive: true, mode: 0o700 });
-  }
-  const journal = path.join(transaction, 'journal.json');
-  fs.writeFileSync(
-    journal,
-    `${JSON.stringify({
-      phase: 'health_pending',
-      root: privateRoot,
-      schema: 'evogent.phone.install-transaction.v3',
-    })}\n`,
-    { mode: 0o600 },
-  );
-  const pinned = path.join(transaction, 'install-release.sh');
-  fs.copyFileSync(rescue, pinned);
-  fs.chmodSync(pinned, 0o700);
-  const before = treeSnapshot(privateRoot);
-  for (const [command, prefix] of [
-    ['bash', [pinned]],
-    ['python3', [pinned]],
-    [pinned, []],
+test('new recoverer treats retained v3 and v4 predecision crashes as inert', () => {
+  for (const schema of [
+    'evogent.phone.install-transaction.v3',
+    'evogent.phone.install-transaction.v4',
   ]) {
-    const result = run(command, [...prefix, '--recover', journal], {
-      env: { ...process.env, HOME: home },
-    });
-    assert.equal(result.status, 70, result.stderr);
-    assert.match(result.stderr, /forward decision is not durably visible/);
-    assert.deepEqual(treeSnapshot(privateRoot), before);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-old-'));
+    const privateRoot = path.join(home, '.local/share/evogent');
+    const transaction = path.join(privateRoot, 'install-transaction');
+    for (const relative of ['releases', 'state', 'migrations', 'install-transaction']) {
+      fs.mkdirSync(path.join(privateRoot, relative), { recursive: true, mode: 0o700 });
+    }
+    const journal = path.join(transaction, 'journal.json');
+    fs.writeFileSync(
+      journal,
+      `${JSON.stringify({
+        phase: 'health_pending',
+        root: privateRoot,
+        schema,
+      })}\n`,
+      { mode: 0o600 },
+    );
+    const pinned = path.join(transaction, 'install-release.sh');
+    fs.copyFileSync(rescue, pinned);
+    fs.chmodSync(pinned, 0o700);
+    const before = treeSnapshot(privateRoot);
+    for (const [command, prefix] of [
+      ['bash', [pinned]],
+      ['python3', [pinned]],
+      [pinned, []],
+    ]) {
+      const result = run(command, [...prefix, '--recover', journal], {
+        env: { ...process.env, HOME: home },
+      });
+      assert.equal(result.status, 70, result.stderr);
+      assert.match(result.stderr, /forward decision is not durably visible/);
+      assert.deepEqual(treeSnapshot(privateRoot), before);
+    }
   }
+});
+
+test('forward admission accepts v4 health only with an empty install-action state', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-forward-v4-action-'));
+  const script = `${loadPrelude()}
+import json
+import os
+import pathlib
+import types
+import sys
+
+base = pathlib.Path(sys.argv[2])
+root = base / "root"
+releases = root / "releases"
+tx = root / "install-transaction"
+tx.mkdir(parents=True)
+releases.mkdir()
+journal = tx / "journal.json"
+ctx = types.SimpleNamespace(
+    journal=journal,
+    releases=releases,
+    root=root,
+)
+old = {
+    "schema": "evogent.phone.install-transaction.v4",
+    "phase": "health_pending",
+    "root": str(root),
+    "previousTarget": "",
+    "previousApkCode": "0",
+    "controlTokenBridge": "",
+    "packageOperation": "",
+    **{key: 1 for key in rescue.OLD_ONES},
+}
+
+def rejection(payload):
+    journal.write_text(json.dumps(payload) + "\\n")
+    os.chmod(journal, 0o600)
+    try:
+        rescue.old_state(ctx, releases / "B")
+    except rescue.Error as error:
+        return str(error)
+    raise AssertionError("incomplete fixture unexpectedly completed admission")
+
+assert "retained transaction is not" not in rejection(old)
+with_action = dict(old)
+with_action["apkUserActionKind"] = "android_install_review"
+assert "retained transaction is not" in rejection(with_action)
+`;
+  const result = run('python3', ['-c', script, rescue, fixture]);
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('invalid forward journals fail without filesystem mutation', () => {
@@ -399,7 +454,10 @@ def build(label, snapshot_tools, snapshot_home_names, crash_after):
         "dependencies": {"packageLockSha256": "c" * 64},
     }
     (incoming / "manifest.json").write_text(json.dumps(manifest) + "\\n")
-    source_journal = {"schema": rescue.OLD_SCHEMA, "label": label}
+    source_journal = {
+        "schema": "evogent.phone.install-transaction.v3",
+        "label": label,
+    }
     ctx.journal.write_bytes(rescue.encode(source_journal))
     os.chmod(ctx.journal, 0o600)
     shutil.copy2(ctx.journal, workspace / "source-journal.json")

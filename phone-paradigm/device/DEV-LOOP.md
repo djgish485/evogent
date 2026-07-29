@@ -73,6 +73,11 @@ Typical on-phone layout:
 - tmux `evo-sched` — the sole Termux scheduler
 - control-plane leases and outcome state under `~/phone-tools/`
 
+tmux target names prefix-match unless the target is explicitly exact. Production
+mechanics use `'=evo'` for a session and `'=evo:'` for a session-scoped
+`list-panes` target; keep the leading equals quoted through every host and
+Termux shell.
+
 ADB and SSH are development/recovery channels. Normal phone operation must keep
 working after the host disconnects.
 
@@ -138,8 +143,9 @@ committed finalization removes it; boot invokes the pinned recovery copy first.
 ### Exact equal-APK forward recovery
 
 Do not use this for an ordinary failure. It accepts only the one fail-closed
-initial-migration shape documented in `docs/phone-production.md`: private v3
-`health_pending` metadata, a fully restored legacy database/token/role
+initial-migration shape documented in `docs/phone-production.md`: private v3 or
+v4 `health_pending` metadata (with no pending v4 foreground-action state), a
+fully restored legacy database/token/role
 snapshot, the exact installed failed-release APK/TLS identity, and positive
 RollbackManager proof that every rollback capable of moving that installed APK
 is committed and terminal, or has been deleted/expired. Multiple exact

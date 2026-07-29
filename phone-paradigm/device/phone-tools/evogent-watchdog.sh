@@ -175,7 +175,7 @@ while true; do
   # once finished, not that its scheduler still exists.
   if ! control_lock_live "$TOOLS/.scheduler.lock"; then
     say "scheduler-liveness: evo-sched session is GONE — restarting now"
-    tmux kill-session -t evo-sched 2>/dev/null || true
+    tmux kill-session -t '=evo-sched' 2>/dev/null || true
     tmux new-session -d -s evo-sched \
       "exec bash '$TOOLS/evogent-scheduler.sh' >> '$HOME/evo-sched.log' 2>&1"
   fi
@@ -248,7 +248,7 @@ while true; do
     # replace just the evo session; the scheduler, cycle, and their tmux sessions are untouched.
     if [ "$fails" -ge 2 ]; then
       say "server down ($code) with a cycle mid-run — scoped server-only revive (cycle untouched)"
-      tmux kill-session -t evo 2>/dev/null
+      tmux kill-session -t '=evo' 2>/dev/null
       tmux new-session -d -s evo "bash $HOME/start-prod.sh >> $HOME/evogent-server.log 2>&1"
       fails=0
     else

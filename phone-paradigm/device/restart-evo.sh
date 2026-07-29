@@ -5,12 +5,12 @@ set -euo pipefail
 LOG="$HOME/evogent-server.log"
 TOOLS="$HOME/phone-tools"
 
-tmux kill-session -t evo 2>/dev/null || true
+tmux kill-session -t '=evo' 2>/dev/null || true
 for _ in $(seq 1 20); do
-  tmux has-session -t evo 2>/dev/null || break
+  tmux has-session -t '=evo' 2>/dev/null || break
   sleep 1
 done
-tmux has-session -t evo 2>/dev/null && {
+tmux has-session -t '=evo' 2>/dev/null && {
   echo "restart-evo: scoped evo session would not stop" >&2
   exit 70
 }

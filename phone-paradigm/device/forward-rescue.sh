@@ -29,7 +29,10 @@ import zipfile
 
 P = pathlib.Path
 SCHEMA = "evogent.phone.forward-rescue.v1"
-OLD_SCHEMA = "evogent.phone.install-transaction.v3"
+OLD_SCHEMAS = {
+    "evogent.phone.install-transaction.v3",
+    "evogent.phone.install-transaction.v4",
+}
 OLD_PLAN = "evogent.phone.legacy-rollback-plan.v1"
 PACKAGE = "net.dangish.evogent"
 ANDROID_SHELL_UID = 2000
@@ -634,13 +637,25 @@ def admitted_nlinks(ctx, migration, plan, admitted):
 def old_state(ctx, incoming):
     old = jread(ctx.journal, 0o600)
     operation = old.get("packageOperation", "")
-    need(old.get("schema") == OLD_SCHEMA and old.get("phase") == "health_pending"
+    action_state_empty = (
+        old.get("schema") != "evogent.phone.install-transaction.v4"
+        or (
+            old.get("apkUserActionKind", "") == ""
+            and old.get("apkUserActionPurpose", "") == ""
+            and old.get("apkUserActionEvidence", "") == ""
+            and old.get("apkUserActionTargetSha256", "") == ""
+            and old.get("apkUserActionTargetVersionCode", -1) == -1
+            and old.get("apkUserActionTargetSignerSha256", "") == ""
+        )
+    )
+    need(old.get("schema") in OLD_SCHEMAS and old.get("phase") == "health_pending"
          and old.get("root") == str(ctx.root) and old.get("previousTarget") == ""
          and old.get("previousApkCode") == "0" and old.get("controlTokenBridge", "") == ""
          and all(old.get(key) == 1 for key in OLD_ONES)
+         and action_state_empty
          and valid_package_operation(operation)
          and not os.path.lexists(ctx.root / "current"),
-         "retained transaction is not the exact admitted v3 shape")
+         "retained transaction is not the exact admitted v3/v4 shape")
     old_release = child(old.get("newRelease", ""), ctx.releases, "source release")
     first, second = release(ctx, old_release), release(ctx, incoming)
     need(first["android"] == second["android"] and first["phoneTls"] == second["phoneTls"],
@@ -825,7 +840,7 @@ def control_processes(ctx):
 
 def stopped(ctx):
     for name in ("evo", "evo-sched"):
-        need(command(["tmux", "has-session", "-t", name], check=False,
+        need(command(["tmux", "has-session", "-t", f"={name}"], check=False,
                      timeout=5).returncode != 0, "legacy tmux session is live")
     runtime = ctx.home / "evogent"
     for proc in P("/proc").glob("[0-9]*"):
@@ -1633,7 +1648,8 @@ def locks(ctx, activation=False):
 
 def quiesce(ctx):
     for name in ("evo-sched", "evo"):
-        command(["tmux", "kill-session", "-t", name], check=False, timeout=20)
+        command(["tmux", "kill-session", "-t", f"={name}"],
+                check=False, timeout=20)
     owners = control_processes(ctx)
     owners.update((pid, proc_start(pid)) for pid in tagged()
                   if pid != os.getpid() and proc_start(pid))
