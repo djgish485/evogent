@@ -90,13 +90,28 @@ function createReleaseFixture(parent, name = 'release.tar.gz') {
 
 test('repo install routing defaults to the canonical Android profile', () => {
   const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  const claude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  const readmeProse = readme.replace(/\s+/g, ' ');
   assert.match(
     agents,
-    /stock\s+Android as the canonical production target[\s\S]*docs\/phone-production[.]md[\s\S]*MIGRATE-TO-NEW-PHONE[.]md/,
+    /stock\s+Android as the canonical production target[\s\S]*phone-installation-and-provisioning[.]md[\s\S]*docs\/phone-production[.]md[\s\S]*MIGRATE-TO-NEW-PHONE[.]md/,
   );
   assert.match(
     agents,
     /setup-for-coding-agents[.]md[\s\S]*only when the user explicitly asks[\s\S]*local\/legacy-VM profile/,
+  );
+  assert.match(
+    claude,
+    /Android is the canonical production target[\s\S]*phone-installation-and-provisioning[.]md[\s\S]*docs\/phone-production[.]md[\s\S]*MIGRATE-TO-NEW-PHONE[.]md/,
+  );
+  assert.match(
+    readme,
+    /Installation channels and Android security.*phone-installation-and-provisioning[.]md/,
+  );
+  assert.match(
+    readmeProse,
+    /managed provisioning for nontechnical fleets is a separate roadmap, not a shipped installer/,
   );
 });
 
@@ -285,6 +300,7 @@ test('public first-install procedure preserves signer identity and Android secur
   assert.match(bootstrap, /extract-phone-bootstrap-apk[.]py/);
   assert.match(bootstrap, /adb install --no-streaming/);
   assert.match(bootstrapProse, /Whenever a Play Protect scan is offered or recommended,[\s\S]*take the scan path/);
+  assert.match(bootstrapProse, /App scan recommended[\s\S]*choose \*\*Scan\*\*/);
   assert.match(bootstrapProse, /Never choose install-without-scanning/);
   assert.match(
     bootstrap,

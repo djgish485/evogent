@@ -1862,6 +1862,12 @@ package_manager_supports_apk_rollback() {
     >/dev/null 2>&1
 }
 
+announce_android_install_security_policy() {
+  local context="$1"
+  say "INSTALL_SECURITY_POLICY play_protect_scan=required_when_offered bypass=prohibited"
+  say "$context If Android shows \"App scan recommended\", choose Scan. If Play Protect otherwise offers or recommends a scan, take the scan path; never choose an install-without-scanning option or suppress verification. Refusal, inability to complete the offered scan, or a harmful/security verdict stops this install."
+}
+
 install_apk() {
   local apk="$1" mode="${2:-upgrade}" operation="" candidate=""
   local expected_apk_sha256="" install_command="" completed=0 operation_removed=0
@@ -1901,6 +1907,9 @@ install_apk() {
     fi
     return 1
   fi
+
+  announce_android_install_security_policy \
+    "Android is about to install the signed Evogent APK."
 
   # The launch fence is durable before the first command that can create an
   # Android PackageInstaller session. Recovery may clean up `prepared`, but a
@@ -2141,8 +2150,7 @@ persist_and_wait_android_install_review() {
   rotate_android_install_review_challenge \
     "$trusted_verifier_observed" "$deadline" || return 1
   say "USER_ACTION_REQUIRED kind=android_install_review purpose=$purpose"
-  say "INSTALL_SECURITY_POLICY play_protect_scan=required_when_offered bypass=prohibited"
-  say "$context If Play Protect offers or recommends a scan, take the scan path; never choose an install-without-scanning option or suppress verification. Refusal, inability to complete the offered scan, or a harmful/security verdict stops this install."
+  announce_android_install_security_policy "$context"
   announce_android_install_review_attestation
 
   while [ "$(date +%s)" -lt "$deadline" ]; do

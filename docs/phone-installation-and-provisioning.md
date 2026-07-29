@@ -47,13 +47,14 @@ and [Android Management API permissible-use policy](https://developers.google.co
 
 Android owns some installation decisions. It does not present a Play Protect
 scan on every install. Whenever Play Protect offers or recommends a scan, the
-supported Evogent path requires that scan. Neither the owner nor an assisting
-agent may choose an install-without-scanning path, dismiss or suppress the gate
-in order to continue, or disable verification. The package installer may also
-require confirmation, developer verification may require a supported power-user
-or registered-developer path, and Settings may require owner confirmation for
-roles or restricted capabilities. Button text, layout, and the number of steps
-can vary by OS release, locale, and device.
+supported Evogent path requires that scan. This includes an Android prompt
+labeled **App scan recommended**: choose **Scan**. Neither the owner nor an
+assisting agent may choose an install-without-scanning path, dismiss or suppress
+the gate in order to continue, or disable verification. The package installer
+may also require confirmation, developer verification may require a supported
+power-user or registered-developer path, and Settings may require owner
+confirmation for roles or restricted capabilities. Button text, layout, and the
+number of steps can vary by OS release, locale, and device.
 
 During every changed-APK install and every predecessor restoration performed by
 the current workflow through Android native rollback, the release workflow

@@ -3,8 +3,9 @@
 Evogent is a personal AI-curated feed that learns what you are trying to understand, not just what you clicked on once.
 
 If pointed at this repo and asked to install Evogent for the user, treat stock
-Android as the canonical production target. Follow `docs/phone-production.md`
-and `phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md`; use
+Android as the canonical production target. Follow
+`docs/phone-installation-and-provisioning.md`, `docs/phone-production.md`, and
+`phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md`; use
 `docs/setup-for-coding-agents.md` end-to-end only when the user explicitly asks
 for the local/legacy-VM profile.
 
@@ -29,6 +30,7 @@ Try to explain things simply. If you cannot explain something simply, you do not
 | `data/media-agent.db` | Phone-local runtime SQLite state |
 | `data/config.md` | User preferences |
 | `.claude/skills/` | Runtime skill plugins |
+| `docs/phone-installation-and-provisioning.md` | Technical-user installation, managed-fleet roadmap, and Android security gates |
 | `docs/phone-production.md` | Canonical production ownership, privacy, release, and verification contract |
 | `docs/phone-signing-and-bootstrap.md` | Stable Android signing identity and exact first-install APK bootstrap |
 | `phone-paradigm/device/DEV-LOOP.md` | Host-to-phone development workflow |

@@ -18,9 +18,13 @@ self-hosting.
 
 The current stock-device path is an engineering preview for technical users. It
 uses the Evogent shell APK, Termux, and Shizuku on an arm64 Android phone.
+This agent-assisted path remains available to technical owners; managed
+provisioning for nontechnical fleets is a separate roadmap, not a shipped
+installer.
 
 Start with:
 
+- [Installation channels and Android security](docs/phone-installation-and-provisioning.md)
 - [Phone production architecture](docs/phone-production.md)
 - [Android runtime overview](phone-paradigm/README.md)
 - [Provision or migrate a phone](phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md)

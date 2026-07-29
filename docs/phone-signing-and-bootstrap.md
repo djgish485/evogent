@@ -115,10 +115,10 @@ adb install --no-streaming "$EVOGENT_BOOTSTRAP_DIRECTORY/evogent.apk"
 Keep display 0 visible. A command exit is not final acceptance: Android or Play
 Protect can surface a scan, install confirmation, or developer-verification
 screen asynchronously. Whenever a Play Protect scan is offered or recommended,
-take the scan path. Never choose install-without-scanning, dismiss or suppress
-the gate to continue, disable verification, or blindly tap coordinates. A
-refusal, timeout, inability to complete the scan, or harmful/security verdict
-stops bootstrap.
+take the scan path. If Android says **App scan recommended**, choose **Scan**.
+Never choose install-without-scanning, dismiss or suppress the gate to continue,
+disable verification, or blindly tap coordinates. A refusal, timeout, inability
+to complete the scan, or harmful/security verdict stops bootstrap.
 
 After the trusted Android foreground has resolved, prove that Android exposes
 one base APK for the expected package and that its bytes are exactly the

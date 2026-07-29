@@ -26,6 +26,11 @@ const installer = fs.readFileSync(
   'phone-paradigm/device/install-release.sh',
   'utf8',
 );
+const installSecurityScriptPaths = [
+  'scripts/deploy-phone-release.sh',
+  'phone-paradigm/device/install-release.sh',
+  'phone-paradigm/device/attest-install-review.py',
+];
 
 function contractByKey(key) {
   return contracts.findLast((entry) => entry.key === key);
@@ -56,6 +61,7 @@ test('technical-user installation is agent-assisted, resumable, and security pre
 
   assert.match(architectureProse, /does not present a Play Protect scan on every install/);
   assert.match(architectureProse, /Whenever Play Protect offers or recommends a scan, the supported Evogent path requires that scan/);
+  assert.match(architectureProse, /App scan recommended.*choose.*Scan/);
   assert.match(
     architectureProse,
     /Neither the owner nor an assisting agent may choose an install-without-scanning path/,
@@ -100,6 +106,7 @@ test('technical-user installation is agent-assisted, resumable, and security pre
     /status-zero package command and automated foreground disappearance never authorize roles, runtime activation, or release commit/,
   );
   assert.match(installer, /play_protect_scan=required_when_offered bypass=prohibited/);
+  assert.match(installer, /App scan recommended.*choose Scan/);
   assert.match(installer, /never choose an install-without-scanning option or suppress verification/);
   assert.match(installer, /reconcile_successful_android_install_foreground/);
   assert.match(installer, /android_install_foreground_state_once/);
@@ -107,10 +114,57 @@ test('technical-user installation is agent-assisted, resumable, and security pre
     installer,
     /apk_rollback_retry_pending|cmd package install[^\n]*\s-d(?:\s|")|install_apk "\$APK_BACKUP" fallback/,
   );
-  assert.doesNotMatch(
-    installer,
-    /package_verifier_enable|verifier_verify_adb_installs|verify_apps_over_usb|pm\s+disable(?:-user)?\s+(?:com[.]android[.]vending|com[.]google[.]android[.]gms)/,
+  for (const scriptPath of installSecurityScriptPaths) {
+    const script = fs.readFileSync(scriptPath, 'utf8');
+    assert.doesNotMatch(
+      script,
+      /package_verifier_enable|verifier_verify_adb_installs|verify_apps_over_usb|pm\s+disable(?:-user)?\s+(?:com[.]android[.]vending|com[.]google[.]android[.]gms)/,
+      `${scriptPath} must not disable Android install verification`,
+    );
+  }
+});
+
+test('scan guidance precedes package launch and remains visible during attestation', () => {
+  const installStart = installer.indexOf('\ninstall_apk() {');
+  const installEnd = installer.indexOf(
+    '\nwait_for_package_manager_idle() {',
+    installStart,
   );
+  assert.notEqual(installStart, -1);
+  assert.notEqual(installEnd, -1);
+  const installBody = installer.slice(installStart, installEnd);
+  const prelaunchGuidance = installBody.indexOf(
+    'announce_android_install_security_policy',
+  );
+  const durableLaunchFence = installBody.indexOf(
+    'PACKAGE_OPERATION_STATE=launched',
+  );
+  const packageCommand = installBody.indexOf('rish_command \\\n');
+  assert.notEqual(prelaunchGuidance, -1);
+  assert.notEqual(durableLaunchFence, -1);
+  assert.notEqual(packageCommand, -1);
+  assert.ok(prelaunchGuidance < durableLaunchFence);
+  assert.ok(prelaunchGuidance < packageCommand);
+
+  const reviewStart = installer.indexOf(
+    '\npersist_and_wait_android_install_review() {',
+  );
+  const reviewEnd = installer.indexOf(
+    '\nreconcile_android_install_user_action() {',
+    reviewStart,
+  );
+  assert.notEqual(reviewStart, -1);
+  assert.notEqual(reviewEnd, -1);
+  const reviewBody = installer.slice(reviewStart, reviewEnd);
+  const reviewGuidance = reviewBody.indexOf(
+    'announce_android_install_security_policy "$context"',
+  );
+  const attestationInstructions = reviewBody.indexOf(
+    'announce_android_install_review_attestation',
+  );
+  assert.notEqual(reviewGuidance, -1);
+  assert.notEqual(attestationInstructions, -1);
+  assert.ok(reviewGuidance < attestationInstructions);
 });
 
 test('nontechnical bulk installation is a supported managed channel, not a sideload loop', () => {

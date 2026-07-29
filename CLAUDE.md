@@ -66,7 +66,8 @@ Choose the path that matches the prompt before you do anything else.
 
 If you were pointed at this repo and asked to install the app, there is no runtime
 task prompt yet. Android is the canonical production target: use
-`docs/phone-production.md` and
+`docs/phone-installation-and-provisioning.md`,
+`docs/phone-production.md`, and
 `phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md`. Use
 `docs/setup-for-coding-agents.md` end-to-end only when the user explicitly asks
 for the local/legacy-VM profile.

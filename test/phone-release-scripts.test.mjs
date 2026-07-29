@@ -4013,6 +4013,7 @@ test('successful package install still gates an asynchronously surfaced verifier
   const harness = `
 set -uo pipefail
 ${shellFunction(installer, 'clear_apk_user_action_state')}
+${shellFunction(installer, 'announce_android_install_security_policy')}
 ${shellFunction(installer, 'persist_and_wait_android_install_review')}
 ${shellFunction(installer, 'reconcile_successful_android_install_foreground')}
 say() { printf 'status=%s\\n' "$*"; }
@@ -7712,6 +7713,7 @@ set -uo pipefail
 ${shellFunction(installer, 'clear_apk_user_action_state')}
 ${shellFunction(installer, 'clear_install_review_attestation')}
 ${shellFunction(installer, 'rotate_android_install_review_challenge')}
+${shellFunction(installer, 'announce_android_install_security_policy')}
 ${shellFunction(installer, 'persist_and_wait_android_install_review')}
 ${shellFunction(installer, 'prepare_android_install_review_for_rollback')}
 ${shellFunction(installer, 'resume_pending_rollback_install_review')}
