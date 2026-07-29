@@ -16,6 +16,32 @@ const androidHomeResolution = fs.readFileSync(
 );
 const manifest = fs.readFileSync('android-shell/AndroidManifest.xml', 'utf8');
 const strings = fs.readFileSync('android-shell/res/values/strings.xml', 'utf8');
+const phoneSetup = fs.readFileSync(
+  'docs/reference/phone-paradigm-setup.md',
+  'utf8',
+);
+const installation = fs.readFileSync(
+  'docs/phone-installation-and-provisioning.md',
+  'utf8',
+);
+const migration = fs.readFileSync(
+  'phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md',
+  'utf8',
+);
+const developmentLoop = fs.readFileSync(
+  'phone-paradigm/device/DEV-LOOP.md',
+  'utf8',
+);
+const contracts = fs
+  .readFileSync('.intent/contracts.jsonl', 'utf8')
+  .trim()
+  .split('\n')
+  .map((line) => JSON.parse(line));
+const failureModes = fs
+  .readFileSync('.intent/failure-modes.jsonl', 'utf8')
+  .trim()
+  .split('\n')
+  .map((line) => JSON.parse(line));
 
 function methodBody(name) {
   const declaration = new RegExp(
@@ -87,6 +113,69 @@ test('server-down recovery is native, escapable, and not an application overlay'
     shellPrompt,
     /boundDocumentOperation =\s*boundEscapeOperation \|\| boundCapabilityReadOperation[\s\S]*?authorizedOperation = boundDocumentOperation\s*\?\s*isCurrentFeedDocumentAuthenticated\(\)\s*:\s*authorizeCurrentDocumentForNativeAction\(\)/,
   );
+});
+
+test('stock HOME has a required native one-tap return to Evogent', () => {
+  const activityStart = manifest.indexOf('android:name=".MainActivity"');
+  const activityEnd = manifest.indexOf('</activity>', activityStart);
+  assert.notEqual(activityStart, -1);
+  assert.notEqual(activityEnd, -1);
+  const mainActivityManifest = manifest.slice(activityStart, activityEnd);
+  assert.match(
+    mainActivityManifest,
+    /<intent-filter>\s*<action android:name="android\.intent\.action\.MAIN" \/>\s*<category android:name="android\.intent\.category\.LAUNCHER" \/>\s*<\/intent-filter>/,
+    'MainActivity must remain an ordinary branded launcher entry',
+  );
+
+  const setupProse = phoneSetup.replace(/\s+/g, ' ');
+  const installationProse = installation.replace(/\s+/g, ' ');
+  const migrationProse = migration.replace(/\s+/g, ' ');
+  const developmentProse = developmentLoop.replace(/\s+/g, ' ');
+  assert.match(
+    setupProse,
+    /provisioning, migration, and recovery after a launcher-data reset are incomplete until that ordinary icon is pinned/,
+  );
+  assert.match(
+    installationProse,
+    /If either direction is not reachable in one tap, technical provisioning is incomplete/,
+  );
+  assert.match(
+    migrationProse,
+    /A missing reciprocal control fails acceptance/,
+  );
+  assert.match(
+    developmentProse,
+    /reciprocal one-tap path at the glass/,
+  );
+  for (const prose of [
+    setupProse,
+    installationProse,
+    migrationProse,
+    developmentProse,
+  ]) {
+    assert.match(prose, /ordinary (?:branded )?(?:Evogent )?(?:app )?(?:launcher )?(?:entry|icon)/i);
+    assert.match(prose, /physical display|display-0|at the glass/i);
+  }
+  assert.match(setupProse, /Do not edit another launcher's database/);
+  assert.match(installationProse, /Never satisfy this step with a cross-app overlay/);
+
+  const launcherContract = contracts.findLast(
+    (entry) => entry.key === 'contract-afd0e7e0ed843cf2',
+  );
+  assert.ok(launcherContract);
+  assert.equal(launcherContract.status, 'law');
+  assert.match(launcherContract.statement, /visible non-overlay one-tap reciprocal control/);
+  assert.match(launcherContract.statement, /bilateral physical-display test/);
+  assert.match(launcherContract.statement, /never a cross-app overlay or launcher-database mutation/);
+
+  const missingControl = failureModes.findLast(
+    (entry) => entry.class === 'missing-reciprocal-home-control',
+  );
+  assert.ok(missingControl);
+  assert.equal(missingControl.phoneRelevant, true);
+  assert.match(missingControl.detection, /bilateral display-0 acceptance/);
+  assert.match(missingControl.selfHeal, /ordinary MAIN\+LAUNCHER entry/);
+  assert.match(missingControl.selfHeal, /without deleting the displaced app/);
 });
 
 test('system HOME owns the bounded no-preference-mutation fallback only', () => {

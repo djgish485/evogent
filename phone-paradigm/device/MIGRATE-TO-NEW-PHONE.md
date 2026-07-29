@@ -146,9 +146,16 @@ private signing identity and follow the exact archive-to-APK bootstrap in
    complete its atomic runtime switch, and publish the canonical
    `~/phone-tools` dispatches; a bootstrap copy of the reviewed helper is not an
    independently supported runtime.
-9. Complete fresh brain-provider sign-in, or restore only an exact separately
+9. Open stock Android HOME. Preserve any existing shortcut by moving it to a
+   free launcher-owned cell, then pin Evogent's ordinary app entry in the
+   closest persistent position corresponding to Evogent's bottom-left
+   Android-home control (the bottom-left hotseat position on a Pixel-style
+   launcher). At physical display 0, tap Evogent, tap **Android Home**, and tap
+   Evogent again. If either direction is not reachable in one tap, provisioning
+   is incomplete. Do not use an overlay or mutate launcher storage.
+10. Complete fresh brain-provider sign-in, or restore only an exact separately
    exported authentication artifact that the owner explicitly chose to transfer.
-10. Choose the battery policy appropriate for this device. Runtime scripts may
+11. Choose the battery policy appropriate for this device. Runtime scripts may
    take a scoped wake lock while actively browsing or running a bounded
    scheduled private-learning task; they must release it after the work. Because
    Termux has one app-global wake lock, enable the documented private
@@ -264,13 +271,16 @@ Run a supervised, hint-free end-to-end cycle:
 3. Confirm candidates land under the base source names the curator consumes.
 4. Score, curate, and arrange through the normal cycle.
 5. Inspect the rendered home feed on physical display 0.
-6. Test native-app tap-through and one non-destructive suggestion action.
-7. Disconnect the host and confirm the feed still operates.
-8. If the backup contained a source-intent handoff, confirm source scout either
+6. Tap Evogent's **Android Home** control, verify the reciprocal Evogent icon in
+   the corresponding persistent stock-workspace position, tap it, and repeat
+   the two-way switch once. A missing reciprocal control fails acceptance.
+7. Test native-app tap-through and one non-destructive suggestion action.
+8. Disconnect the host and confirm the feed still operates.
+9. If the backup contained a source-intent handoff, confirm source scout either
    recreated its installed-app tasks under the new queue or retained only
    not-yet-installed/temporarily-unverifiable intents; confirm no old lease was
    restored.
-9. Observe the next naturally scheduled cycle and its cleanup/power release.
+10. Observe the next naturally scheduled cycle and its cleanup/power release.
 
 Do not declare success from a server `200`, a tmux session name, or an API payload
 alone.

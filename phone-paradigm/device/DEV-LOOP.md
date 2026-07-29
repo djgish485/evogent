@@ -232,7 +232,11 @@ API state and rendered state can diverge. For every user-visible change:
 3. Run a hint-free browse → cache → score → curate → arrange cycle.
 4. Capture physical display 0 and inspect the actual top slate.
 5. Exercise the affected interaction on display 0.
-6. Observe one naturally scheduled cycle after the manual verification.
+6. For an install, migration, HOME-routing change, or launcher reset, prove the
+   reciprocal one-tap path at the glass: Evogent → Android Home → the ordinary
+   Evogent icon in the corresponding persistent stock-workspace position →
+   Evogent. Repeat the switch once; a missing icon fails acceptance.
+7. Observe one naturally scheduled cycle after the manual verification.
 
 Use explicit display 0 for host-driven input:
 
@@ -244,6 +248,11 @@ adb -s <DEVICE_SERIAL> shell input -d 0 swipe <X1> <Y1> <X2> <Y2> <DURATION_MS>
 
 Take a fresh screenshot immediately before a tap. Live feed updates and reorder
 banners can move hit targets.
+
+Launcher layout is launcher-owned state. Use a visible, user-like display-0
+drag to preserve and relocate an existing workspace item before pinning
+Evogent's ordinary app entry. Never edit Pixel Launcher or another launcher's
+database, and never substitute a cross-app overlay.
 
 ## Known operational traps
 
@@ -282,5 +291,7 @@ A handoff should state, without private values:
 - component inventory match;
 - local health result and single scheduler/cycle owners;
 - manual display-0 behavior observed;
+- reciprocal one-tap HOME control and bilateral switch acceptance when the
+  install or launcher surface was in scope;
 - scheduled-run time and structured source outcomes; and
 - any remaining open intent-ledger entries.

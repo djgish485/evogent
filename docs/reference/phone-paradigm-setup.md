@@ -51,14 +51,20 @@ therefore remains the HOME holder and remembers only the surface the user explic
 - launching Evogent from its ordinary, branded stock-launcher icon records Evogent; and
 - MAIN+HOME gestures route to that remembered surface without changing the preference.
 
-Pin that ordinary icon on the stock workspace when a one-tap return control is desired. It is a
-real launcher entry, not a cross-app overlay, and remains available in the stock app drawer even
-when it is not pinned.
+Technical-user provisioning, migration, and recovery after a launcher-data reset are incomplete
+until that ordinary icon is pinned on the stock workspace as the reciprocal one-tap return
+control. Put it in the closest persistent launcher-owned position corresponding to Evogent's
+bottom-left Android-home control (the bottom-left hotseat position on a Pixel-style launcher).
+Preserve an existing shortcut by moving it to a free workspace cell rather than deleting its app.
+Then prove the complete round trip at the glass: Evogent → Android Home → Evogent → Android Home.
+The control is a real launcher entry, not a cross-app overlay, and remains available in the stock
+app drawer if its workspace item is later removed.
 
 The stock launch is an explicit component launch. Whether Pixel Launcher restores an exact
 workspace page or normalizes back to its primary page remains launcher-owned; public Android APIs
-cannot save or restore another launcher's internal navigation state. A stale/unlaunchable stock
-component clears the preference and stays in Evogent instead of retrying on every HOME gesture.
+cannot save or restore another launcher's internal navigation state or silently guarantee exact
+icon placement. Do not edit another launcher's database. A stale/unlaunchable stock component
+clears the preference and stays in Evogent instead of retrying on every HOME gesture.
 
 Evogent also qualifies for the Android assistant role through a `VoiceInteractionService`.
 Assigning that role makes the system assistant gesture open the existing authenticated Add Message

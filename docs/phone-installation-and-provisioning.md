@@ -25,6 +25,11 @@ Both channels:
   state separate for each phone;
 - verify the installed APK and Android grants from fresh platform state rather
   than trusting a command exit or management-console request;
+- expose reciprocal non-overlay one-tap controls between Evogent and stock Android
+  HOME. Provisioning is incomplete until the ordinary branded Evogent launcher
+  entry is pinned in the closest persistent stock-workspace position
+  corresponding to Evogent's Android-home control and a bilateral physical
+  display test passes;
 - retain the durable rollback and runtime-health contract in
   `docs/phone-production.md`; and
 - never disable Play Protect, developer verification, restricted-settings
@@ -187,6 +192,14 @@ For a fresh technical-user phone, the supported order is:
    invokes `--apply`; and
 5. resume or run the versioned bundle installer so the same APK and the complete
    runtime become one atomic current release.
+6. open stock Android HOME, preserve any existing shortcut by moving it to a
+   free launcher-owned cell, and pin Evogent's ordinary branded app entry in the
+   closest persistent position corresponding to Evogent's bottom-left
+   Android-home control (the bottom-left hotseat position on a Pixel-style
+   launcher). At physical display 0, tap Evogent, tap **Android Home**, and tap
+   Evogent again. If either direction is not reachable in one tap, technical
+   provisioning is incomplete. Never satisfy this step with a cross-app overlay
+   or launcher-database edit.
 
 A technical bootstrap may place the exact reviewed helper from that verified
 bundle at the canonical command path before the transaction resumes. That copy
@@ -224,13 +237,17 @@ The selected supported path should:
    maintained system image;
 2. distribute Evogent as a verified private or public managed app and apply only
    policies the platform allows that management mode to set;
-3. run a visible first-use setup action for account sign-in, consent, or a grant
+3. place the ordinary Evogent app entry through a supported managed
+   launcher-layout policy when that launcher exposes one, or require a visible
+   first-use operator placement, then pass the same bilateral one-tap HOME
+   acceptance test as the technical-user channel;
+4. run a visible first-use setup action for account sign-in, consent, or a grant
    that Android does not delegate to the administrator;
-4. mint device-local control identity and private state after enrollment rather
+5. mint device-local control identity and private state after enrollment rather
    than cloning either from a golden phone;
-5. bind the installed APK proof to the same atomic runtime release transaction;
+6. bind the installed APK proof to the same atomic runtime release transaction;
    and
-6. support ordinary updates, failed-update recovery, device replacement,
+7. support ordinary updates, failed-update recovery, device replacement,
    administrator removal, and data erasure without depending on a development
    Mac or an interactive coding agent.
 
