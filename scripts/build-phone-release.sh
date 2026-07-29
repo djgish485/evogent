@@ -1340,13 +1340,6 @@ else
   export EVOGENT_ANDROID_VERSION_CODE="$ANDROID_VERSION_CODE"
 fi
 
-JAVA_HOME="$(resolve_java_home)" || {
-  echo "phone release: JDK not found; set EVOGENT_JAVA_HOME or JAVA_HOME" >&2
-  exit 69
-}
-export JAVA_HOME
-export PATH="$JAVA_HOME/bin:$PATH"
-
 echo "phone release: building web application at $SOURCE_SHORT"
 npm run build
 
@@ -1354,6 +1347,12 @@ if [ -n "$REUSE_ANDROID_TLS_ARCHIVE" ]; then
   echo "phone release: reusing verified Android/TLS artifact version $ANDROID_VERSION_CODE"
 else
   echo "phone release: building and signing Android shell version $ANDROID_VERSION_CODE"
+  JAVA_HOME="$(resolve_java_home)" || {
+    echo "phone release: JDK not found; set EVOGENT_JAVA_HOME or JAVA_HOME" >&2
+    exit 69
+  }
+  export JAVA_HOME
+  export PATH="$JAVA_HOME/bin:$PATH"
   bash android-shell/build.sh
   APK="$ROOT/android-shell/build/evogent.apk"
   TLS_CERT="$ROOT/android-shell/build/server-cert.pem"

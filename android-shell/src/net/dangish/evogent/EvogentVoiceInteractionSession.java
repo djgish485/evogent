@@ -48,6 +48,14 @@ final class EvogentVoiceInteractionSession extends VoiceInteractionSession {
 
     EvogentVoiceInteractionSession(Context context) {
         super(context);
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // VoiceInteractionSession.doCreate attaches the system-service binder before invoking
+        // this callback. The constructor runs before that attachment, so binder-backed session
+        // policy calls are lifecycle-safe only here (or later).
         // The composer needs semantic assist text only. Do not ask Android to capture pixels.
         setDisabledShowContext(SHOW_WITH_SCREENSHOT);
     }

@@ -52,6 +52,8 @@ interface EvogentNotificationShell {
   getNotificationCapability?: () => string | null;
   openNotificationListenerSettings?: () => string | null;
   openNotificationSettings?: () => string | null;
+  synchronizeNotificationDigestPrivate?: () => string | null;
+  armNotificationDigestDetailed?: () => string | null;
 }
 
 function notificationShell(): EvogentNotificationShell | null {
@@ -101,6 +103,26 @@ export function openNativeNotificationListenerSettings(): boolean {
   if (typeof openSettings !== 'function') return false;
   try {
     return openSettings() === 'opened';
+  } catch {
+    return false;
+  }
+}
+
+export function synchronizeNativeNotificationDigestPrivate(): boolean {
+  const synchronizePrivate = notificationShell()?.synchronizeNotificationDigestPrivate;
+  if (typeof synchronizePrivate !== 'function') return false;
+  try {
+    return synchronizePrivate() === 'private';
+  } catch {
+    return false;
+  }
+}
+
+export function armNativeNotificationDigestDetailed(): boolean {
+  const armDetailed = notificationShell()?.armNotificationDigestDetailed;
+  if (typeof armDetailed !== 'function') return false;
+  try {
+    return armDetailed() === 'detailed-armed';
   } catch {
     return false;
   }
@@ -225,6 +247,11 @@ export function PhoneNotificationCurationPanel() {
     setSaving(true);
     setStatus(null);
     try {
+      const preview = patch.lockScreenPreview;
+      const changesPreview = preview === 'private' || preview === 'detailed';
+      if (changesPreview && !synchronizeNativeNotificationDigestPrivate()) {
+        throw new Error('Could not secure the Android digest before saving.');
+      }
       const response = await fetch('/api/phone-notifications/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -232,6 +259,16 @@ export function PhoneNotificationCurationPanel() {
       });
       const payload = await response.json() as SettingsView & { error?: string };
       if (!response.ok) throw new Error(payload.error || `Error ${response.status}`);
+      if (changesPreview && payload.config.lockScreenPreview !== preview) {
+        throw new Error('The saved digest preview did not match the requested setting.');
+      }
+      if (
+        preview === 'private'
+          ? !synchronizeNativeNotificationDigestPrivate()
+          : preview === 'detailed' && !armNativeNotificationDigestDetailed()
+      ) {
+        throw new Error('Could not synchronize the Android digest after saving.');
+      }
       setView(payload);
       setStatus('Saved on this phone.');
     } catch (error) {
@@ -405,12 +442,12 @@ export function PhoneNotificationCurationPanel() {
             {
               value: 'private' as const,
               label: 'Private (recommended)',
-              description: 'The locked screen says only that curated notifications are ready.',
+              description: 'Keep Android’s native digest generic; ranked details stay inside Evogent.',
             },
             {
               value: 'detailed' as const,
               label: 'Detailed',
-              description: 'Show the ranked eligible-app summary while the phone is locked.',
+              description: 'Show the ranked eligible-app summary in Android, including while the phone is locked.',
             },
           ]).map((option) => (
             <button

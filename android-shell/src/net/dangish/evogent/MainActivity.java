@@ -95,6 +95,10 @@ public class MainActivity extends Activity {
             + "return call('openNotificationSettings',[]);},"
             + "openNotificationListenerSettings:function(){"
             + "return call('openNotificationListenerSettings',[]);},"
+            + "synchronizeNotificationDigestPrivate:function(){"
+            + "return call('synchronizeNotificationDigestPrivate',[]);},"
+            + "armNotificationDigestDetailed:function(){"
+            + "return call('armNotificationDigestDetailed',[]);},"
             + "dismissPhoneNotification:function(eventId){"
             + "return call('dismissPhoneNotification',[String(eventId)]);}"
             + "}),writable:false,configurable:false});"
@@ -2045,6 +2049,16 @@ public class MainActivity extends Activity {
                             && args != null
                             && args.length() == 0)
                     || (shellPrompt
+                            && isHomeSurface()
+                            && "synchronizeNotificationDigestPrivate".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (shellPrompt
+                            && isHomeSurface()
+                            && "armNotificationDigestDetailed".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (shellPrompt
                             && "dismissPhoneNotification".equals(method)
                             && args != null
                             && args.length() == 1)
@@ -2115,6 +2129,26 @@ public class MainActivity extends Activity {
                     && args.length() == 0
                     && isHomeSurface()) {
                 result.confirm(openNotificationListenerSettings());
+                return;
+            } else if ("synchronizeNotificationDigestPrivate".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && isHomeSurface()) {
+                boolean synchronizedPrivate =
+                        EvogentNotificationListenerService.synchronizeDigestPreviewMode(
+                                this,
+                                false);
+                result.confirm(synchronizedPrivate ? "private" : "unavailable");
+                return;
+            } else if ("armNotificationDigestDetailed".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && isHomeSurface()) {
+                boolean armedDetailed =
+                        EvogentNotificationListenerService.synchronizeDigestPreviewMode(
+                                this,
+                                true);
+                result.confirm(armedDetailed ? "detailed-armed" : "unavailable");
                 return;
             } else if ("dismissPhoneNotification".equals(method)
                     && args != null

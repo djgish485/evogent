@@ -152,6 +152,39 @@ describe('PhoneNotificationCurationPanel native capability recovery', () => {
     }
   });
 
+  test('explains that Private keeps native Android content generic', async () => {
+    const dom = installDom();
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: async () => ({
+        ok: true,
+        json: async () => curatedSettings,
+      }),
+    });
+    const container = dom.window.document.getElementById('root');
+    assert.ok(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(createElement(PhoneNotificationCurationPanel));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.match(
+        container.textContent ?? '',
+        /Keep Android’s native digest generic; ranked details stay inside Evogent\./,
+      );
+      assert.match(
+        container.textContent ?? '',
+        /Show the ranked eligible-app summary in Android, including while the phone is locked\./,
+      );
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      dom.window.close();
+    }
+  });
+
   test('refreshes when the authenticated fallback shell becomes ready after mount', async () => {
     const dom = installDom();
     Object.defineProperty(globalThis, 'fetch', {
@@ -380,6 +413,144 @@ describe('PhoneNotificationCurationPanel native capability recovery', () => {
       await act(async () => {
         root.unmount();
       });
+      dom.window.close();
+    }
+  });
+
+  test('floors an active Detailed digest before and after saving Private', async () => {
+    const dom = installDom();
+    const order: string[] = [];
+    const detailedSettings = {
+      ...curatedSettings,
+      config: { ...curatedSettings.config, lockScreenPreview: 'detailed' },
+    };
+    Object.defineProperty(dom.window, 'EvogentShell', {
+      configurable: true,
+      value: {
+        synchronizeNotificationDigestPrivate: () => {
+          order.push('private');
+          return 'private';
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: async (_input: unknown, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          order.push('patch-private');
+          return { ok: true, json: async () => curatedSettings };
+        }
+        return { ok: true, json: async () => detailedSettings };
+      },
+    });
+    const container = dom.window.document.getElementById('root');
+    assert.ok(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(createElement(PhoneNotificationCurationPanel));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const privateButton = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+        .find((button) => button.textContent?.includes('Private (recommended)'));
+      assert.ok(privateButton);
+      await act(async () => {
+        privateButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.deepEqual(order, ['private', 'patch-private', 'private']);
+      assert.match(container.textContent ?? '', /Saved on this phone\./);
+    } finally {
+      await act(async () => root.unmount());
+      dom.window.close();
+    }
+  });
+
+  test('keeps the current digest Private until Detailed is armed after its PATCH', async () => {
+    const dom = installDom();
+    const order: string[] = [];
+    const savedDetailed = {
+      ...curatedSettings,
+      config: { ...curatedSettings.config, lockScreenPreview: 'detailed' },
+    };
+    Object.defineProperty(dom.window, 'EvogentShell', {
+      configurable: true,
+      value: {
+        synchronizeNotificationDigestPrivate: () => {
+          order.push('private');
+          return 'private';
+        },
+        armNotificationDigestDetailed: () => {
+          order.push('detailed-arm');
+          return 'detailed-armed';
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: async (_input: unknown, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          order.push('patch-detailed');
+          return { ok: true, json: async () => savedDetailed };
+        }
+        return { ok: true, json: async () => curatedSettings };
+      },
+    });
+    const container = dom.window.document.getElementById('root');
+    assert.ok(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(createElement(PhoneNotificationCurationPanel));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const detailedButton = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+        .find((button) => button.textContent?.startsWith('Detailed'));
+      assert.ok(detailedButton);
+      await act(async () => {
+        detailedButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.deepEqual(order, ['private', 'patch-detailed', 'detailed-arm']);
+      assert.match(container.textContent ?? '', /Saved on this phone\./);
+    } finally {
+      await act(async () => root.unmount());
+      dom.window.close();
+    }
+  });
+
+  test('does not PATCH preview settings without the native Private floor', async () => {
+    const dom = installDom();
+    let patchCount = 0;
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: async (_input: unknown, init?: RequestInit) => {
+        if (init?.method === 'PATCH') patchCount += 1;
+        return { ok: true, json: async () => curatedSettings };
+      },
+    });
+    const container = dom.window.document.getElementById('root');
+    assert.ok(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(createElement(PhoneNotificationCurationPanel));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const detailedButton = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+        .find((button) => button.textContent?.startsWith('Detailed'));
+      assert.ok(detailedButton);
+      await act(async () => {
+        detailedButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.equal(patchCount, 0);
+      assert.match(
+        container.textContent ?? '',
+        /Could not secure the Android digest before saving\./,
+      );
+    } finally {
+      await act(async () => root.unmount());
       dom.window.close();
     }
   });

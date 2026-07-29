@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.os.Bundle;
@@ -43,6 +44,9 @@ public final class EvogentNotificationListenerService extends NotificationListen
     private static final String REMOVE_URL = EvogentSecurityPolicy.PHONE_NOTIFICATION_REMOVE_URL;
     static final String DIGEST_CHANNEL_ID = "evogent_curated_notifications_v2_silent";
     private static final int DIGEST_NOTIFICATION_ID = 0x45564f4e;
+    private static final String PRIVATE_DIGEST_TITLE = "Evogent";
+    private static final String PRIVATE_DIGEST_TEXT =
+            "Curated notifications are ready.";
     private static final int MAX_LIVE_PENDING_EVENTS = 16;
     private static final int MAX_HISTORICAL_PENDING_EVENTS = 128;
     private static final int NOTIFICATION_END_TO_END_BUDGET_MS = 2000;
@@ -58,10 +62,17 @@ public final class EvogentNotificationListenerService extends NotificationListen
             "evogent_active_count";
     private static final String DIGEST_EXPIRES_AT_MS_EXTRA =
             "evogent_expires_at_ms";
+    private static final String DIGEST_PREVIEW_PREFERENCES =
+            "evogent_notification_digest_preview";
+    private static final String DIGEST_PREVIEW_MODE_KEY = "mode";
+    private static final String DIGEST_PREVIEW_PRIVATE = "private";
+    private static final String DIGEST_PREVIEW_DETAILED = "detailed";
     private static final Object DIGEST_PUBLICATION_LOCK = new Object();
     private static long nextServiceGeneration;
     private static long activeServiceGeneration;
     private static EvogentNotificationListenerService activeService;
+    private static long digestPreviewPolicyGeneration;
+    private static String currentProcessDigestPreviewMode;
 
     private final EvogentNotificationWorkQueue<NotificationWork> workQueue =
             new EvogentNotificationWorkQueue<NotificationWork>(
@@ -169,6 +180,24 @@ public final class EvogentNotificationListenerService extends NotificationListen
                     }
                     if (serviceGeneration == current.extras.getLong(
                             DIGEST_SERVICE_GENERATION_EXTRA)) {
+                        // VISIBILITY_PRIVATE delegates redaction to Android's global lock-screen
+                        // preference. A user who allows private notification content would
+                        // otherwise see ranked app details despite choosing Evogent's Private
+                        // preview. Sanitize the primary notification itself, including a digest
+                        // left by an older build, without extending its absolute expiry.
+                        if (!isDetailedDigestPreviewModeLocked(this)
+                                || current.visibility != Notification.VISIBILITY_PUBLIC) {
+                            Notification.Builder privateBuilder =
+                                    Notification.Builder.recoverBuilder(this, current);
+                            applyDigestDisplayContent(
+                                    this,
+                                    privateBuilder,
+                                    null,
+                                    null,
+                                    false);
+                            privateBuilder.setTimeoutAfter(timeoutAfterMs);
+                            manager.notify(DIGEST_NOTIFICATION_ID, privateBuilder.build());
+                        }
                         return;
                     }
                     DigestMarker marker = new DigestMarker(
@@ -209,6 +238,10 @@ public final class EvogentNotificationListenerService extends NotificationListen
                             .setAutoCancel(false)
                             .setTimeoutAfter(timeoutAfterMs)
                             .addExtras(markerExtras);
+                    if (!isDetailedDigestPreviewModeLocked(this)
+                            || current.visibility != Notification.VISIBILITY_PUBLIC) {
+                        applyDigestDisplayContent(this, builder, null, null, false);
+                    }
                     manager.notify(DIGEST_NOTIFICATION_ID, builder.build());
                     return;
                 }
@@ -484,13 +517,16 @@ public final class EvogentNotificationListenerService extends NotificationListen
         } catch (Exception invalid) {
             return null;
         }
+        DigestPreviewFence digestPreviewFence = captureDigestPreviewFence(this);
         return new Snapshot(
                 sbn.getKey(),
                 sbn.getPostTime(),
                 eventId,
                 historical,
                 decision,
-                request);
+                request,
+                digestPreviewFence.policyGeneration,
+                digestPreviewFence.detailedAuthorized);
     }
 
     private void applyResponse(
@@ -774,9 +810,6 @@ public final class EvogentNotificationListenerService extends NotificationListen
                     marker.expiresAtMs);
             builder
                     .setSmallIcon(R.drawable.ic_evogent)
-                    .setContentTitle(title)
-                    .setContentText(text)
-                    .setStyle(new Notification.BigTextStyle().bigText(text))
                     .setContentIntent(contentIntent)
                     .setCategory(Notification.CATEGORY_STATUS)
                     .setPriority(Notification.PRIORITY_LOW)
@@ -786,33 +819,22 @@ public final class EvogentNotificationListenerService extends NotificationListen
                     .setOnlyAlertOnce(true)
                     .setAutoCancel(false)
                     .setLocalOnly(true)
-                    .addExtras(receiptMarker)
-                    .setVisibility("detailed".equals(preview)
-                            ? Notification.VISIBILITY_PUBLIC
-                            : Notification.VISIBILITY_PRIVATE);
-
-            if (!"detailed".equals(preview)) {
-                Notification.Builder publicBuilder = Build.VERSION.SDK_INT >= 26
-                        ? new Notification.Builder(this, DIGEST_CHANNEL_ID)
-                        : new Notification.Builder(this);
-                builder.setPublicVersion(publicBuilder
-                        .setSmallIcon(R.drawable.ic_evogent)
-                        .setContentTitle("Evogent")
-                        .setContentText("Curated notifications are ready.")
-                        .setCategory(Notification.CATEGORY_STATUS)
-                        .setPriority(Notification.PRIORITY_LOW)
-                        .setDefaults(0)
-                        .setSound(null)
-                        .setVibrate(null)
-                        .setVisibility(Notification.VISIBILITY_PUBLIC)
-                        .build());
-            }
-
+                    .addExtras(receiptMarker);
             synchronized (DIGEST_PUBLICATION_LOCK) {
                 // This is the final service/work/revision check before the key-owned digest is
                 // replaced. Holding the process-wide lock orders old/new service instances.
                 if (SystemClock.elapsedRealtime() >= endToEndDeadlineElapsedMs
                         || !isPublicationCurrent(entry, snapshot)) return false;
+                boolean detailedPreview = mayPublishDetailedDigestLocked(
+                        this,
+                        snapshot,
+                        preview);
+                applyDigestDisplayContent(
+                        this,
+                        builder,
+                        title,
+                        text,
+                        detailedPreview);
                 long timeoutAfterMs = EvogentNotificationPolicy.digestTimeoutAfterMs(
                         marker.expiresAtMs,
                         System.currentTimeMillis());
@@ -1270,9 +1292,6 @@ public final class EvogentNotificationListenerService extends NotificationListen
                             this,
                             current);
                     builder
-                            .setContentTitle(title)
-                            .setContentText(text)
-                            .setStyle(new Notification.BigTextStyle().bigText(text))
                             .setPriority(Notification.PRIORITY_LOW)
                             .setDefaults(0)
                             .setSound(null)
@@ -1280,22 +1299,13 @@ public final class EvogentNotificationListenerService extends NotificationListen
                             .setOnlyAlertOnce(true)
                             .setAutoCancel(false)
                             .addExtras(markerExtras);
-                    if (current.visibility != Notification.VISIBILITY_PUBLIC) {
-                        Notification.Builder publicBuilder = Build.VERSION.SDK_INT >= 26
-                                ? new Notification.Builder(this, DIGEST_CHANNEL_ID)
-                                : new Notification.Builder(this);
-                        builder.setPublicVersion(publicBuilder
-                                .setSmallIcon(R.drawable.ic_evogent)
-                                .setContentTitle("Evogent")
-                                .setContentText("Curated notifications are ready.")
-                                .setCategory(Notification.CATEGORY_STATUS)
-                                .setPriority(Notification.PRIORITY_LOW)
-                                .setDefaults(0)
-                                .setSound(null)
-                                .setVibrate(null)
-                                .setVisibility(Notification.VISIBILITY_PUBLIC)
-                                .build());
-                    }
+                    applyDigestDisplayContent(
+                            this,
+                            builder,
+                            title,
+                            text,
+                            current.visibility == Notification.VISIBILITY_PUBLIC
+                                    && isDetailedDigestPreviewModeLocked(this));
                     timeoutAfterMs = EvogentNotificationPolicy.digestTimeoutAfterMs(
                             marker.expiresAtMs,
                             System.currentTimeMillis());
@@ -1310,6 +1320,208 @@ public final class EvogentNotificationListenerService extends NotificationListen
             } catch (Throwable error) {
                 logFailure("digest lifecycle shrink", error);
             }
+        }
+    }
+
+    /**
+     * Synchronize the native publication floor before or after the authenticated settings PATCH.
+     *
+     * Every transition changes the in-process generation while holding the same lock as final
+     * digest publication. Private is persisted before this method returns. Arming Detailed also
+     * sanitizes any existing digest: ranked Android content can return only from a later ingest
+     * whose snapshot and server response both authorize the new generation.
+     */
+    static boolean synchronizeDigestPreviewMode(Context context, boolean detailedPreview) {
+        if (context == null) return false;
+        Context applicationContext = context.getApplicationContext();
+        if (applicationContext == null) applicationContext = context;
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            String targetMode = detailedPreview
+                    ? DIGEST_PREVIEW_DETAILED
+                    : DIGEST_PREVIEW_PRIVATE;
+            advanceDigestPreviewPolicyGenerationLocked();
+            currentProcessDigestPreviewMode = targetMode;
+            boolean persisted = persistDigestPreviewModeLocked(applicationContext, targetMode);
+            boolean sanitized = sanitizeActiveDigestLocked(applicationContext);
+            if (persisted && sanitized) return true;
+
+            // A failed persistence or sanitizer must never leave Detailed armed. Retraction is a
+            // safe fallback because Evogent does not own or mutate any source notification here.
+            advanceDigestPreviewPolicyGenerationLocked();
+            currentProcessDigestPreviewMode = DIGEST_PREVIEW_PRIVATE;
+            persistDigestPreviewModeLocked(applicationContext, DIGEST_PREVIEW_PRIVATE);
+            sanitizeActiveDigestLocked(applicationContext);
+            return false;
+        }
+    }
+
+    private static DigestPreviewFence captureDigestPreviewFence(Context context) {
+        synchronized (DIGEST_PUBLICATION_LOCK) {
+            return new DigestPreviewFence(
+                    digestPreviewPolicyGeneration,
+                    isDetailedDigestPreviewModeLocked(context));
+        }
+    }
+
+    private static boolean mayPublishDetailedDigestLocked(
+            Context context,
+            Snapshot snapshot,
+            String serverPreview) {
+        return DIGEST_PREVIEW_DETAILED.equals(serverPreview)
+                && snapshot != null
+                && snapshot.detailedDigestPreviewAuthorized
+                && snapshot.digestPreviewPolicyGeneration == digestPreviewPolicyGeneration
+                && isDetailedDigestPreviewModeLocked(context);
+    }
+
+    private static boolean isDetailedDigestPreviewModeLocked(Context context) {
+        if (currentProcessDigestPreviewMode == null) {
+            String persistedMode = DIGEST_PREVIEW_PRIVATE;
+            try {
+                SharedPreferences preferences = context.getSharedPreferences(
+                        DIGEST_PREVIEW_PREFERENCES,
+                        Context.MODE_PRIVATE);
+                String candidate = preferences.getString(
+                        DIGEST_PREVIEW_MODE_KEY,
+                        DIGEST_PREVIEW_PRIVATE);
+                if (DIGEST_PREVIEW_DETAILED.equals(candidate)) {
+                    persistedMode = DIGEST_PREVIEW_DETAILED;
+                }
+            } catch (Throwable ignored) {
+                // Storage uncertainty fails closed for Android notification content.
+            }
+            currentProcessDigestPreviewMode = persistedMode;
+        }
+        return DIGEST_PREVIEW_DETAILED.equals(currentProcessDigestPreviewMode);
+    }
+
+    private static void advanceDigestPreviewPolicyGenerationLocked() {
+        if (digestPreviewPolicyGeneration == Long.MAX_VALUE) {
+            digestPreviewPolicyGeneration = 1L;
+        } else {
+            digestPreviewPolicyGeneration += 1L;
+        }
+    }
+
+    private static boolean persistDigestPreviewModeLocked(Context context, String mode) {
+        try {
+            return context.getSharedPreferences(
+                            DIGEST_PREVIEW_PREFERENCES,
+                            Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(DIGEST_PREVIEW_MODE_KEY, mode)
+                    .commit();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Replace only Evogent's exact untagged digest. The recovered builder preserves its action,
+     * marker, coverage, and absolute expiry; no source notification is read or changed.
+     */
+    private static boolean sanitizeActiveDigestLocked(Context context) {
+        if (Build.VERSION.SDK_INT < 26) return true;
+        NotificationManager manager =
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return false;
+        try {
+            StatusBarNotification[] active = manager.getActiveNotifications();
+            if (active == null) return false;
+            for (StatusBarNotification candidate : active) {
+                if (candidate == null
+                        || candidate.getTag() != null
+                        || candidate.getId() != DIGEST_NOTIFICATION_ID
+                        || !EvogentNotificationPolicy.EVOGENT_PACKAGE.equals(
+                                candidate.getPackageName())) {
+                    continue;
+                }
+                Notification current = candidate.getNotification();
+                if (current == null
+                        || current.extras == null
+                        || !DIGEST_CHANNEL_ID.equals(current.getChannelId())) {
+                    manager.cancel(DIGEST_NOTIFICATION_ID);
+                    return true;
+                }
+                ArrayList<String> covered = current.extras.getStringArrayList(
+                        DIGEST_COVERED_EVENT_IDS_EXTRA);
+                int activeCount = current.extras.getInt(DIGEST_ACTIVE_COUNT_EXTRA, 0);
+                long expiresAtMs = current.extras.getLong(
+                        DIGEST_EXPIRES_AT_MS_EXTRA,
+                        0L);
+                long timeoutAfterMs = EvogentNotificationPolicy.digestTimeoutAfterMs(
+                        expiresAtMs,
+                        System.currentTimeMillis());
+                if (!isValidCoverage(covered)
+                        || activeCount <= 0
+                        || activeCount != covered.size()
+                        || timeoutAfterMs <= 0L) {
+                    manager.cancel(DIGEST_NOTIFICATION_ID);
+                    return true;
+                }
+                Notification.Builder builder = Notification.Builder.recoverBuilder(
+                        context,
+                        current);
+                builder
+                        .setPriority(Notification.PRIORITY_LOW)
+                        .setDefaults(0)
+                        .setSound(null)
+                        .setVibrate(null)
+                        .setOnlyAlertOnce(true)
+                        .setAutoCancel(false)
+                        .setTimeoutAfter(timeoutAfterMs);
+                applyDigestDisplayContent(context, builder, null, null, false);
+                manager.notify(DIGEST_NOTIFICATION_ID, builder.build());
+                return true;
+            }
+            return true;
+        } catch (Throwable error) {
+            try {
+                manager.cancel(DIGEST_NOTIFICATION_ID);
+            } catch (Throwable ignored) {
+            }
+            logFailure("digest preview synchronization", error);
+            return false;
+        }
+    }
+
+    /**
+     * Private is an Evogent privacy choice, not a request to defer to Android's global
+     * "show sensitive notification content" preference. Keep the primary native notification
+     * generic in Private mode so both the shade and secure lock screen are safe under either OS
+     * preference. Ranked detail remains in Evogent's authenticated Notifications view. Detailed
+     * mode is the only mode that puts the ranked summary in Android's notification surface.
+     */
+    private static void applyDigestDisplayContent(
+            Context context,
+            Notification.Builder builder,
+            String rankedTitle,
+            String rankedText,
+            boolean detailedPreview) {
+        String visibleTitle = detailedPreview ? rankedTitle : PRIVATE_DIGEST_TITLE;
+        String visibleText = detailedPreview ? rankedText : PRIVATE_DIGEST_TEXT;
+        builder
+                .setContentTitle(visibleTitle)
+                .setContentText(visibleText)
+                .setStyle(new Notification.BigTextStyle().bigText(visibleText))
+                .setVisibility(detailedPreview
+                        ? Notification.VISIBILITY_PUBLIC
+                        : Notification.VISIBILITY_PRIVATE);
+        if (!detailedPreview) {
+            Notification.Builder publicBuilder = Build.VERSION.SDK_INT >= 26
+                    ? new Notification.Builder(context, DIGEST_CHANNEL_ID)
+                    : new Notification.Builder(context);
+            builder.setPublicVersion(publicBuilder
+                    .setSmallIcon(R.drawable.ic_evogent)
+                    .setContentTitle(PRIVATE_DIGEST_TITLE)
+                    .setContentText(PRIVATE_DIGEST_TEXT)
+                    .setCategory(Notification.CATEGORY_STATUS)
+                    .setPriority(Notification.PRIORITY_LOW)
+                    .setDefaults(0)
+                    .setSound(null)
+                    .setVibrate(null)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .build());
         }
     }
 
@@ -1440,6 +1652,16 @@ public final class EvogentNotificationListenerService extends NotificationListen
         }
     }
 
+    private static final class DigestPreviewFence {
+        final long policyGeneration;
+        final boolean detailedAuthorized;
+
+        DigestPreviewFence(long policyGeneration, boolean detailedAuthorized) {
+            this.policyGeneration = policyGeneration;
+            this.detailedAuthorized = detailedAuthorized;
+        }
+    }
+
     private static final class Snapshot {
         final String notificationKey;
         final long postTimeMs;
@@ -1447,6 +1669,8 @@ public final class EvogentNotificationListenerService extends NotificationListen
         final boolean historical;
         final EvogentNotificationPolicy.Decision decision;
         final JSONObject request;
+        final long digestPreviewPolicyGeneration;
+        final boolean detailedDigestPreviewAuthorized;
 
         Snapshot(
                 String notificationKey,
@@ -1454,13 +1678,17 @@ public final class EvogentNotificationListenerService extends NotificationListen
                 String eventId,
                 boolean historical,
                 EvogentNotificationPolicy.Decision decision,
-                JSONObject request) {
+                JSONObject request,
+                long digestPreviewPolicyGeneration,
+                boolean detailedDigestPreviewAuthorized) {
             this.notificationKey = notificationKey;
             this.postTimeMs = postTimeMs;
             this.eventId = eventId;
             this.historical = historical;
             this.decision = decision;
             this.request = request;
+            this.digestPreviewPolicyGeneration = digestPreviewPolicyGeneration;
+            this.detailedDigestPreviewAuthorized = detailedDigestPreviewAuthorized;
         }
     }
 }

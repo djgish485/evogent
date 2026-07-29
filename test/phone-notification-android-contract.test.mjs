@@ -310,6 +310,138 @@ test('digest is aggregate, silent, low-importance, and opens the notification vi
   assert.match(architectureProse, /never extend it/);
 });
 
+test('private preview sanitizes the primary digest on every native publication path', () => {
+  const helperStart = listener.indexOf('private static void applyDigestDisplayContent(');
+  const helperEnd = listener.indexOf('private void ensureDigestChannel(', helperStart);
+  assert.ok(helperStart >= 0);
+  assert.ok(helperEnd > helperStart);
+  const helper = listener.slice(helperStart, helperEnd);
+  assert.match(
+    helper,
+    /String visibleTitle = detailedPreview \? rankedTitle : PRIVATE_DIGEST_TITLE/,
+  );
+  assert.match(
+    helper,
+    /String visibleText = detailedPreview \? rankedText : PRIVATE_DIGEST_TEXT/,
+  );
+  assert.match(helper, /\.setContentTitle\(visibleTitle\)/);
+  assert.match(helper, /\.setContentText\(visibleText\)/);
+  assert.match(helper, /\.setStyle\(new Notification\.BigTextStyle\(\)\.bigText\(visibleText\)\)/);
+  assert.match(
+    helper,
+    /\.setVisibility\(detailedPreview[\s\S]*?Notification\.VISIBILITY_PUBLIC[\s\S]*?Notification\.VISIBILITY_PRIVATE\)/,
+  );
+
+  const rebindStart = listener.indexOf('private void rebindActiveDigestGeneration()');
+  const rebindEnd = listener.indexOf('@Override\n    public void onNotificationPosted', rebindStart);
+  const rebind = listener.slice(rebindStart, rebindEnd);
+  assert.equal(
+    (rebind.match(/applyDigestDisplayContent\(/g) ?? []).length,
+    2,
+    'same-generation and rebound private digests must both be sanitized',
+  );
+  assert.match(
+    rebind,
+    /!isDetailedDigestPreviewModeLocked\(this\)[\s\S]*?\|\| current\.visibility != Notification\.VISIBILITY_PUBLIC[\s\S]*?applyDigestDisplayContent\([\s\S]*?false\)/,
+  );
+
+  const publishStart = listener.indexOf('private boolean publishAndVerifyDigest(');
+  const publishEnd = listener.indexOf('private boolean isDigestActive(', publishStart);
+  const publish = listener.slice(publishStart, publishEnd);
+  const publicationLock = publish.indexOf('synchronized (DIGEST_PUBLICATION_LOCK)');
+  const displayApplication = publish.indexOf('applyDigestDisplayContent(');
+  const notify = publish.indexOf('manager.notify(DIGEST_NOTIFICATION_ID');
+  assert.ok(publicationLock >= 0);
+  assert.ok(displayApplication > publicationLock);
+  assert.ok(notify > displayApplication);
+  assert.match(
+    publish,
+    /boolean detailedPreview = mayPublishDetailedDigestLocked\([\s\S]*?applyDigestDisplayContent\([\s\S]*?detailedPreview\)/,
+  );
+
+  const pruneStart = listener.indexOf('private void pruneActiveDigestCoverage(');
+  const pruneEnd = listener.indexOf('private static void applyDigestDisplayContent(', pruneStart);
+  const prune = listener.slice(pruneStart, pruneEnd);
+  assert.match(
+    prune,
+    /current\.visibility == Notification\.VISIBILITY_PUBLIC[\s\S]*?&& isDetailedDigestPreviewModeLocked\(this\)/,
+  );
+
+  assert.match(
+    settingsPanel,
+    /Keep Android’s native digest generic; ranked details stay inside Evogent\./,
+  );
+  assert.match(
+    architectureProse,
+    /primary native title and text generic.*even when Android's global setting allows private notification content/i,
+  );
+});
+
+test('preview transitions use a durable private-default generation fence', () => {
+  assert.match(listener, /import android\.content\.SharedPreferences/);
+  assert.match(listener, /DIGEST_PREVIEW_PRIVATE = "private"/);
+  assert.match(
+    listener,
+    /getString\([\s\S]*?DIGEST_PREVIEW_MODE_KEY,[\s\S]*?DIGEST_PREVIEW_PRIVATE\)/,
+  );
+  assert.match(listener, /\.putString\(DIGEST_PREVIEW_MODE_KEY, mode\)[\s\S]*?\.commit\(\)/);
+
+  const synchronizeStart = listener.indexOf(
+    'static boolean synchronizeDigestPreviewMode(Context context, boolean detailedPreview)',
+  );
+  const synchronizeEnd = listener.indexOf(
+    'private static DigestPreviewFence captureDigestPreviewFence(',
+    synchronizeStart,
+  );
+  assert.ok(synchronizeStart >= 0);
+  assert.ok(synchronizeEnd > synchronizeStart);
+  const synchronize = listener.slice(synchronizeStart, synchronizeEnd);
+  assert.match(synchronize, /synchronized \(DIGEST_PUBLICATION_LOCK\)/);
+  assert.ok(
+    synchronize.indexOf('advanceDigestPreviewPolicyGenerationLocked()')
+      < synchronize.indexOf('sanitizeActiveDigestLocked(applicationContext)'),
+  );
+  assert.match(
+    synchronize,
+    /currentProcessDigestPreviewMode = DIGEST_PREVIEW_PRIVATE[\s\S]*?sanitizeActiveDigestLocked\(applicationContext\)/,
+  );
+
+  const gateStart = listener.indexOf('private static boolean mayPublishDetailedDigestLocked(');
+  const gateEnd = listener.indexOf(
+    'private static boolean isDetailedDigestPreviewModeLocked(',
+    gateStart,
+  );
+  const gate = listener.slice(gateStart, gateEnd);
+  assert.match(gate, /DIGEST_PREVIEW_DETAILED\.equals\(serverPreview\)/);
+  assert.match(gate, /snapshot\.detailedDigestPreviewAuthorized/);
+  assert.match(
+    gate,
+    /snapshot\.digestPreviewPolicyGeneration == digestPreviewPolicyGeneration/,
+  );
+  assert.match(gate, /isDetailedDigestPreviewModeLocked\(context\)/);
+
+  assert.match(listener, /DigestPreviewFence digestPreviewFence = captureDigestPreviewFence\(this\)/);
+  assert.match(listener, /final long digestPreviewPolicyGeneration/);
+  assert.match(listener, /final boolean detailedDigestPreviewAuthorized/);
+
+  const sanitizerStart = listener.indexOf('private static boolean sanitizeActiveDigestLocked(');
+  const sanitizerEnd = listener.indexOf(
+    'private static void applyDigestDisplayContent(',
+    sanitizerStart,
+  );
+  const sanitizer = listener.slice(sanitizerStart, sanitizerEnd);
+  assert.match(sanitizer, /candidate\.getTag\(\) != null/);
+  assert.match(sanitizer, /DIGEST_CHANNEL_ID\.equals\(current\.getChannelId\(\)\)/);
+  assert.match(sanitizer, /activeCount != covered\.size\(\)/);
+  assert.match(sanitizer, /digestTimeoutAfterMs\(/);
+  assert.match(sanitizer, /Notification\.Builder\.recoverBuilder\(/);
+  assert.match(sanitizer, /\.setTimeoutAfter\(timeoutAfterMs\)/);
+  assert.match(sanitizer, /applyDigestDisplayContent\(context, builder, null, null, false\)/);
+  assert.match(sanitizer, /manager\.notify\(DIGEST_NOTIFICATION_ID, builder\.build\(\)\)/);
+  assert.match(sanitizer, /manager\.cancel\(DIGEST_NOTIFICATION_ID\)/);
+  assert.doesNotMatch(sanitizer, /EXTRA_TITLE|EXTRA_TEXT|rankedTitle|rankedText/);
+});
+
 test('known secrets are removed before native request fields are populated', () => {
   assert.match(nativePolicy, /verification code/);
   assert.match(nativePolicy, /VISIBILITY_SECRET/);
@@ -361,6 +493,8 @@ test('Phone Alerts exposes a fail-safe native capability recovery state', () => 
   assert.match(mainActivity, /getNotificationCapability:function\(\)/);
   assert.match(mainActivity, /openNotificationListenerSettings:function\(\)/);
   assert.match(mainActivity, /openNotificationSettings:function\(\)/);
+  assert.match(mainActivity, /synchronizeNotificationDigestPrivate:function\(\)/);
+  assert.match(mainActivity, /armNotificationDigestDetailed:function\(\)/);
   assert.match(
     mainActivity,
     /isHomeSurface\(\)[\s\S]{0,100}"getNotificationCapability"\.equals\(method\)/,
@@ -382,7 +516,7 @@ test('Phone Alerts exposes a fail-safe native capability recovery state', () => 
   assert.match(boundEscapeBlock, /"openAndroidHome"\.equals\(method\)/);
   assert.doesNotMatch(
     boundEscapeBlock,
-    /getNotificationCapability|openNotificationSettings|openNotificationListenerSettings/,
+    /getNotificationCapability|openNotificationSettings|openNotificationListenerSettings|synchronizeNotificationDigestPrivate|armNotificationDigestDetailed/,
   );
   const boundCapabilityBlock = mainActivity.match(
     /boolean boundCapabilityReadOperation =[\s\S]*?;\s*boolean boundDocumentOperation =/,
@@ -390,7 +524,7 @@ test('Phone Alerts exposes a fail-safe native capability recovery state', () => 
   assert.match(boundCapabilityBlock, /"getNotificationCapability"\.equals\(method\)/);
   assert.doesNotMatch(
     boundCapabilityBlock,
-    /openNotificationSettings|openNotificationListenerSettings/,
+    /openNotificationSettings|openNotificationListenerSettings|synchronizeNotificationDigestPrivate|armNotificationDigestDetailed/,
   );
   assert.match(
     mainActivity,
@@ -401,6 +535,22 @@ test('Phone Alerts exposes a fail-safe native capability recovery state', () => 
   assert.match(mainActivity, /Settings\.EXTRA_APP_PACKAGE/);
   assert.match(mainActivity, /Settings\.ACTION_APPLICATION_DETAILS_SETTINGS/);
   assert.match(mainActivity, /result\.confirm\(openNotificationListenerSettings\(\)\)/);
+  assert.match(
+    mainActivity,
+    /isHomeSurface\(\)[\s\S]{0,100}"synchronizeNotificationDigestPrivate"\.equals\(method\)[\s\S]{0,100}args\.length\(\) == 0/,
+  );
+  assert.match(
+    mainActivity,
+    /isHomeSurface\(\)[\s\S]{0,100}"armNotificationDigestDetailed"\.equals\(method\)[\s\S]{0,100}args\.length\(\) == 0/,
+  );
+  assert.match(
+    mainActivity,
+    /"synchronizeNotificationDigestPrivate"\.equals\(method\)[\s\S]*?synchronizeDigestPreviewMode\([\s\S]*?false\)/,
+  );
+  assert.match(
+    mainActivity,
+    /"armNotificationDigestDetailed"\.equals\(method\)[\s\S]*?synchronizeDigestPreviewMode\([\s\S]*?true\)/,
+  );
   assert.match(mainActivity, /\.put\("digestSupported", digestSupported\)/);
   assert.match(mainActivity, /\.put\("listenerAccessGranted", listenerAccessGranted\)/);
   assert.match(mainActivity, /\.put\("postingPermissionGranted", postingPermissionGranted\)/);
@@ -413,6 +563,8 @@ test('Phone Alerts exposes a fail-safe native capability recovery state', () => 
   assert.match(settingsPanel, /getNotificationCapability/);
   assert.match(settingsPanel, /openNotificationListenerSettings/);
   assert.match(settingsPanel, /openNotificationSettings/);
+  assert.match(settingsPanel, /synchronizeNativeNotificationDigestPrivate/);
+  assert.match(settingsPanel, /armNativeNotificationDigestDetailed/);
   assert.match(settingsPanel, /schemaVersion:\s*1/);
   assert.match(settingsPanel, /postingPermissionGranted/);
   assert.match(settingsPanel, /canPostDigest/);

@@ -218,10 +218,26 @@ vibration, lights, and badges, and uses `PRIORITY_LOW` with no defaults before
 Android 8. It is one non-auto-cancel aggregate: tapping it opens Evogent's
 Notifications view, where dismissal first persists the exact lifecycle
 tombstone and then asks native to cancel only a still-matching eligible original
-when one remains. The default preview uses `VISIBILITY_PRIVATE`: the secure lock
-screen shows only “Curated notifications are ready,” while the unlocked shade
-may show a ranked multi-app summary. Detailed preview uses
-`VISIBILITY_PUBLIC` only after the user chooses it. Evogent requests
+when one remains. The default preview makes the primary native title and text
+generic and also uses `VISIBILITY_PRIVATE` with the same generic public version.
+It therefore says only “Curated notifications are ready” in both the unlocked
+shade and secure lock screen, even when Android's global setting allows private
+notification content. Ranked detail remains in Evogent's authenticated
+Notifications view. Detailed preview places the ranked multi-app summary in the
+primary notification and uses `VISIBILITY_PUBLIC` only after the user chooses
+it. The native shell also keeps a durable, app-private preview latch whose
+missing or invalid value defaults to Private. A preview change first floors and
+sanitizes the current digest to Private, then patches the authenticated local
+setting. Private repeats that floor after the PATCH; Detailed only arms a new
+native generation after the PATCH and leaves the existing digest generic.
+Final digest publication holds the same process lock and requires the response
+to say Detailed, the captured native mode to be Detailed, and its generation to
+still be current. Consequently, a delayed in-flight Detailed response becomes
+generic after either transition, and returning to Detailed cannot reconstruct
+ranked text from the old notification: a fresh server-authorized digest is
+required. Sanitization preserves the exact digest marker, coverage, action, and
+absolute expiry, remains silent, never changes an Android original, and adds no
+polling or wakeup. Evogent requests
 notification-posting permission once, only after notification-listener access
 is already enabled; a denial is not nagged and disables replacement rather than
 hiding originals. The authenticated HOME shell exposes a content-free native
@@ -360,6 +376,12 @@ Automated checks must cover:
   generation preserving the original;
 - accessible controls for modes, lock-screen preview, and per-app preservation;
   and
+- immediate Private preview synchronization, a durable private-default native
+  latch, stale-response generation fencing, and Detailed waiting for a fresh
+  server-authorized digest rather than promoting old Android content;
+- exact digest identity, coverage, absolute expiry, action, and silent behavior
+  surviving native preview sanitization while source originals remain untouched;
+  and
 - authenticated native capability reporting, an accessible Curated-mode
   degraded warning, supported listener-access and posting-settings recovery
   actions, one coalesced capability proof per return-event burst, and refreshed
@@ -381,10 +403,17 @@ At the glass:
    clearable, normal-importance notification; confirm its Android original still
    remains and Evogent records the exact card;
 4. explicitly allow best-effort replacement for only the benign fixture app,
-   post several fixtures, and confirm one silent generic locked preview, a
-   ranked aggregate unlocked digest, and a tap that opens the Notifications
-   view; dismiss one card and prove neither its original nor dedupe bucket
-   returns; then revoke the app permission and prove the next original remains;
+   post several fixtures, and confirm one silent generic native digest both
+   unlocked and locked, even with Android's global private-notification setting
+   enabled, plus a tap that opens the ranked Notifications view; then choose
+   Detailed preview and confirm the existing digest stays generic until a fresh
+   eligible notification produces a server-authorized ranked aggregate; with
+   that Detailed digest active, choose Private and confirm it becomes generic
+   immediately without another notification, including while a delayed older
+   Detailed response completes; switch back to Detailed and again confirm the
+   current digest stays generic until a fresh eligible notification;
+   dismiss one card and prove neither its original nor dedupe bucket returns;
+   then revoke the app permission and prove the next original remains;
 5. post call/alarm/high-importance/ongoing/secret fixtures and prove their
    originals remain;
 6. separately confirm “all eligible low-stakes apps,” prove exact
