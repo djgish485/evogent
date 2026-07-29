@@ -704,16 +704,64 @@ control_lockscreen_state_from_dump() {
   '
 }
 
+# Android 16 reports whether a showing keyguard is covered by another physical-display window
+# as an exact direct child of KeyguardServiceDelegate. A showing-but-occluded keyguard is not an
+# unattended-screen proof: the user may be actively using the target app above it. Accept only one
+# unambiguous direct-child value; missing, contradictory, nested, or unrelated fields are unknown.
+control_keyguard_occlusion_state_from_dump() {
+  awk '
+    function observe(value) {
+      if (value == "true") occluded = 1
+      else if (value == "false") non_occluded = 1
+      else unknown = 1
+    }
+    {
+      raw = $0
+      prefix = raw
+      sub(/[^[:space:]].*$/, "", prefix)
+      indent = length(prefix)
+      trimmed = raw
+      sub(/^[[:space:]]*/, "", trimmed)
+      sub(/[[:space:]]*$/, "", trimmed)
+
+      if (trimmed == "KeyguardServiceDelegate") {
+        delegate_indent = indent
+        in_delegate = 1
+        next
+      }
+      if (in_delegate && trimmed != "" && indent <= delegate_indent) {
+        in_delegate = 0
+      }
+      if (in_delegate && indent == delegate_indent + 2 \
+          && trimmed ~ /^occluded=(true|false)$/) {
+        field = trimmed
+        sub(/^[^=]*=/, "", field)
+        observe(field)
+      }
+    }
+    END {
+      if (unknown || (occluded && non_occluded) || (!occluded && !non_occluded)) {
+        print "unknown"
+      } else if (occluded) {
+        print "occluded"
+      } else {
+        print "non-occluded"
+      }
+    }
+  '
+}
+
 # Return one stable verdict for phone.sh. Only two situations are safe:
-#   1. the physical screen is proved non-interactive or keyguard-locked; or
+#   1. the physical screen is proved non-interactive or keyguard-locked and non-occluded; or
 #   2. it is awake and unlocked, and display 0 unambiguously has a different exact package.
 # Every incomplete or contradictory proof is a refusal.
 control_hidden_launch_verdict() {
-  local wake="${1:-unknown}" lock="${2:-unknown}" foreground="${3:-}" target="${4:-}"
-  if [ "$wake" = "not-awake" ]; then
-    printf '%s\n' safe-unattended
-  elif [ "$lock" = "locked" ]; then
+  local wake="${1:-unknown}" lock="${2:-unknown}" occlusion="${3:-unknown}"
+  local foreground="${4:-}" target="${5:-}"
+  if [ "$lock" = "locked" ] && [ "$occlusion" = "non-occluded" ]; then
     printf '%s\n' safe-locked
+  elif [ "$wake" = "not-awake" ]; then
+    printf '%s\n' safe-unattended
   elif [ "$wake" = "awake" ] && [ "$lock" = "unlocked" ] \
       && [ -n "$foreground" ] && [ -n "$target" ]; then
     if [ "$foreground" = "$target" ]; then
@@ -755,35 +803,35 @@ control_hidden_display_for_package_from_windows_dump() {
 }
 
 # Force-stop is a device-wide mutation even when it is motivated by hidden-display cleanup.
-# Re-prove physical-display state immediately before each package stop. A different exact
-# display-0 package is safe; the target package is safe only when the phone is proved asleep or
-# locked. Any missing/ambiguous state skips the optimization.
+# Re-prove physical-display state immediately before each package stop, in transition-safe order:
+# window first, then power, and activity last only for awake+unlocked. Each sufficient proof mutates
+# immediately, so an older unattended snapshot can never override a newer target-foreground one.
 control_safe_force_stop_package() {
-  local package="${1:-}" activity_dump foreground power_dump window_dump wake lock verdict
+  local package="${1:-}" activity_dump foreground power_dump window_dump wake lock occlusion
   [[ "$package" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || return 2
 
-  activity_dump=$(control_rish_bounded 'dumpsys activity activities 2>/dev/null' \
-    2>/dev/null || true)
-  foreground=$(printf '%s\n' "$activity_dump" |
-    control_display_zero_top_resumed_from_dump 2>/dev/null || true)
-  if [ -n "$foreground" ] && [ "$foreground" != "$package" ]; then
+  window_dump=$(control_rish_bounded 'dumpsys window 2>/dev/null' 2>/dev/null || true)
+  lock=$(printf '%s\n' "$window_dump" | control_lockscreen_state_from_dump)
+  occlusion=$(printf '%s\n' "$window_dump" | control_keyguard_occlusion_state_from_dump)
+  if [ "$lock" = "locked" ] && [ "$occlusion" = "non-occluded" ]; then
     control_rish_bounded "am force-stop $package" >/dev/null 2>&1
     return
   fi
 
   power_dump=$(control_rish_bounded 'dumpsys power 2>/dev/null' 2>/dev/null || true)
-  window_dump=$(control_rish_bounded 'dumpsys window 2>/dev/null' 2>/dev/null || true)
   wake=$(printf '%s\n' "$power_dump" | control_screen_wake_state_from_dump)
-  lock=$(printf '%s\n' "$window_dump" | control_lockscreen_state_from_dump)
-  verdict=$(control_hidden_launch_verdict "$wake" "$lock" "$foreground" "$package")
-  case "$verdict" in
-    safe-unattended|safe-locked|safe-different-app)
-      control_rish_bounded "am force-stop $package" >/dev/null 2>&1
-      ;;
-    *)
-      return 75
-      ;;
-  esac
+  if [ "$wake" = "not-awake" ]; then
+    control_rish_bounded "am force-stop $package" >/dev/null 2>&1
+    return
+  fi
+  [ "$lock" = "unlocked" ] && [ "$wake" = "awake" ] || return 75
+
+  activity_dump=$(control_rish_bounded 'dumpsys activity activities 2>/dev/null' \
+    2>/dev/null || true)
+  foreground=$(printf '%s\n' "$activity_dump" |
+    control_display_zero_top_resumed_from_dump 2>/dev/null || true)
+  [ -n "$foreground" ] && [ "$foreground" != "$package" ] || return 75
+  control_rish_bounded "am force-stop $package" >/dev/null 2>&1
 }
 
 control_close_hidden_displays() {

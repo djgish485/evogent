@@ -7,9 +7,6 @@ import android.hardware.display.VirtualDisplay;
 import android.media.ImageReader;
 import android.util.Log;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-
 /**
  * Shizuku UserService: instantiated by Shizuku in a process running as the
  * shell user (uid 2000). Because it runs as shell it can create a TRUSTED
@@ -19,6 +16,10 @@ import java.io.InputStreamReader;
  */
 public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     private static final String TAG = "EvoPriv";
+    private static final long DUMPSYS_TIMEOUT_MS = 2000L;
+    private static final long PACKAGE_COMMAND_TIMEOUT_MS = 3000L;
+    private static final long ACTIVITY_START_TIMEOUT_MS = 5000L;
+    private static final int COMMAND_OUTPUT_MAX_CHARS = 256 * 1024;
     // Mirror scrcpy's --new-display flag set exactly. The important ones: PUBLIC
     // (else the display is private and invisible to the accessibility service),
     // TRUSTED + OWN_DISPLAY_GROUP + OWN_FOCUS + ALWAYS_UNLOCKED (a self-contained,
@@ -99,28 +100,39 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
             // display, so force-stop first for a clean launch on the target display. Re-check at
             // this shell-uid mutation boundary as defense in depth: direct/internal callers may
             // not bypass phone.sh and kill the exact app resumed on physical display 0.
+            if (!EvogentPhysicalDisplayPolicy.isValidTargetPackage(pkg)) {
+                Log.w(TAG, "refusing invalid force-stop target");
+                return false;
+            }
+            String windows = commandOutput(
+                    new String[]{"dumpsys", "window"}, 2 * 1024 * 1024);
+            // Each unattended proof is immediately followed by the mutation. Do not collect later
+            // snapshots and then let older locked/asleep evidence override a foreground transition.
+            if (EvogentPhysicalDisplayPolicy.isStrictlyLockedAndNonOccluded(windows)) {
+                return forceStopAndLaunch(pkg, activity, displayId);
+            }
+
+            String power = commandOutput(
+                    new String[]{"dumpsys", "power"}, 512 * 1024);
+            if (EvogentPhysicalDisplayPolicy.isStrictlyNotAwake(power)) {
+                return forceStopAndLaunch(pkg, activity, displayId);
+            }
+            if (!EvogentPhysicalDisplayPolicy.isStrictlyUnlocked(windows)
+                    || !EvogentPhysicalDisplayPolicy.isStrictlyAwake(power)) {
+                Log.w(TAG, "refusing force-stop without exact awake/unlocked proof for " + pkg);
+                return false;
+            }
+
+            // On an awake and unlocked phone, activity is the final observation immediately before
+            // mutation. It must prove one exact different package on physical display 0.
             String activities = commandOutput(
                     new String[]{"dumpsys", "activity", "activities"}, 2 * 1024 * 1024);
-            if (!EvogentPhysicalDisplayPolicy.mayForceStop(pkg, activities)) {
+            if (!EvogentPhysicalDisplayPolicy.hasExactDifferentDisplayZeroForeground(
+                    pkg, activities)) {
                 Log.w(TAG, "refusing force-stop without unambiguous display-0 safety for " + pkg);
                 return false;
             }
-            Process stop = Runtime.getRuntime().exec(new String[]{"am", "force-stop", pkg});
-            if (stop.waitFor() != 0) {
-                Log.e(TAG, "force-stop failed for " + pkg);
-                return false;
-            }
-            String act = (activity != null && !activity.isEmpty())
-                    ? pkg + "/" + activity : resolveLauncher(pkg);
-            String[] cmd = act != null
-                    ? new String[]{"am", "start", "--display", String.valueOf(displayId), "-n", act}
-                    : new String[]{"am", "start", "--display", String.valueOf(displayId),
-                            "-a", "android.intent.action.MAIN",
-                            "-c", "android.intent.category.LAUNCHER", "-p", pkg};
-            Process p = Runtime.getRuntime().exec(cmd);
-            int rc = p.waitFor();
-            Log.i(TAG, "launch " + pkg + " (" + act + ") on display " + displayId + " rc=" + rc);
-            return rc == 0;
+            return forceStopAndLaunch(pkg, activity, displayId);
         } catch (Throwable t) {
             Log.e(TAG, "launch failed", t);
             return false;
@@ -128,41 +140,54 @@ public class EvoPrivilegedService extends IEvoPrivileged.Stub {
     }
 
     private String commandOutput(String[] command, int maxChars) {
-        StringBuilder out = new StringBuilder();
-        try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream()));
-            String line;
-            boolean overflow = false;
-            while ((line = reader.readLine()) != null) {
-                if (out.length() + line.length() + 1 <= maxChars) {
-                    out.append(line).append('\n');
-                } else {
-                    // Keep draining the process so a full pipe cannot deadlock waitFor().
-                    overflow = true;
-                }
-            }
-            if (process.waitFor() != 0 || overflow) return null;
-            return out.toString();
-        } catch (Throwable error) {
-            Log.e(TAG, "command output failed", error);
+        EvogentProcessRunner.Result result =
+                EvogentProcessRunner.run(command, maxChars, DUMPSYS_TIMEOUT_MS);
+        if (!result.succeeded()) {
+            Log.w(TAG, "bounded command failed"
+                    + (result.timedOut() ? " (timeout)" : ""));
             return null;
         }
+        return result.output();
+    }
+
+    private boolean forceStopAndLaunch(String pkg, String activity, int displayId) {
+        EvogentProcessRunner.Result stop = EvogentProcessRunner.run(
+                new String[]{"am", "force-stop", pkg},
+                COMMAND_OUTPUT_MAX_CHARS,
+                PACKAGE_COMMAND_TIMEOUT_MS);
+        if (!stop.succeeded()) {
+            Log.e(TAG, "force-stop failed for " + pkg
+                    + (stop.timedOut() ? " (timeout)" : ""));
+            return false;
+        }
+
+        String act = (activity != null && !activity.isEmpty())
+                ? pkg + "/" + activity : resolveLauncher(pkg);
+        String[] command = act != null
+                ? new String[]{"am", "start", "--display", String.valueOf(displayId), "-n", act}
+                : new String[]{"am", "start", "--display", String.valueOf(displayId),
+                        "-a", "android.intent.action.MAIN",
+                        "-c", "android.intent.category.LAUNCHER", "-p", pkg};
+        EvogentProcessRunner.Result start = EvogentProcessRunner.run(
+                command, COMMAND_OUTPUT_MAX_CHARS, ACTIVITY_START_TIMEOUT_MS);
+        Log.i(TAG, "launch " + pkg + " (" + act + ") on display " + displayId
+                + " ok=" + start.succeeded());
+        return start.succeeded();
     }
 
     /** Resolve a package's launcher "pkg/activity" so callers needn't know the activity name. */
     private String resolveLauncher(String pkg) {
-        try {
-            Process p = Runtime.getRuntime().exec(new String[]{"cmd", "package",
-                    "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg});
-            java.io.BufferedReader r = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(p.getInputStream()));
-            String line, last = null;
-            while ((line = r.readLine()) != null) if (line.contains("/")) last = line.trim();
-            p.waitFor();
-            return last;
-        } catch (Throwable t) { return null; }
+        EvogentProcessRunner.Result result = EvogentProcessRunner.run(
+                new String[]{"cmd", "package", "resolve-activity", "--brief",
+                        "-c", "android.intent.category.LAUNCHER", pkg},
+                COMMAND_OUTPUT_MAX_CHARS,
+                PACKAGE_COMMAND_TIMEOUT_MS);
+        if (!result.succeeded()) return null;
+        String last = null;
+        for (String line : result.output().split("\\r?\\n")) {
+            if (line.contains("/")) last = line.trim();
+        }
+        return last;
     }
 
     @Override

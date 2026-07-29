@@ -7,6 +7,7 @@
 #
 # Usage:
 #   phone.sh launch <pkg>          open <pkg> on a hidden display; prints + remembers its id
+#   phone.sh health                prove the accessibility service is answering (no display)
 #   phone.sh see [display]         dump the node tree of that display (default: last launched)
 #   phone.sh tap <text> [display]  tap the element whose text/desc contains <text>
 #   phone.sh scroll [display]      scroll the display's list forward
@@ -199,10 +200,15 @@ a11y_grab() {
     return 1
   fi
   # Keep the legacy snapshot for diagnostics, but current callers read their unique reply file
-  # so concurrent requests cannot overwrite one another between receive and parse.
-  snapshot="$OUT.tmp.$$.$RANDOM"
-  cp "$A11Y_LAST_REPLY" "$snapshot"
-  mv "$snapshot" "$OUT"
+  # so concurrent requests cannot overwrite one another between receive and parse. Health probes
+  # explicitly suppress this snapshot: their fixed, display-independent reply proves only
+  # service liveness and must not create a persistent diagnostic artifact.
+  if [ "${A11Y_PERSIST_SNAPSHOT:-1}" = 1 ]; then
+    snapshot="$OUT.tmp.$$.$RANDOM"
+    cp "$A11Y_LAST_REPLY" "$snapshot"
+    mv "$snapshot" "$OUT"
+  fi
+  return 0
 }
 a11y_fire() { am broadcast -a $EVO.A11Y "$@" --es token "$TOKEN" -p $EVO >/dev/null 2>&1; sleep 2; }
 cur_disp() {
@@ -283,6 +289,21 @@ case "${1:-}" in
     fi
     echo "BROWSE_SHARE_CLEARED"
     ;;
+  health)
+    # The fixed health reply proves that the accessibility service received a control-token-
+    # authenticated request and returned the fresh nonce over its request-scoped loopback
+    # receiver. It neither selects nor enumerates a display and leaves no diagnostic snapshot.
+    if ! A11Y_PERSIST_SNAPSHOT=0 a11y_grab --es op health; then
+      echo "ERROR: accessibility service did not return an authenticated health reply" >&2
+      exit 1
+    fi
+    HEALTH_RESULT=$(tr -d '\r\n' < "$A11Y_LAST_REPLY")
+    if [ "$HEALTH_RESULT" != ready ]; then
+      echo "ERROR: accessibility service returned an invalid health marker" >&2
+      exit 1
+    fi
+    printf 'ready\n'
+    ;;
   launch)
     PKG="$2"
     [[ "$PKG" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || {
@@ -292,21 +313,31 @@ case "${1:-}" in
     # Active-use guard: the privileged launch FORCE-STOPS the target app to move it to the
     # hidden display. If the user is holding the phone with that very app foregrounded on
     # display 0, that would kill the app in their hands.
-    # Prove state from complete dumps rather than grepping a lossy task summary. Missing rish,
-    # timeouts, changed dumpsys formats, and ambiguous fields all produce "refuse-unproven".
-    POWER_DUMP=$(control_rish_bounded 'dumpsys power 2>/dev/null' 2>/dev/null || true)
+    # Prove state from complete dumps in the same transition-safe order as the privileged service:
+    # window first; accept locked only with exact non-occlusion; power second; activity last only
+    # for awake+unlocked. Missing, contradictory, or occluded state always fails closed.
     WINDOW_DUMP=$(control_rish_bounded 'dumpsys window 2>/dev/null' 2>/dev/null || true)
-    WAKE_STATE=$(printf '%s\n' "$POWER_DUMP" | control_screen_wake_state_from_dump)
     LOCK_STATE=$(printf '%s\n' "$WINDOW_DUMP" | control_lockscreen_state_from_dump)
-    DISPLAY_ZERO_PACKAGE=""
-    if [ "$WAKE_STATE" = "awake" ] && [ "$LOCK_STATE" = "unlocked" ]; then
-      ACTIVITY_DUMP=$(control_rish_bounded 'dumpsys activity activities 2>/dev/null' \
-        2>/dev/null || true)
-      DISPLAY_ZERO_PACKAGE=$(printf '%s\n' "$ACTIVITY_DUMP" |
-        control_display_zero_top_resumed_from_dump 2>/dev/null || true)
+    OCCLUSION_STATE=$(printf '%s\n' "$WINDOW_DUMP" |
+      control_keyguard_occlusion_state_from_dump)
+    LAUNCH_VERDICT=refuse-unproven
+    if [ "$LOCK_STATE" = "locked" ] && [ "$OCCLUSION_STATE" = "non-occluded" ]; then
+      LAUNCH_VERDICT=safe-locked
+    else
+      POWER_DUMP=$(control_rish_bounded 'dumpsys power 2>/dev/null' 2>/dev/null || true)
+      WAKE_STATE=$(printf '%s\n' "$POWER_DUMP" | control_screen_wake_state_from_dump)
+      if [ "$WAKE_STATE" = "not-awake" ]; then
+        LAUNCH_VERDICT=safe-unattended
+      elif [ "$WAKE_STATE" = "awake" ] && [ "$LOCK_STATE" = "unlocked" ]; then
+        ACTIVITY_DUMP=$(control_rish_bounded 'dumpsys activity activities 2>/dev/null' \
+          2>/dev/null || true)
+        DISPLAY_ZERO_PACKAGE=$(printf '%s\n' "$ACTIVITY_DUMP" |
+          control_display_zero_top_resumed_from_dump 2>/dev/null || true)
+        LAUNCH_VERDICT=$(control_hidden_launch_verdict \
+          "$WAKE_STATE" "$LOCK_STATE" "$OCCLUSION_STATE" \
+          "$DISPLAY_ZERO_PACKAGE" "$PKG")
+      fi
     fi
-    LAUNCH_VERDICT=$(control_hidden_launch_verdict \
-      "$WAKE_STATE" "$LOCK_STATE" "$DISPLAY_ZERO_PACKAGE" "$PKG")
     case "$LAUNCH_VERDICT" in
       safe-unattended|safe-locked|safe-different-app) ;;
       refuse-active-target)
@@ -460,5 +491,5 @@ case "${1:-}" in
     echo "closed Evogent hidden display"
     ;;
   *)
-    echo "usage: phone.sh {launch <pkg>|see [display]|tap <text> [display]|scroll [display]|swipe x1 y1 x2 y2 [ms] [display]|swipe-rel x1‰ y1‰ x2‰ y2‰ [ms] [display]|shot [dest] [display]|shotnode <match> [dest] [display] [name]|benchmark-share-arm <run-id> <sequence> <token> <armed-at-ms>|benchmark-share-clear <run-id>|stop <pkg>|close}"; exit 1;;
+    echo "usage: phone.sh {health|launch <pkg>|see [display]|tap <text> [display]|scroll [display]|swipe x1 y1 x2 y2 [ms] [display]|swipe-rel x1‰ y1‰ x2‰ y2‰ [ms] [display]|shot [dest] [display]|shotnode <match> [dest] [display] [name]|benchmark-share-arm <run-id> <sequence> <token> <armed-at-ms>|benchmark-share-clear <run-id>|stop <pkg>|close}"; exit 1;;
 esac

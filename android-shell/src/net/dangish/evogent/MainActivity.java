@@ -1766,6 +1766,7 @@ public class MainActivity extends Activity {
         revokeDocumentTrust();
         main.removeCallbacksAndMessages(null);
         try { unregisterReceiver(shizukuReceiver); } catch (Throwable ignored) {}
+        if (shizuku != null) shizuku.shutdown();
         if (webView != null) {
             try { webView.stopLoading(); } catch (Throwable ignored) {}
             try { webView.destroy(); } catch (Throwable ignored) {}

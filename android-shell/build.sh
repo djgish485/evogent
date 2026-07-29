@@ -226,6 +226,7 @@ mkdir -p build/test
     src/net/dangish/evogent/EvogentAssistantTraversalPolicy.java \
     src/net/dangish/evogent/EvogentAccessibilityActionPolicy.java \
     src/net/dangish/evogent/EvogentPhysicalDisplayPolicy.java \
+    src/net/dangish/evogent/EvogentProcessRunner.java \
     src/net/dangish/evogent/EvogentNotificationPolicy.java \
     src/net/dangish/evogent/EvogentNotificationReceiptRetentionPolicy.java \
     src/net/dangish/evogent/EvogentNotificationWorkQueue.java \
@@ -240,6 +241,7 @@ mkdir -p build/test
     tests/EvogentAssistantContextStoreTest.java \
     tests/EvogentAccessibilityActionPolicyTest.java \
     tests/EvogentPhysicalDisplayPolicyTest.java \
+    tests/EvogentProcessRunnerTest.java \
     tests/EvogentNotificationPolicyTest.java \
     tests/EvogentNotificationReceiptRetentionPolicyTest.java \
     tests/EvogentNotificationWorkQueueTest.java \
@@ -254,6 +256,7 @@ mkdir -p build/test
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantContextStoreTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAccessibilityActionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentPhysicalDisplayPolicyTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentProcessRunnerTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationReceiptRetentionPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentNotificationWorkQueueTest

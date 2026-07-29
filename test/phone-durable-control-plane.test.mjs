@@ -187,6 +187,7 @@ test('lockscreen parser accepts Android 16 state only in its exact keyguard hier
   const locked = `PhoneWindowManager
   KeyguardServiceDelegate
     showing=true
+    occluded=false
     inputRestricted=true
     KeyguardStateMonitor
       mIsShowing=true
@@ -196,9 +197,14 @@ test('lockscreen parser accepts Android 16 state only in its exact keyguard hier
     runControlFunction('control_lockscreen_state_from_dump', locked).stdout.trim(),
     'locked',
   );
+  assert.equal(
+    runControlFunction('control_keyguard_occlusion_state_from_dump', locked).stdout.trim(),
+    'non-occluded',
+  );
 
   const unlocked = `KeyguardServiceDelegate
   showing=false
+  occluded=false
   KeyguardStateMonitor
     mIsShowing=false
 `;
@@ -217,6 +223,10 @@ test('lockscreen parser accepts Android 16 state only in its exact keyguard hier
     'unknown',
   );
   assert.equal(
+    runControlFunction('control_keyguard_occlusion_state_from_dump', unrelated).stdout.trim(),
+    'unknown',
+  );
+  assert.equal(
     runControlFunction(
       'control_lockscreen_state_from_dump',
       'showing=true\nmIsShowing=true\n',
@@ -227,14 +237,21 @@ test('lockscreen parser accepts Android 16 state only in its exact keyguard hier
   const nestedDecoy = `KeyguardServiceDelegate
   SomeOtherState
     showing=true
+    occluded=false
 `;
   assert.equal(
     runControlFunction('control_lockscreen_state_from_dump', nestedDecoy).stdout.trim(),
     'unknown',
   );
+  assert.equal(
+    runControlFunction('control_keyguard_occlusion_state_from_dump', nestedDecoy).stdout.trim(),
+    'unknown',
+  );
 
   const conflicting = `KeyguardServiceDelegate
   showing=true
+  occluded=false
+  occluded=true
   KeyguardStateMonitor
     mIsShowing=false
 `;
@@ -242,24 +259,204 @@ test('lockscreen parser accepts Android 16 state only in its exact keyguard hier
     runControlFunction('control_lockscreen_state_from_dump', conflicting).stdout.trim(),
     'unknown',
   );
+  assert.equal(
+    runControlFunction('control_keyguard_occlusion_state_from_dump', conflicting).stdout.trim(),
+    'unknown',
+  );
+
+  const occluded = `KeyguardServiceDelegate
+  showing=true
+  occluded=true
+  KeyguardStateMonitor
+    mIsShowing=true
+`;
+  assert.equal(
+    runControlFunction('control_keyguard_occlusion_state_from_dump', occluded).stdout.trim(),
+    'occluded',
+  );
+  const missingOcclusion = `KeyguardServiceDelegate
+  showing=true
+  KeyguardStateMonitor
+    mIsShowing=true
+`;
+  assert.equal(
+    runControlFunction(
+      'control_keyguard_occlusion_state_from_dump',
+      missingOcclusion,
+    ).stdout.trim(),
+    'unknown',
+  );
 });
 
 test('hidden launch verdict permits only proved unattended or exact different-package states', () => {
   const verdict = (...args) =>
     runControlFunction('control_hidden_launch_verdict', '', args).stdout.trim();
-  assert.equal(verdict('not-awake', 'unknown', '', 'com.twitter.android'), 'safe-unattended');
-  assert.equal(verdict('unknown', 'locked', '', 'com.twitter.android'), 'safe-locked');
   assert.equal(
-    verdict('awake', 'unlocked', 'com.example.reader', 'com.twitter.android'),
+    verdict('not-awake', 'unknown', 'unknown', '', 'com.twitter.android'),
+    'safe-unattended',
+  );
+  assert.equal(
+    verdict('unknown', 'locked', 'non-occluded', '', 'com.twitter.android'),
+    'safe-locked',
+  );
+  assert.equal(
+    verdict('awake', 'locked', 'occluded', 'com.twitter.android', 'com.twitter.android'),
+    'refuse-unproven',
+  );
+  assert.equal(
+    verdict('unknown', 'locked', 'unknown', '', 'com.twitter.android'),
+    'refuse-unproven',
+  );
+  assert.equal(
+    verdict('awake', 'unlocked', 'non-occluded', 'com.example.reader', 'com.twitter.android'),
     'safe-different-app',
   );
   assert.equal(
-    verdict('awake', 'unlocked', 'com.twitter.android', 'com.twitter.android'),
+    verdict('awake', 'unlocked', 'non-occluded', 'com.twitter.android', 'com.twitter.android'),
     'refuse-active-target',
   );
-  assert.equal(verdict('awake', 'unlocked', '', 'com.twitter.android'), 'refuse-unproven');
-  assert.equal(verdict('unknown', 'unlocked', 'com.example.reader', 'com.twitter.android'), 'refuse-unproven');
-  assert.equal(verdict('awake', 'unknown', 'com.example.reader', 'com.twitter.android'), 'refuse-unproven');
+  assert.equal(
+    verdict('awake', 'unlocked', 'non-occluded', '', 'com.twitter.android'),
+    'refuse-unproven',
+  );
+  assert.equal(
+    verdict('unknown', 'unlocked', 'unknown', 'com.example.reader', 'com.twitter.android'),
+    'refuse-unproven',
+  );
+  assert.equal(
+    verdict('awake', 'unknown', 'unknown', 'com.example.reader', 'com.twitter.android'),
+    'refuse-unproven',
+  );
+});
+
+test('shell force-stop proof refuses occluded keyguard and observes activity last', () => {
+  const control = read('control-plane.sh');
+  const functions = [
+    shellFunction(control, 'control_display_zero_top_resumed_from_dump'),
+    shellFunction(control, 'control_screen_wake_state_from_dump'),
+    shellFunction(control, 'control_lockscreen_state_from_dump'),
+    shellFunction(control, 'control_keyguard_occlusion_state_from_dump'),
+    shellFunction(control, 'control_safe_force_stop_package'),
+  ].join('\n');
+  const fixture = fs.mkdtempSync(path.join(
+    process.env.TMPDIR || '/tmp',
+    'evogent-shell-force-stop-proof-',
+  ));
+  const windowDump = path.join(fixture, 'window');
+  const powerDump = path.join(fixture, 'power');
+  const activityDump = path.join(fixture, 'activity');
+  const trace = path.join(fixture, 'trace');
+  const harness = `
+set -u
+${functions}
+control_rish_bounded() {
+  printf '%s\\n' "$1" >> "$TRACE"
+  case "$1" in
+    'dumpsys window 2>/dev/null') cat "$WINDOW_DUMP" ;;
+    'dumpsys power 2>/dev/null') cat "$POWER_DUMP" ;;
+    'dumpsys activity activities 2>/dev/null') cat "$ACTIVITY_DUMP" ;;
+    'am force-stop com.twitter.android') return 0 ;;
+    *) return 64 ;;
+  esac
+}
+control_safe_force_stop_package com.twitter.android
+printf '%s\\n' "$?"
+`;
+  const targetForeground = `Display #0:
+  topResumedActivity=ActivityRecord{1 u0 com.twitter.android/.StartActivity t1}
+`;
+  const differentForeground = `Display #0:
+  topResumedActivity=ActivityRecord{1 u0 com.example.reader/.MainActivity t1}
+`;
+  const awake = 'mWakefulness=Awake\nmInteractive=true\n';
+  const asleep = 'mWakefulness=Asleep\nmInteractive=false\n';
+  const locked = (occlusion) => `KeyguardServiceDelegate
+  showing=true
+${occlusion}
+  KeyguardStateMonitor
+    mIsShowing=true
+`;
+  const unlocked = `KeyguardServiceDelegate
+  showing=false
+  occluded=false
+  KeyguardStateMonitor
+    mIsShowing=false
+`;
+  const runFixture = (window, power, activity) => {
+    fs.writeFileSync(windowDump, window);
+    fs.writeFileSync(powerDump, power);
+    fs.writeFileSync(activityDump, activity);
+    fs.rmSync(trace, { force: true });
+    const result = spawnSync('bash', ['-c', harness], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ACTIVITY_DUMP: activityDump,
+        POWER_DUMP: powerDump,
+        TRACE: trace,
+        WINDOW_DUMP: windowDump,
+      },
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    return {
+      verdict: result.stdout.trim(),
+      trace: fs.readFileSync(trace, 'utf8').trim().split('\n'),
+    };
+  };
+
+  try {
+    const lockedSafe = runFixture(
+      locked('  occluded=false'),
+      awake,
+      targetForeground,
+    );
+    assert.equal(lockedSafe.verdict, '0');
+    assert.deepEqual(lockedSafe.trace, [
+      'dumpsys window 2>/dev/null',
+      'am force-stop com.twitter.android',
+    ]);
+
+    for (const unsafeOcclusion of [
+      '  occluded=true',
+      '',
+      '  occluded=false\n  occluded=true',
+    ]) {
+      const refused = runFixture(locked(unsafeOcclusion), awake, targetForeground);
+      assert.equal(refused.verdict, '75');
+      assert.deepEqual(refused.trace, [
+        'dumpsys window 2>/dev/null',
+        'dumpsys power 2>/dev/null',
+      ]);
+    }
+
+    const targetActive = runFixture(unlocked, awake, targetForeground);
+    assert.equal(targetActive.verdict, '75');
+    assert.deepEqual(targetActive.trace, [
+      'dumpsys window 2>/dev/null',
+      'dumpsys power 2>/dev/null',
+      'dumpsys activity activities 2>/dev/null',
+    ]);
+
+    const differentActive = runFixture(unlocked, awake, differentForeground);
+    assert.equal(differentActive.verdict, '0');
+    assert.deepEqual(differentActive.trace, [
+      'dumpsys window 2>/dev/null',
+      'dumpsys power 2>/dev/null',
+      'dumpsys activity activities 2>/dev/null',
+      'am force-stop com.twitter.android',
+    ]);
+
+    const sleeping = runFixture(locked('  occluded=true'), asleep, targetForeground);
+    assert.equal(sleeping.verdict, '0');
+    assert.deepEqual(sleeping.trace, [
+      'dumpsys window 2>/dev/null',
+      'dumpsys power 2>/dev/null',
+      'am force-stop com.twitter.android',
+    ]);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('hidden-display discovery rejects physical, substring, missing, and ambiguous matches', () => {
@@ -310,6 +507,51 @@ getWindowsOnAllDisplays() displays=2
   assert.notEqual(ambiguous.status, 0);
 });
 
+test('accessibility health is a fixed authenticated reply with no display dependency', () => {
+  const phone = read('phone.sh');
+  const check = read('a11y-check.sh');
+  const heal = read('a11y-heal.sh');
+  const healthCase = phone.slice(
+    phone.indexOf('  health)'),
+    phone.indexOf('  launch)'),
+  );
+  assert.match(healthCase, /A11Y_PERSIST_SNAPSHOT=0 a11y_grab --es op health/);
+  assert.match(healthCase, /\[ "\$HEALTH_RESULT" != ready \]/);
+  assert.doesNotMatch(healthCase, /cur_disp|op (?:nodes|windows)|--ei display/);
+  assert.match(check, /phone\.sh" health/);
+  assert.doesNotMatch(check, /phone\.sh" see/);
+  assert.match(heal, /probe\(\)\{ bash "\$TOOLS\/phone\.sh" health/);
+  assert.doesNotMatch(heal, /phone\.sh" see/);
+
+  const service = fs.readFileSync(
+    path.join(
+      root,
+      'android-shell',
+      'src',
+      'net',
+      'dangish',
+      'evogent',
+      'EvogentAccessibilityService.java',
+    ),
+    'utf8',
+  );
+  const healthServiceCase = service.slice(
+    service.indexOf('case "health"'),
+    service.indexOf('case "nodes"'),
+  );
+  assert.match(healthServiceCase, /String healthResult = "ready"/);
+  assert.match(healthServiceCase, /sendToLocalAgent\(reply, healthResult\)/);
+  assert.doesNotMatch(
+    healthServiceCase,
+    /dumpActiveTree|dumpTreeOnDisplay|dumpAllWindows|getRootInActiveWindow/,
+  );
+  assert.ok(
+    service.indexOf('EvogentSecurityPolicy.tokenMatches') < service.indexOf('case "health"'),
+  );
+  assert.match(service, /return "health"\.equals\(op\)/);
+  assert.match(phone, /--es token "\$TOKEN"[\s\S]*--es reply_nonce "\$nonce"/);
+});
+
 test('text taps require an authenticated performed result before reporting success', () => {
   const phone = read('phone.sh');
   assert.doesNotMatch(phone, /cat "\$DISPFILE" 2>\/dev\/null \|\| echo 0/);
@@ -341,10 +583,47 @@ test('text taps require an authenticated performed result before reporting succe
 
 test('all phone-runtime force-stops pass through the physical-screen safety proof', () => {
   const control = read('control-plane.sh');
+  const phone = read('phone.sh');
   const cycle = read('evogent-cycle.sh');
   const interests = read('browse-interests.py');
   const micro = read('benchmark-cu-micro.sh');
   const browseBenchmark = read('benchmark-browse-models.sh');
+  const privilegedService = fs.readFileSync(
+    path.join(
+      root,
+      'android-shell',
+      'src',
+      'net',
+      'dangish',
+      'evogent',
+      'EvoPrivilegedService.java',
+    ),
+    'utf8',
+  );
+  const privilegedLaunch = privilegedService.slice(
+    privilegedService.indexOf('public boolean launch('),
+    privilegedService.indexOf('private String commandOutput('),
+  );
+  const shellForceStop = shellFunction(control, 'control_safe_force_stop_package');
+  const phoneLaunch = phone.slice(phone.indexOf('  launch)'), phone.indexOf('  see)'));
+  const windowDump = privilegedLaunch.indexOf('new String[]{"dumpsys", "window"}');
+  const lockedProof = privilegedLaunch.indexOf('isStrictlyLockedAndNonOccluded(windows)');
+  const lockedMutation = privilegedLaunch.indexOf('forceStopAndLaunch(', lockedProof);
+  const powerDump = privilegedLaunch.indexOf('new String[]{"dumpsys", "power"}');
+  const asleepProof = privilegedLaunch.indexOf('isStrictlyNotAwake(power)');
+  const asleepMutation = privilegedLaunch.indexOf('forceStopAndLaunch(', asleepProof);
+  const unlockedProof = privilegedLaunch.indexOf('isStrictlyUnlocked(windows)');
+  const awakeProof = privilegedLaunch.indexOf('isStrictlyAwake(power)');
+  const activityDump = privilegedLaunch.indexOf(
+    'new String[]{"dumpsys", "activity", "activities"}',
+  );
+  const foregroundProof = privilegedLaunch.indexOf(
+    'hasExactDifferentDisplayZeroForeground(',
+  );
+  const foregroundMutation = privilegedLaunch.indexOf(
+    'forceStopAndLaunch(',
+    foregroundProof,
+  );
 
   assert.match(control, /control_safe_force_stop_package\(\)/);
   assert.match(control, /control_display_zero_top_resumed_from_dump/);
@@ -354,6 +633,190 @@ test('all phone-runtime force-stops pass through the physical-screen safety proo
   assert.match(interests, /sh\("stop", "com\.instagram\.android"\)/);
   assert.match(micro, /control_safe_force_stop_package com\.google\.android\.youtube/);
   assert.match(browseBenchmark, /control_safe_force_stop_package com\.google\.android\.youtube/);
+  assert.ok(
+    windowDump >= 0
+      && windowDump < lockedProof
+      && lockedProof < lockedMutation
+      && lockedMutation < powerDump,
+    'locked proof must mutate before collecting any newer snapshot',
+  );
+  assert.ok(
+    powerDump < asleepProof
+      && asleepProof < asleepMutation
+      && asleepMutation < unlockedProof
+      && unlockedProof < awakeProof
+      && awakeProof < activityDump,
+    'asleep proof must mutate immediately; active branch must prove unlocked and awake first',
+  );
+  assert.ok(
+    activityDump < foregroundProof && foregroundProof < foregroundMutation,
+    'activity must be the last observation before the active-display mutation',
+  );
+  assert.doesNotMatch(privilegedLaunch, /\bmayForceStop\(/);
+  assert.match(
+    privilegedLaunch,
+    /if \(EvogentPhysicalDisplayPolicy\.isStrictlyLockedAndNonOccluded\(windows\)\) \{\s*return forceStopAndLaunch/,
+  );
+  assert.match(
+    privilegedLaunch,
+    /if \(EvogentPhysicalDisplayPolicy\.isStrictlyNotAwake\(power\)\) \{\s*return forceStopAndLaunch/,
+  );
+
+  const shellWindow = shellForceStop.indexOf("control_rish_bounded 'dumpsys window");
+  const shellLocked = shellForceStop.indexOf('[ "$lock" = "locked" ]');
+  const shellNonOccluded = shellForceStop.indexOf('[ "$occlusion" = "non-occluded" ]');
+  const shellLockedMutation = shellForceStop.indexOf(
+    'control_rish_bounded "am force-stop $package"',
+    shellNonOccluded,
+  );
+  const shellPower = shellForceStop.indexOf("control_rish_bounded 'dumpsys power");
+  const shellAsleep = shellForceStop.indexOf('[ "$wake" = "not-awake" ]');
+  const shellAsleepMutation = shellForceStop.indexOf(
+    'control_rish_bounded "am force-stop $package"',
+    shellAsleep,
+  );
+  const shellUnlockedAwake = shellForceStop.indexOf(
+    '[ "$lock" = "unlocked" ] && [ "$wake" = "awake" ]',
+  );
+  const shellActivity = shellForceStop.indexOf(
+    "control_rish_bounded 'dumpsys activity activities",
+  );
+  const shellForeground = shellForceStop.indexOf(
+    'control_display_zero_top_resumed_from_dump',
+  );
+  const shellForegroundMutation = shellForceStop.lastIndexOf(
+    'control_rish_bounded "am force-stop $package"',
+  );
+  assert.ok(
+    shellWindow >= 0
+      && shellWindow < shellLocked
+      && shellLocked <= shellNonOccluded
+      && shellNonOccluded < shellLockedMutation
+      && shellLockedMutation < shellPower,
+    'shell locked+non-occluded proof must mutate before power or activity collection',
+  );
+  assert.ok(
+    shellPower < shellAsleep
+      && shellAsleep < shellAsleepMutation
+      && shellAsleepMutation < shellUnlockedAwake
+      && shellUnlockedAwake < shellActivity,
+    'shell sleep proof must mutate immediately and reserve activity for awake+unlocked',
+  );
+  assert.ok(
+    shellActivity < shellForeground && shellForeground < shellForegroundMutation,
+    'shell activity proof must be the final observation before force-stop',
+  );
+
+  const phoneWindow = phoneLaunch.indexOf("control_rish_bounded 'dumpsys window");
+  const phoneOcclusion = phoneLaunch.indexOf('control_keyguard_occlusion_state_from_dump');
+  const phoneLocked = phoneLaunch.indexOf('LAUNCH_VERDICT=safe-locked');
+  const phonePower = phoneLaunch.indexOf("control_rish_bounded 'dumpsys power");
+  const phoneAsleep = phoneLaunch.indexOf('LAUNCH_VERDICT=safe-unattended');
+  const phoneUnlockedAwake = phoneLaunch.indexOf(
+    '[ "$WAKE_STATE" = "awake" ] && [ "$LOCK_STATE" = "unlocked" ]',
+  );
+  const phoneActivity = phoneLaunch.indexOf(
+    "control_rish_bounded 'dumpsys activity activities",
+  );
+  const phoneForeground = phoneLaunch.indexOf(
+    'control_display_zero_top_resumed_from_dump',
+  );
+  const phoneVerdict = phoneLaunch.indexOf('control_hidden_launch_verdict');
+  const phoneMutation = phoneLaunch.indexOf('am broadcast -a $EVO.SHIZUKU');
+  assert.ok(
+    phoneWindow >= 0
+      && phoneWindow < phoneOcclusion
+      && phoneOcclusion < phoneLocked
+      && phoneLocked < phonePower
+      && phonePower < phoneAsleep,
+    'phone launch must prove window lock+occlusion before collecting power',
+  );
+  assert.ok(
+    phoneAsleep < phoneUnlockedAwake
+      && phoneUnlockedAwake < phoneActivity
+      && phoneActivity < phoneForeground
+      && phoneForeground < phoneVerdict
+      && phoneVerdict < phoneMutation,
+    'phone launch activity must be last and only on the awake+unlocked branch',
+  );
+});
+
+test('privileged launch is off-main and every child has a hard sub-24-second budget', () => {
+  const androidSource = (...parts) => fs.readFileSync(
+    path.join(root, 'android-shell', 'src', 'net', 'dangish', 'evogent', ...parts),
+    'utf8',
+  );
+  const service = androidSource('EvoPrivilegedService.java');
+  const runner = androidSource('EvogentProcessRunner.java');
+  const controller = androidSource('ShizukuController.java');
+  const mainActivity = androidSource('MainActivity.java');
+  const submitLaunch = controller.slice(
+    controller.indexOf('private void submitLaunch('),
+    controller.indexOf('private void deliverResult('),
+  );
+  const deliverResult = controller.slice(
+    controller.indexOf('private void deliverResult('),
+    controller.indexOf('/** Tear down the current hidden display'),
+  );
+
+  assert.match(controller, /Executors\.newSingleThreadExecutor\(\)/);
+  assert.ok(
+    submitLaunch.indexOf('launchWorker.execute(') < submitLaunch.indexOf('service.createDisplay(')
+      && submitLaunch.indexOf('service.createDisplay(') < submitLaunch.indexOf('service.launch('),
+    'createDisplay and launch Binder calls must run inside the one launch worker',
+  );
+  assert.match(deliverResult, /main\.post\([\s\S]*callback\.ready\(displayId\)/);
+  assert.match(mainActivity, /if \(shizuku != null\) shizuku\.shutdown\(\)/);
+  assert.match(controller, /Shizuku binder not available[\s\S]{0,120}onFailure\.run\(\)/);
+  assert.match(controller, /Shizuku permission denied[\s\S]{0,220}failure\.run\(\)/);
+  assert.match(controller, /bindUserService failed[\s\S]{0,120}request\.failure\.run\(\)/);
+  assert.match(controller, /new PendingRequest\(\+\+nextPendingGeneration, ready, failure\)/);
+  assert.match(controller, /if \(superseded != null\) superseded\.failure\.run\(\)/);
+  assert.match(
+    controller,
+    /main\.postDelayed\([\s\S]{0,180}if \(!clearPending\(request\)\) return;[\s\S]{0,260}request\.failure\.run\(\);[\s\S]{0,80}PENDING_READY_TIMEOUT_MS/,
+  );
+  assert.match(controller, /if \(pending != request\) return false/);
+  assert.match(
+    controller,
+    /onServiceConnected[\s\S]{0,260}PendingRequest request = takePending\(\);[\s\S]{0,100}request\.ready\.run\(\)/,
+  );
+
+  assert.doesNotMatch(service, /\.waitFor\(|\.readLine\(|Runtime\.getRuntime\(\)\.exec/);
+  assert.doesNotMatch(service, /new ProcessBuilder\(/);
+  assert.match(service, /EvogentProcessRunner\.run\(/);
+  assert.doesNotMatch(runner, /\.waitFor\(|\.readLine\(/);
+  assert.match(runner, /process\.destroy\(\)/);
+  assert.match(runner, /getMethod\("destroyForcibly"\)/);
+  assert.match(runner, /thread\.join\(remainingMs\)/);
+  assert.match(runner, /if \(!drained\) return new Result\(false, false, exitCode, ""\)/);
+
+  const javaLong = (source, name) => {
+    const match = source.match(new RegExp(`${name} = ([0-9]+)L`));
+    assert.ok(match, `missing ${name}`);
+    return Number(match[1]);
+  };
+  const dumpsysMs = javaLong(service, 'DUMPSYS_TIMEOUT_MS');
+  const packageMs = javaLong(service, 'PACKAGE_COMMAND_TIMEOUT_MS');
+  const startMs = javaLong(service, 'ACTIVITY_START_TIMEOUT_MS');
+  const terminateMs = javaLong(runner, 'TERMINATE_GRACE_MS');
+  const forceTerminateMs = javaLong(runner, 'FORCE_TERMINATE_GRACE_MS');
+  const readerDrainMs = javaLong(runner, 'READER_DRAIN_MS');
+  const pendingReadyMs = javaLong(controller, 'PENDING_READY_TIMEOUT_MS');
+  const childCount = 6;
+  const worstCleanupPerChild = (2 * (terminateMs + forceTerminateMs)) + readerDrainMs;
+  const awakeBranchMaxMs = (3 * dumpsysMs)
+    + (2 * packageMs)
+    + startMs
+    + (childCount * worstCleanupPerChild);
+  assert.ok(
+    awakeBranchMaxMs < 24000,
+    `privileged awake branch max ${awakeBranchMaxMs}ms must fit caller's ~24s poll`,
+  );
+  assert.ok(
+    pendingReadyMs <= 10000,
+    `Shizuku readiness timeout ${pendingReadyMs}ms must expire well before the caller`,
+  );
 });
 
 test('shell CLI proof exercises queued, leased, retry, ack, and quarantine', () => {
@@ -394,6 +857,158 @@ test('phone request consumers use a durable lease rather than remove-before-work
   assert.doesNotMatch(cycle, /rm -f "\$NEXT_Q"/);
   assert.match(discovery, /finish_request ack discovery_fresh/);
   assert.match(discovery, /finish_request retry discovery_failure/);
+});
+
+test('source discovery re-proves phone control after lock wait before provider spend', () => {
+  const discovery = read('source-discovery.sh');
+  const reprove = shellFunction(discovery, 'discovery_phone_reprove');
+  const launch = shellFunction(discovery, 'launch_discovery_provider');
+  assert.match(
+    reprove,
+    /A11Y_PERSIST_SNAPSHOT=0[\s\S]*bash "\$TOOLS\/phone\.sh" health >\/dev\/null/,
+  );
+  assert.match(reprove, /control_rish_bounded 'id'/);
+  assert.match(reprove, /uid=2000/);
+  assert.doesNotMatch(reprove, /a11y-heal|sleep|until |while |for /);
+  assert.ok(
+    launch.indexOf('discovery_phone_reprove')
+      < launch.indexOf('codex exec --model "$CODEX_MODEL"'),
+  );
+  assert.ok(
+    launch.indexOf('discovery_phone_reprove')
+      < launch.indexOf('claude -p "$PROMPT"'),
+  );
+  assert.match(
+    launch,
+    /finish_request retry discovery_prerequisites_unavailable[\s\S]*DISC_PROVIDER_DEFERRED=1[\s\S]*return 0/,
+  );
+  const lockAcquired = discovery.indexOf('DISC_LOCK_HELD=1');
+  const launchCall = discovery.indexOf(
+    '\nlaunch_discovery_provider\n',
+    discovery.indexOf('say "discovery starting'),
+  );
+  assert.ok(lockAcquired >= 0 && launchCall > lockAcquired);
+  assert.doesNotMatch(discovery, /a11y-heal\.sh/);
+
+  const fixture = fs.mkdtempSync(path.join(
+    process.env.TMPDIR || '/tmp',
+    'evogent-discovery-lock-loss-',
+  ));
+  const fakeTools = path.join(fixture, 'phone-tools');
+  const evo = path.join(fixture, 'evogent');
+  const phoneSequence = path.join(fixture, 'phone-sequence');
+  const phoneCount = path.join(fixture, 'phone-count');
+  const shellCount = path.join(fixture, 'shell-count');
+  const lockCount = path.join(fixture, 'lock-count');
+  const providerTrace = path.join(fixture, 'provider-trace');
+  const queueTrace = path.join(fixture, 'queue-trace');
+  const sayTrace = path.join(fixture, 'say-trace');
+  const statusTrace = path.join(fixture, 'status-trace');
+  fs.mkdirSync(fakeTools);
+  fs.mkdirSync(evo);
+  fs.writeFileSync(phoneSequence, 'ready\ndown\nready\n');
+  fs.writeFileSync(path.join(fakeTools, 'phone.sh'), `#!/bin/bash
+count=$(cat "$PHONE_COUNT" 2>/dev/null || printf 0)
+count=$((count + 1))
+printf '%s\\n' "$count" > "$PHONE_COUNT"
+value=$(sed -n "$count"'p' "$PHONE_SEQUENCE")
+[ "$1" = health ] && [ "$value" = ready ]
+`);
+  const harness = `
+set -u
+${reprove}
+${launch}
+say() { printf '%s\\n' "$*" >> "$SAY_TRACE"; }
+control_rish_bounded() {
+  [ "$1" = id ] || return 1
+  count=$(cat "$SHELL_COUNT" 2>/dev/null || printf 0)
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$SHELL_COUNT"
+  printf 'uid=2000(shell) gid=2000(shell)\\n'
+}
+control_lock_acquire() {
+  count=$(cat "$LOCK_COUNT" 2>/dev/null || printf 0)
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$LOCK_COUNT"
+  [ "$count" -ge 2 ]
+}
+control_status_write() { printf '%s\\n' "$*" >> "$STATUS_TRACE"; }
+finish_request() {
+  printf '%s|%s|%s\\n' "$1" "$2" "$3" >> "$QUEUE_TRACE"
+  DISC_REQUEST_FINISHED=1
+}
+run_owned_timeout() {
+  printf '%s\\n' "$*" >> "$PROVIDER_TRACE"
+  return 0
+}
+CONTROL_OWNER_ID=test-discovery-owner
+LOG="$FIXTURE/scheduler.log"
+TOOLS="$FAKE_TOOLS"
+EVO="$EVO_ROOT"
+SRC=test-source
+BRAIN=codex
+CODEX_MODEL=test-model
+CODEX_EFFORT=medium
+PROMPT=test-prompt
+DISC_REPORTED=0
+DISC_REQUEST_FINISHED=0
+DISC_PROVIDER_DEFERRED=0
+
+# This represents the scheduler's once-live admission proof before the detached worker waits.
+discovery_phone_reprove
+printf 'prior=%s\\n' "$?"
+until control_lock_acquire ignored source-discovery; do :; done
+
+# Accessibility disappears during the lock wait. The post-lock proof must retry the queue and
+# must not invoke the provider even though the older proof succeeded.
+launch_discovery_provider
+printf 'deferred=%s request_finished=%s\\n' \
+  "$DISC_PROVIDER_DEFERRED" "$DISC_REQUEST_FINISHED"
+
+# A later worker may recover only through another complete fresh proof.
+launch_discovery_provider
+printf 'recovered=%s\\n' "$DISC_PROVIDER_DEFERRED"
+`;
+
+  try {
+    const result = spawnSync('bash', ['-c', harness], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EVO_ROOT: evo,
+        FAKE_TOOLS: fakeTools,
+        FIXTURE: fixture,
+        LOCK_COUNT: lockCount,
+        PHONE_COUNT: phoneCount,
+        PHONE_SEQUENCE: phoneSequence,
+        PROVIDER_TRACE: providerTrace,
+        QUEUE_TRACE: queueTrace,
+        SAY_TRACE: sayTrace,
+        SHELL_COUNT: shellCount,
+        STATUS_TRACE: statusTrace,
+      },
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(
+      result.stdout,
+      'prior=0\ndeferred=1 request_finished=1\nrecovered=0\n',
+    );
+    assert.equal(fs.readFileSync(lockCount, 'utf8'), '2\n');
+    assert.equal(fs.readFileSync(phoneCount, 'utf8'), '3\n');
+    assert.equal(fs.readFileSync(shellCount, 'utf8'), '2\n');
+    assert.equal(fs.readFileSync(providerTrace, 'utf8').trim().split('\n').length, 1);
+    assert.match(
+      fs.readFileSync(queueTrace, 'utf8'),
+      /^retry\|discovery_prerequisites_unavailable\|/,
+    );
+    assert.match(
+      fs.readFileSync(statusTrace, 'utf8'),
+      /degraded discovery_prerequisites_unavailable 0 75/,
+    );
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('phone scheduler acknowledges a request only after the exact validated curation receipt', () => {
@@ -548,6 +1163,7 @@ test('daily overseer owns the shared cross-cycle audit while legacy review comma
 
 test('source cadence advances only after a completed terminal browse receipt', () => {
   const cycle = read('evogent-cycle.sh');
+  const browseDue = shellFunction(cycle, 'browse_due_source');
   assert.match(cycle, /source_cadence\.py/);
   assert.match(cycle, /--signal "\$signal"/);
   assert.match(cycle, /--signal-ack "\$signal_ack"/);
@@ -560,7 +1176,15 @@ test('source cadence advances only after a completed terminal browse receipt', (
   assert.match(cycle, /SELECT COUNT\(\*\) FROM browse_cache_items[\s\S]*fetched_at_ms>=\?/);
   assert.match(cycle, /not the worker's self-reported itemsAdded field/);
   assert.match(cycle, /partial harvest retained, but cadence remains due[\s\S]*return 1/);
-  assert.match(cycle, /if browse_source "\$src" "\$prompt_file" "\$budget"; then[\s\S]*mark_browsed "\$src"/);
+  assert.ok(
+    browseDue.indexOf('browse_source "$src" "$prompt_file" "$budget"')
+      < browseDue.indexOf('mark_browsed "$src"'),
+  );
+  assert.match(browseDue, /browse_rc=\$\?[\s\S]*\[ "\$browse_rc" -eq 0 \][\s\S]*mark_browsed "\$src"/);
+  assert.match(
+    browseDue,
+    /\[ "\$browse_rc" -eq 75 \][\s\S]*cadence and failure state untouched/,
+  );
   assert.doesNotMatch(cycle, /browse_source youtube[^\\n]*;[^\\n]*mark_browsed youtube/);
 
   const recipeLoop = cycle.slice(
@@ -581,6 +1205,352 @@ test('source cadence advances only after a completed terminal browse receipt', (
     cycle.indexOf('browse_due_source youtube'),
   );
   assert.ok(twitterBlock.indexOf('harvest_watch twitter') < twitterBlock.indexOf('mark_browsed twitter'));
+});
+
+test('phone-control prerequisites gate app browsing without consuming source state', () => {
+  const cycle = read('evogent-cycle.sh');
+  const reprove = shellFunction(cycle, 'app_browse_reprove');
+  const browseSource = shellFunction(cycle, 'browse_source');
+  const diagnosisClaim = shellFunction(cycle, 'automatic_diagnosis_claim');
+  const prerequisiteStart = cycle.indexOf('  a11y_live=0');
+  const hackerNewsStart = cycle.indexOf('if src_due hackernews', prerequisiteStart);
+  const appGateStart = cycle.indexOf(
+    '  if [ "$APP_BROWSE_READY" = 1 ]; then',
+    hackerNewsStart,
+  );
+  const appGateEnd = cycle.indexOf(
+    '\n  fi\n\n  # ALWAYS-ON SHIPMENT JUDGMENT',
+    appGateStart,
+  );
+  assert.ok(prerequisiteStart > 0 && hackerNewsStart > prerequisiteStart);
+  assert.ok(appGateStart > hackerNewsStart && appGateEnd > appGateStart);
+
+  const hackerNewsBlock = cycle.slice(hackerNewsStart, appGateStart);
+  assert.match(hackerNewsBlock, /python3 "\$TOOLS\/hn-fetch\.py"/);
+  assert.match(hackerNewsBlock, /harvest_watch hackernews/);
+  assert.match(hackerNewsBlock, /mark_browsed hackernews/);
+
+  const appBlock = cycle.slice(appGateStart, appGateEnd);
+  for (const expected of [
+    'src_due twitter',
+    'browse_due_source youtube',
+    'browse_due_source substack',
+    'browse_due_source gmail',
+    'browse-interests.py',
+    'data/phone-sources/*.txt',
+    'data/phone-sources/*.py',
+    'control_safe_force_stop_package',
+  ]) {
+    assert.ok(appBlock.includes(expected), `app gate is missing ${expected}`);
+  }
+
+  const deferStart = cycle.indexOf(
+    '  else\n    CYCLE_DEGRADED=1\n    say "source-browse: app prerequisites unavailable',
+    prerequisiteStart,
+  );
+  const deferEnd = cycle.indexOf('\n  fi\n\n  # HN is a public', deferStart);
+  const deferBranch = cycle.slice(deferStart, deferEnd);
+  assert.match(deferBranch, /cadence and failure counters untouched/);
+  assert.doesNotMatch(
+    deferBranch,
+    /src_due|browse_due_source|harvest_watch|mark_browsed|automatic_diagnosis|\.barren-|\.failure-/,
+  );
+
+  assert.match(
+    cycle,
+    /if \[ "\$a11y_live" = 1 \] && \[ "\$shizuku_live" = 1 \]; then[\s\S]*APP_BROWSE_READY=1/,
+  );
+  assert.match(reprove, /APP_BROWSE_READY=0/);
+  assert.match(
+    reprove,
+    /A11Y_PERSIST_SNAPSHOT=0[\s\S]*bash "\$TOOLS\/phone\.sh" health >\/dev\/null/,
+  );
+  assert.match(reprove, /control_rish_bounded 'id'/);
+  assert.match(reprove, /uid=2000/);
+  assert.match(reprove, /APP_BROWSE_READY=1/);
+  assert.doesNotMatch(reprove, /a11y-heal|sleep|for [_A-Za-z]|while /);
+
+  assert.ok(
+    browseSource.indexOf('app_browse_reprove "source-browse[$src]: provider launch"')
+      < browseSource.indexOf('codex exec --model "$route_model"'),
+  );
+  assert.ok(
+    browseSource.indexOf('app_browse_reprove "source-browse[$src]: provider launch"')
+      < browseSource.indexOf('claude -p "$prompt"'),
+  );
+  assert.ok(
+    diagnosisClaim.indexOf('--dispatcher-unavailable')
+      < diagnosisClaim.indexOf('app_browse_reprove "automatic-diagnosis[$src]: claim"'),
+  );
+  assert.ok(
+    diagnosisClaim.lastIndexOf('python3 "$DIAGNOSIS_BUDGET_HELPER"')
+      > diagnosisClaim.indexOf('app_browse_reprove "automatic-diagnosis[$src]: claim"'),
+  );
+  assert.match(diagnosisClaim, /threshold is already durable[\s\S]*paid slot remains untouched/);
+
+  const twitterBlock = cycle.slice(
+    cycle.indexOf('if src_due twitter'),
+    cycle.indexOf('browse_due_source youtube'),
+  );
+  assert.ok(
+    twitterBlock.indexOf('app_browse_reprove "source-browse[twitter]: driver launch"')
+      < twitterBlock.indexOf('python3 "$TOOLS/browse-x-scrape.py"'),
+  );
+  const interestsBlock = cycle.slice(
+    cycle.indexOf('if [ -s "$EVO/data/interests.jsonl" ]'),
+    cycle.indexOf('# User-discovered sources:'),
+  );
+  assert.ok(
+    interestsBlock.indexOf('app_browse_reprove "source-browse[interests]: worker launch"')
+      < interestsBlock.indexOf('python3 "$TOOLS/browse-interests.py"'),
+  );
+  const recipeBlock = cycle.slice(
+    cycle.indexOf('for rf in "$EVO"/data/phone-sources/*.py'),
+    cycle.indexOf('# CRITICAL memory hygiene'),
+  );
+  assert.ok(
+    recipeBlock.indexOf('app_browse_reprove "source-browse[$rsrc]: recipe launch"')
+      < recipeBlock.indexOf('python3 "$rf"'),
+  );
+  assert.doesNotMatch(
+    shellFunction(cycle, 'browse_due_source'),
+    /app_browse_reprove[\s\S]*src_due/,
+  );
+
+  const scoutBlock = cycle.slice(
+    cycle.indexOf('SCOUT_STAMP='),
+    cycle.indexOf('# feed post count'),
+  );
+  assert.match(
+    scoutBlock,
+    /\[ "\$ONLINE" = 1 \] && is_on "\$BG_BROWSE"[\s\S]*app_browse_reprove "source-scout: launch"[\s\S]*source-scout\.py/,
+  );
+  const permalinkBlock = cycle.slice(
+    cycle.indexOf('VP=$(python3 "$TOOLS/validate-tweet-permalinks.py"'),
+    cycle.indexOf('VERDICT=$(python3 "$TOOLS/verify-intents.py"'),
+  );
+  assert.match(
+    permalinkBlock,
+    /\[ "\$ONLINE" = 1 \] && is_on "\$BG_BROWSE"[\s\S]*app_browse_reprove "permalink-backfill: launch"[\s\S]*backfill-tweet-permalinks\.py/,
+  );
+  const queueBlock = cycle.slice(
+    cycle.indexOf("if [ \"$ONLINE\" = 1 ] && is_on \"$BG_BROWSE\"", cycle.indexOf('finish_queued_task(){')),
+    cycle.indexOf('if [ -n "$TASK_LEASE" ]'),
+  );
+  assert.match(
+    queueBlock,
+    /! tmux has-session[\s\S]*app_browse_reprove "request-ledger: app task claim"[\s\S]*"\$TASK_QUEUE" claim/,
+  );
+  assert.ok(
+    cycle.indexOf('# ---------- 2. Curation:') > appGateEnd,
+    'curation must remain outside the app prerequisite gate',
+  );
+});
+
+test('mid-cycle prerequisite loss invalidates admission and only a fresh two-part proof recovers', () => {
+  const cycle = read('evogent-cycle.sh');
+  const reprove = shellFunction(cycle, 'app_browse_reprove');
+  const fixture = fs.mkdtempSync(path.join(
+    process.env.TMPDIR || '/tmp',
+    'evogent-mid-cycle-phone-loss-',
+  ));
+  const fakeTools = path.join(fixture, 'phone-tools');
+  const phoneSequence = path.join(fixture, 'phone-sequence');
+  const phoneCount = path.join(fixture, 'phone-count');
+  const shellSequence = path.join(fixture, 'shell-sequence');
+  const shellCount = path.join(fixture, 'shell-count');
+  const actionTrace = path.join(fixture, 'actions');
+  const sayTrace = path.join(fixture, 'say');
+  const log = path.join(fixture, 'scheduler.log');
+  fs.mkdirSync(fakeTools);
+  fs.writeFileSync(phoneSequence, 'down\nready\nready\n');
+  fs.writeFileSync(shellSequence, 'uid=0(root) gid=0(root)\nuid=2000(shell) gid=2000(shell)\n');
+  fs.writeFileSync(path.join(fakeTools, 'phone.sh'), `#!/bin/bash
+count=$(cat "$PHONE_COUNT" 2>/dev/null || printf 0)
+count=$((count + 1))
+printf '%s\\n' "$count" > "$PHONE_COUNT"
+value=$(sed -n "$count"'p' "$PHONE_SEQUENCE")
+[ "$1" = health ] && [ "$value" = ready ]
+`);
+  const harness = `
+set -u
+${reprove}
+say() { printf '%s\\n' "$*" >> "$SAY_TRACE"; }
+control_rish_bounded() {
+  [ "$1" = id ] || return 1
+  count=$(cat "$SHELL_COUNT" 2>/dev/null || printf 0)
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$SHELL_COUNT"
+  sed -n "$count"'p' "$SHELL_SEQUENCE"
+}
+APP_BROWSE_READY=1
+CYCLE_DEGRADED=0
+attempt() {
+  if app_browse_reprove "$1"; then
+    printf '%s\\n' "$1" >> "$ACTION_TRACE"
+  fi
+  printf '%s:%s\\n' "$APP_BROWSE_READY" "$CYCLE_DEGRADED"
+}
+attempt lost-accessibility
+attempt lost-shell
+attempt recovered
+`;
+
+  try {
+    const result = spawnSync('bash', ['-c', harness], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ACTION_TRACE: actionTrace,
+        CONTROL_OWNER_ID: 'test-cycle-owner',
+        LOG: log,
+        PHONE_COUNT: phoneCount,
+        PHONE_SEQUENCE: phoneSequence,
+        SAY_TRACE: sayTrace,
+        SHELL_COUNT: shellCount,
+        SHELL_SEQUENCE: shellSequence,
+        TOOLS: fakeTools,
+      },
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(result.stdout, '0:1\n0:1\n1:1\n');
+    assert.equal(fs.readFileSync(phoneCount, 'utf8'), '3\n');
+    assert.equal(fs.readFileSync(shellCount, 'utf8'), '2\n');
+    assert.equal(fs.readFileSync(actionTrace, 'utf8'), 'recovered\n');
+    assert.match(fs.readFileSync(sayTrace, 'utf8'), /lost-accessibility: accessibility health proof failed/);
+    assert.match(fs.readFileSync(sayTrace, 'utf8'), /lost-shell: shell uid proof failed/);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('automatic mechanics and barren diagnosis stay unspent behind the phone gate', () => {
+  const cycle = read('evogent-cycle.sh');
+  const reprove = shellFunction(cycle, 'app_browse_reprove');
+  const diagnosisClaim = shellFunction(cycle, 'automatic_diagnosis_claim');
+  const harvest = shellFunction(cycle, 'harvest_watch');
+  const fixture = fs.mkdtempSync(path.join(
+    process.env.TMPDIR || '/tmp',
+    'evogent-diagnosis-phone-gate-',
+  ));
+  const helper = path.join(fixture, 'diagnosis-helper.py');
+  const state = path.join(fixture, 'diagnosis-state.json');
+  const helperTrace = path.join(fixture, 'helper-trace');
+  const log = path.join(fixture, 'scheduler.log');
+  const fakeTools = path.join(fixture, 'phone-tools');
+  const phoneSequence = path.join(fixture, 'phone-sequence');
+  const phoneCount = path.join(fixture, 'phone-count');
+  const shellSequence = path.join(fixture, 'shell-sequence');
+  const shellCount = path.join(fixture, 'shell-count');
+  fs.mkdirSync(fakeTools);
+  fs.writeFileSync(phoneSequence, 'down\nready\nready\n');
+  fs.writeFileSync(shellSequence, 'uid=0(root) gid=0(root)\nuid=2000(shell) gid=2000(shell)\n');
+  fs.writeFileSync(path.join(fakeTools, 'phone.sh'), `#!/bin/bash
+count=$(cat "$PHONE_COUNT" 2>/dev/null || printf 0)
+count=$((count + 1))
+printf '%s\\n' "$count" > "$PHONE_COUNT"
+value=$(sed -n "$count"'p' "$PHONE_SEQUENCE")
+[ "$1" = health ] && [ "$value" = ready ]
+`);
+  fs.writeFileSync(helper, `import os, pathlib, sys
+pathlib.Path(os.environ["HELPER_TRACE"]).open("a", encoding="utf-8").write(
+    " ".join(sys.argv[1:]) + "\\n"
+)
+state = pathlib.Path(sys.argv[sys.argv.index("--state") + 1])
+if "--dispatcher-unavailable" in sys.argv:
+    state.write_text("pending\\n", encoding="utf-8")
+    print("0\\tdispatcher_unavailable")
+else:
+    state.write_text("spent\\n", encoding="utf-8")
+    print("1\\tclaimed")
+`);
+  const harness = `
+set -u
+${reprove}
+${diagnosisClaim}
+say() { printf '%s\\n' "$*" >> "$SAY_TRACE"; }
+control_rish_bounded() {
+  [ "$1" = id ] || return 1
+  count=$(cat "$SHELL_COUNT" 2>/dev/null || printf 0)
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$SHELL_COUNT"
+  sed -n "$count"'p' "$SHELL_SEQUENCE"
+}
+DIAGNOSIS_BUDGET_HELPER="$HELPER"
+DIAGNOSIS_BUDGET_STATE="$STATE"
+LOG="$LOG_FILE"
+BRAIN=codex
+CONTROL_OWNER_ID=test-cycle-owner
+APP_BROWSE_READY=1
+CYCLE_DEGRADED=0
+AUTOMATIC_DIAGNOSIS_CLAIMED=0
+AUTOMATIC_DIAGNOSIS_REASON=threshold_not_due
+automatic_diagnosis_claim hackernews 3 mechanics
+printf '%s|%s|%s|%s\\n' "$AUTOMATIC_DIAGNOSIS_CLAIMED" \
+  "$AUTOMATIC_DIAGNOSIS_REASON" "$APP_BROWSE_READY" "$(cat "$STATE")"
+automatic_diagnosis_claim hackernews 3 barren
+printf '%s|%s|%s|%s\\n' "$AUTOMATIC_DIAGNOSIS_CLAIMED" \
+  "$AUTOMATIC_DIAGNOSIS_REASON" "$APP_BROWSE_READY" "$(cat "$STATE")"
+automatic_diagnosis_claim hackernews 3 barren
+printf '%s|%s|%s|%s\\n' "$AUTOMATIC_DIAGNOSIS_CLAIMED" \
+  "$AUTOMATIC_DIAGNOSIS_REASON" "$APP_BROWSE_READY" "$(cat "$STATE")"
+`;
+
+  try {
+    fs.writeFileSync(state, 'pending\n');
+    const result = spawnSync('bash', ['-c', harness], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HELPER: helper,
+        HELPER_TRACE: helperTrace,
+        LOG_FILE: log,
+        PHONE_COUNT: phoneCount,
+        PHONE_SEQUENCE: phoneSequence,
+        SAY_TRACE: path.join(fixture, 'say'),
+        SHELL_COUNT: shellCount,
+        SHELL_SEQUENCE: shellSequence,
+        STATE: state,
+        TOOLS: fakeTools,
+      },
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(
+      result.stdout,
+      '0|prerequisites_unavailable|0|pending\n'
+        + '0|prerequisites_unavailable|0|pending\n'
+        + '1|claimed|1|spent\n',
+    );
+    assert.equal(fs.readFileSync(phoneCount, 'utf8'), '3\n');
+    assert.equal(fs.readFileSync(shellCount, 'utf8'), '2\n');
+    const helperCalls = fs.readFileSync(helperTrace, 'utf8').trim().split('\n');
+    assert.equal(helperCalls.length, 4);
+    assert.ok(helperCalls[0].includes('--lane mechanics'));
+    assert.ok(helperCalls.slice(0, 3).every((call) => call.includes('--dispatcher-unavailable')));
+    assert.ok(helperCalls[3].includes('--lane barren'));
+    assert.ok(!helperCalls[3].includes('--dispatcher-unavailable'));
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+
+  assert.match(
+    harvest,
+    /if \[ "\$APP_BROWSE_READY" = 1 \] && \[ "\$mechanics_claimed" = 1 \]; then[\s\S]*dispatching diagnosis agent within daily budget \(mechanics incident\)/,
+  );
+  assert.match(
+    harvest,
+    /if \[ "\$APP_BROWSE_READY" = 1 \] && \[ "\$diagnosis_claimed" = 1 \]; then[\s\S]*dispatching diagnosis agent within daily budget \(barren streak \$n\)/,
+  );
+  assert.match(
+    harvest,
+    /mechanics diagnosis remains pending until phone-control prerequisites recover/,
+  );
+  assert.match(
+    harvest,
+    /automatic diagnosis remains pending until phone-control prerequisites recover/,
+  );
 });
 
 test('cadence helper execution and parse failures defer every source without browsing', () => {

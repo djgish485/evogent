@@ -68,6 +68,15 @@ public class EvogentAccessibilityService extends AccessibilityService {
             }
             Log.i(TAG, "cmd op=" + op);
             switch (op) {
+                case "health": {
+                    // Content-free liveness proof for the phone control plane. Authentication and
+                    // the request-scoped nonce are validated above; never enumerate windows,
+                    // inspect a display, or expose accessibility data for this operation.
+                    String healthResult = "ready";
+                    try { if (isOrderedBroadcast()) setResultData(healthResult); } catch (Throwable ignored) {}
+                    sendToLocalAgent(reply, healthResult);
+                    break;
+                }
                 case "nodes": {
                     // Return a window's node tree straight to the caller via the ordered broadcast
                     // result AND the loopback push, so an on-device agent (Termux/claude, a different
@@ -163,7 +172,8 @@ public class EvogentAccessibilityService extends AccessibilityService {
     };
 
     private static boolean operationReturnsData(String op) {
-        return "nodes".equals(op)
+        return "health".equals(op)
+                || "nodes".equals(op)
                 || "windows".equals(op)
                 || "clip".equals(op)
                 || "paste".equals(op)

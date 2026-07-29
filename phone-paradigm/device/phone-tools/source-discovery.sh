@@ -35,6 +35,25 @@ say(){ echo "[$(ts)] [source-discovery:$SRC] $*" | tee -a "$LOG" >&2; }
 control_init_owner source-discovery
 control_reap_abandoned_owners
 
+# The scheduler's admission proof can be minutes old by the time this detached worker obtains the
+# cycle lock. Re-prove both independent phone-control paths at the provider boundary: one fixed,
+# authenticated accessibility health reply and one bounded shell-uid query. No heal, retry loop,
+# display selection, or source-state mutation belongs in this fast proof.
+discovery_phone_reprove() {
+  local shell_identity=""
+  if ! EVOGENT_TASK_OWNER="$CONTROL_OWNER_ID" A11Y_PERSIST_SNAPSHOT=0 \
+      bash "$TOOLS/phone.sh" health >/dev/null 2>>"$LOG"; then
+    say "accessibility health proof failed after lock acquisition"
+    return 1
+  fi
+  if ! shell_identity=$(control_rish_bounded 'id' 2>/dev/null) \
+      || ! printf '%s\n' "$shell_identity" | grep -qE '(^|[[:space:]])uid=2000([[:space:](]|$)'; then
+    say "shell uid proof failed after lock acquisition"
+    return 1
+  fi
+  return 0
+}
+
 # Same PID+start-aware lease as evogent-cycle.sh: exactly one hidden-display driver at a time.
 # A live owner is never evicted merely because its task crossed an arbitrary age threshold.
 LOCKDIR="$TOOLS/.cycle.lock"
@@ -55,6 +74,34 @@ finish_request() {
   DISC_REQUEST_FINISHED=1
   say "request ledger: $(printf '%s' "$transition" | python3 -c 'import json,sys;print((json.load(sys.stdin) or {}).get("action") or "updated")' 2>/dev/null || echo updated)"
 }
+
+# Return provider status in the normal case. A prerequisite miss is not a provider failure and
+# consumes no spend: durably return the lease to the bounded retry queue before telling the caller
+# to exit. The fresh proof is intentionally the final operation before the provider branch.
+DISC_PROVIDER_DEFERRED=0
+launch_discovery_provider() {
+  DISC_PROVIDER_DEFERRED=0
+  if ! discovery_phone_reprove; then
+    control_status_write sources "$SRC" degraded discovery_prerequisites_unavailable 0 75 \
+      "phone-control prerequisites unavailable after cycle-lock acquisition"
+    finish_request retry discovery_prerequisites_unavailable \
+      "fresh accessibility and shell proof failed after cycle-lock acquisition" || true
+    DISC_REPORTED=1
+    DISC_PROVIDER_DEFERRED=1
+    return 0
+  fi
+  if [ "$BRAIN" = "codex" ]; then
+    # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
+    ( cd "$EVO" && run_owned_timeout 900 30 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" \
+        --dangerously-bypass-approvals-and-sandbox -- "$PROMPT" >>"$LOG" 2>&1 )
+  else
+    ( cd "$EVO" && run_owned_timeout 900 30 env -u ANTHROPIC_API_KEY \
+      CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.evogent-oauth-token" 2>/dev/null)" \
+      claude -p "$PROMPT" --permission-mode bypassPermissions \
+        --allowedTools "Bash,Read,Write,Glob,Grep" >>"$LOG" 2>&1 )
+  fi
+}
+
 discovery_cleanup() {
   local rc=$?
   trap - EXIT INT TERM HUP
@@ -172,22 +219,13 @@ if ! [[ "$CODEX_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,159}$ ]]; then
   CODEX_ROUTE_ORIGIN=fallback
 fi
 
-# Self-heal the a11y service: a disabled service reads as "app did not land on any display".
-EVOGENT_TASK_OWNER="$CONTROL_OWNER_ID" bash "$TOOLS/a11y-heal.sh" >>"$LOG" 2>&1 \
-  || say "a11y-heal: service unresponsive — discovery will likely fail"
-
 say "discovery starting (brain=$BRAIN, route=$CODEX_ROUTE_ORIGIN, budget 900s) — $NAME ($PKG) -> $SRC"
-if [ "$BRAIN" = "codex" ]; then
-  # '--' guards against prompts that begin with '-' (codex parses them as CLI options).
-  ( cd "$EVO" && run_owned_timeout 900 30 codex exec --model "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" \
-      --dangerously-bypass-approvals-and-sandbox -- "$PROMPT" >>"$LOG" 2>&1 )
-else
-  ( cd "$EVO" && run_owned_timeout 900 30 env -u ANTHROPIC_API_KEY \
-    CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.evogent-oauth-token" 2>/dev/null)" \
-    claude -p "$PROMPT" --permission-mode bypassPermissions \
-      --allowedTools "Bash,Read,Write,Glob,Grep" >>"$LOG" 2>&1 )
-fi
+launch_discovery_provider
 RC=$?
+if [ "$DISC_PROVIDER_DEFERRED" = 1 ]; then
+  say "discovery deferred before provider launch; request retained for retry"
+  exit 75
+fi
 
 RECIPE="$EVO/data/phone-sources/$SRC.txt"
 # Cancellation raced the discovery: respect it — remove whatever was written and stop quietly.

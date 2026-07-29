@@ -18,7 +18,11 @@ test('every automatic barren-source diagnosis passes through one durable daily c
     cycle.indexOf('AUTO_CUR="$(cfg'),
   );
   const claim = harvest.indexOf(
-    'diagnosis_decision=$(automatic_diagnosis_claim "$src" "$n")',
+    'automatic_diagnosis_claim "$src" "$n"',
+  );
+  const capture = harvest.indexOf(
+    'diagnosis_claimed="$AUTOMATIC_DIAGNOSIS_CLAIMED"',
+    claim,
   );
   const dispatch = harvest.indexOf(
     'codex exec --model "$DIAGNOSIS_MODEL"',
@@ -26,8 +30,18 @@ test('every automatic barren-source diagnosis passes through one durable daily c
   );
 
   assert.ok(claim >= 0);
+  assert.ok(capture > claim, 'the parent shell must capture the durable claim result');
   assert.ok(dispatch > claim, 'the budget claim must commit before provider launch');
-  assert.match(harvest, /if \[ "\$diagnosis_claimed" = 1 \]; then/);
+  assert.ok(dispatch > capture, 'provider launch must use the captured claim result');
+  assert.doesNotMatch(
+    harvest,
+    /diagnosis_decision=\$\(automatic_diagnosis_claim/,
+    'command substitution would discard the refreshed prerequisite latch',
+  );
+  assert.match(
+    harvest,
+    /if \[ "\$APP_BROWSE_READY" = 1 \] && \[ "\$diagnosis_claimed" = 1 \]; then/,
+  );
   assert.match(harvest, /automatic_diagnosis_clear "\$src"/);
   const failedOutcome = harvest.slice(
     harvest.indexOf('if [ "$outcome" != empty ]; then'),

@@ -98,6 +98,27 @@ class AutomaticDiagnosisBudgetTests(unittest.TestCase):
         self.assertEqual(unavailable["reason"], "dispatcher_unavailable")
         self.assertTrue(later["claimed"])
 
+    def test_unavailable_first_threshold_survives_an_interrupted_streak(self) -> None:
+        unavailable = self.claim(
+            "source-a", 3, "2027-03-10", available=False
+        )
+        self.assertEqual(unavailable["reason"], "dispatcher_unavailable")
+        self.assertTrue(
+            reset_source_streak(
+                self.state,
+                source="source-a",
+                stamp_ms=1_800_000_001_000,
+            )
+        )
+
+        later = self.claim(
+            "source-a",
+            1,
+            "2027-03-11",
+            stamp=1_800_086_400_000,
+        )
+        self.assertTrue(later["claimed"])
+
     def test_clear_resets_source_streak_but_never_refunds_daily_claim(self) -> None:
         self.assertTrue(self.claim("source-a", 3, "2027-04-01")["claimed"])
         self.assertTrue(clear_source_state(self.state, source="source-a"))
