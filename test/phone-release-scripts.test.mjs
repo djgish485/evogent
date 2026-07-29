@@ -529,21 +529,43 @@ fi
   );
 });
 
-test('claimed overseer work holds a scoped wake reference on every exit', () => {
+test('overseer proves health and wake before claim, then retires every held reference', () => {
   const scheduler = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/phone-tools/evogent-scheduler.sh'),
     'utf8',
   );
   const body = shellFunction(scheduler, 'run_due_overseer');
-  const acquiredAt = body.indexOf('scheduled_task_wake_acquire overseer || true');
-  assert.ok(acquiredAt > body.indexOf('[ -n "$lease" ] || return 0'));
+  const healthAt = body.indexOf('"$TOOLS/evo-health"');
+  const ensureConfigAt = body.indexOf('ensure-phone-config');
+  const ensureDueAt = body.indexOf('ensure-nightly');
+  const acquiredAt = body.indexOf('if ! scheduled_task_wake_acquire overseer; then');
+  const claimAt = body.indexOf('claim --root "$SCHEDULED_TASK_ROOT"');
+  const providerAt = body.indexOf('codex exec --model "$model"');
+  assert.ok(
+    healthAt >= 0
+      && healthAt < ensureConfigAt
+      && ensureConfigAt < ensureDueAt
+      && ensureDueAt < acquiredAt
+      && acquiredAt < claimAt
+      && claimAt < providerAt,
+  );
+  const hardWakeBranch = body.slice(acquiredAt, claimAt);
+  assert.match(
+    hardWakeBranch,
+    /wake_acquire_failed[\s\S]*scheduled_task_wake_release \|\| true[\s\S]*return 2/,
+  );
+  assert.doesNotMatch(hardWakeBranch, /claim --root|codex exec|claude -p/);
   const claimedBody = body.slice(acquiredAt);
   const returns = [...claimedBody.matchAll(/^[ \t]*return [02]$/gm)];
   assert.ok(returns.length >= 3);
   for (const match of returns) {
     const priorLines = claimedBody.slice(0, match.index).trimEnd().split('\n');
-    assert.equal(priorLines.at(-1).trim(), 'scheduled_task_wake_release');
+    assert.match(
+      priorLines.at(-1).trim(),
+      /^scheduled_task_wake_release(?: \|\| true)?$/,
+    );
   }
+  const acquire = shellFunction(scheduler, 'scheduled_task_wake_acquire');
   const cleanup = shellFunction(scheduler, 'scheduler_cleanup');
   assert.match(
     cleanup,
@@ -570,6 +592,42 @@ test "$SCHEDULED_WAKE_HELD" = 0
     { encoding: 'utf8' },
   );
   assert.equal(releaseResult.status, 0, releaseResult.stderr);
+
+  const acquireHarness = `
+set -u
+${acquire}
+say() { :; }
+control_wake_acquire() {
+  CONTROL_WAKE_HELD="$CONTROL_HELD"
+  return "$WAKE_RC"
+}
+SCHEDULED_WAKE_HELD=0
+CONTROL_WAKE_HELD=0
+if scheduled_task_wake_acquire overseer; then
+  rc=0
+else
+  rc=$?
+fi
+printf '%s\\t%s\\t%s\\n' "$rc" "$SCHEDULED_WAKE_HELD" "$CONTROL_WAKE_HELD"
+`;
+  const runAcquire = (wakeRc, controlHeld) => spawnSync(
+    'bash',
+    ['-c', acquireHarness, 'wake-acquire'],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CONTROL_HELD: String(controlHeld),
+        WAKE_RC: String(wakeRc),
+      },
+    },
+  );
+  let acquireResult = runAcquire(125, 0);
+  assert.equal(acquireResult.status, 0, acquireResult.stderr);
+  assert.equal(acquireResult.stdout, '0\t0\t0\n');
+  acquireResult = runAcquire(1, 1);
+  assert.equal(acquireResult.status, 0, acquireResult.stderr);
+  assert.equal(acquireResult.stdout, '76\t1\t1\n');
 });
 
 test('wake acquire refuses an undedicated Termux without touching its global lock', () => {
@@ -1651,7 +1709,11 @@ test('installer contract is complete and process-scoped', () => {
   );
   assert.match(
     installer,
-    /allocate_shell_package_operation\(\)[\s\S]*secrets\.token_hex\(16\)[\s\S]*mkdir -m 0700[\s\S]*candidate\.apk[\s\S]*chmod 0666[\s\S]*chmod 0711/,
+    /select_shell_package_operation\(\)[\s\S]*secrets\.token_hex\(16\)[\s\S]*prepare_shell_package_operation\(\)[\s\S]*write_transaction_journal "\$phase"[\s\S]*allocate_shell_package_operation "\$operation"/,
+  );
+  assert.match(
+    installer,
+    /allocate_shell_package_operation\(\)[\s\S]*mkdir -m 0700[\s\S]*candidate\.apk[\s\S]*chmod 0666[\s\S]*chmod 0711/,
   );
   assert.doesNotMatch(
     shellFunction(installer, 'allocate_shell_package_operation'),
@@ -1672,6 +1734,9 @@ test('installer contract is complete and process-scoped', () => {
   assert.match(installer, /EXPECTED_APK_SHA256/);
   assert.match(installer, /APK_INSTALL_ATTEMPTED/);
   assert.match(installer, /"packageOperation": package_operation/);
+  assert.match(installer, /"packageOperationState": package_operation_state/);
+  assert.match(installer, /"apkRollbackRetryGeneration": int/);
+  assert.match(installer, /"apkInstallScanRequired": int/);
   assert.match(installer, /"controlTokenBridge": control_token_bridge/);
   assert.match(
     installer,
@@ -1730,7 +1795,7 @@ test('installer contract is complete and process-scoped', () => {
   );
   assert.match(
     installer,
-    /install_apk\(\)[\s\S]*allocate_shell_package_operation[\s\S]*sha256sum '\$candidate'[\s\S]*cmd package wait-for-handler --timeout 120000[\s\S]*EVOGENT_PACKAGE_RESULT_V1[\s\S]*mv '\$operation\/details\.tmp' '\$operation\/details'[\s\S]*mv '\$operation\/status\.tmp' '\$operation\/status'[\s\S]*chmod 0755/,
+    /install_apk\(\)[\s\S]*prepare_shell_package_operation[\s\S]*PACKAGE_OPERATION_STATE=launched[\s\S]*write_transaction_journal[\s\S]*sha256sum '\$candidate'[\s\S]*cmd package wait-for-handler --timeout 120000[\s\S]*EVOGENT_PACKAGE_RESULT_V1[\s\S]*mv '\$operation\/details\.tmp' '\$operation\/details'[\s\S]*mv '\$operation\/status\.tmp' '\$operation\/status'[\s\S]*chmod 0755/,
   );
   assert.match(
     installer,
@@ -1808,12 +1873,19 @@ wait_for_apk_backup_identity() {
   record exact
   [ "$(grep -c '^exact$' "$TRACE")" -ge "$EXACT_SUCCESS_AT" ]
 }
-rish_command() { record rollback; }
-install_apk() { record fallback; return 1; }
+wait_for_apk_rollback_availability() { return 0; }
+launch_native_apk_rollback() { record rollback; }
+complete_native_apk_rollback_operation() { record complete; }
+persist_restored_apk_review() { record review; }
 TRACE="$1"
 STAGING_ROOT="$2"
 APK_INSTALL_ATTEMPTED=1
 APK_BACKUP_READY=1
+APK_ROLLBACK_RETRY_GENERATION=0
+EXPECTED_APK_CODE=200
+PACKAGE_OPERATION=
+PACKAGE_OPERATION_STATE=
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
 PREVIOUS_APK_CODE="$3"
 PACKAGE_NAME=net.dangish.evogent
 APK_BACKUP="$2/backup.apk"
@@ -1845,14 +1917,14 @@ rollback_apk_native
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'reap\nidle\nversion\nrollback\nidle\nexact\n',
+    'idle\nversion\nrollback\nidle\nexact\ncomplete\n',
   );
 
   result = run({ currentCode: 100, exactSuccessAt: 1 });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'reap\nidle\nversion\nexact\n',
+    'idle\nversion\nexact\nreview\n',
   );
 
   result = run({
@@ -1863,7 +1935,7 @@ rollback_apk_native
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'reap\nidle\nversion\nexact\n',
+    'idle\nversion\nexact\nreview\n',
   );
 
   result = run({
@@ -1874,7 +1946,7 @@ rollback_apk_native
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'reap\nidle\nversion\nexact\n',
+    'idle\nversion\nexact\nreview\n',
   );
 });
 
@@ -2029,12 +2101,19 @@ APK_BACKUP_READY=1
 APK_CHANGED=1
 APK_INSTALL_ATTEMPTED=0
 PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+APK_ROLLBACK_RETRY_GENERATION=0
+APK_INSTALL_SCAN_REQUIRED=0
 APK_USER_ACTION_KIND=""
 APK_USER_ACTION_PURPOSE=""
 APK_USER_ACTION_EVIDENCE=""
 APK_USER_ACTION_TARGET_SHA256=""
 APK_USER_ACTION_TARGET_VERSION_CODE=""
 APK_USER_ACTION_TARGET_SIGNER_SHA256=""
+APK_USER_ACTION_CHALLENGE=""
+APK_USER_ACTION_CHALLENGE_CREATED_AT=""
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT=""
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
 PREVIOUS_APK_CODE=7
 PREVIOUS_APK_SIGNER=signer
 INITIAL_MIGRATION=0
@@ -2081,7 +2160,14 @@ write_transaction_journal quiesce_pending
   assert.equal(payload.androidRoleUserId, -1);
   assert.equal(payload.apkUserActionKind, '');
   assert.equal(payload.apkUserActionTargetVersionCode, -1);
-  assert.equal(payload.schema, 'evogent.phone.install-transaction.v4');
+  assert.equal(payload.apkUserActionChallenge, '');
+  assert.equal(payload.apkUserActionChallengeCreatedAtEpochSeconds, -1);
+  assert.equal(payload.apkUserActionChallengeExpiresAtEpochSeconds, -1);
+  assert.equal(payload.apkUserActionTrustedVerifierObserved, 0);
+  assert.equal(payload.packageOperationState, '');
+  assert.equal(payload.apkRollbackRetryGeneration, 0);
+  assert.equal(payload.apkInstallScanRequired, 0);
+  assert.equal(payload.schema, 'evogent.phone.install-transaction.v6');
 });
 
 test('durable committed decisions can never fall back into rollback', () => {
@@ -2106,6 +2192,12 @@ MIGRATION_STARTED=0
 INITIAL_MIGRATION=0
 ANDROID_ROLE_BACKUP_READY=1
 ANDROID_ROLES_APPLIED=1
+PACKAGE_OPERATION=
+PACKAGE_OPERATION_STATE=
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+APK_ROLLBACK_RETRY_GENERATION=0
+APK_INSTALL_SCAN_REQUIRED=0
+APK_USER_ACTION_KIND=
 COMMITTED=0
 CYCLE_GATE="/synthetic-home/.cycle.lock"
 WRITER_STATUS="$1"
@@ -2157,6 +2249,49 @@ printf 'rc=%s committed=%s phase=%s gate=%s\\n' \
   assert.match(
     shellFunction(installer, 'write_transaction_journal'),
     /raise SystemExit\(76\)/,
+  );
+});
+
+test('recovery normalizes absent numeric APK action fields before terminal guards', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const optional = shellFunction(installer, 'journal_optional_field');
+  const actionInteger = shellFunction(
+    installer,
+    'journal_optional_action_integer',
+  );
+  const recovery = shellFunction(installer, 'recover_interrupted_transaction');
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-action-integer-recovery-'),
+  );
+  const journal = path.join(fixture, 'journal.json');
+  fs.writeFileSync(
+    journal,
+    `${JSON.stringify({
+      apkUserActionChallengeCreatedAtEpochSeconds: -1,
+      apkUserActionChallengeExpiresAtEpochSeconds: 200,
+      apkUserActionTargetVersionCode: -1,
+    })}\n`,
+  );
+  const harness = `
+set -euo pipefail
+${optional}
+${actionInteger}
+printf 'version=[%s] created=[%s] expires=[%s]\\n' \
+  "$(journal_optional_action_integer "$1" apkUserActionTargetVersionCode)" \
+  "$(journal_optional_action_integer "$1" apkUserActionChallengeCreatedAtEpochSeconds)" \
+  "$(journal_optional_action_integer "$1" apkUserActionChallengeExpiresAtEpochSeconds)"
+`;
+  const result = spawnSync('bash', ['-c', harness, 'normalize-action', journal], {
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'version=[] created=[] expires=[200]\n');
+  assert.match(
+    recovery,
+    /journal_optional_action_integer[\s\S]*apkUserActionTargetVersionCode[\s\S]*journal_optional_action_integer[\s\S]*apkUserActionChallengeCreatedAtEpochSeconds[\s\S]*journal_optional_action_integer[\s\S]*apkUserActionChallengeExpiresAtEpochSeconds/,
   );
 });
 
@@ -3081,7 +3216,7 @@ validate_transaction_journal "$3"
   assert.notEqual(validate().status, 0);
 });
 
-test('v4 journal binds a foreground install action to one exact APK target', () => {
+test('v4-v6 attestation journals bind one exact APK target and restoration fence', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
     'utf8',
@@ -3220,11 +3355,217 @@ validate_transaction_journal "$3"
   result = validate();
   assert.equal(result.status, 0, result.stderr);
 
+  payload.schema = 'evogent.phone.install-transaction.v5';
+  payload.apkUserActionEvidence = 'fresh_display_0_operator_attestation_v1';
+  payload.apkUserActionChallenge = 'e'.repeat(64);
+  payload.apkUserActionChallengeCreatedAtEpochSeconds = 1_800_000_000;
+  payload.apkUserActionChallengeExpiresAtEpochSeconds = 1_800_000_900;
+  payload.apkUserActionTrustedVerifierObserved = 1;
+  result = validate();
+  assert.equal(result.status, 0, result.stderr);
+  payload.apkUserActionChallenge = 'short';
+  assert.notEqual(validate().status, 0);
+  payload.apkUserActionChallenge = 'e'.repeat(64);
+  payload.apkUserActionTrustedVerifierObserved = true;
+  assert.notEqual(validate().status, 0);
+  payload.apkUserActionTrustedVerifierObserved = 1;
+
+  payload.schema = 'evogent.phone.install-transaction.v6';
+  payload.packageOperationState = '';
+  payload.apkRollbackRetryGeneration = 1;
+  payload.apkInstallScanRequired = 1;
+  result = validate();
+  assert.equal(result.status, 0, result.stderr);
+  delete payload.packageOperationState;
+  assert.notEqual(validate().status, 0);
+  payload.packageOperationState = '';
+  payload.apkRollbackRetryGeneration = 0;
+  assert.notEqual(validate().status, 0);
+  payload.apkRollbackRetryGeneration = 1;
+
+  for (const invalidCode of [
+    '',
+    '0',
+    '01',
+    7,
+    '9223372036854775808',
+  ]) {
+    payload.previousApkCode = invalidCode;
+    assert.notEqual(
+      validate().status,
+      0,
+      `accepted invalid predecessor version code ${String(invalidCode)}`,
+    );
+  }
+  payload.previousApkCode = '7';
+  for (const invalidSigner of [
+    '',
+    'c'.repeat(63),
+    'C'.repeat(64),
+    null,
+  ]) {
+    payload.previousApkSigner = invalidSigner;
+    assert.notEqual(validate().status, 0, 'accepted invalid predecessor signer');
+  }
+  payload.previousApkSigner = previousSigner;
+  for (const [key, invalidValue] of [
+    ['apkChanged', 0],
+    ['apkInstallAttempted', 0],
+    ['apkBackupReady', 0],
+    ['androidRoleBackupReady', 0],
+    ['androidRoleRestoreRequired', 0],
+    [
+      'controlTokenBridge',
+      `/data/local/tmp/evogent-control-token.${'a'.repeat(32)}/payload`,
+    ],
+  ]) {
+    const original = payload[key];
+    payload[key] = invalidValue;
+    assert.notEqual(
+      validate().status,
+      0,
+      `accepted incomplete restoration-review authority ${key}`,
+    );
+    payload[key] = original;
+  }
+
   payload.apkUserActionKind = '';
   assert.notEqual(validate().status, 0);
   payload.apkUserActionKind = 'android_install_review';
   payload.schema = 'evogent.phone.install-transaction.v3';
   assert.notEqual(validate().status, 0);
+
+  payload.schema = 'evogent.phone.install-transaction.v6';
+  payload.phase = 'apk_rollback_retry_pending';
+  result = validate();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid install transaction phase/);
+});
+
+test('pinned display-0 attester rejects stale challenges and verifier bypass', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const source = path.join(
+    root,
+    'phone-paradigm/device/attest-install-review.py',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-install-attestation-'),
+  );
+  const home = path.join(fixture, 'home');
+  const releaseRoot = path.join(home, '.local/share/evogent');
+  const transaction = path.join(releaseRoot, 'install-transaction');
+  const migrations = path.join(releaseRoot, 'migrations');
+  const migration = path.join(migrations, 'install-release-new');
+  fs.mkdirSync(transaction, { recursive: true, mode: 0o700 });
+  fs.chmodSync(transaction, 0o700);
+  fs.mkdirSync(migration, { recursive: true, mode: 0o700 });
+  const attester = path.join(transaction, 'attest-install-review.py');
+  fs.copyFileSync(source, attester);
+  fs.chmodSync(attester, 0o700);
+  const journal = path.join(transaction, 'journal.json');
+  const attestation = path.join(
+    transaction,
+    'install-review-attestation.json',
+  );
+  const now = Math.floor(Date.now() / 1000);
+  const firstChallenge = 'a'.repeat(64);
+  const secondChallenge = 'b'.repeat(64);
+  const payload = {
+    apkBackupReady: 1,
+    apkChanged: 1,
+    apkInstallAttempted: 1,
+    apkInstallScanRequired: 0,
+    apkRollbackRetryGeneration: 0,
+    apkUserActionChallenge: firstChallenge,
+    apkUserActionChallengeCreatedAtEpochSeconds: now - 1,
+    apkUserActionChallengeExpiresAtEpochSeconds: now + 300,
+    apkUserActionEvidence: 'fresh_display_0_operator_attestation_v1',
+    apkUserActionKind: 'android_install_review',
+    apkUserActionPurpose: 'candidate_install',
+    apkUserActionTargetSha256: 'c'.repeat(64),
+    apkUserActionTargetSignerSha256: 'd'.repeat(64),
+    apkUserActionTargetVersionCode: 8,
+    apkUserActionTrustedVerifierObserved: 0,
+    controlTokenBridge: '',
+    migrationDir: migration,
+    packageOperation: '',
+    packageOperationState: '',
+    phase: 'apk_user_action_required',
+    releaseId: 'release-new',
+    root: releaseRoot,
+    schema: 'evogent.phone.install-transaction.v6',
+  };
+  const writeJournal = () => {
+    fs.writeFileSync(journal, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
+    fs.chmodSync(journal, 0o600);
+  };
+  const attest = (challenge, outcome) => spawnSync(
+    'python3',
+    [attester, '--fresh-display-0', challenge, outcome],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home },
+    },
+  );
+
+  writeJournal();
+  let result = attest(firstChallenge, 'no-scan-offered');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.statSync(attestation).mode & 0o777, 0o600);
+  const firstReceipt = fs.readFileSync(attestation);
+  const firstData = JSON.parse(firstReceipt);
+  assert.equal(firstData.challenge, firstChallenge);
+  assert.equal(firstData.displayEvidence, 'fresh_display_0_operator_v1');
+  assert.equal(
+    firstData.journalSha256,
+    crypto.createHash('sha256').update(fs.readFileSync(journal)).digest('hex'),
+  );
+
+  payload.apkUserActionChallenge = secondChallenge;
+  payload.apkUserActionChallengeCreatedAtEpochSeconds = now;
+  payload.apkUserActionTrustedVerifierObserved = 1;
+  payload.apkInstallScanRequired = 1;
+  fs.rmSync(attestation);
+  writeJournal();
+  fs.writeFileSync(attestation, firstReceipt, { mode: 0o600 });
+  fs.chmodSync(attestation, 0o600);
+  const readHarness = `
+set -uo pipefail
+${shellFunction(installer, 'read_install_review_attestation')}
+INSTALL_REVIEW_ATTESTATION="$1"
+TRANSACTION_JOURNAL="$2"
+RELEASE_ID=release-new
+MIGRATION_DIR="$3"
+APK_USER_ACTION_PURPOSE=candidate_install
+APK_USER_ACTION_TARGET_SHA256="${'c'.repeat(64)}"
+APK_USER_ACTION_TARGET_VERSION_CODE=8
+APK_USER_ACTION_TARGET_SIGNER_SHA256="${'d'.repeat(64)}"
+APK_USER_ACTION_CHALLENGE="${secondChallenge}"
+APK_USER_ACTION_CHALLENGE_CREATED_AT="${now}"
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT="${now + 300}"
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=1
+read_install_review_attestation
+`;
+  result = spawnSync(
+    'bash',
+    ['-c', readHarness, 'read-attestation', attestation, journal, migration],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0, 'pre-rotation receipt must be invalid');
+
+  fs.rmSync(attestation);
+  assert.notEqual(attest(firstChallenge, 'scan-completed').status, 0);
+  assert.notEqual(attest(secondChallenge, 'no-scan-offered').status, 0);
+  assert.equal(fs.existsSync(attestation), false);
+  result = attest(secondChallenge, 'scan-completed');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    JSON.parse(fs.readFileSync(attestation, 'utf8')).outcome,
+    'scan-completed',
+  );
 });
 
 test('package install result parser accepts only one bounded versioned status', () => {
@@ -3324,6 +3665,64 @@ Display 12:
   }
 });
 
+test('install review observation distinguishes trusted, known-other, and unknown', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'display_zero_top_resumed_package_from_dump')}
+${shellFunction(installer, 'android_install_foreground_state_once')}
+rish_command() {
+  cat "$DUMP_FILE"
+  return "$RISH_RC"
+}
+android_install_foreground_state_once
+`;
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-install-foreground-state-'),
+  );
+  function observe(payload, rishRc = 0) {
+    const dump = path.join(fixture, crypto.randomBytes(4).toString('hex'));
+    fs.writeFileSync(dump, payload);
+    return spawnSync(
+      'bash',
+      ['-c', harness],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          DUMP_FILE: dump,
+          RISH_RC: String(rishRc),
+        },
+      },
+    );
+  }
+
+  let result = observe(`Display #0 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{123 u0 com.android.vending/.ReviewActivity t42}
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'trusted\n');
+
+  result = observe(`Display #0 (activities from top to bottom):
+  topResumedActivity=ActivityRecord{123 u0 com.example.reader/.MainActivity t42}
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'other\n');
+
+  result = observe('unparseable activity state\n');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'unknown\n');
+
+  result = observe(`Display #0:
+  mResumedActivity: ActivityRecord{123 u0 com.example.reader/.MainActivity t42}
+`, 1);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'unknown\n');
+});
+
 test('foreground Android install review is typed, identity-bound, and resumable in place', () => {
   const installer = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/install-release.sh'),
@@ -3343,7 +3742,71 @@ set -uo pipefail
 ${shellFunction(installer, 'clear_apk_user_action_state')}
 ${shellFunction(installer, 'reconcile_android_install_user_action')}
 say() { printf 'status=%s\\n' "$*"; }
-stat() { printf '600\\n'; }
+persist_and_wait_android_install_review() {
+  prior_phase="$1"
+  APK_USER_ACTION_KIND=android_install_review
+  APK_USER_ACTION_PURPOSE="$2"
+  APK_USER_ACTION_EVIDENCE=fresh_display_0_operator_attestation_v1
+  APK_USER_ACTION_TARGET_VERSION_CODE="$3"
+  APK_USER_ACTION_TARGET_SIGNER_SHA256="$4"
+  APK_USER_ACTION_TARGET_SHA256="$5"
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$8"
+  write_transaction_journal apk_user_action_required
+  say "USER_ACTION_REQUIRED kind=android_install_review purpose=$2"
+  say "INSTALL_SECURITY_POLICY play_protect_scan=required_when_offered bypass=prohibited"
+  say "never choose an install-without-scanning option or suppress verification"
+  outcome="$INITIAL_ATTESTATION"
+  [ "$outcome" != missing ] || return 1
+  if [ "$8" = 1 ] && [ "$outcome" != scan-completed ]; then
+    say "Install-review attestation was rejected"
+    return 1
+  fi
+  clear_apk_user_action_state
+  write_transaction_journal "$prior_phase"
+  say "Fresh display-0 operator attestation accepted ($outcome)"
+}
+stat() {
+  case "$2" in
+    %a)
+      [ "$3" != "$TRANSACTION_ATTESTER" ] || { printf '700\\n'; return; }
+      printf '600\\n'
+      ;;
+    %u) id -u ;;
+    %h) printf '1\\n' ;;
+    *) return 1 ;;
+  esac
+}
+clear_install_review_attestation() {
+  rm -f -- "$INSTALL_REVIEW_ATTESTATION"
+}
+rotate_android_install_review_challenge() {
+  CHALLENGE_COUNT=$((CHALLENGE_COUNT + 1))
+  APK_USER_ACTION_CHALLENGE="$(printf '%064d' "$CHALLENGE_COUNT")"
+  APK_USER_ACTION_CHALLENGE_CREATED_AT=1
+  APK_USER_ACTION_CHALLENGE_EXPIRES_AT="$2"
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$1"
+  clear_install_review_attestation
+  write_transaction_journal apk_user_action_required
+  outcome="$INITIAL_ATTESTATION"
+  [ "$CHALLENGE_COUNT" -eq 1 ] || outcome="$ROTATED_ATTESTATION"
+  if [ "$outcome" != missing ]; then
+    printf '%s\\n' "$outcome" > "$INSTALL_REVIEW_ATTESTATION"
+    chmod 600 "$INSTALL_REVIEW_ATTESTATION"
+  fi
+}
+announce_android_install_review_attestation() {
+  say "INSTALL_REVIEW_ATTESTATION challenge=$APK_USER_ACTION_CHALLENGE"
+  say "Inspect a fresh display-0 image immediately before recording the outcome."
+}
+read_install_review_attestation() {
+  [ -f "$INSTALL_REVIEW_ATTESTATION" ] || return 1
+  outcome="$(cat "$INSTALL_REVIEW_ATTESTATION")"
+  [ "$outcome" = scan-completed ] || [ "$outcome" = no-scan-offered ] || return 1
+  if [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 1 ]; then
+    [ "$outcome" = scan-completed ] || return 1
+  fi
+  printf '%s\\n' "$outcome"
+}
 sha256_file() {
   if [ "$1" = /candidate.apk ]; then
     printf '%s\\n' "$TARGET_SHA"
@@ -3353,7 +3816,7 @@ sha256_file() {
 }
 installed_apk_identity_stable() {
   if [ "$2" = "$EXPECTED_APK_CODE" ]; then
-    [ "$TARGET_ALREADY" = 1 ] || [ "$ACTION_WRITTEN" = 1 ]
+    [ "$TARGET_ALREADY" = 1 ] || [ -e "$ACTION_MARKER" ]
   else
     [ "$COUNTERPART_KNOWN" = 1 ]
   fi
@@ -3362,17 +3825,50 @@ installed_apk_matches_identity() {
   [ "$ACTION_WRITTEN" = 1 ] && [ "$2" = "$EXPECTED_APK_CODE" ]
 }
 wait_for_package_manager_idle() { return 0; }
-trusted_android_install_foreground() { [ "$TRUSTED_FOREGROUND" = 1 ]; }
+android_install_foreground_state_once() {
+  if [ -e "$ACTION_MARKER" ]; then
+    if [ "$ROTATE_AFTER_ATTESTATION" = 1 ] \
+        && [ "$CHALLENGE_COUNT" -eq 1 ] \
+        && [ ! -e "$ROTATION_SEEN" ]; then
+      : > "$ROTATION_SEEN"
+      printf 'trusted\\n'
+      return
+    fi
+    printf 'other\\n'
+  elif [ "$TRUSTED_FOREGROUND" = 1 ]; then
+    printf 'trusted\\n'
+  else
+    printf 'other\\n'
+  fi
+}
+trusted_android_install_foreground() {
+  [ "$(android_install_foreground_state_once)" = trusted ]
+}
 write_transaction_journal() {
   printf 'phase=%s\\n' "$1" >> "$TRACE"
   TRANSACTION_PHASE="$1"
-  [ "$1" != apk_user_action_required ] || ACTION_WRITTEN=1
+  [ "$1" != apk_user_action_required ] || {
+    ACTION_WRITTEN=1
+    : > "$ACTION_MARKER"
+  }
 }
-date() { command date "$@"; }
+date() {
+  if [ "\${1:-}" = +%s ]; then
+    now=$(cat "$CLOCK_FILE")
+    now=$((now + 1))
+    printf '%s\\n' "$now" > "$CLOCK_FILE"
+    printf '%s\\n' "$now"
+  else
+    command date "$@"
+  fi
+}
 sleep() { :; }
 STAGE="$1"
 TRACE="$2"
 RETAINED="$3"
+INSTALL_REVIEW_ATTESTATION="$1/install-review-attestation.json"
+TRANSACTION_ATTESTER="$1/attest-install-review.py"
+ACTION_MARKER="$1/install-review-action"
 TRANSACTION_JOURNAL_WRITTEN=1
 TRANSACTION_PHASE=apk_install_pending
 APK_BACKUP=/backup.apk
@@ -3381,8 +3877,10 @@ EXPECTED_APK_SIGNER="$TARGET_SIGNER"
 EXPECTED_APK_SHA256="$TARGET_SHA"
 PREVIOUS_APK_CODE=7
 PREVIOUS_APK_SIGNER="$PRIOR_SIGNER"
-INSTALL_USER_ACTION_WAIT_SECONDS=2
+INSTALL_USER_ACTION_WAIT_SECONDS=4
 ACTION_WRITTEN=0
+CHALLENGE_COUNT=0
+rm -f -- "$ACTION_MARKER"
 clear_apk_user_action_state
 if reconcile_android_install_user_action \
     /candidate.apk upgrade "$RETAINED"; then
@@ -3396,6 +3894,15 @@ printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
 `;
   function run(env) {
     const trace = path.join(fixture, `trace-${crypto.randomBytes(4).toString('hex')}`);
+    const clock = path.join(fixture, `clock-${crypto.randomBytes(4).toString('hex')}`);
+    const rotationSeen = path.join(
+      fixture,
+      `rotation-${crypto.randomBytes(4).toString('hex')}`,
+    );
+    const attester = path.join(fixture, 'attest-install-review.py');
+    fs.writeFileSync(attester, '#!/bin/sh\\n', { mode: 0o700 });
+    fs.chmodSync(attester, 0o700);
+    fs.writeFileSync(clock, '0\\n');
     const result = spawnSync(
       'bash',
       ['-c', harness, 'install-user-action', fixture, trace, retained],
@@ -3405,8 +3912,13 @@ printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
           ...process.env,
           ACTION_WRITTEN: '0',
           COUNTERPART_KNOWN: '1',
+          CLOCK_FILE: clock,
+          INITIAL_ATTESTATION: 'scan-completed',
           PRIOR_SHA: priorSha,
           PRIOR_SIGNER: priorSigner,
+          ROTATED_ATTESTATION: 'missing',
+          ROTATE_AFTER_ATTESTATION: '0',
+          ROTATION_SEEN: rotationSeen,
           TARGET_ALREADY: '0',
           TARGET_SHA: targetSha,
           TARGET_SIGNER: targetSigner,
@@ -3425,7 +3937,18 @@ printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
   let outcome = run({});
   assert.equal(outcome.result.status, 0, outcome.result.stderr);
   assert.match(outcome.result.stdout, /USER_ACTION_REQUIRED/);
-  assert.match(outcome.result.stdout, /foreground installation action completed/);
+  assert.match(
+    outcome.result.stdout,
+    /play_protect_scan=required_when_offered bypass=prohibited/,
+  );
+  assert.match(
+    outcome.result.stdout,
+    /never choose an install-without-scanning option or suppress verification/,
+  );
+  assert.match(
+    outcome.result.stdout,
+    /Fresh display-0 operator attestation accepted \(scan-completed\)/,
+  );
   assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
   assert.equal(
     outcome.trace,
@@ -3438,10 +3961,34 @@ printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
   assert.match(outcome.result.stdout, /result=1 action= purpose= evidence=/);
   assert.equal(outcome.trace, '');
 
-  outcome = run({ TARGET_ALREADY: '1', COUNTERPART_KNOWN: '0' });
+  outcome = run({
+    INITIAL_ATTESTATION: 'no-scan-offered',
+    TARGET_ALREADY: '1',
+    COUNTERPART_KNOWN: '0',
+    TRUSTED_FOREGROUND: '0',
+  });
   assert.equal(outcome.result.status, 0, outcome.result.stderr);
   assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
-  assert.equal(outcome.trace, '');
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_install_pending\n',
+  );
+
+  outcome = run({
+    INITIAL_ATTESTATION: 'missing',
+    TARGET_ALREADY: '1',
+    COUNTERPART_KNOWN: '0',
+    TRUSTED_FOREGROUND: '0',
+  });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
+
+  outcome = run({ INITIAL_ATTESTATION: 'no-scan-offered' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /attestation was rejected/);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
 
   assert.match(
     shellFunction(installer, 'install_apk'),
@@ -3449,7 +3996,271 @@ printf 'result=%s action=%s purpose=%s evidence=%s\\n' \
   );
   assert.match(
     installer,
-    /"schema": "evogent[.]phone[.]install-transaction[.]v4"/,
+    /"schema": "evogent[.]phone[.]install-transaction[.]v6"/,
+  );
+});
+
+test('successful package install still gates an asynchronously surfaced verifier review', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-post-success-install-review-'),
+  );
+  const targetSha = 'a'.repeat(64);
+  const targetSigner = 'b'.repeat(64);
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'clear_apk_user_action_state')}
+${shellFunction(installer, 'persist_and_wait_android_install_review')}
+${shellFunction(installer, 'reconcile_successful_android_install_foreground')}
+say() { printf 'status=%s\\n' "$*"; }
+stat() {
+  case "$2" in
+    %a)
+      [ "$3" != "$TRANSACTION_ATTESTER" ] || { printf '700\\n'; return; }
+      printf '600\\n'
+      ;;
+    %u) id -u ;;
+    %h) printf '1\\n' ;;
+    *) return 1 ;;
+  esac
+}
+clear_install_review_attestation() {
+  rm -f -- "$INSTALL_REVIEW_ATTESTATION"
+}
+rotate_android_install_review_challenge() {
+  CHALLENGE_COUNT=$((CHALLENGE_COUNT + 1))
+  APK_USER_ACTION_CHALLENGE="$(printf '%064d' "$CHALLENGE_COUNT")"
+  APK_USER_ACTION_CHALLENGE_CREATED_AT=1
+  APK_USER_ACTION_CHALLENGE_EXPIRES_AT="$2"
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$1"
+  clear_install_review_attestation
+  write_transaction_journal apk_user_action_required
+  outcome="$INITIAL_ATTESTATION"
+  [ "$CHALLENGE_COUNT" -eq 1 ] || outcome="$ROTATED_ATTESTATION"
+  if [ "$outcome" = auto ]; then
+    outcome=no-scan-offered
+    [ "$1" = 0 ] || outcome=scan-completed
+  fi
+  if [ "$outcome" != missing ]; then
+    printf '%s\\n' "$outcome" > "$INSTALL_REVIEW_ATTESTATION"
+    chmod 600 "$INSTALL_REVIEW_ATTESTATION"
+  fi
+}
+announce_android_install_review_attestation() {
+  say "INSTALL_REVIEW_ATTESTATION challenge=$APK_USER_ACTION_CHALLENGE"
+}
+read_install_review_attestation() {
+  [ -f "$INSTALL_REVIEW_ATTESTATION" ] || return 1
+  outcome="$(cat "$INSTALL_REVIEW_ATTESTATION")"
+  [ "$outcome" = scan-completed ] || [ "$outcome" = no-scan-offered ] || return 1
+  if [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 1 ]; then
+    [ "$outcome" = scan-completed ] || return 1
+  fi
+  printf '%s\\n' "$outcome"
+}
+sha256_file() { printf '%s\\n' "$TARGET_SHA"; }
+installed_apk_identity_stable() { [ "$IDENTITY_READY" = 1 ]; }
+wait_for_package_manager_idle() { return 0; }
+android_install_foreground_state_once() {
+  if [ "$ACTION_WRITTEN" = 1 ]; then
+    if [ "$RESOLUTION_STATE" = trusted-once ]; then
+      if [ ! -e "$ROTATION_SEEN" ]; then
+        : > "$ROTATION_SEEN"
+        printf 'trusted\\n'
+      else
+        printf 'other\\n'
+      fi
+      return
+    fi
+    if [ "$RESOLUTION_STATE" = trusted-delayed ]; then
+      now="$(cat "$CLOCK_FILE")"
+      if [ "$now" -ge "$DELAYED_TRUST_AT" ] \
+          && [ ! -e "$ROTATION_SEEN" ]; then
+        : > "$ROTATION_SEEN"
+        printf 'trusted\\n'
+      else
+        printf 'other\\n'
+      fi
+      return
+    fi
+    printf '%s\\n' "$RESOLUTION_STATE"
+  elif [ "$PROMPT_SEEN" = 1 ]; then
+    printf 'trusted\\n'
+  else
+    printf 'other\\n'
+  fi
+}
+write_transaction_journal() {
+  printf 'phase=%s\\n' "$1" >> "$TRACE"
+  TRANSACTION_PHASE="$1"
+  [ "$1" != apk_user_action_required ] || ACTION_WRITTEN=1
+}
+date() {
+  if [ "\${1:-}" = +%s ]; then
+    now=$(cat "$CLOCK_FILE")
+    now=$((now + 1))
+    printf '%s\\n' "$now" > "$CLOCK_FILE"
+    printf '%s\\n' "$now"
+  else
+    command date "$@"
+  fi
+}
+sleep() { :; }
+STAGE="$1"
+TRACE="$2"
+INSTALL_REVIEW_ATTESTATION="$1/install-review-attestation.json"
+TRANSACTION_ATTESTER="$1/attest-install-review.py"
+TRANSACTION_JOURNAL_WRITTEN=1
+TRANSACTION_PHASE=apk_install_pending
+EXPECTED_APK_CODE=8
+EXPECTED_APK_SIGNER="$TARGET_SIGNER"
+PREVIOUS_APK_CODE=7
+PREVIOUS_APK_SIGNER="${'c'.repeat(64)}"
+INSTALL_POST_SUCCESS_REVIEW_SECONDS=3
+INSTALL_USER_ACTION_WAIT_SECONDS=4
+ACTION_WRITTEN=0
+CHALLENGE_COUNT=0
+clear_apk_user_action_state
+if reconcile_successful_android_install_foreground /candidate.apk upgrade; then
+  rc=0
+else
+  rc=$?
+fi
+printf 'result=%s action=%s purpose=%s evidence=%s\\n' \\
+  "$rc" "$APK_USER_ACTION_KIND" "$APK_USER_ACTION_PURPOSE" \\
+  "$APK_USER_ACTION_EVIDENCE"
+`;
+  function run(env) {
+    const trace = path.join(fixture, `trace-${crypto.randomBytes(4).toString('hex')}`);
+    const clock = path.join(fixture, `clock-${crypto.randomBytes(4).toString('hex')}`);
+    const rotationSeen = path.join(
+      fixture,
+      `rotation-${crypto.randomBytes(4).toString('hex')}`,
+    );
+    const attester = path.join(fixture, 'attest-install-review.py');
+    fs.writeFileSync(attester, '#!/bin/sh\\n', { mode: 0o700 });
+    fs.chmodSync(attester, 0o700);
+    fs.writeFileSync(clock, '0\n');
+    const result = spawnSync(
+      'bash',
+      ['-c', harness, 'post-success-review', fixture, trace],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ACTION_WRITTEN: '0',
+          DELAYED_TRUST_AT: '4',
+          IDENTITY_READY: '1',
+          INITIAL_ATTESTATION: 'auto',
+          PROMPT_SEEN: '1',
+          RESOLUTION_STATE: 'other',
+          ROTATED_ATTESTATION: 'auto',
+          ROTATION_SEEN: rotationSeen,
+          TARGET_SHA: targetSha,
+          TARGET_SIGNER: targetSigner,
+          TRACE: trace,
+          CLOCK_FILE: clock,
+          ...env,
+        },
+      },
+    );
+    return {
+      result,
+      trace: fs.existsSync(trace) ? fs.readFileSync(trace, 'utf8') : '',
+    };
+  }
+
+  let outcome = run({});
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /USER_ACTION_REQUIRED/);
+  assert.match(
+    outcome.result.stdout,
+    /surfaced a trusted install or verification review after package success/,
+  );
+  assert.match(
+    outcome.result.stdout,
+    /Fresh display-0 operator attestation accepted \(scan-completed\); exact installed identity reproved/,
+  );
+  assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_install_pending\n',
+  );
+
+  outcome = run({ PROMPT_SEEN: '0' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=0 action= purpose= evidence=/);
+  assert.match(
+    outcome.result.stdout,
+    /operator attestation is still required/,
+  );
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_install_pending\n',
+  );
+
+  outcome = run({
+    INITIAL_ATTESTATION: 'missing',
+    PROMPT_SEEN: '0',
+  });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
+
+  outcome = run({
+    INITIAL_ATTESTATION: 'no-scan-offered',
+    PROMPT_SEEN: '0',
+    RESOLUTION_STATE: 'trusted-once',
+    ROTATED_ATTESTATION: 'missing',
+  });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /prior attestation challenge was revoked/);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_user_action_required\n',
+  );
+
+  outcome = run({
+    INITIAL_ATTESTATION: 'no-scan-offered',
+    PROMPT_SEEN: '0',
+    RESOLUTION_STATE: 'trusted-delayed',
+    ROTATED_ATTESTATION: 'missing',
+  });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /prior attestation challenge was revoked/);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(
+    outcome.trace,
+    'phase=apk_user_action_required\nphase=apk_user_action_required\n',
+  );
+
+  outcome = run({ IDENTITY_READY: '0' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
+
+  outcome = run({ RESOLUTION_STATE: 'unknown' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
+
+  outcome = run({ RESOLUTION_STATE: 'trusted' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(outcome.result.stdout, /result=1/);
+  assert.equal(outcome.trace, 'phase=apk_user_action_required\n');
+
+  const installFunction = shellFunction(installer, 'install_apk');
+  assert.match(
+    installFunction,
+    /package_status.*-ne 0[\s\S]*reconcile_android_install_user_action[\s\S]*return 0/,
+  );
+  assert.match(
+    installFunction,
+    /rm -f -- "\$retained_result"[\s\S]*reconcile_successful_android_install_foreground "\$apk" "\$mode"/,
   );
 });
 
@@ -3631,6 +4442,8 @@ PHONE_STATE="$STATE/phone-tools"
 APK_CHANGED=0
 APK_INSTALL_ATTEMPTED=1
 PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
 CONTROL_TOKEN_BRIDGE=""
 ANDROID_ROLE_RESTORE_REQUIRED=0
 INITIAL_MIGRATION=0
@@ -5939,7 +6752,10 @@ test('package install trusts a complete private marker, not rish transport outpu
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-package-install-'));
   const apk = path.join(fixture, 'candidate.apk');
   const stage = path.join(fixture, 'stage');
-  const operation = path.join(fixture, 'shell-operation');
+  const operation = path.join(
+    fixture,
+    `evogent-package-op.${'a'.repeat(32)}`,
+  );
   const log = path.join(fixture, 'install-fixture.log');
   const trace = path.join(fixture, 'trace');
   const fakeBin = path.join(fixture, 'bin');
@@ -5970,12 +6786,22 @@ say() { printf '%s\\n' "$*"; }
 sleep() { :; }
 sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 fsync_regular_file_and_parent() { :; }
-allocate_shell_package_operation() {
+reconcile_android_install_user_action() { return 1; }
+reconcile_successful_android_install_foreground() {
+  record post-success-review
+  return "$POST_REVIEW_RESULT"
+}
+prepare_shell_package_operation() {
   record allocate
   mkdir -p "$OPERATION"
   : > "$OPERATION/candidate.apk"
   chmod 0666 "$OPERATION/candidate.apk"
-  printf '%s\\n' "$OPERATION"
+  PACKAGE_OPERATION="$OPERATION"
+  PACKAGE_OPERATION_STATE=prepared
+}
+write_transaction_journal() {
+  record "journal:$PACKAGE_OPERATION_STATE"
+  TRANSACTION_PHASE="$1"
 }
 remove_shell_package_operation() {
   record cleanup
@@ -5999,19 +6825,27 @@ rish_command() {
 STAGE="$STAGE_DIR"
 LOG="$INSTALL_LOG"
 PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+TRANSACTION_JOURNAL_WRITTEN=1
+TRANSACTION_PHASE=apk_install_pending
 if install_apk "$APK_PATH" "$INSTALL_MODE"; then rc=0; else rc=$?; fi
-printf 'rc=%s\\n' "$rc"
+if [ -n "$PACKAGE_OPERATION" ]; then retained=yes; else retained=no; fi
+printf 'rc=%s state=%s retained=%s unresolved=%s\\n' \
+  "$rc" "$PACKAGE_OPERATION_STATE" "$retained" \
+  "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED"
 `;
   function runInstall({
     installMode = 'upgrade',
     packageStatus = '0',
     publishResult = 'actual',
     rishResult = '0',
+    postReviewResult = '0',
   } = {}) {
     fs.rmSync(operation, { recursive: true, force: true });
     fs.rmSync(trace, { force: true });
     fs.rmSync(
-      `${log.slice(0, -4)}-package-manager-${installMode}.log`,
+      `${log.slice(0, -4)}-package-manager-${installMode}-${'a'.repeat(32)}.log`,
       { force: true },
     );
     return spawnSync('bash', ['-c', harness], {
@@ -6025,6 +6859,7 @@ printf 'rc=%s\\n' "$rc"
         OPERATION: operation,
         PACKAGE_STATUS: packageStatus,
         PRIVATE_DETAIL: 'diagnostic that must stay private',
+        POST_REVIEW_RESULT: postReviewResult,
         PUBLISH_RESULT: publishResult,
         RISH_RESULT: rishResult,
         STAGE_DIR: stage,
@@ -6035,30 +6870,384 @@ printf 'rc=%s\\n' "$rc"
 
   let result = runInstall({ rishResult: '9' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /rc=0/);
+  assert.match(result.stdout, /rc=0 state= retained=no unresolved=0/);
   assert.doesNotMatch(result.stdout + result.stderr, /diagnostic that must stay private/);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\ncleanup\n');
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'allocate\njournal:launched\nrish\ncleanup\npost-success-review\n',
+  );
   assert.equal(fs.existsSync(operation), false);
+
+  result = runInstall({ postReviewResult: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /rc=1 state=launched retained=yes unresolved=1/,
+  );
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'allocate\njournal:launched\nrish\ncleanup\npost-success-review\n',
+  );
 
   result = runInstall({ packageStatus: '7' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /rc=1/);
+  assert.match(result.stdout, /rc=1 state=launched retained=yes unresolved=1/);
   assert.doesNotMatch(result.stdout + result.stderr, /diagnostic that must stay private/);
-  const retained = `${log.slice(0, -4)}-package-manager-upgrade.log`;
+  const retained =
+    `${log.slice(0, -4)}-package-manager-upgrade-${'a'.repeat(32)}.log`;
   assert.match(fs.readFileSync(retained, 'utf8'), /diagnostic that must stay private/);
   assert.equal(fs.statSync(retained).mode & 0o777, 0o600);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\ncleanup\n');
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'allocate\njournal:launched\nrish\ncleanup\n',
+  );
 
   result = runInstall({ publishResult: 'none' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /rc=1/);
+  assert.match(result.stdout, /rc=1 state=launched retained=yes unresolved=1/);
   assert.equal(fs.existsSync(operation), true);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'allocate\nrish\n');
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'allocate\njournal:launched\nrish\n',
+  );
 
   result = runInstall({ installMode: 'unknown' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /rc=1/);
   assert.equal(fs.existsSync(trace), false);
+});
+
+test('native APK rollback is durably fenced through result and review publication', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const parser = shellFunction(installer, 'read_package_result_status');
+  const launch = shellFunction(installer, 'launch_native_apk_rollback');
+  const complete = shellFunction(
+    installer,
+    'complete_native_apk_rollback_operation',
+  );
+  const restoredReview = shellFunction(
+    installer,
+    'persist_restored_apk_review',
+  );
+  const launchJournal = launch.indexOf(
+    'write_transaction_journal "$TRANSACTION_PHASE"',
+  );
+  const rollbackCommand = launch.indexOf("cmd package rollback-app");
+  assert.ok(launchJournal >= 0 && launchJournal < rollbackCommand);
+  const removeNonce = complete.indexOf(
+    'remove_shell_package_operation "$operation"',
+  );
+  const clearOperation = complete.indexOf('PACKAGE_OPERATION=""', removeNonce);
+  const publishReview = complete.indexOf(
+    'persist_restored_apk_review',
+    clearOperation,
+  );
+  const clearGuard = complete.indexOf(
+    'PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0',
+    publishReview,
+  );
+  assert.ok(
+    removeNonce >= 0
+      && removeNonce < clearOperation
+      && clearOperation < publishReview
+      && publishReview < clearGuard,
+  );
+
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-native-rollback-fence-'),
+  );
+  const stage = path.join(fixture, 'stage');
+  const operation = path.join(
+    fixture,
+    `evogent-package-op.${'a'.repeat(32)}`,
+  );
+  const log = path.join(fixture, 'install.log');
+  const trace = path.join(fixture, 'trace');
+  const retained =
+    `${log.slice(0, -4)}-package-manager-native-rollback-${'a'.repeat(32)}.log`;
+  const launchHarness = `
+set -uo pipefail
+${parser}
+${launch}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+sleep() { :; }
+fsync_regular_file_and_parent() { record fsync; }
+write_transaction_journal() {
+  JOURNAL_CALLS=$((JOURNAL_CALLS + 1))
+  record "journal:$1:$PACKAGE_OPERATION_STATE:\${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}"
+  if [ "$JOURNAL_CALLS" = "$FAIL_JOURNAL_AT" ]; then
+    if [ "$JOURNAL_RESULT" = 76 ]; then TRANSACTION_PHASE="$1"; fi
+    return "$JOURNAL_RESULT"
+  fi
+  TRANSACTION_PHASE="$1"
+  return 0
+}
+prepare_shell_package_operation() {
+  PACKAGE_OPERATION="$OPERATION"
+  PACKAGE_OPERATION_STATE=prepared
+  write_transaction_journal "$TRANSACTION_PHASE" || return 1
+  record allocate
+  mkdir -p "$OPERATION"
+  : > "$OPERATION/candidate.apk"
+  chmod 0666 "$OPERATION/candidate.apk"
+}
+rish_command() {
+  record rish
+  if [ "$PUBLISH_RESULT" = valid ]; then
+    printf '%s\\n' "$PRIVATE_DETAIL" > "$OPERATION/details"
+    printf 'EVOGENT_PACKAGE_RESULT_V1\\n%s\\n' \
+      "$PACKAGE_STATUS" > "$OPERATION/status"
+    chmod 0444 "$OPERATION/details" "$OPERATION/status"
+  elif [ "$PUBLISH_RESULT" = invalid ]; then
+    printf 'partial\\n' > "$OPERATION/status"
+    chmod 0444 "$OPERATION/status"
+  fi
+  return "$RISH_RESULT"
+}
+JOURNAL_CALLS=0
+STAGE="$STAGE_DIR"
+LOG="$INSTALL_LOG"
+PACKAGE_NAME=net.dangish.evogent
+PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+APK_ROLLBACK_RETRY_GENERATION=0
+TRANSACTION_JOURNAL_WRITTEN=1
+TRANSACTION_PHASE=health_pending
+if launch_native_apk_rollback; then rc=0; else rc=$?; fi
+if [ -n "$PACKAGE_OPERATION" ]; then retained=yes; else retained=no; fi
+printf 'rc=%s phase=%s state=%s guard=%s retained=%s\\n' \
+  "$rc" "$TRANSACTION_PHASE" "$PACKAGE_OPERATION_STATE" \
+  "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" "$retained"
+`;
+  function runLaunch({
+    failJournalAt = '0',
+    journalResult = '1',
+    packageStatus = '0',
+    publishResult = 'valid',
+    rishResult = '0',
+  } = {}) {
+    fs.rmSync(stage, { recursive: true, force: true });
+    fs.rmSync(operation, { recursive: true, force: true });
+    fs.rmSync(trace, { force: true });
+    fs.rmSync(retained, { force: true });
+    fs.mkdirSync(stage);
+    return spawnSync('bash', ['-c', launchHarness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        FAIL_JOURNAL_AT: failJournalAt,
+        INSTALL_LOG: log,
+        JOURNAL_RESULT: journalResult,
+        OPERATION: operation,
+        PACKAGE_STATUS: packageStatus,
+        PRIVATE_DETAIL: 'private native rollback diagnostic',
+        PUBLISH_RESULT: publishResult,
+        RISH_RESULT: rishResult,
+        STAGE_DIR: stage,
+        TRACE: trace,
+      },
+    });
+  }
+
+  let result = runLaunch();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /rc=0 phase=apk_install_pending state=launched guard=1 retained=yes/,
+  );
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'journal:apk_install_pending::0\n'
+      + 'journal:apk_install_pending:prepared:0\n'
+      + 'allocate\n'
+      + 'journal:apk_install_pending:launched:1\n'
+      + 'rish\n',
+  );
+
+  result = runLaunch({ packageStatus: '7' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 .*state=launched guard=1 retained=yes/);
+  assert.equal(fs.statSync(retained).mode & 0o777, 0o600);
+  assert.match(
+    fs.readFileSync(retained, 'utf8'),
+    /private native rollback diagnostic/,
+  );
+
+  result = runLaunch({ publishResult: 'none' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 .*state=launched guard=1 retained=yes/);
+
+  result = runLaunch({ failJournalAt: '3', journalResult: '76' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 .*state=launched guard=1 retained=yes/);
+  assert.doesNotMatch(fs.readFileSync(trace, 'utf8'), /^rish$/m);
+
+  const completeHarness = `
+set -uo pipefail
+${complete}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+remove_shell_package_operation() {
+  record "remove:$1"
+  return "$REMOVE_RESULT"
+}
+persist_restored_apk_review() {
+  record "review:$REVIEW_RESULT"
+  return "$REVIEW_RESULT"
+}
+PACKAGE_OPERATION="/data/local/tmp/evogent-package-op.${'b'.repeat(32)}"
+PACKAGE_OPERATION_STATE=launched
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+TRANSACTION_PHASE=apk_install_pending
+if complete_native_apk_rollback_operation; then rc=0; else rc=$?; fi
+if [ -n "$PACKAGE_OPERATION" ]; then retained=yes; else retained=no; fi
+printf 'rc=%s state=%s guard=%s retained=%s\\n' \
+  "$rc" "$PACKAGE_OPERATION_STATE" \
+  "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" "$retained"
+`;
+  function runComplete(removeResult = '0', reviewResult = '0') {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', completeHarness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        REMOVE_RESULT: removeResult,
+        REVIEW_RESULT: reviewResult,
+        TRACE: trace,
+      },
+    });
+  }
+
+  result = runComplete();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 state= guard=0 retained=no/);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    `remove:/data/local/tmp/evogent-package-op.${'b'.repeat(32)}\nreview:0\n`,
+  );
+
+  result = runComplete('0', '76');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 state=launched guard=1 retained=yes/);
+
+  result = runComplete('1', '0');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 state=launched guard=1 retained=yes/);
+  assert.doesNotMatch(fs.readFileSync(trace, 'utf8'), /^review:/m);
+
+  const restoredHarness = `
+set -uo pipefail
+${restoredReview}
+sha256_file() { printf '%s\\n' "${'d'.repeat(64)}"; }
+persist_and_wait_android_install_review() {
+  printf '%s:%s:%s:%s:%s:trusted=%s:generation=%s\\n' \
+    "$1" "$2" "$3" "$4" "$5" "$8" \
+    "$APK_ROLLBACK_RETRY_GENERATION" >> "$TRACE"
+  return "$REVIEW_RESULT"
+}
+STAGE="$1"
+APK_BACKUP="$1/backup.apk"
+PREVIOUS_APK_CODE=7
+PREVIOUS_APK_SIGNER="${'c'.repeat(64)}"
+APK_ROLLBACK_RETRY_GENERATION="$INITIAL_GENERATION"
+PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+APK_INSTALL_SCAN_REQUIRED=0
+APK_USER_ACTION_KIND=""
+if persist_restored_apk_review; then rc=0; else rc=$?; fi
+printf 'rc=%s generation=%s\\n' "$rc" "$APK_ROLLBACK_RETRY_GENERATION"
+`;
+  function runRestored(initialGeneration = '0', reviewResult = '0') {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', restoredHarness, 'review', fixture], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        INITIAL_GENERATION: initialGeneration,
+        REVIEW_RESULT: reviewResult,
+        TRACE: trace,
+      },
+    });
+  }
+  result = runRestored();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 generation=1/);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    `apk_install_pending:rollback_restore:7:${'c'.repeat(64)}:${'d'.repeat(64)}:trusted=0:generation=1\n`,
+  );
+  result = runRestored('1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 generation=1/);
+  assert.equal(fs.existsSync(trace), false);
+});
+
+test('EXIT cleanup cannot mutate or discard across the live launch-fence gap', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const rollback = shellFunction(installer, 'rollback_release');
+  const cleanup = shellFunction(installer, 'cleanup');
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-launch-gap-cleanup-'),
+  );
+  const trace = path.join(fixture, 'trace');
+  const harness = `
+set -uo pipefail
+${rollback}
+${cleanup}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+quiesce_control_plane() { record mutation; }
+clear_transaction_journal() { record clear; }
+COMMITTED=0
+ROLLBACK_ATTEMPTED=0
+ROLLBACK_FAILED=0
+SWITCH_STARTED="$MUTATED"
+MIGRATION_STARTED=0
+QUIESCED=0
+CONTROL_PLANE_MUTATION_STARTED=0
+TRANSACTION_JOURNAL_WRITTEN=1
+PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+CYCLE_GATE_HELD=0
+CONTROL_MUTATION_GATE_HELD=0
+STAGE=""
+REARM_PRIOR_CONTROL_PLANE=0
+ROLLBACK_DECISION_DURABLE=0
+INSTALL_LOCK_HELD=0
+DEPENDENCY_STATE_HELPER=""
+DEPENDENCY_BUILD=""
+DEPENDENCY_BUILDS="$1/dependency-builds"
+SUCCESS=0
+RECOVERY_ACTIVE=0
+false
+cleanup
+`;
+  for (const mutated of ['0', '1']) {
+    fs.rmSync(trace, { force: true });
+    const result = spawnSync('bash', ['-c', harness, 'cleanup', fixture], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        MUTATED: mutated,
+        TRACE: trace,
+      },
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(
+      fs.existsSync(trace),
+      false,
+      `launch-gap cleanup mutated state for mutated=${mutated}`,
+    );
+  }
 });
 
 test('APK rollback proves an already-restored identity before any package mutation', () => {
@@ -6067,12 +7256,26 @@ test('APK rollback proves an already-restored identity before any package mutati
     'utf8',
   );
   const helper = shellFunction(installer, 'rollback_apk_native');
+  assert.match(
+    helper,
+    /operation_state="\$PACKAGE_OPERATION_STATE"[\s\S]*PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0[\s\S]*operation_state" = launched[\s\S]*return 1/,
+  );
+  assert.match(
+    helper,
+    /persist_restored_apk_review[\s\S]*launch_native_apk_rollback[\s\S]*complete_native_apk_rollback_operation/,
+  );
+  assert.doesNotMatch(helper, /wait_for_apk_rollback_availability/);
   const harness = `
 set -uo pipefail
 ${helper}
 record() { printf '%s\\n' "$1" >> "$TRACE"; }
 say() { :; }
-reap_recorded_package_operation() { record cancel; return 0; }
+reap_recorded_package_operation() {
+  record cancel
+  PACKAGE_OPERATION=
+  PACKAGE_OPERATION_STATE=
+  return 0
+}
 wait_for_package_manager_idle() { record barrier; return 0; }
 wait_for_apk_backup_identity() {
   record proof
@@ -6083,15 +7286,36 @@ wait_for_apk_backup_identity() {
     *) return "$PROOF_THREE" ;;
   esac
 }
-rish_command() { record native; return 0; }
-install_apk() { record fallback; return "$FALLBACK_RESULT"; }
+launch_native_apk_rollback() {
+  record native
+  return "$NATIVE_RESULT"
+}
+complete_native_apk_rollback_operation() {
+  record complete
+  return "$COMPLETE_RESULT"
+}
+persist_restored_apk_review() {
+  record review
+  return "$REVIEW_RESULT"
+}
 PROOF_CALLS=0
 if rollback_apk_native; then rc=0; else rc=$?; fi
 printf 'rc=%s\\n' "$rc"
 `;
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'evogent-apk-rollback-'));
   const trace = path.join(fixture, 'trace');
-  function runRollback(proofOne, proofTwo = '0', proofThree = '0') {
+  function runRollback({
+    proofOne,
+    proofTwo = '0',
+    proofThree = '0',
+    initialOperation = '',
+    initialOperationState = '',
+    launchUnresolved = '0',
+    nativeResult = '0',
+    completeResult = '0',
+    restoreGeneration = '0',
+    reviewResult = '0',
+  }) {
     fs.rmSync(trace, { force: true });
     return spawnSync('bash', ['-c', harness], {
       encoding: 'utf8',
@@ -6100,37 +7324,574 @@ printf 'rc=%s\\n' "$rc"
         APK_BACKUP: path.join(fixture, 'backup.apk'),
         APK_BACKUP_READY: '1',
         APK_INSTALL_ATTEMPTED: '1',
-        FALLBACK_RESULT: '0',
+        APK_ROLLBACK_RETRY_GENERATION: restoreGeneration,
+        COMPLETE_RESULT: completeResult,
+        NATIVE_RESULT: nativeResult,
+        PACKAGE_OPERATION: initialOperation,
+        PACKAGE_OPERATION_LAUNCH_UNRESOLVED: launchUnresolved,
+        PACKAGE_OPERATION_STATE: initialOperationState,
         PACKAGE_NAME: 'com.example.evogent',
+        PREVIOUS_APK_CODE: '100',
         PROOF_ONE: proofOne,
         PROOF_THREE: proofThree,
         PROOF_TWO: proofTwo,
+        REVIEW_RESULT: reviewResult,
         STAGING_ROOT: fixture,
         TRACE: trace,
       },
     });
   }
 
-  let result = runRollback('0');
+  let result = runRollback({ proofOne: '0' });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.readFileSync(trace, 'utf8'), 'cancel\nbarrier\nproof\n');
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nproof\nreview\n');
   assert.match(result.stdout, /rc=0/);
 
-  result = runRollback('1', '0');
+  result = runRollback({ proofOne: '0', restoreGeneration: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'barrier\nproof\n');
+  assert.match(result.stdout, /rc=0/);
+
+  result = runRollback({ proofOne: '1', proofTwo: '0' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'cancel\nbarrier\nproof\nnative\nbarrier\nproof\n',
+    'barrier\nproof\nnative\nbarrier\nproof\ncomplete\n',
   );
   assert.match(result.stdout, /rc=0/);
 
-  result = runRollback('1', '1', '0');
+  result = runRollback({ proofOne: '1', proofTwo: '1' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     fs.readFileSync(trace, 'utf8'),
-    'cancel\nbarrier\nproof\nnative\nbarrier\nproof\nfallback\ncancel\nbarrier\nproof\n',
+    'barrier\nproof\nnative\nbarrier\nproof\n',
+  );
+  assert.match(result.stdout, /rc=1/);
+
+  result = runRollback({ proofOne: '1', nativeResult: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'barrier\nproof\nnative\n',
+  );
+  assert.match(result.stdout, /rc=1/);
+
+  result = runRollback({
+    proofOne: '0',
+    initialOperation:
+      '/data/local/tmp/evogent-package-op.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    initialOperationState: 'prepared',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'cancel\nbarrier\nproof\nreview\n',
   );
   assert.match(result.stdout, /rc=0/);
+
+  result = runRollback({
+    proofOne: '0',
+    initialOperation:
+      '/data/local/tmp/evogent-package-op.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    initialOperationState: 'launched',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(trace), false);
+  assert.match(result.stdout, /rc=1/);
+
+  result = runRollback({ proofOne: '0', launchUnresolved: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(trace), false);
+  assert.match(result.stdout, /rc=1/);
+});
+
+test('terminal rollback rejects unresolved APK review authority', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const helper = shellFunction(installer, 'commit_rolled_back_decision');
+  const harness = `
+set -uo pipefail
+${helper}
+write_transaction_journal() {
+  printf '%s\\n' "$1" >> "$TRACE"
+}
+ROLLBACK_FAILED=0
+RUNTIME_PROVEN_STOPPED=1
+TRANSACTION_PHASE="$PHASE"
+PACKAGE_OPERATION=
+PACKAGE_OPERATION_STATE=
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+CONTROL_TOKEN_BRIDGE=
+APK_USER_ACTION_KIND="$ACTION_KIND"
+APK_USER_ACTION_PURPOSE="$ACTION_PURPOSE"
+APK_USER_ACTION_EVIDENCE="$ACTION_EVIDENCE"
+APK_USER_ACTION_TARGET_SHA256="$ACTION_SHA256"
+APK_USER_ACTION_TARGET_VERSION_CODE="$ACTION_VERSION"
+APK_USER_ACTION_TARGET_SIGNER_SHA256="$ACTION_SIGNER"
+APK_USER_ACTION_CHALLENGE="$ACTION_CHALLENGE"
+APK_USER_ACTION_CHALLENGE_CREATED_AT="$ACTION_CREATED"
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT="$ACTION_EXPIRES"
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$ACTION_TRUSTED"
+APK_INSTALL_SCAN_REQUIRED="$ACTION_TRUSTED"
+APK_INSTALL_ATTEMPTED=1
+APK_BACKUP_READY=1
+ANDROID_ROLE_RESTORE_REQUIRED=0
+ANDROID_ROLE_BACKUP_READY=0
+MIGRATION_STARTED=0
+SWITCH_STARTED=0
+DB_BACKUP_READY=0
+CONTROL_TOKEN_BACKUP_READY=0
+ROLLBACK_DECISION_DURABLE=0
+if commit_rolled_back_decision; then rc=0; else rc=$?; fi
+printf 'rc=%s durable=%s\\n' "$rc" "$ROLLBACK_DECISION_DURABLE"
+`;
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-terminal-rollback-review-'),
+  );
+  const trace = path.join(fixture, 'trace');
+  const emptyAction = {
+    ACTION_CHALLENGE: '',
+    ACTION_CREATED: '',
+    ACTION_EVIDENCE: '',
+    ACTION_EXPIRES: '',
+    ACTION_KIND: '',
+    ACTION_PURPOSE: '',
+    ACTION_SHA256: '',
+    ACTION_SIGNER: '',
+    ACTION_TRUSTED: '0',
+    ACTION_VERSION: '',
+  };
+  function run(overrides = {}) {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ...emptyAction,
+        PHASE: 'apk_install_pending',
+        TRACE: trace,
+        ...overrides,
+      },
+    });
+  }
+
+  let result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=0 durable=1/);
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'rolled_back\n');
+
+  result = run({
+    ACTION_CHALLENGE: 'a'.repeat(64),
+    ACTION_CREATED: '1',
+    ACTION_EVIDENCE: 'fresh_display_0_operator_attestation_v1',
+    ACTION_EXPIRES: '2',
+    ACTION_KIND: 'android_install_review',
+    ACTION_PURPOSE: 'rollback_restore',
+    ACTION_SHA256: 'b'.repeat(64),
+    ACTION_SIGNER: 'c'.repeat(64),
+    ACTION_TRUSTED: '1',
+    ACTION_VERSION: '100',
+    PHASE: 'apk_user_action_required',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=70 durable=0/);
+  assert.equal(fs.existsSync(trace), false);
+});
+
+test('rollback recovery preserves predecessor-review authority until re-attested', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const prepare = shellFunction(
+    installer,
+    'prepare_android_install_review_for_rollback',
+  );
+  const resume = shellFunction(
+    installer,
+    'resume_pending_rollback_install_review',
+  );
+  assert.doesNotMatch(
+    installer,
+    /apk_rollback_retry_pending|begin_fresh_rollback_install_retry|retry_pending_rollback_install_review|cmd package install[^\n]*\s-d(?:\s|")|install_apk "\$APK_BACKUP" fallback/,
+  );
+  const rollback = shellFunction(installer, 'rollback_release');
+  assert.match(
+    rollback,
+    /prepare_android_install_review_for_rollback[\s\S]*quiesce_control_plane[\s\S]*resume_pending_rollback_install_review[\s\S]*rollback_apk_native/,
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-rollback-review-recovery-'),
+  );
+  const backup = path.join(fixture, 'backup.apk');
+  const trace = path.join(fixture, 'trace');
+  fs.writeFileSync(backup, 'exact predecessor APK bytes\n');
+  const backupSha256 = crypto.createHash('sha256')
+    .update(fs.readFileSync(backup))
+    .digest('hex');
+  const candidateSha256 = 'd'.repeat(64);
+  const candidateSigner = 'e'.repeat(64);
+  const harness = `
+set -uo pipefail
+${prepare}
+${resume}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+sha256_file() { sha256sum "$1" | awk '{print $1}'; }
+clear_install_review_attestation() { record clear-receipt; }
+clear_apk_user_action_state() {
+  record clear-action
+  APK_USER_ACTION_KIND=
+  APK_USER_ACTION_PURPOSE=
+  APK_USER_ACTION_EVIDENCE=
+  APK_USER_ACTION_TARGET_SHA256=
+  APK_USER_ACTION_TARGET_VERSION_CODE=
+  APK_USER_ACTION_TARGET_SIGNER_SHA256=
+  APK_USER_ACTION_CHALLENGE=
+  APK_USER_ACTION_CHALLENGE_CREATED_AT=
+  APK_USER_ACTION_CHALLENGE_EXPIRES_AT=
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
+}
+write_transaction_journal() {
+  record "phase:$1"
+  TRANSACTION_PHASE="$1"
+}
+persist_and_wait_android_install_review() {
+  record "resume:$1:$2:$8"
+  [ "$RESUME_RESULT" = 0 ] || return 1
+  APK_INSTALL_SCAN_REQUIRED=0
+  clear_apk_user_action_state
+  TRANSACTION_PHASE="$1"
+}
+android_install_foreground_state_once() {
+  printf '%s\\n' "$FOREGROUND_STATE"
+}
+TRANSACTION_PHASE=apk_user_action_required
+APK_USER_ACTION_KIND=android_install_review
+APK_USER_ACTION_PURPOSE="$PURPOSE"
+APK_USER_ACTION_EVIDENCE=fresh_display_0_operator_attestation_v1
+if [ "$PURPOSE" = candidate_install ]; then
+  APK_USER_ACTION_TARGET_SHA256="$CANDIDATE_SHA256"
+  APK_USER_ACTION_TARGET_VERSION_CODE=101
+  APK_USER_ACTION_TARGET_SIGNER_SHA256="$CANDIDATE_SIGNER"
+else
+  APK_USER_ACTION_TARGET_SHA256="$BACKUP_SHA256"
+  APK_USER_ACTION_TARGET_VERSION_CODE=100
+  APK_USER_ACTION_TARGET_SIGNER_SHA256="${'c'.repeat(64)}"
+fi
+APK_USER_ACTION_CHALLENGE="${'a'.repeat(64)}"
+APK_USER_ACTION_CHALLENGE_CREATED_AT=1780000000
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT=1780000900
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$ACTION_TRUSTED"
+APK_INSTALL_SCAN_REQUIRED="$ACTION_TRUSTED"
+APK_BACKUP="$BACKUP"
+PREVIOUS_APK_CODE=100
+PREVIOUS_APK_SIGNER="${'c'.repeat(64)}"
+EXPECTED_APK_CODE=101
+EXPECTED_APK_SHA256="$CANDIDATE_SHA256"
+EXPECTED_APK_SIGNER="$CANDIDATE_SIGNER"
+STAGE="$STAGE_DIR"
+if prepare_android_install_review_for_rollback; then prepare_rc=0; else prepare_rc=$?; fi
+if [ "$RUN_RESUME" = 1 ]; then
+  if resume_pending_rollback_install_review; then resume_rc=0; else resume_rc=$?; fi
+else
+  resume_rc=skipped
+fi
+printf 'prepare=%s resume=%s phase=%s purpose=%s\\n' \
+  "$prepare_rc" "$resume_rc" "$TRANSACTION_PHASE" "$APK_USER_ACTION_PURPOSE"
+`;
+  function run({
+    actionTrusted = '1',
+    foregroundState = 'trusted',
+    purpose = 'rollback_restore',
+    resumeResult = '1',
+    runResume = '1',
+  } = {}) {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ACTION_TRUSTED: actionTrusted,
+        BACKUP: backup,
+        BACKUP_SHA256: backupSha256,
+        CANDIDATE_SHA256: candidateSha256,
+        CANDIDATE_SIGNER: candidateSigner,
+        FOREGROUND_STATE: foregroundState,
+        PURPOSE: purpose,
+        RESUME_RESULT: resumeResult,
+        RUN_RESUME: runResume,
+        STAGE_DIR: fixture,
+        TRACE: trace,
+      },
+    });
+  }
+
+  let result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=rollback_restore/,
+  );
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'resume:apk_install_pending:rollback_restore:1\n');
+
+  result = run({ resumeResult: '0' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=0 phase=apk_install_pending purpose=/,
+  );
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'resume:apk_install_pending:rollback_restore:1\nclear-action\n',
+  );
+
+  result = run({ actionTrusted: '0' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=rollback_restore/,
+  );
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'resume:apk_install_pending:rollback_restore:1\n',
+  );
+
+  result = run({ foregroundState: 'other' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=rollback_restore/,
+  );
+  assert.equal(fs.existsSync(trace), false);
+
+  result = run({ foregroundState: 'unknown' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=rollback_restore/,
+  );
+  assert.equal(fs.existsSync(trace), false);
+
+  result = run({
+    purpose: 'candidate_install',
+    resumeResult: '0',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /prepare=0 resume=0 phase=apk_install_pending purpose=/,
+  );
+  assert.equal(
+    fs.readFileSync(trace, 'utf8'),
+    'resume:apk_install_pending:candidate_install:1\nclear-action\n',
+  );
+});
+
+test('interrupted candidate review rotates away pre-crash receipts before visible recovery', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-candidate-review-recovery-'),
+  );
+  const receipt = path.join(fixture, 'install-review-attestation.json');
+  const receiptPublished = path.join(fixture, 'fresh-receipt-published');
+  const attester = path.join(fixture, 'attest-install-review.py');
+  const trace = path.join(fixture, 'trace');
+  const clock = path.join(fixture, 'clock');
+  const candidateSha256 = 'd'.repeat(64);
+  const candidateSigner = 'e'.repeat(64);
+  fs.writeFileSync(attester, '#!/bin/sh\n', { mode: 0o700 });
+  fs.chmodSync(attester, 0o700);
+  const harness = `
+set -uo pipefail
+${shellFunction(installer, 'clear_apk_user_action_state')}
+${shellFunction(installer, 'clear_install_review_attestation')}
+${shellFunction(installer, 'rotate_android_install_review_challenge')}
+${shellFunction(installer, 'persist_and_wait_android_install_review')}
+${shellFunction(installer, 'prepare_android_install_review_for_rollback')}
+${shellFunction(installer, 'resume_pending_rollback_install_review')}
+record() { printf '%s\\n' "$1" >> "$TRACE"; }
+say() { :; }
+stat() {
+  case "$2" in
+    %a) printf '700\\n' ;;
+    %u) id -u ;;
+    %h) printf '1\\n' ;;
+    *) return 1 ;;
+  esac
+}
+write_transaction_journal() {
+  record "phase:$1:trusted=$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED"
+  TRANSACTION_PHASE="$1"
+  [ "$1" != apk_user_action_required ] || ACTION_ROTATED=1
+}
+announce_android_install_review_attestation() { :; }
+read_install_review_attestation() {
+  if [ ! -f "$INSTALL_REVIEW_ATTESTATION" ]; then
+    record read:missing
+    return 1
+  fi
+  outcome="$(cat "$INSTALL_REVIEW_ATTESTATION")"
+  record "read:$outcome"
+  [ "$outcome" = scan-completed ] || return 1
+  printf '%s\\n' "$outcome"
+}
+wait_for_package_manager_idle() { return 0; }
+installed_apk_identity_stable() {
+  record "identity:$2:$3:$4"
+  [ "$IDENTITY_READY" = 1 ] \
+    && [ "$2" = "$EXPECTED_APK_CODE" ] \
+    && [ "$3" = "$EXPECTED_APK_SIGNER" ] \
+    && [ "$4" = "$EXPECTED_APK_SHA256" ]
+}
+android_install_foreground_state_once() {
+  if [ "$ACTION_ROTATED" = 0 ]; then
+    printf '%s\\n' "$INITIAL_FOREGROUND"
+    return
+  fi
+  if [ "$FRESH_RECEIPT" = 1 ] \
+      && [ ! -e "$FRESH_RECEIPT_PUBLISHED" ]; then
+    printf 'scan-completed\\n' > "$INSTALL_REVIEW_ATTESTATION"
+    chmod 600 "$INSTALL_REVIEW_ATTESTATION"
+    : > "$FRESH_RECEIPT_PUBLISHED"
+  fi
+  printf 'other\\n'
+}
+date() {
+  if [ "\${1:-}" = +%s ]; then
+    now="$(cat "$CLOCK_FILE")"
+    now=$((now + 1))
+    printf '%s\\n' "$now" > "$CLOCK_FILE"
+    printf '%s\\n' "$now"
+  else
+    command date "$@"
+  fi
+}
+sleep() { :; }
+TRANSACTION_PHASE=apk_user_action_required
+APK_USER_ACTION_KIND=android_install_review
+APK_USER_ACTION_PURPOSE=candidate_install
+APK_USER_ACTION_EVIDENCE=fresh_display_0_operator_attestation_v1
+APK_USER_ACTION_TARGET_SHA256="$ACTION_SHA256"
+APK_USER_ACTION_TARGET_VERSION_CODE=101
+APK_USER_ACTION_TARGET_SIGNER_SHA256="$CANDIDATE_SIGNER"
+APK_USER_ACTION_CHALLENGE="${'a'.repeat(64)}"
+APK_USER_ACTION_CHALLENGE_CREATED_AT=1780000000
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT=1780000900
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
+APK_INSTALL_SCAN_REQUIRED=0
+EXPECTED_APK_CODE=101
+EXPECTED_APK_SHA256="$CANDIDATE_SHA256"
+EXPECTED_APK_SIGNER="$CANDIDATE_SIGNER"
+APK_BACKUP="$STAGE/unused-backup.apk"
+PREVIOUS_APK_CODE=100
+PREVIOUS_APK_SIGNER="${'c'.repeat(64)}"
+INSTALL_POST_SUCCESS_REVIEW_SECONDS=1
+INSTALL_USER_ACTION_WAIT_SECONDS=8
+INSTALL_REVIEW_ATTESTATION="$RECEIPT"
+TRANSACTION_ATTESTER="$ATTESTER"
+STAGE="$STAGE"
+ACTION_ROTATED=0
+printf 'scan-completed\\n' > "$INSTALL_REVIEW_ATTESTATION"
+chmod 600 "$INSTALL_REVIEW_ATTESTATION"
+if prepare_android_install_review_for_rollback; then prepare_rc=0; else prepare_rc=$?; fi
+if resume_pending_rollback_install_review; then resume_rc=0; else resume_rc=$?; fi
+if [ -e "$INSTALL_REVIEW_ATTESTATION" ]; then receipt_after=present; else receipt_after=absent; fi
+printf 'prepare=%s resume=%s phase=%s purpose=%s scan=%s receipt=%s\\n' \
+  "$prepare_rc" "$resume_rc" "$TRANSACTION_PHASE" \
+  "$APK_USER_ACTION_PURPOSE" "$APK_INSTALL_SCAN_REQUIRED" "$receipt_after"
+`;
+
+  function run({
+    actionSha256 = candidateSha256,
+    freshReceipt = '0',
+    identityReady = '1',
+    initialForeground = 'trusted',
+  } = {}) {
+    fs.rmSync(trace, { force: true });
+    fs.rmSync(receipt, { force: true });
+    fs.rmSync(receiptPublished, { force: true });
+    fs.writeFileSync(clock, '1800000000\n');
+    const result = spawnSync(
+      'bash',
+      ['-c', harness, 'candidate-review-recovery'],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ACTION_SHA256: actionSha256,
+          ATTESTER: attester,
+          CANDIDATE_SHA256: candidateSha256,
+          CANDIDATE_SIGNER: candidateSigner,
+          CLOCK_FILE: clock,
+          FRESH_RECEIPT: freshReceipt,
+          FRESH_RECEIPT_PUBLISHED: receiptPublished,
+          IDENTITY_READY: identityReady,
+          INITIAL_FOREGROUND: initialForeground,
+          RECEIPT: receipt,
+          STAGE: fixture,
+          TRACE: trace,
+        },
+      },
+    );
+    return {
+      result,
+      trace: fs.existsSync(trace) ? fs.readFileSync(trace, 'utf8') : '',
+    };
+  }
+
+  let outcome = run();
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(
+    outcome.result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=candidate_install scan=1 receipt=absent/,
+  );
+  assert.match(outcome.trace, /^phase:apk_user_action_required:trusted=1\n/);
+  assert.match(outcome.trace, /read:missing/);
+  assert.doesNotMatch(outcome.trace, /phase:apk_install_pending/);
+
+  outcome = run({ freshReceipt: '1' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(
+    outcome.result.stdout,
+    /prepare=0 resume=0 phase=apk_install_pending purpose= scan=0 receipt=absent/,
+  );
+  assert.match(outcome.trace, /^phase:apk_user_action_required:trusted=1\n/);
+  assert.match(
+    outcome.trace,
+    new RegExp(`identity:101:${candidateSigner}:${candidateSha256}`),
+  );
+  assert.match(outcome.trace, /read:scan-completed/);
+  assert.match(outcome.trace, /phase:apk_install_pending:trusted=0/);
+
+  outcome = run({ initialForeground: 'other' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(
+    outcome.result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=candidate_install scan=0 receipt=present/,
+  );
+  assert.equal(outcome.trace, '');
+
+  outcome = run({ initialForeground: 'unknown' });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(
+    outcome.result.stdout,
+    /prepare=0 resume=1 phase=apk_user_action_required purpose=candidate_install scan=0 receipt=present/,
+  );
+  assert.equal(outcome.trace, '');
+
+  outcome = run({ actionSha256: 'f'.repeat(64) });
+  assert.equal(outcome.result.status, 0, outcome.result.stderr);
+  assert.match(
+    outcome.result.stdout,
+    /prepare=1 resume=1 phase=apk_user_action_required purpose=candidate_install scan=0 receipt=present/,
+  );
+  assert.equal(outcome.trace, '');
 });
 
 test('rollback reaps only its exact journaled package operation', () => {
@@ -6148,6 +7909,7 @@ remove_shell_package_operation() {
   return "$REMOVE_RESULT"
 }
 PACKAGE_OPERATION="/data/local/tmp/evogent-package-op.${'a'.repeat(32)}"
+PACKAGE_OPERATION_STATE="$OPERATION_STATE"
 if reap_recorded_package_operation; then rc=0; else rc=$?; fi
 if [ -n "$PACKAGE_OPERATION" ]; then retained=yes; else retained=no; fi
 printf 'rc=%s retained=%s\\n' "$rc" "$retained"
@@ -6156,7 +7918,12 @@ printf 'rc=%s retained=%s\\n' "$rc" "$retained"
   const trace = path.join(fixture, 'trace');
   let result = spawnSync('bash', ['-c', harness], {
     encoding: 'utf8',
-    env: { ...process.env, REMOVE_RESULT: '0', TRACE: trace },
+    env: {
+      ...process.env,
+      OPERATION_STATE: 'prepared',
+      REMOVE_RESULT: '0',
+      TRACE: trace,
+    },
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /rc=0 retained=no/);
@@ -6167,10 +7934,29 @@ printf 'rc=%s retained=%s\\n' "$rc" "$retained"
 
   result = spawnSync('bash', ['-c', harness], {
     encoding: 'utf8',
-    env: { ...process.env, REMOVE_RESULT: '1', TRACE: trace },
+    env: {
+      ...process.env,
+      OPERATION_STATE: 'prepared',
+      REMOVE_RESULT: '1',
+      TRACE: trace,
+    },
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /rc=1 retained=yes/);
+
+  fs.rmSync(trace, { force: true });
+  result = spawnSync('bash', ['-c', harness], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      OPERATION_STATE: 'launched',
+      REMOVE_RESULT: '0',
+      TRACE: trace,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /rc=1 retained=yes/);
+  assert.equal(fs.existsSync(trace), false);
 });
 
 test('rollback retains its journal until the private token bridge is gone', () => {
@@ -6252,6 +8038,9 @@ printf 'rc=%s failed=%s rearm=%s\\n' "$rc" "$ROLLBACK_FAILED" "$REARM_PRIOR_CONT
         APK_INSTALL_ATTEMPTED: scenario.apkAttempted,
         INITIAL_MIGRATION: '0',
         MIGRATION_STARTED: scenario.migrationStarted,
+        PACKAGE_OPERATION: '',
+        PACKAGE_OPERATION_LAUNCH_UNRESOLVED: '0',
+        PACKAGE_OPERATION_STATE: '',
         QUIESCE_RESULT: '1',
         REARM_PRIOR_CONTROL_PLANE: '0',
         ROLLBACK_ATTEMPTED: '0',
@@ -6930,6 +8719,7 @@ test('release packages every device helper referenced by the installer', () => {
     ),
   );
   assert.ok(referencedHelpers.has('android-role-state.py'));
+  assert.ok(referencedHelpers.has('attest-install-review.py'));
 
   const deviceArchive = builder.match(
     /git archive "\$SOURCE_COMMIT":phone-paradigm\/device\/phone-tools \\\n  \| tar -xf - -C "\$RELEASE\/phone-tools"\ngit archive "\$SOURCE_COMMIT" \\\n([\s\S]*?)  \| tar --strip-components=2 -xf - -C "\$RELEASE\/device"/,
@@ -7008,6 +8798,79 @@ printf 'current=<%s> previous=<%s>\\n' "$CURRENT_RESOLVED" "$PREVIOUS_TARGET"
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'current=<> previous=<>\n');
   assert.equal(fs.existsSync(trace), false);
+});
+
+test('changed APK predecessor identity fails before journal or package authority', () => {
+  const installer = fs.readFileSync(
+    path.join(root, 'phone-paradigm/device/install-release.sh'),
+    'utf8',
+  );
+  const changed = installer.match(
+    /(if \[ "\$CURRENT_APK_SHA256" != "\$EXPECTED_APK_SHA256" \]; then[\s\S]*?\nfi)\nif \[ "\$CURRENT_RESOLVED"/,
+  );
+  assert.ok(changed, 'missing changed-APK predecessor gate');
+  const identityGate = installer.indexOf(
+    'changed APK predecessor identity is invalid',
+  );
+  const firstJournal = installer.indexOf(
+    '\nprepare_transaction_recoverer\n',
+    identityGate,
+  );
+  const packageLaunch = installer.indexOf(
+    'install_apk "$NEW_RELEASE/apk/evogent.apk" upgrade',
+    identityGate,
+  );
+  assert.ok(
+    identityGate >= 0
+      && identityGate < firstJournal
+      && firstJournal < packageLaunch,
+  );
+
+  const fixture = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'evogent-predecessor-identity-'),
+  );
+  const trace = path.join(fixture, 'trace');
+  const harness = `
+set -uo pipefail
+say() { :; }
+package_manager_supports_apk_rollback() {
+  printf 'rollback-support\\n' >> "$TRACE"
+}
+CURRENT_APK_SHA256=old
+EXPECTED_APK_SHA256=new
+EXPECTED_APK_CODE=8
+INSTALLED_APK_CODE="$CODE"
+INSTALLED_APK_SIGNER="$SIGNER"
+APK_CHANGED=0
+${changed[1]}
+printf 'changed=%s\\n' "$APK_CHANGED"
+`;
+  function run(code, signer) {
+    fs.rmSync(trace, { force: true });
+    return spawnSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CODE: code,
+        SIGNER: signer,
+        TRACE: trace,
+      },
+    });
+  }
+  for (const code of ['', '0', '01', '9223372036854775808']) {
+    const result = run(code, 'a'.repeat(64));
+    assert.equal(result.status, 65, result.stderr);
+    assert.equal(fs.existsSync(trace), false);
+  }
+  for (const signer of ['', 'a'.repeat(63), 'A'.repeat(64)]) {
+    const result = run('7', signer);
+    assert.equal(result.status, 65, result.stderr);
+    assert.equal(fs.existsSync(trace), false);
+  }
+  const valid = run('7', 'a'.repeat(64));
+  assert.equal(valid.status, 0, valid.stderr);
+  assert.equal(valid.stdout, 'changed=1\n');
+  assert.equal(fs.readFileSync(trace, 'utf8'), 'rollback-support\n');
 });
 
 test('boot recovery preserves the recovered contract and binds tmux release identity', () => {

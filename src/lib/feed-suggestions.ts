@@ -39,7 +39,7 @@ export interface SuggestionAction {
   // page" — an invoice payment page, a Google security alert). Before this existed the parser
   // silently downgraded link actions to 'acknowledge' and dropped the url, so every "Open …"
   // button just marked the card handled and vanished without ever opening the page.
-  kind: 'execute' | 'acknowledge' | 'link';
+  kind: 'execute' | 'acknowledge' | 'link' | 'cancel_source';
   url?: string;
 }
 
@@ -64,6 +64,10 @@ export function parseSuggestionActions(raw: unknown): SuggestionAction[] {
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : '';
     if (kindRaw === 'link' && url) {
       actions.push({ label, kind: 'link', url });
+      continue;
+    }
+    if (kindRaw === 'cancel_source') {
+      actions.push({ label, kind: 'cancel_source' });
       continue;
     }
     const kind: SuggestionAction['kind'] = kindRaw === 'acknowledge' || !instruction

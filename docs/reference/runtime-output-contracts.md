@@ -89,6 +89,19 @@ Key rules:
 
 If JSONL fallback is required, append one compact JSON object per line and end each append with a newline.
 
+## Curator Browse-Cache Read
+
+Full curation reads raw candidates through
+`GET /api/internal/browse-cache/items?eligibleForCuration=1`. This opt-in mode
+uses one server-owned current-time cutoff and returns only rows whose cache
+expiry has not passed, whose `seenByCurationAtMs` is still null, and whose
+`sourceId` is not already present in the feed. It returns the complete set in
+stable evidence order; legacy `source`, `limit`, source-balancing,
+published-time, and ordering flags cannot subset or rerank it. Flags such as
+`includeExpired`, `freshAfterMs`, and `excludeFeedDuplicates=false` cannot
+relax the boundary. The request is read-only: held and unjudged rows remain
+pending, and bench or carry-forward state is neither consumed nor rearranged.
+
 ## `text` Semantics By Feed Type
 
 - `tweet`: `text` is the tweet's verbatim author-typed body, regardless of which capture path produced it. If a tweet has no visible body text and only contains media (image, video, or GIF), return `text` as an empty string. Do NOT describe the media, use accessibility alt text, generate a caption, transcribe, or summarize anything from the rendered media. Editorial framing belongs in `reason` or `excerpt`, not `text`.
@@ -191,10 +204,15 @@ intersected with a content-app catalog). Two flavors:
 
 - **Auto-added** (`metadata.autoAdded: true`, most content apps): the source is being set up
   automatically — the card ANNOUNCES it ("act, show, easy undo"); a one-time background
-  discovery session learns the app and writes a browse recipe to the on-device user data
-  layer (`data/phone-sources/`). **Dismissing the card cancels the source**: the server
-  deletes the recipe/queue entry and appends `data/phone-sources/.optout`, which the scout,
-  the recipe-runner, and any in-flight discovery all honor.
+  discovery session learns the app, but writes only a run-scoped candidate and staged cache
+  evidence. The phone worker validates the exact receipt, read-only safety block, and repeatable
+  mechanics before atomically publishing a hash-bound recipe and activating the staged rows.
+  Later cheap-agent browses get a new worker-owned run identity and clock on every invocation;
+  the discovery identity is provenance and is never executable. **Dismissing the card cancels
+  the source**: the server first commits a database tombstone that defeats every late submit or
+  activation, then durably appends `data/phone-sources/.optout` and removes live/candidate
+  recipe state. The scout, recipe-runner, and any in-flight discovery all fail closed on an
+  unreadable or ambiguous cancellation authority.
 - **Ask-first** (messaging-hybrid apps like Telegram/Discord/Facebook, `autoAdd: false` in
   the catalog): nothing is touched until the user approves the card's execute action, which
   starts the same discovery session.
@@ -261,6 +279,17 @@ Suggested metadata fields:
 - `metadata.expiresAt`: optional ISO-8601 timestamp for TTL-based expiry
 
 Prefer stable `sourceId` and `metadata.notificationId` values so producers can `INSERT OR IGNORE` without recreating dismissed items.
+
+Recurring phone-capability incidents are a narrow exception, not a license to
+override Dismiss. Their stored and incoming records must both opt in with
+`reactivateOnRepeat: true` and exactly match the allowlisted
+`userActionKind`, `incidentKey`, source, and notification ID. The producer also
+keeps a private active-incident marker: it posts once when a capability first
+becomes unavailable, respects dismissal throughout that outage, resolves and
+retires the marker only after a fresh ready proof (or feature disable), and may
+reactivate the stable row only after a later ready-to-unavailable transition.
+A rejected, mixed-invalid, automated-cycle, spoofed, or identity-mismatched
+submit never changes dismissal state.
 
 ## Feed Persistence
 

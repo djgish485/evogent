@@ -76,6 +76,8 @@ CONTROL_MUTATION_GATE="$ROOT/control-plane-mutation.lock"
 TRANSACTION_DIR="$ROOT/install-transaction"
 TRANSACTION_JOURNAL="$TRANSACTION_DIR/journal.json"
 TRANSACTION_RECOVERER="$TRANSACTION_DIR/install-release.sh"
+TRANSACTION_ATTESTER="$TRANSACTION_DIR/attest-install-review.py"
+INSTALL_REVIEW_ATTESTATION="$TRANSACTION_DIR/install-review-attestation.json"
 PACKAGE_NAME="net.dangish.evogent"
 ANDROID_HOME_ROLE="android.app.role.HOME"
 ANDROID_ASSISTANT_ROLE="android.app.role.ASSISTANT"
@@ -87,6 +89,7 @@ FEED_URL="${EVOGENT_PHONE_FEED_URL:-http://127.0.0.1:${PHONE_PORT}/api/feed?limi
 DEPLOYMENT_URL="${EVOGENT_PHONE_DEPLOYMENT_URL:-http://127.0.0.1:${PHONE_PORT}/api/internal/deployment-status}"
 INSTALL_WAIT_SECONDS="${EVOGENT_INSTALL_WAIT_SECONDS:-21600}"
 INSTALL_USER_ACTION_WAIT_SECONDS="${EVOGENT_INSTALL_USER_ACTION_WAIT_SECONDS:-900}"
+INSTALL_POST_SUCCESS_REVIEW_SECONDS="${EVOGENT_INSTALL_POST_SUCCESS_REVIEW_SECONDS:-15}"
 KEEP_RELEASES="${EVOGENT_KEEP_RELEASES:-5}"
 KEEP_BACKUPS="${EVOGENT_KEEP_BACKUPS:-7}"
 KEEP_LOGS="${EVOGENT_KEEP_INSTALL_LOGS:-20}"
@@ -99,6 +102,15 @@ done
 [[ "$INSTALL_USER_ACTION_WAIT_SECONDS" =~ ^[1-9][0-9]*$ ]] \
   && [ "$INSTALL_USER_ACTION_WAIT_SECONDS" -le 3600 ] || {
   echo "release install: foreground action wait must be 1..3600 seconds" >&2
+  exit 65
+}
+[[ "$INSTALL_POST_SUCCESS_REVIEW_SECONDS" =~ ^[1-9][0-9]*$ ]] \
+  && [ "$INSTALL_POST_SUCCESS_REVIEW_SECONDS" -le 120 ] || {
+  echo "release install: post-success foreground review must be 1..120 seconds" >&2
+  exit 65
+}
+[ "$INSTALL_USER_ACTION_WAIT_SECONDS" -gt "$INSTALL_POST_SUCCESS_REVIEW_SECONDS" ] || {
+  echo "release install: foreground action wait must exceed delayed-verifier review" >&2
   exit 65
 }
 
@@ -926,12 +938,25 @@ APK_BACKUP_READY=0
 APK_CHANGED=0
 APK_INSTALL_ATTEMPTED=0
 PACKAGE_OPERATION=""
+PACKAGE_OPERATION_STATE=""
+# Process-local fence for the interval after Android launch authority became
+# durable but the nonce-scoped shell directory has already been removed. The
+# journal remains authoritative across process death; this guard keeps the live
+# owner's EXIT trap from mistaking temporarily cleared journal fields for proof
+# that rollback or journal retirement is safe.
+PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+APK_ROLLBACK_RETRY_GENERATION=0
+APK_INSTALL_SCAN_REQUIRED=0
 APK_USER_ACTION_KIND=""
 APK_USER_ACTION_PURPOSE=""
 APK_USER_ACTION_EVIDENCE=""
 APK_USER_ACTION_TARGET_SHA256=""
 APK_USER_ACTION_TARGET_VERSION_CODE=""
 APK_USER_ACTION_TARGET_SIGNER_SHA256=""
+APK_USER_ACTION_CHALLENGE=""
+APK_USER_ACTION_CHALLENGE_CREATED_AT=""
+APK_USER_ACTION_CHALLENGE_EXPIRES_AT=""
+APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
 PREVIOUS_APK_CODE=""
 PREVIOUS_APK_SIGNER=""
 ROLLBACK_FAILED=0
@@ -1426,12 +1451,19 @@ copy_published_shell_file() {
   return 1
 }
 
+select_shell_package_operation() {
+  local nonce=""
+  nonce="$(python3 -c 'import secrets; print(secrets.token_hex(16))')" \
+    || return 1
+  [[ "$nonce" =~ ^[0-9a-f]{32}$ ]] || return 1
+  printf '/data/local/tmp/evogent-package-op.%s\n' "$nonce"
+}
+
 allocate_shell_package_operation() {
-  local path="" nonce="" attempt probe
+  local path="$1" attempt probe
+  [[ "$path" =~ ^/data/local/tmp/evogent-package-op\.[0-9a-f]{32}$ ]] \
+    || return 1
   for attempt in $(seq 1 3); do
-    nonce="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
-    [[ "$nonce" =~ ^[0-9a-f]{32}$ ]] || return 1
-    path="/data/local/tmp/evogent-package-op.${nonce}"
     rish_command \
       "mkdir -m 0700 '$path' && : > '$path/candidate.apk' && chmod 0666 '$path/candidate.apk' && chmod 0711 '$path'" \
       >/dev/null 2>&1 || true
@@ -1448,6 +1480,24 @@ allocate_shell_package_operation() {
     rish_command "rm -rf '$path'" >/dev/null 2>&1 || true
   done
   return 1
+}
+
+prepare_shell_package_operation() {
+  local phase="${TRANSACTION_PHASE:-apk_install_pending}" operation=""
+  [ "${TRANSACTION_JOURNAL_WRITTEN:-0}" = 1 ] \
+    && [ -z "$PACKAGE_OPERATION" ] \
+    && [ -z "$PACKAGE_OPERATION_STATE" ] \
+    && [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 0 ] || return 1
+  operation="$(select_shell_package_operation)" || return 1
+  PACKAGE_OPERATION="$operation"
+  PACKAGE_OPERATION_STATE=prepared
+  # Publish the exact nonce/path before creating anything in Android shell
+  # storage. A process death can therefore never leave an untracked namespace
+  # that a later package command might mistake for its own.
+  if ! write_transaction_journal "$phase"; then
+    return 1
+  fi
+  allocate_shell_package_operation "$operation"
 }
 
 remove_shell_package_operation() {
@@ -1529,24 +1579,33 @@ display_zero_top_resumed_package_from_dump() {
   '
 }
 
-trusted_android_install_foreground_once() {
+android_install_foreground_state_once() {
   local activity_dump="" package_name=""
-  activity_dump="$(
-    rish_command 'dumpsys activity activities 2>/dev/null' 15 \
-      2>/dev/null || true
-  )"
-  package_name="$(
+  if ! activity_dump="$(
+    rish_command 'dumpsys activity activities 2>/dev/null' 15 2>/dev/null
+  )"; then
+    printf 'unknown\n'
+    return 0
+  fi
+  if ! package_name="$(
     printf '%s\n' "$activity_dump" \
-      | display_zero_top_resumed_package_from_dump 2>/dev/null || true
-  )"
+      | display_zero_top_resumed_package_from_dump 2>/dev/null
+  )"; then
+    printf 'unknown\n'
+    return 0
+  fi
   case "$package_name" in
     com.android.packageinstaller|com.google.android.packageinstaller|\
 com.android.permissioncontroller|com.google.android.permissioncontroller|\
 com.android.vending|com.google.android.gms)
-      return 0
+      printf 'trusted\n'
       ;;
-    *) return 1 ;;
+    *) printf 'other\n' ;;
   esac
+}
+
+trusted_android_install_foreground_once() {
+  [ "$(android_install_foreground_state_once)" = trusted ]
 }
 
 trusted_android_install_foreground() {
@@ -1562,6 +1621,227 @@ clear_apk_user_action_state() {
   APK_USER_ACTION_TARGET_SHA256=""
   APK_USER_ACTION_TARGET_VERSION_CODE=""
   APK_USER_ACTION_TARGET_SIGNER_SHA256=""
+  APK_USER_ACTION_CHALLENGE=""
+  APK_USER_ACTION_CHALLENGE_CREATED_AT=""
+  APK_USER_ACTION_CHALLENGE_EXPIRES_AT=""
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
+}
+
+clear_install_review_attestation() {
+  python3 - "$INSTALL_REVIEW_ATTESTATION" <<'PY'
+import os
+import pathlib
+import sys
+
+attestation = pathlib.Path(sys.argv[1])
+try:
+    attestation.unlink()
+except FileNotFoundError:
+    pass
+directory = os.open(
+    attestation.parent,
+    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+}
+
+read_install_review_attestation() {
+  python3 - "$INSTALL_REVIEW_ATTESTATION" "$TRANSACTION_JOURNAL" \
+    "$RELEASE_ID" "$MIGRATION_DIR" "$APK_USER_ACTION_PURPOSE" \
+    "$APK_USER_ACTION_TARGET_SHA256" \
+    "$APK_USER_ACTION_TARGET_VERSION_CODE" \
+    "$APK_USER_ACTION_TARGET_SIGNER_SHA256" \
+    "$APK_USER_ACTION_CHALLENGE" \
+    "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+    "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" \
+    "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" <<'PY'
+import json
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+import time
+
+(
+    raw_attestation,
+    raw_journal,
+    release_id,
+    migration_dir,
+    purpose,
+    target_sha256,
+    target_version_code,
+    target_signer_sha256,
+    challenge,
+    challenge_created_at,
+    challenge_expires_at,
+    trusted_verifier_observed,
+) = sys.argv[1:]
+attestation = pathlib.Path(raw_attestation)
+journal = pathlib.Path(raw_journal)
+
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+descriptor = os.open(attestation, flags)
+try:
+    metadata = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or metadata.st_size < 2
+        or metadata.st_size > 8192
+    ):
+        raise SystemExit("install-review attestation is unsafe")
+    payload = b""
+    while len(payload) <= 8192:
+        chunk = os.read(descriptor, 8193 - len(payload))
+        if not chunk:
+            break
+        payload += chunk
+    if len(payload) > 8192:
+        raise SystemExit("install-review attestation is oversized")
+finally:
+    os.close(descriptor)
+try:
+    data = json.loads(
+        payload.decode("utf-8"),
+        object_pairs_hook=reject_duplicate_keys,
+    )
+except (UnicodeDecodeError, ValueError, json.JSONDecodeError):
+    raise SystemExit("install-review attestation is invalid")
+expected_keys = {
+    "attestedAtEpochSeconds",
+    "challenge",
+    "challengeCreatedAtEpochSeconds",
+    "challengeExpiresAtEpochSeconds",
+    "displayEvidence",
+    "journalSha256",
+    "migrationDir",
+    "outcome",
+    "purpose",
+    "releaseId",
+    "schema",
+    "targetSha256",
+    "targetSignerSha256",
+    "targetVersionCode",
+    "trustedVerifierObserved",
+}
+if not isinstance(data, dict) or set(data) != expected_keys:
+    raise SystemExit("install-review attestation schema is incomplete")
+expected = {
+    "schema": "evogent.phone.install-review-attestation.v1",
+    "displayEvidence": "fresh_display_0_operator_v1",
+    "releaseId": release_id,
+    "migrationDir": migration_dir,
+    "purpose": purpose,
+    "targetSha256": target_sha256,
+    "targetVersionCode": int(target_version_code),
+    "targetSignerSha256": target_signer_sha256,
+    "challenge": challenge,
+    "challengeCreatedAtEpochSeconds": int(challenge_created_at),
+    "challengeExpiresAtEpochSeconds": int(challenge_expires_at),
+    "trustedVerifierObserved": int(trusted_verifier_observed),
+}
+for key, value in expected.items():
+    if data.get(key) != value or type(data.get(key)) is not type(value):
+        raise SystemExit("install-review attestation does not match its transaction")
+journal_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+journal_descriptor = os.open(journal, journal_flags)
+try:
+    journal_metadata = os.fstat(journal_descriptor)
+    if (
+        not stat.S_ISREG(journal_metadata.st_mode)
+        or stat.S_IMODE(journal_metadata.st_mode) != 0o600
+        or journal_metadata.st_uid != os.getuid()
+        or journal_metadata.st_nlink != 1
+        or journal_metadata.st_size < 2
+        or journal_metadata.st_size > 131072
+    ):
+        raise SystemExit("install-review journal is unsafe")
+    journal_payload = b""
+    while len(journal_payload) <= 131072:
+        chunk = os.read(journal_descriptor, 131073 - len(journal_payload))
+        if not chunk:
+            break
+        journal_payload += chunk
+    if len(journal_payload) > 131072:
+        raise SystemExit("install-review journal is oversized")
+finally:
+    os.close(journal_descriptor)
+if data.get("journalSha256") != hashlib.sha256(journal_payload).hexdigest():
+    raise SystemExit("install-review attestation is not bound to the live journal")
+outcome = data.get("outcome")
+if outcome not in {"scan-completed", "no-scan-offered"}:
+    raise SystemExit("install-review attestation outcome is invalid")
+if expected["trustedVerifierObserved"] == 1 and outcome != "scan-completed":
+    raise SystemExit("a seen verifier requires scan-completed attestation")
+attested_at = data.get("attestedAtEpochSeconds")
+now = int(time.time())
+if (
+    type(attested_at) is not int
+    or attested_at < expected["challengeCreatedAtEpochSeconds"]
+    or attested_at > expected["challengeExpiresAtEpochSeconds"]
+    or attested_at > now + 5
+    or now - attested_at > 120
+    or now > expected["challengeExpiresAtEpochSeconds"]
+):
+    raise SystemExit("install-review attestation is not fresh")
+print(outcome)
+PY
+}
+
+rotate_android_install_review_challenge() {
+  local trusted_verifier_observed="$1" expires_at="$2"
+  local created_at="" challenge=""
+  [ "$trusted_verifier_observed" = 0 ] \
+    || [ "$trusted_verifier_observed" = 1 ] || return 1
+  if [ "$APK_INSTALL_SCAN_REQUIRED" = 1 ]; then
+    trusted_verifier_observed=1
+  elif [ "$trusted_verifier_observed" = 1 ]; then
+    APK_INSTALL_SCAN_REQUIRED=1
+  fi
+  created_at="$(date +%s)"
+  [[ "$created_at" =~ ^[1-9][0-9]{8,}$ ]] \
+    && [[ "$expires_at" =~ ^[1-9][0-9]{8,}$ ]] \
+    && [ "$created_at" -le "$expires_at" ] || return 1
+  challenge="$(
+    python3 -c 'import secrets; print(secrets.token_hex(32))'
+  )" || return 1
+  [[ "$challenge" =~ ^[0-9a-f]{64}$ ]] || return 1
+  clear_install_review_attestation || return 1
+  APK_USER_ACTION_CHALLENGE="$challenge"
+  APK_USER_ACTION_CHALLENGE_CREATED_AT="$created_at"
+  APK_USER_ACTION_CHALLENGE_EXPIRES_AT="$expires_at"
+  APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$trusted_verifier_observed"
+  write_transaction_journal apk_user_action_required || return 1
+  # Close the helper/publication race on both sides of the journal rotation.
+  # A receipt for the retired challenge is never allowed to survive merely
+  # because its writer began just before the new journal became visible.
+  clear_install_review_attestation || return 1
+}
+
+announce_android_install_review_attestation() {
+  say "INSTALL_REVIEW_ATTESTATION challenge=$APK_USER_ACTION_CHALLENGE trusted_verifier_observed=$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED"
+  say "Inspect a fresh display-0 image immediately before recording the outcome."
+  say "Record a completed offered scan with: python3 $TRANSACTION_ATTESTER --fresh-display-0 $APK_USER_ACTION_CHALLENGE scan-completed"
+  if [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ]; then
+    say "Only when the fresh display shows no scan was offered, record: python3 $TRANSACTION_ATTESTER --fresh-display-0 $APK_USER_ACTION_CHALLENGE no-scan-offered"
+  else
+    say "A trusted installer or verifier was observed; no-scan-offered is rejected for this transaction."
+  fi
 }
 
 package_manager_supports_apk_rollback() {
@@ -1587,47 +1867,48 @@ install_apk() {
   local expected_apk_sha256="" install_command="" completed=0 operation_removed=0
   local private_output="$STAGE/package-manager-output.txt"
   local private_status="$STAGE/package-manager-status.txt"
-  local retained_result="${LOG%.log}-package-manager-${mode}.log"
+  local retained_result=""
   local package_status="" rish_status=0
+  [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 0 ] || return 1
   case "$mode" in
     upgrade)
       install_command="cmd package install -r --enable-rollback"
-      ;;
-    fallback)
-      # Last-resort fallback only. Android native rollback is the supported
-      # path; `-d` may reject non-debuggable downgrades and cannot be trusted.
-      install_command="cmd package install -r -d"
       ;;
     *) return 1 ;;
   esac
   expected_apk_sha256="$(sha256_file "$apk")"
   [[ "$expected_apk_sha256" =~ ^[0-9a-f]{64}$ ]] || return 1
-  if [ "$mode" = fallback ] && [ -n "$PACKAGE_OPERATION" ]; then
-    remove_shell_package_operation "$PACKAGE_OPERATION" || return 1
-    PACKAGE_OPERATION=""
-  fi
   if [ -n "$PACKAGE_OPERATION" ]; then
     [[ "$PACKAGE_OPERATION" =~ ^/data/local/tmp/evogent-package-op\.[0-9a-f]{32}$ ]] \
-      || return 1
+      && [ "$PACKAGE_OPERATION_STATE" = prepared ] || return 1
     operation="$PACKAGE_OPERATION"
     [ -d "$operation" ] && [ ! -L "$operation" ] \
       && [ -f "$operation/candidate.apk" ] \
       && [ ! -L "$operation/candidate.apk" ] || return 1
   else
-    operation="$(allocate_shell_package_operation)" || return 1
-    PACKAGE_OPERATION="$operation"
-    if [ "${TRANSACTION_JOURNAL_WRITTEN:-0}" = 1 ]; then
-      if ! write_transaction_journal "${TRANSACTION_PHASE:-apk_install_pending}"; then
-        return 1
-      fi
-    fi
+    prepare_shell_package_operation || return 1
+    operation="$PACKAGE_OPERATION"
   fi
+  retained_result="${LOG%.log}-package-manager-${mode}-${operation##*.}.log"
   candidate="$operation/candidate.apk"
   if ! cp "$apk" "$candidate" \
       || [ "$(sha256_file "$candidate")" != "$expected_apk_sha256" ]; then
     if remove_shell_package_operation "$operation"; then
-      [ "$operation" != "$PACKAGE_OPERATION" ] || PACKAGE_OPERATION=""
+      if [ "$operation" = "$PACKAGE_OPERATION" ]; then
+        PACKAGE_OPERATION=""
+        PACKAGE_OPERATION_STATE=""
+      fi
     fi
+    return 1
+  fi
+
+  # The launch fence is durable before the first command that can create an
+  # Android PackageInstaller session. Recovery may clean up `prepared`, but a
+  # `launched` operation is permanently ambiguous without a journaled platform
+  # session id and must never be reissued or accepted from installed bytes.
+  PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+  PACKAGE_OPERATION_STATE=launched
+  if ! write_transaction_journal "${TRANSACTION_PHASE:-apk_install_pending}"; then
     return 1
   fi
 
@@ -1662,7 +1943,10 @@ install_apk() {
   if [ "$completed" = 1 ]; then
     if remove_shell_package_operation "$operation"; then
       operation_removed=1
-      [ "$operation" != "$PACKAGE_OPERATION" ] || PACKAGE_OPERATION=""
+      if [ "$operation" = "$PACKAGE_OPERATION" ]; then
+        PACKAGE_OPERATION=""
+        PACKAGE_OPERATION_STATE=""
+      fi
     fi
   fi
 
@@ -1683,13 +1967,29 @@ install_apk() {
         && [ "$operation_removed" = 1 ] \
         && reconcile_android_install_user_action \
           "$apk" "$mode" "$retained_result"; then
+      PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
       rm -f -- "$retained_result"
       return 0
+    fi
+    if [ "$operation_removed" = 1 ]; then
+      # The durable journal still carries the launch fence unless reconciliation
+      # published a later action phase. Preserve that ambiguity in this owner as
+      # well, so trap cleanup cannot accept bytes or start rollback after a
+      # failed/ambiguous journal transition.
+      PACKAGE_OPERATION="$operation"
+      PACKAGE_OPERATION_STATE=launched
     fi
     say "Android package installation failed; private package-manager details were retained"
     return 1
   fi
   rm -f -- "$retained_result"
+  if reconcile_successful_android_install_foreground "$apk" "$mode"; then
+    PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+    return 0
+  fi
+  PACKAGE_OPERATION="$operation"
+  PACKAGE_OPERATION_STATE=launched
+  return 1
 }
 
 wait_for_package_manager_idle() {
@@ -1813,12 +2113,96 @@ installed_apk_identity_stable() {
   done
 }
 
+persist_and_wait_android_install_review() {
+  local prior_phase="$1" purpose="$2" target_code="$3"
+  local target_signer="$4" target_sha256="$5" probe="$6"
+  local context="$7" trusted_verifier_observed="${8:-0}"
+  local started_at=0 deadline=0 accept_after=0
+  local state="" final_state="" known_other=0 outcome=""
+  [ "$trusted_verifier_observed" = 0 ] \
+    || [ "$trusted_verifier_observed" = 1 ] || return 1
+  [ -f "$TRANSACTION_ATTESTER" ] && [ ! -L "$TRANSACTION_ATTESTER" ] \
+    && [ "$(stat -c '%a' "$TRANSACTION_ATTESTER")" = 700 ] \
+    && [ "$(stat -c '%u' "$TRANSACTION_ATTESTER")" = "$(id -u)" ] \
+    && [ "$(stat -c '%h' "$TRANSACTION_ATTESTER")" = 1 ] || return 1
+  APK_USER_ACTION_KIND=android_install_review
+  APK_USER_ACTION_PURPOSE="$purpose"
+  APK_USER_ACTION_EVIDENCE=fresh_display_0_operator_attestation_v1
+  APK_USER_ACTION_TARGET_SHA256="$target_sha256"
+  APK_USER_ACTION_TARGET_VERSION_CODE="$target_code"
+  APK_USER_ACTION_TARGET_SIGNER_SHA256="$target_signer"
+  started_at="$(date +%s)"
+  deadline=$(( started_at + INSTALL_USER_ACTION_WAIT_SECONDS ))
+  # Publish the action first, then keep observing for the complete delayed-
+  # verifier window before any receipt can be consumed. A verifier appearing
+  # after an early no-scan receipt rotates the challenge and makes scan-required
+  # sticky while the live package-launch guard remains raised.
+  accept_after=$(( started_at + INSTALL_POST_SUCCESS_REVIEW_SECONDS ))
+  rotate_android_install_review_challenge \
+    "$trusted_verifier_observed" "$deadline" || return 1
+  say "USER_ACTION_REQUIRED kind=android_install_review purpose=$purpose"
+  say "INSTALL_SECURITY_POLICY play_protect_scan=required_when_offered bypass=prohibited"
+  say "$context If Play Protect offers or recommends a scan, take the scan path; never choose an install-without-scanning option or suppress verification. Refusal, inability to complete the offered scan, or a harmful/security verdict stops this install."
+  announce_android_install_review_attestation
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    state="$(android_install_foreground_state_once)"
+    case "$state" in
+      other) known_other=$((known_other + 1)) ;;
+      trusted)
+        known_other=0
+        if [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ]; then
+          rotate_android_install_review_challenge 1 "$deadline" || return 1
+          say "A trusted installer or verifier appeared; the prior attestation challenge was revoked."
+          announce_android_install_review_attestation
+        fi
+        ;;
+      unknown) known_other=0 ;;
+      *) known_other=0 ;;
+    esac
+    if [ "$known_other" -ge 2 ] \
+        && [ "$(date +%s)" -ge "$accept_after" ]; then
+      if wait_for_package_manager_idle \
+          && installed_apk_identity_stable \
+            "$probe" "$target_code" "$target_signer" "$target_sha256" 3; then
+        final_state="$(android_install_foreground_state_once)"
+        if [ "$final_state" = trusted ]; then
+          if [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ]; then
+            rotate_android_install_review_challenge 1 "$deadline" || return 1
+            say "A trusted installer or verifier appeared; the prior attestation challenge was revoked."
+            announce_android_install_review_attestation
+          fi
+        elif [ "$final_state" = other ]; then
+          if outcome="$(read_install_review_attestation 2>/dev/null)"; then
+            APK_INSTALL_SCAN_REQUIRED=0
+            clear_apk_user_action_state
+            write_transaction_journal "$prior_phase" || return 1
+            clear_install_review_attestation || return 1
+            say "Fresh display-0 operator attestation accepted ($outcome); exact installed identity reproved"
+            return 0
+          fi
+          if [ -e "$INSTALL_REVIEW_ATTESTATION" ] \
+              || [ -L "$INSTALL_REVIEW_ATTESTATION" ]; then
+            say "Install-review attestation was rejected; restoring the prior release"
+            return 1
+          fi
+        fi
+      fi
+      known_other=0
+    fi
+    sleep 2
+  done
+  say "Fresh display-0 install-review attestation timed out; restoring the prior release"
+  return 1
+}
+
 reconcile_android_install_user_action() {
   local apk="$1" mode="$2" retained_result="$3"
-  local prior_phase="$TRANSACTION_PHASE" purpose="" target_code=""
+  local prior_phase="$TRANSACTION_PHASE" return_phase="$TRANSACTION_PHASE"
+  local purpose="" target_code=""
   local target_signer="" target_sha256="" counterpart_code=""
   local counterpart_signer="" counterpart_sha256="" probe=""
-  local deadline=0
+  local first_state="" second_state="" trusted_verifier_observed=0
   [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ] \
     && [ -f "$retained_result" ] && [ ! -L "$retained_result" ] \
     && [ "$(stat -c '%a' "$retained_result")" = 600 ] || return 1
@@ -1833,14 +2217,6 @@ reconcile_android_install_user_action() {
       counterpart_signer="$PREVIOUS_APK_SIGNER"
       counterpart_sha256="$(sha256_file "$APK_BACKUP")"
       ;;
-    fallback)
-      purpose=rollback_restore
-      target_code="$PREVIOUS_APK_CODE"
-      target_signer="$PREVIOUS_APK_SIGNER"
-      counterpart_code="$EXPECTED_APK_CODE"
-      counterpart_signer="$EXPECTED_APK_SIGNER"
-      counterpart_sha256="$EXPECTED_APK_SHA256"
-      ;;
     *) return 1 ;;
   esac
   [[ "$target_sha256" =~ ^[0-9a-f]{64}$ ]] \
@@ -1852,44 +2228,76 @@ reconcile_android_install_user_action() {
 
   probe="$STAGE/installed-user-action.apk"
   if installed_apk_identity_stable \
-      "$probe" "$target_code" "$target_signer" "$target_sha256" 3 \
-      && wait_for_package_manager_idle \
-      && installed_apk_identity_stable \
-        "$probe" "$target_code" "$target_signer" "$target_sha256" 3; then
-    say "Android package result reconciled from exact installed identity"
-    return 0
+      "$probe" "$target_code" "$target_signer" "$target_sha256" 3; then
+    first_state="$(android_install_foreground_state_once)"
+    sleep 1
+    second_state="$(android_install_foreground_state_once)"
+    if [ "$first_state" = trusted ] || [ "$second_state" = trusted ]; then
+      trusted_verifier_observed=1
+    fi
+    persist_and_wait_android_install_review \
+      "$return_phase" "$purpose" "$target_code" "$target_signer" \
+      "$target_sha256" "$probe" \
+      "Android published the exact target despite a nonzero package result; operator attestation is still required." \
+      "$trusted_verifier_observed"
+    return $?
   fi
   installed_apk_identity_stable \
     "$probe" "$counterpart_code" "$counterpart_signer" \
     "$counterpart_sha256" 3 || return 1
-  trusted_android_install_foreground || return 1
+  first_state="$(android_install_foreground_state_once)"
+  sleep 1
+  second_state="$(android_install_foreground_state_once)"
+  [ "$first_state" = trusted ] || [ "$second_state" = trusted ] || return 1
+  persist_and_wait_android_install_review \
+    "$return_phase" "$purpose" "$target_code" "$target_signer" \
+    "$target_sha256" "$probe" \
+    "Android is waiting on a trusted install or verification foreground." 1
+}
 
-  APK_USER_ACTION_KIND=android_install_review
-  APK_USER_ACTION_PURPOSE="$purpose"
-  APK_USER_ACTION_EVIDENCE=trusted_system_installer_foreground_v1
-  APK_USER_ACTION_TARGET_SHA256="$target_sha256"
-  APK_USER_ACTION_TARGET_VERSION_CODE="$target_code"
-  APK_USER_ACTION_TARGET_SIGNER_SHA256="$target_signer"
-  write_transaction_journal apk_user_action_required || return 1
-  say "USER_ACTION_REQUIRED kind=android_install_review purpose=$purpose"
+# A package command can report success and publish the exact target APK before
+# Play Protect asynchronously raises its foreground review. Exact package
+# identity and foreground disappearance therefore are not release authority.
+# Observe a short bounded window, remember any trusted verifier seen even once,
+# then require a fresh display-0 operator attestation in every case.
+reconcile_successful_android_install_foreground() {
+  local apk="$1" mode="$2" prior_phase="$TRANSACTION_PHASE"
+  local return_phase="$TRANSACTION_PHASE" purpose="" target_code=""
+  local target_signer="" target_sha256="" probe=""
+  local observed=0 deadline=0 state="" context=""
+  [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ] || return 1
+  target_sha256="$(sha256_file "$apk")"
+  case "$mode" in
+    upgrade)
+      [ "$prior_phase" = apk_install_pending ] || return 1
+      purpose=candidate_install
+      target_code="$EXPECTED_APK_CODE"
+      target_signer="$EXPECTED_APK_SIGNER"
+      ;;
+    *) return 1 ;;
+  esac
+  [[ "$target_sha256" =~ ^[0-9a-f]{64}$ ]] \
+    && [[ "$target_signer" =~ ^[0-9a-f]{64}$ ]] \
+    && [[ "$target_code" =~ ^[0-9]{1,18}$ ]] || return 1
 
-  deadline=$(( $(date +%s) + INSTALL_USER_ACTION_WAIT_SECONDS ))
+  probe="$STAGE/installed-post-success-review.apk"
+  deadline=$(( $(date +%s) + INSTALL_POST_SUCCESS_REVIEW_SECONDS ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if installed_apk_matches_identity \
-        "$probe" "$target_code" "$target_signer" "$target_sha256"; then
-      if wait_for_package_manager_idle \
-          && installed_apk_identity_stable \
-            "$probe" "$target_code" "$target_signer" "$target_sha256" 3; then
-        clear_apk_user_action_state
-        write_transaction_journal "$prior_phase" || return 1
-        say "Android foreground installation action completed"
-        return 0
-      fi
+    state="$(android_install_foreground_state_once)"
+    if [ "$state" = trusted ]; then
+      observed=1
+      break
     fi
-    sleep 2
+    sleep 1
   done
-  say "Android foreground installation action timed out; restoring the prior release"
-  return 1
+  if [ "$observed" = 1 ]; then
+    context="Android surfaced a trusted install or verification review after package success."
+  else
+    context="Android published the target without a known verifier foreground; operator attestation is still required."
+  fi
+  persist_and_wait_android_install_review \
+    "$return_phase" "$purpose" "$target_code" "$target_signer" \
+    "$target_sha256" "$probe" "$context" "$observed"
 }
 
 wait_for_apk_backup_identity() {
@@ -1906,19 +2314,144 @@ wait_for_apk_backup_identity() {
   return 1
 }
 
+launch_native_apk_rollback() {
+  local operation="" completed=0
+  local private_output="$STAGE/native-rollback-output.txt"
+  local private_status="$STAGE/native-rollback-status.txt"
+  local retained_result="" package_status="" rish_status=0
+  [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ] \
+    && [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 0 ] \
+    && [ -z "$PACKAGE_OPERATION" ] \
+    && [ -z "$PACKAGE_OPERATION_STATE" ] \
+    && [ "$APK_ROLLBACK_RETRY_GENERATION" = 0 ] || return 1
+  if [ "$TRANSACTION_PHASE" != apk_install_pending ]; then
+    write_transaction_journal apk_install_pending || return 1
+  fi
+  prepare_shell_package_operation || return 1
+  operation="$PACKAGE_OPERATION"
+  retained_result="${LOG%.log}-package-manager-native-rollback-${operation##*.}.log"
+
+  # Native rollback is an Android package mutation too. Fence it before the
+  # first rollback-app dispatch, and keep that fence until this uninterrupted
+  # owner has both a terminal result marker and exact predecessor-byte proof.
+  PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+  PACKAGE_OPERATION_STATE=launched
+  if ! write_transaction_journal "$TRANSACTION_PHASE"; then
+    return 1
+  fi
+  rish_command \
+    "package_rc=125; : > '$operation/details.tmp'; if chmod 0700 '$operation' && rm -f '$operation/candidate.apk'; then cmd package rollback-app '$PACKAGE_NAME' > '$operation/details.tmp' 2>&1; package_rc=\$?; if [ \"\$package_rc\" -eq 0 ]; then cmd package wait-for-handler --timeout 120000 >> '$operation/details.tmp' 2>&1 && cmd package wait-for-background-handler --timeout 120000 >> '$operation/details.tmp' 2>&1 || package_rc=\$?; fi; else printf '%s\\n' 'native rollback staging check failed' > '$operation/details.tmp'; fi; printf 'EVOGENT_PACKAGE_RESULT_V1\\n%s\\n' \"\$package_rc\" > '$operation/status.tmp'; chmod 0444 '$operation/details.tmp' '$operation/status.tmp' && mv '$operation/details.tmp' '$operation/details' && mv '$operation/status.tmp' '$operation/status' && chmod 0755 '$operation'; exit 0" \
+    300 \
+    >/dev/null 2>&1 || rish_status=$?
+  for _ in $(seq 1 120); do
+    if [ -d "$operation" ] && [ ! -L "$operation" ] \
+        && [ -f "$operation/status" ] && [ ! -L "$operation/status" ] \
+        && cp "$operation/status" "$private_status" 2>/dev/null; then
+      chmod 600 "$private_status"
+      if package_status="$(
+        read_package_result_status "$private_status" 2>/dev/null
+      )"; then
+        completed=1
+        break
+      fi
+    fi
+    package_status=""
+    sleep 1
+  done
+  if [ "$completed" = 1 ] \
+      && [ -f "$operation/details" ] && [ ! -L "$operation/details" ]; then
+    cp "$operation/details" "$private_output" 2>/dev/null \
+      || : > "$private_output"
+  else
+    : > "$private_output"
+  fi
+  chmod 600 "$private_output"
+  if [ "$completed" = 1 ] && [ "$package_status" -eq 0 ]; then
+    rm -f -- "$retained_result"
+    return 0
+  fi
+  [ ! -e "$retained_result" ] && [ ! -L "$retained_result" ] || return 1
+  {
+    printf 'rishStatus=%s\n' "$rish_status"
+    printf 'completionPublished=%s\n' "$completed"
+    printf 'packageStatus=%s\n' "${package_status:-unavailable}"
+    printf '%s\n' '--- private package-manager output ---'
+    cat "$private_output"
+  } > "$retained_result"
+  chmod 600 "$retained_result"
+  fsync_regular_file_and_parent "$retained_result"
+  say "Android native rollback failed; private package-manager details were retained"
+  return 1
+}
+
+complete_native_apk_rollback_operation() {
+  local operation="$PACKAGE_OPERATION"
+  [ "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" = 1 ] \
+    && [ "$PACKAGE_OPERATION_STATE" = launched ] \
+    && [[ "$operation" =~ ^/data/local/tmp/evogent-package-op\.[0-9a-f]{32}$ ]] \
+    || return 1
+  # Reap the exact nonce before publishing an action with an empty operation.
+  # The process-local guard remains raised across that transition, so an
+  # interruption can observe only the durable launched fence or the complete
+  # predecessor-review action—never authority to commit or launch again.
+  remove_shell_package_operation "$operation" || return 1
+  PACKAGE_OPERATION=""
+  PACKAGE_OPERATION_STATE=""
+  if persist_restored_apk_review; then
+    PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+    return 0
+  fi
+  PACKAGE_OPERATION="$operation"
+  PACKAGE_OPERATION_STATE=launched
+  return 1
+}
+
+persist_restored_apk_review() {
+  local backup_sha256="" probe="$STAGE/restored-apk-review.apk"
+  [ "$APK_ROLLBACK_RETRY_GENERATION" = 0 ] \
+    && [ "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" = 1 ] \
+    && [ -z "$PACKAGE_OPERATION" ] \
+    && [ -z "$PACKAGE_OPERATION_STATE" ] \
+    && [ "$APK_INSTALL_SCAN_REQUIRED" = 0 ] \
+    && [ -z "$APK_USER_ACTION_KIND" ] || return 1
+  backup_sha256="$(sha256_file "$APK_BACKUP")" || return 1
+  [[ "$PREVIOUS_APK_CODE" =~ ^[1-9][0-9]{0,17}$ ]] \
+    && [[ "$PREVIOUS_APK_SIGNER" =~ ^[0-9a-f]{64}$ ]] \
+    && [[ "$backup_sha256" =~ ^[0-9a-f]{64}$ ]] || return 1
+  # Generation one means exactly one predecessor-restoration review lineage.
+  # Publish it atomically with the fresh action challenge.
+  APK_ROLLBACK_RETRY_GENERATION=1
+  persist_and_wait_android_install_review \
+    apk_install_pending rollback_restore "$PREVIOUS_APK_CODE" \
+    "$PREVIOUS_APK_SIGNER" "$backup_sha256" "$probe" \
+    "Android restored the predecessor APK. Complete any offered Play Protect scan and attest the fresh display before rollback can finish." \
+    0
+}
+
 rollback_apk_native() {
   local probe="$STAGING_ROOT/installed-after-rollback.apk" current_code=""
-  local version_mismatch=0
+  local version_mismatch=0 operation_state="$PACKAGE_OPERATION_STATE"
   [ "$APK_INSTALL_ATTEMPTED" = 1 ] || return 0
   [ "$APK_BACKUP_READY" = 1 ] || {
     say "CRITICAL: APK install was attempted without a proven rollback backup"
     return 1
   }
-
-  # Cancel the exact journaled candidate before the final package-manager
-  # barrier. A detached shell that starts afterward can no longer open the APK;
-  # a shell already in PackageManager is drained by the barriers below.
-  reap_recorded_package_operation || return 1
+  # A launched cmd-package operation may own an Android PackageInstaller session
+  # even after its shell staging directory disappears and handler barriers
+  # return. Without a journaled platform session id, only the uninterrupted
+  # owner may consume its terminal result. Recovery fails closed and never
+  # accepts the predecessor merely because those bytes are still installed.
+  if [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 1 ] \
+      || [ "$operation_state" = launched ]; then
+    say "USER_ACTION_REQUIRED kind=manual_package_recovery purpose=package_operation"
+    say "An Android install or native rollback crossed its durable launch fence before recovery. Automatic rollback is paused to avoid overlapping the unresolved Android package operation."
+    return 1
+  fi
+  case "$operation_state" in
+    prepared) reap_recorded_package_operation || return 1 ;;
+    "") [ -z "$PACKAGE_OPERATION" ] || return 1 ;;
+    *) return 1 ;;
+  esac
 
   # Accept an already-restored APK only after both package-manager handlers are
   # idle and three stable exact-identity observations agree. A version mismatch
@@ -1933,36 +2466,35 @@ rollback_apk_native() {
     fi
     if [ "$version_mismatch" = 0 ] \
         && wait_for_apk_backup_identity "$probe"; then
-      return 0
+      if [ "$APK_ROLLBACK_RETRY_GENERATION" = 1 ]; then
+        return 0
+      fi
+      PACKAGE_OPERATION_LAUNCH_UNRESOLVED=1
+      if persist_restored_apk_review; then
+        PACKAGE_OPERATION_LAUNCH_UNRESOLVED=0
+        return 0
+      fi
+      return 1
     fi
   fi
 
-  # Otherwise serialize a native rollback (or exact-byte fallback reinstall)
-  # behind any pending package operation and prove its exact identity.
-  rish_command "cmd package rollback-app '$PACKAGE_NAME'" 120 \
-    >/dev/null 2>&1 || true
-  if wait_for_package_manager_idle \
-      && wait_for_apk_backup_identity "$probe"; then
-    return 0
-  fi
-
-  say "CRITICAL: Android native rollback did not restore the backed-up APK; trying -d fallback"
-  if ! install_apk "$APK_BACKUP" fallback >/dev/null 2>&1; then
-    say "CRITICAL: backed-up APK fallback install was rejected"
-    reap_recorded_package_operation || return 1
-    if wait_for_package_manager_idle \
-        && wait_for_apk_backup_identity "$probe"; then
-      return 0
-    fi
+  # Native rollback is fenced exactly like install. Only this uninterrupted
+  # owner may consume its terminal marker and exact identity proof. Any command
+  # failure, identity miss, journal ambiguity, or process death stays launched
+  # and manual; no second package mutation may overlap opaque Android work.
+  if ! launch_native_apk_rollback; then
+    say "CRITICAL: Android native rollback remains unresolved; another package mutation is prohibited"
     return 1
   fi
-  reap_recorded_package_operation || return 1
-  if wait_for_package_manager_idle \
-      && wait_for_apk_backup_identity "$probe"; then
-    return 0
+  if ! wait_for_package_manager_idle \
+      || ! wait_for_apk_backup_identity "$probe"; then
+    say "CRITICAL: native rollback did not prove the exact backed-up APK; recovery stays inert"
+    return 1
   fi
-  say "CRITICAL: installed APK did not return to its backed-up identity"
-  return 1
+  complete_native_apk_rollback_operation || {
+    say "CRITICAL: native rollback proof could not clear its durable launch fence"
+    return 1
+  }
 }
 
 wait_for_apk_rollback_availability() {
@@ -3956,12 +4488,21 @@ sync_control_token_from_apk() {
 
 prepare_transaction_recoverer() {
   local source="$NEW_RELEASE/device/install-release.sh"
+  local attester_source="$NEW_RELEASE/device/attest-install-review.py"
   local temporary="$TRANSACTION_RECOVERER.new.$$"
-  [ -f "$source" ] && [ ! -L "$source" ] || return 1
-  cp "$source" "$temporary"
-  chmod 700 "$temporary"
+  local attester_temporary="$TRANSACTION_ATTESTER.new.$$"
+  [ -f "$source" ] && [ ! -L "$source" ] \
+    && [ -f "$attester_source" ] && [ ! -L "$attester_source" ] || return 1
+  cp "$source" "$temporary" || return 1
+  cp "$attester_source" "$attester_temporary" || {
+    rm -f -- "$temporary"
+    return 1
+  }
+  chmod 700 "$temporary" "$attester_temporary"
   mv -f "$temporary" "$TRANSACTION_RECOVERER"
-  fsync_regular_file_and_parent "$TRANSACTION_RECOVERER"
+  mv -f "$attester_temporary" "$TRANSACTION_ATTESTER"
+  fsync_regular_file_and_parent "$TRANSACTION_RECOVERER" \
+    && fsync_regular_file_and_parent "$TRANSACTION_ATTESTER"
 }
 
 write_transaction_journal() {
@@ -3971,10 +4512,16 @@ write_transaction_journal() {
     "$BACKUP_DIR" "$DB_BACKUP" "$DB_BACKUP_READY" "$DB_EXISTED" \
     "$APK_BACKUP" "$APK_BACKUP_READY" "$APK_CHANGED" \
     "$APK_INSTALL_ATTEMPTED" "$PACKAGE_OPERATION" \
+    "$PACKAGE_OPERATION_STATE" "$APK_ROLLBACK_RETRY_GENERATION" \
+    "$APK_INSTALL_SCAN_REQUIRED" \
     "$APK_USER_ACTION_KIND" "$APK_USER_ACTION_PURPOSE" \
     "$APK_USER_ACTION_EVIDENCE" "$APK_USER_ACTION_TARGET_SHA256" \
     "$APK_USER_ACTION_TARGET_VERSION_CODE" \
     "$APK_USER_ACTION_TARGET_SIGNER_SHA256" \
+    "$APK_USER_ACTION_CHALLENGE" \
+    "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+    "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" \
+    "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" \
     "$PREVIOUS_APK_CODE" "$PREVIOUS_APK_SIGNER" \
     "$INITIAL_MIGRATION" "$LEGACY_RUNTIME_EXPECTED" \
     "$LEGACY_CONTROL_PLANE_EXPECTED" \
@@ -4011,12 +4558,19 @@ import sys
     apk_changed,
     apk_install_attempted,
     package_operation,
+    package_operation_state,
+    apk_rollback_retry_generation,
+    apk_install_scan_required,
     apk_user_action_kind,
     apk_user_action_purpose,
     apk_user_action_evidence,
     apk_user_action_target_sha256,
     apk_user_action_target_version_code,
     apk_user_action_target_signer_sha256,
+    apk_user_action_challenge,
+    apk_user_action_challenge_created_at,
+    apk_user_action_challenge_expires_at,
+    apk_user_action_trusted_verifier_observed,
     previous_apk_code,
     previous_apk_signer,
     initial_migration,
@@ -4042,7 +4596,7 @@ import sys
     android_roles_applied,
 ) = sys.argv[1:]
 payload = {
-    "schema": "evogent.phone.install-transaction.v4",
+    "schema": "evogent.phone.install-transaction.v6",
     "root": root,
     "phase": phase,
     "releaseId": release_id,
@@ -4057,6 +4611,9 @@ payload = {
     "apkChanged": int(apk_changed),
     "apkInstallAttempted": int(apk_install_attempted),
     "packageOperation": package_operation,
+    "packageOperationState": package_operation_state,
+    "apkRollbackRetryGeneration": int(apk_rollback_retry_generation),
+    "apkInstallScanRequired": int(apk_install_scan_required),
     "apkUserActionKind": apk_user_action_kind,
     "apkUserActionPurpose": apk_user_action_purpose,
     "apkUserActionEvidence": apk_user_action_evidence,
@@ -4068,6 +4625,20 @@ payload = {
     ),
     "apkUserActionTargetSignerSha256": (
         apk_user_action_target_signer_sha256
+    ),
+    "apkUserActionChallenge": apk_user_action_challenge,
+    "apkUserActionChallengeCreatedAtEpochSeconds": (
+        int(apk_user_action_challenge_created_at)
+        if apk_user_action_challenge_created_at
+        else -1
+    ),
+    "apkUserActionChallengeExpiresAtEpochSeconds": (
+        int(apk_user_action_challenge_expires_at)
+        if apk_user_action_challenge_expires_at
+        else -1
+    ),
+    "apkUserActionTrustedVerifierObserved": int(
+        apk_user_action_trusted_verifier_observed
     ),
     "previousApkCode": previous_apk_code,
     "previousApkSigner": previous_apk_signer,
@@ -4127,6 +4698,8 @@ PY
 }
 
 clear_transaction_journal() {
+  [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 0 ] \
+    && [ "${PACKAGE_OPERATION_STATE:-}" != launched ] || return 70
   python3 - "$TRANSACTION_JOURNAL" <<'PY'
 import os
 import pathlib
@@ -4171,8 +4744,22 @@ commit_rolled_back_decision() {
   [ "$ROLLBACK_FAILED" = 0 ] \
     && [ "$RUNTIME_PROVEN_STOPPED" = 1 ] \
     && [ "$TRANSACTION_PHASE" != committed ] \
+    && [ "$TRANSACTION_PHASE" != apk_user_action_required ] \
     && [ -z "$PACKAGE_OPERATION" ] \
+    && [ -z "$PACKAGE_OPERATION_STATE" ] \
+    && [ "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" = 0 ] \
     && [ -z "$CONTROL_TOKEN_BRIDGE" ] \
+    && [ -z "$APK_USER_ACTION_KIND" ] \
+    && [ -z "$APK_USER_ACTION_PURPOSE" ] \
+    && [ -z "$APK_USER_ACTION_EVIDENCE" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_SHA256" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_VERSION_CODE" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_SIGNER_SHA256" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE_CREATED_AT" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" ] \
+    && [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ] \
+    && [ "$APK_INSTALL_SCAN_REQUIRED" = 0 ] \
     && { [ "$APK_INSTALL_ATTEMPTED" = 0 ] \
       || [ "$APK_BACKUP_READY" = 1 ]; } \
     && { [ "$ANDROID_ROLE_RESTORE_REQUIRED" = 0 ] \
@@ -4202,7 +4789,13 @@ commit_new_release_decision() {
     && [ "$SWITCH_STARTED" = 1 ] \
     && [ "$MIGRATION_STARTED" = "$INITIAL_MIGRATION" ] \
     && [ "$ANDROID_ROLE_BACKUP_READY" = 1 ] \
-    && [ "$ANDROID_ROLES_APPLIED" = 1 ] || return 70
+    && [ "$ANDROID_ROLES_APPLIED" = 1 ] \
+    && [ -z "$PACKAGE_OPERATION" ] \
+    && [ -z "$PACKAGE_OPERATION_STATE" ] \
+    && [ "$PACKAGE_OPERATION_LAUNCH_UNRESOLVED" = 0 ] \
+    && [ "$APK_ROLLBACK_RETRY_GENERATION" = 0 ] \
+    && [ "$APK_INSTALL_SCAN_REQUIRED" = 0 ] \
+    && [ -z "$APK_USER_ACTION_KIND" ] || return 70
   canonicalize_cycle_gate_for_commit || return 70
   trap '' INT TERM HUP
   if write_transaction_journal committed; then
@@ -4225,16 +4818,18 @@ commit_new_release_decision() {
 }
 
 remove_transaction_recoverer() {
-  python3 - "$TRANSACTION_RECOVERER" <<'PY'
+  python3 - "$TRANSACTION_RECOVERER" "$TRANSACTION_ATTESTER" \
+    "$INSTALL_REVIEW_ATTESTATION" <<'PY'
 import os
 import pathlib
 import sys
 
-recoverer = pathlib.Path(sys.argv[1])
-try:
-    recoverer.unlink()
-except FileNotFoundError:
-    pass
+recoverer, attester, attestation = map(pathlib.Path, sys.argv[1:])
+for artifact in (attestation, attester, recoverer):
+    try:
+        artifact.unlink()
+    except FileNotFoundError:
+        pass
 directory = os.open(
     recoverer.parent,
     os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
@@ -4324,6 +4919,8 @@ if schema not in {
     "evogent.phone.install-transaction.v2",
     "evogent.phone.install-transaction.v3",
     "evogent.phone.install-transaction.v4",
+    "evogent.phone.install-transaction.v5",
+    "evogent.phone.install-transaction.v6",
 }:
     raise SystemExit("unsupported install transaction journal")
 if data.get("root") != root:
@@ -4395,6 +4992,8 @@ exact_child(data.get("controlTokenBackup", ""), backups, optional=True)
 if schema in {
     "evogent.phone.install-transaction.v3",
     "evogent.phone.install-transaction.v4",
+    "evogent.phone.install-transaction.v5",
+    "evogent.phone.install-transaction.v6",
 }:
     exact_child(data.get("androidRoleBackup", ""), backups)
 package_operation = data.get("packageOperation", "")
@@ -4407,6 +5006,31 @@ if not isinstance(package_operation, str) or (
     is None
 ):
     raise SystemExit("transaction package operation is invalid")
+package_operation_state = data.get("packageOperationState", "")
+apk_rollback_retry_generation = data.get("apkRollbackRetryGeneration", 0)
+apk_install_scan_required = data.get("apkInstallScanRequired", 0)
+if schema == "evogent.phone.install-transaction.v6":
+    if not {
+        "packageOperationState",
+        "apkRollbackRetryGeneration",
+        "apkInstallScanRequired",
+    }.issubset(data):
+        raise SystemExit("transaction v6 retry authority is missing")
+    if package_operation_state not in {"", "prepared", "launched"}:
+        raise SystemExit("transaction package operation state is invalid")
+    if (package_operation == "") != (package_operation_state == ""):
+        raise SystemExit("transaction package operation state is incomplete")
+    if (
+        type(apk_rollback_retry_generation) is not int
+        or apk_rollback_retry_generation not in {0, 1}
+        or type(apk_install_scan_required) is not int
+        or apk_install_scan_required not in {0, 1}
+    ):
+        raise SystemExit("transaction rollback retry authority is invalid")
+else:
+    package_operation_state = ""
+    apk_rollback_retry_generation = 0
+    apk_install_scan_required = 0
 control_token_bridge = data.get("controlTokenBridge", "")
 if not isinstance(control_token_bridge, str) or (
     control_token_bridge
@@ -4421,6 +5045,34 @@ if package_operation and (
     data.get("apkChanged") != 1 or data.get("apkInstallAttempted") != 1
 ):
     raise SystemExit("transaction package operation has no APK mutation intent")
+if schema == "evogent.phone.install-transaction.v6":
+    previous_apk_code = data.get("previousApkCode")
+    previous_apk_signer = data.get("previousApkSigner")
+    if data.get("apkChanged") == 1 and (
+        not isinstance(previous_apk_code, str)
+        or re.fullmatch(r"[1-9][0-9]{0,17}", previous_apk_code) is None
+        or int(previous_apk_code) > 9223372036854775807
+        or not isinstance(previous_apk_signer, str)
+        or re.fullmatch(r"[0-9a-f]{64}", previous_apk_signer) is None
+    ):
+        raise SystemExit("changed APK predecessor identity is invalid")
+    if package_operation_state and data.get("phase") != "apk_install_pending":
+        raise SystemExit("package operation escaped its APK phase")
+    if data.get("phase") == "committed" and apk_rollback_retry_generation != 0:
+        raise SystemExit("committed release carries rollback retry authority")
+    if apk_rollback_retry_generation == 1 and not (
+        (
+            data.get("phase") == "apk_user_action_required"
+            and data.get("apkUserActionPurpose") == "rollback_restore"
+        )
+        or (
+            data.get("phase") == "apk_install_pending"
+            and package_operation == ""
+            and package_operation_state == ""
+        )
+        or data.get("phase") == "rolled_back"
+    ):
+        raise SystemExit("rollback retry generation escaped its recovery phases")
 action_phase = data.get("phase") == "apk_user_action_required"
 action_kind = data.get("apkUserActionKind", "")
 action_purpose = data.get("apkUserActionPurpose", "")
@@ -4428,7 +5080,82 @@ action_evidence = data.get("apkUserActionEvidence", "")
 action_sha256 = data.get("apkUserActionTargetSha256", "")
 action_version = data.get("apkUserActionTargetVersionCode", -1)
 action_signer = data.get("apkUserActionTargetSignerSha256", "")
-if schema == "evogent.phone.install-transaction.v4":
+action_challenge = data.get("apkUserActionChallenge", "")
+action_challenge_created_at = data.get(
+    "apkUserActionChallengeCreatedAtEpochSeconds",
+    -1,
+)
+action_challenge_expires_at = data.get(
+    "apkUserActionChallengeExpiresAtEpochSeconds",
+    -1,
+)
+action_trusted_verifier_observed = data.get(
+    "apkUserActionTrustedVerifierObserved",
+    0,
+)
+if schema in {
+    "evogent.phone.install-transaction.v5",
+    "evogent.phone.install-transaction.v6",
+}:
+    if action_phase:
+        if (
+            action_kind != "android_install_review"
+            or action_purpose not in {"candidate_install", "rollback_restore"}
+            or action_evidence
+            != "fresh_display_0_operator_attestation_v1"
+            or re.fullmatch(r"[0-9a-f]{64}", str(action_sha256)) is None
+            or type(action_version) is not int
+            or action_version < 1
+            or action_version > 9223372036854775807
+            or re.fullmatch(r"[0-9a-f]{64}", str(action_signer)) is None
+            or re.fullmatch(r"[0-9a-f]{64}", str(action_challenge)) is None
+            or type(action_challenge_created_at) is not int
+            or type(action_challenge_expires_at) is not int
+            or action_challenge_created_at < 1
+            or action_challenge_expires_at < action_challenge_created_at
+            or type(action_trusted_verifier_observed) is not int
+            or action_trusted_verifier_observed not in {0, 1}
+            or package_operation != ""
+            or control_token_bridge != ""
+            or data.get("apkChanged") != 1
+            or data.get("apkInstallAttempted") != 1
+            or data.get("apkBackupReady") != 1
+            or (
+                schema == "evogent.phone.install-transaction.v6"
+                and (
+                    package_operation_state != ""
+                    or apk_install_scan_required
+                    != action_trusted_verifier_observed
+                    or (
+                        action_purpose == "candidate_install"
+                        and apk_rollback_retry_generation != 0
+                    )
+                    or (
+                        action_purpose == "rollback_restore"
+                        and apk_rollback_retry_generation != 1
+                    )
+                )
+            )
+        ):
+            raise SystemExit("APK operator-attestation authority is incomplete")
+    elif (
+        action_kind != ""
+        or action_purpose != ""
+        or action_evidence != ""
+        or action_sha256 != ""
+        or action_version != -1
+        or action_signer != ""
+        or action_challenge != ""
+        or action_challenge_created_at != -1
+        or action_challenge_expires_at != -1
+        or action_trusted_verifier_observed != 0
+        or (
+            schema == "evogent.phone.install-transaction.v6"
+            and apk_install_scan_required != 0
+        )
+    ):
+        raise SystemExit("terminal transaction carries APK operator-attestation state")
+elif schema == "evogent.phone.install-transaction.v4":
     if action_phase:
         if (
             action_kind != "android_install_review"
@@ -4489,6 +5216,8 @@ if schema in {
     "evogent.phone.install-transaction.v2",
     "evogent.phone.install-transaction.v3",
     "evogent.phone.install-transaction.v4",
+    "evogent.phone.install-transaction.v5",
+    "evogent.phone.install-transaction.v6",
 }:
     committed = data["phase"] == "committed"
     rolled_back = data["phase"] == "rolled_back"
@@ -4729,6 +5458,8 @@ if schema in {
             and data["controlTokenBackupReady"] == 1
             and data["apkInstallAttempted"] == data["apkChanged"]
             and package_operation == ""
+            and package_operation_state == ""
+            and apk_install_scan_required == 0
             and control_token_bridge == ""
             and data["cycleGate"] == state_gate
         ):
@@ -4741,6 +5472,8 @@ if schema in {
     if schema in {
         "evogent.phone.install-transaction.v3",
         "evogent.phone.install-transaction.v4",
+        "evogent.phone.install-transaction.v5",
+        "evogent.phone.install-transaction.v6",
     }:
         for key in (
             "androidRoleBackupReady",
@@ -4836,6 +5569,8 @@ if schema in {
         raise SystemExit("legacy transaction carries Android role phases")
     if rolled_back and (
         package_operation != ""
+        or package_operation_state != ""
+        or apk_install_scan_required != 0
         or control_token_bridge != ""
         or (
             data["apkInstallAttempted"] == 1
@@ -4877,6 +5612,13 @@ import sys
 value = json.load(open(sys.argv[1], encoding="utf-8")).get(sys.argv[2], "")
 print(value)
 PY
+}
+
+journal_optional_action_integer() {
+  local value=""
+  value="$(journal_optional_field "$1" "$2")" || return 1
+  [ "$value" != -1 ] || value=""
+  printf '%s\n' "$value"
 }
 
 copy_legacy_home_snapshots() {
@@ -8101,6 +8843,8 @@ if (
         "evogent.phone.install-transaction.v2",
         "evogent.phone.install-transaction.v3",
         "evogent.phone.install-transaction.v4",
+        "evogent.phone.install-transaction.v5",
+        "evogent.phone.install-transaction.v6",
     }
     or data.get("phase") != "committed"
     or pathlib.Path(data.get("migrationDir", "")) != migration
@@ -8157,9 +8901,17 @@ finalize_committed_transaction_state() {
 }
 
 reap_recorded_package_operation() {
-  [ -n "$PACKAGE_OPERATION" ] || return 0
+  if [ -z "$PACKAGE_OPERATION" ]; then
+    [ -z "$PACKAGE_OPERATION_STATE" ]
+    return
+  fi
+  [ "$PACKAGE_OPERATION_STATE" = prepared ] || {
+    say "CRITICAL: launched Android package operation requires manual recovery"
+    return 1
+  }
   if remove_shell_package_operation "$PACKAGE_OPERATION"; then
     PACKAGE_OPERATION=""
+    PACKAGE_OPERATION_STATE=""
     return 0
   fi
   say "CRITICAL: recorded Android package operation could not be reaped"
@@ -8176,18 +8928,137 @@ reap_recorded_control_token_bridge() {
   return 1
 }
 
+prepare_android_install_review_for_rollback() {
+  local backup_sha256=""
+  [ "$TRANSACTION_PHASE" = apk_user_action_required ] || return 0
+  case "$APK_USER_ACTION_PURPOSE" in
+    candidate_install)
+      # A recovered candidate review can be completed only while Android still
+      # exposes a trusted foreground. Validate its exact durable target here;
+      # resume_pending_rollback_install_review rotates the challenge before it
+      # can inspect any receipt and otherwise leaves the transaction inert.
+      [[ "$EXPECTED_APK_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+        && [[ "$EXPECTED_APK_CODE" =~ ^[1-9][0-9]{0,17}$ ]] \
+        && [[ "$EXPECTED_APK_SIGNER" =~ ^[0-9a-f]{64}$ ]] \
+        && [ "$APK_USER_ACTION_KIND" = android_install_review ] \
+        && [ "$APK_USER_ACTION_EVIDENCE" \
+          = fresh_display_0_operator_attestation_v1 ] \
+        && [ "$APK_USER_ACTION_TARGET_SHA256" = "$EXPECTED_APK_SHA256" ] \
+        && [ "$APK_USER_ACTION_TARGET_VERSION_CODE" = "$EXPECTED_APK_CODE" ] \
+        && [ "$APK_USER_ACTION_TARGET_SIGNER_SHA256" \
+          = "$EXPECTED_APK_SIGNER" ] \
+        && [[ "$APK_USER_ACTION_CHALLENGE" =~ ^[0-9a-f]{64}$ ]] \
+        && [[ "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+          =~ ^[1-9][0-9]{8,}$ ]] \
+        && [[ "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" \
+          =~ ^[1-9][0-9]{8,}$ ]] \
+        && [ "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+          -le "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" ] \
+        && { [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ] \
+          || [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 1 ]; }
+      ;;
+    rollback_restore)
+      # An interrupted owner may already have published the predecessor review
+      # before its visible review was rejected, timed out, or interrupted.
+      # Preserve that action authority through quiesce; exact bytes alone
+      # cannot retire it on this or a later recovery run.
+      backup_sha256="$(sha256_file "$APK_BACKUP")" || return 1
+      [ "$APK_USER_ACTION_KIND" = android_install_review ] \
+        && [ "$APK_USER_ACTION_EVIDENCE" \
+          = fresh_display_0_operator_attestation_v1 ] \
+        && [ "$APK_USER_ACTION_TARGET_SHA256" = "$backup_sha256" ] \
+        && [ "$APK_USER_ACTION_TARGET_VERSION_CODE" = "$PREVIOUS_APK_CODE" ] \
+        && [ "$APK_USER_ACTION_TARGET_SIGNER_SHA256" \
+          = "$PREVIOUS_APK_SIGNER" ] \
+        && [[ "$APK_USER_ACTION_CHALLENGE" =~ ^[0-9a-f]{64}$ ]] \
+        && [[ "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+          =~ ^[1-9][0-9]{8,}$ ]] \
+        && [[ "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" \
+          =~ ^[1-9][0-9]{8,}$ ]] \
+        && [ "$APK_USER_ACTION_CHALLENGE_CREATED_AT" \
+          -le "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" ] \
+        && { [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ] \
+          || [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 1 ]; }
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+resume_pending_rollback_install_review() {
+  local backup_sha256="" purpose="" target_code="" target_signer=""
+  local target_sha256="" probe="" context="" first_state=""
+  [ "$TRANSACTION_PHASE" = apk_user_action_required ] || return 1
+  prepare_android_install_review_for_rollback || return 1
+  purpose="$APK_USER_ACTION_PURPOSE"
+  case "$purpose" in
+    candidate_install)
+      target_code="$EXPECTED_APK_CODE"
+      target_signer="$EXPECTED_APK_SIGNER"
+      target_sha256="$EXPECTED_APK_SHA256"
+      probe="$STAGE/recovered-candidate-install-review.apk"
+      context="Interrupted candidate installation still has a trusted Android review; complete its scan before the prior release can be restored."
+      ;;
+    rollback_restore)
+      backup_sha256="$(sha256_file "$APK_BACKUP")" || return 1
+      target_code="$PREVIOUS_APK_CODE"
+      target_signer="$PREVIOUS_APK_SIGNER"
+      target_sha256="$backup_sha256"
+      probe="$STAGE/recovered-rollback-install-review.apk"
+      context="Interrupted predecessor restoration still has a trusted Android review; complete its scan before rollback can finish."
+      ;;
+    *) return 1 ;;
+  esac
+  first_state="$(android_install_foreground_state_once)"
+  if [ "$first_state" = trusted ]; then
+    # The foreground observation and its durable rotation cannot be one atomic
+    # event. A recovered visible verifier therefore always requires a fresh
+    # scan-completed challenge, regardless of the last persisted bit.
+    persist_and_wait_android_install_review \
+      apk_install_pending "$purpose" "$target_code" "$target_signer" \
+      "$target_sha256" "$probe" "$context" 1 || return 1
+  elif [ "$first_state" = other ]; then
+    # Observation and journal rotation are not atomic. A receipt left by a
+    # crashed owner may predate a trusted verifier that appeared immediately
+    # before death, so recovery never consumes it after the foreground is gone.
+    say "USER_ACTION_REQUIRED kind=manual_package_recovery purpose=$purpose"
+    say "The interrupted Android install review is no longer visibly bound to Android. Evogent will not infer completion, consume a pre-crash receipt, or start an overlapping package mutation."
+    return 1
+  else
+    # An unavailable or ambiguous display-0 probe is never evidence that a
+    # trusted verifier disappeared.
+    return 1
+  fi
+  [ "$TRANSACTION_PHASE" = apk_install_pending ] \
+    && [ -z "$APK_USER_ACTION_KIND" ] \
+    && [ -z "$APK_USER_ACTION_PURPOSE" ] \
+    && [ -z "$APK_USER_ACTION_EVIDENCE" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_SHA256" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_VERSION_CODE" ] \
+    && [ -z "$APK_USER_ACTION_TARGET_SIGNER_SHA256" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE_CREATED_AT" ] \
+    && [ -z "$APK_USER_ACTION_CHALLENGE_EXPIRES_AT" ] \
+    && [ "$APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED" = 0 ] \
+    && [ "$APK_INSTALL_SCAN_REQUIRED" = 0 ]
+}
+
 rollback_release() {
   say "install failed; rolling back the complete release"
   ROLLBACK_ATTEMPTED=1
   set +e
-  if [ "$TRANSACTION_PHASE" = apk_user_action_required ]; then
-    clear_apk_user_action_state
-    if ! write_transaction_journal apk_install_pending; then
-      ROLLBACK_FAILED=1
-      say "CRITICAL: foreground install action could not enter rollback"
-      set -e
-      return 1
-    fi
+  if [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 1 ] \
+      || [ "${PACKAGE_OPERATION_STATE:-}" = launched ]; then
+    ROLLBACK_FAILED=1
+    say "CRITICAL: an Android package launch remains unresolved; rollback stays inert and the recovery journal is retained"
+    set -e
+    return 1
+  fi
+  if [ "$TRANSACTION_PHASE" = apk_user_action_required ] \
+      && ! prepare_android_install_review_for_rollback; then
+    ROLLBACK_FAILED=1
+    say "CRITICAL: foreground install action could not safely enter rollback"
+    set -e
+    return 1
   fi
   CONTROL_PLANE_MUTATION_STARTED=1
   if ! quiesce_control_plane; then
@@ -8242,6 +9113,13 @@ rollback_release() {
   fi
   if [ "$SWITCH_STARTED" = 1 ] || [ "$MIGRATION_STARTED" = 1 ]; then
     rollback_phone_dispatch_changes || ROLLBACK_FAILED=1
+  fi
+  if [ "$TRANSACTION_PHASE" = apk_user_action_required ] \
+      && ! resume_pending_rollback_install_review; then
+    ROLLBACK_FAILED=1
+    say "CRITICAL: Android install review remains unresolved; rollback stays inert"
+    set -e
+    return 1
   fi
   if [ "$APK_CHANGED" = 1 ] && ! rollback_apk_native; then
     ROLLBACK_FAILED=1
@@ -8361,7 +9239,9 @@ cleanup() {
     rollback_release || true
   elif [ "$rc" -ne 0 ] && [ "$COMMITTED" = 0 ] \
       && [ "$ROLLBACK_ATTEMPTED" = 0 ] \
-      && [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ]; then
+      && [ "$TRANSACTION_JOURNAL_WRITTEN" = 1 ] \
+      && [ "${PACKAGE_OPERATION_LAUNCH_UNRESOLVED:-0}" = 0 ] \
+      && [ "${PACKAGE_OPERATION_STATE:-}" != launched ]; then
     # The durable intent exists but no production mutation began. A graceful
     # failure can discard it; SIGKILL/reboot still leaves it for recovery.
     if clear_transaction_journal; then
@@ -8525,12 +9405,29 @@ recover_interrupted_transaction() {
   APK_CHANGED="$(journal_field "$journal" apkChanged)"
   APK_INSTALL_ATTEMPTED="$(journal_field "$journal" apkInstallAttempted)"
   PACKAGE_OPERATION="$(journal_optional_field "$journal" packageOperation)"
+  if [ "$journal_schema" = evogent.phone.install-transaction.v6 ]; then
+    PACKAGE_OPERATION_STATE="$(
+      journal_optional_field "$journal" packageOperationState
+    )"
+    APK_ROLLBACK_RETRY_GENERATION="$(
+      journal_field "$journal" apkRollbackRetryGeneration
+    )"
+    APK_INSTALL_SCAN_REQUIRED="$(
+      journal_field "$journal" apkInstallScanRequired
+    )"
+  else
+    PACKAGE_OPERATION_STATE=""
+    APK_ROLLBACK_RETRY_GENERATION=0
+    APK_INSTALL_SCAN_REQUIRED=0
+  fi
   PREVIOUS_APK_CODE="$(journal_field "$journal" previousApkCode)"
   PREVIOUS_APK_SIGNER="$(journal_field "$journal" previousApkSigner)"
   INITIAL_MIGRATION="$(journal_field "$journal" initialMigration)"
   if [ "$journal_schema" = evogent.phone.install-transaction.v2 ] \
       || [ "$journal_schema" = evogent.phone.install-transaction.v3 ] \
-      || [ "$journal_schema" = evogent.phone.install-transaction.v4 ]; then
+      || [ "$journal_schema" = evogent.phone.install-transaction.v4 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v5 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v6 ]; then
     DB_EXISTED="$(journal_field "$journal" dbExisted)"
     LEGACY_RUNTIME_EXPECTED="$(journal_field "$journal" legacyRuntimeExpected)"
     LEGACY_CONTROL_PLANE_EXPECTED="$(
@@ -8557,7 +9454,9 @@ recover_interrupted_transaction() {
   CONTROL_TOKEN_BACKUP_READY="$(journal_field "$journal" controlTokenBackupReady)"
   CONTROL_TOKEN_BRIDGE="$(journal_optional_field "$journal" controlTokenBridge)"
   if [ "$journal_schema" = evogent.phone.install-transaction.v3 ] \
-      || [ "$journal_schema" = evogent.phone.install-transaction.v4 ]; then
+      || [ "$journal_schema" = evogent.phone.install-transaction.v4 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v5 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v6 ]; then
     ANDROID_ROLE_BACKUP="$(journal_field "$journal" androidRoleBackup)"
     ANDROID_ROLE_BACKUP_READY="$(
       journal_field "$journal" androidRoleBackupReady
@@ -8582,7 +9481,9 @@ recover_interrupted_transaction() {
     ANDROID_ROLE_MUTATION_ATTEMPTED=0
     ANDROID_ROLES_APPLIED=0
   fi
-  if [ "$journal_schema" = evogent.phone.install-transaction.v4 ]; then
+  if [ "$journal_schema" = evogent.phone.install-transaction.v4 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v5 ] \
+      || [ "$journal_schema" = evogent.phone.install-transaction.v6 ]; then
     APK_USER_ACTION_KIND="$(
       journal_optional_field "$journal" apkUserActionKind
     )"
@@ -8596,11 +9497,35 @@ recover_interrupted_transaction() {
       journal_optional_field "$journal" apkUserActionTargetSha256
     )"
     APK_USER_ACTION_TARGET_VERSION_CODE="$(
-      journal_optional_field "$journal" apkUserActionTargetVersionCode
+      journal_optional_action_integer \
+        "$journal" apkUserActionTargetVersionCode
     )"
     APK_USER_ACTION_TARGET_SIGNER_SHA256="$(
       journal_optional_field "$journal" apkUserActionTargetSignerSha256
     )"
+    if [ "$journal_schema" = evogent.phone.install-transaction.v5 ] \
+        || [ "$journal_schema" = evogent.phone.install-transaction.v6 ]; then
+      APK_USER_ACTION_CHALLENGE="$(
+        journal_optional_field "$journal" apkUserActionChallenge
+      )"
+      APK_USER_ACTION_CHALLENGE_CREATED_AT="$(
+        journal_optional_action_integer \
+          "$journal" apkUserActionChallengeCreatedAtEpochSeconds
+      )"
+      APK_USER_ACTION_CHALLENGE_EXPIRES_AT="$(
+        journal_optional_action_integer \
+          "$journal" apkUserActionChallengeExpiresAtEpochSeconds
+      )"
+      APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED="$(
+        journal_optional_field \
+          "$journal" apkUserActionTrustedVerifierObserved
+      )"
+    else
+      APK_USER_ACTION_CHALLENGE=""
+      APK_USER_ACTION_CHALLENGE_CREATED_AT=""
+      APK_USER_ACTION_CHALLENGE_EXPIRES_AT=""
+      APK_USER_ACTION_TRUSTED_VERIFIER_OBSERVED=0
+    fi
   else
     clear_apk_user_action_state
   fi
@@ -9320,8 +10245,12 @@ if [ "$FORWARD_SUPERSEDE" = 1 ]; then
 fi
 if [ "$CURRENT_APK_SHA256" != "$EXPECTED_APK_SHA256" ]; then
   APK_CHANGED=1
-  [[ "$INSTALLED_APK_CODE" =~ ^[0-9]+$ ]] \
-    && [[ "$EXPECTED_APK_CODE" =~ ^[0-9]+$ ]] \
+  [[ "$INSTALLED_APK_CODE" =~ ^[1-9][0-9]{0,17}$ ]] \
+    && [[ "$INSTALLED_APK_SIGNER" =~ ^[0-9a-f]{64}$ ]] || {
+      say "changed APK predecessor identity is invalid"
+      exit 65
+    }
+  [[ "$EXPECTED_APK_CODE" =~ ^[0-9]+$ ]] \
     && [ "$EXPECTED_APK_CODE" -gt "$INSTALLED_APK_CODE" ] || {
       say "changed APK requires a strictly higher Android version code"
       exit 65
@@ -9518,10 +10447,6 @@ write_transaction_journal prepared
 # so even a reboot during the first versioned migration can recover without
 # depending on a temporarily moving ~/phone-tools symlink.
 if [ "$APK_CHANGED" = 1 ]; then
-  PACKAGE_OPERATION="$(allocate_shell_package_operation)" || {
-    say "could not allocate a private Android package operation"
-    exit 70
-  }
   APK_INSTALL_ATTEMPTED=1
   write_transaction_journal apk_install_pending
   install_apk "$NEW_RELEASE/apk/evogent.apk" upgrade

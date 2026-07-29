@@ -19,6 +19,7 @@ import {
 import { deletePreferenceByFeedItem, insertPreference, updatePreferenceReasonByFeedItem } from '@/lib/db/preferences';
 import { insertThreadFeedback, type ThreadFeedbackVote } from '@/lib/db/thread-feedback';
 import { regeneratePreferenceContext } from '@/lib/preferences-context';
+import { withFeedMutationLock } from '@/lib/feed-mutation-lock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ states });
 }
 
-export async function POST(request: Request) {
+async function postUnlocked(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -226,8 +227,17 @@ export async function POST(request: Request) {
     if (action === 'dismiss_suggestion' && getFeedSuggestionType(item) === 'source_setup') {
       if (userInitiated) {
         const cancellation = cancelSourceSetup(item);
-        if (!cancellation.cancelled && cancellation.source) {
-          console.warn(`[interactions] source_setup dismiss: cleanup failed for ${cancellation.source}`);
+        if (!cancellation.cancelled) {
+          const sourceLabel = cancellation.source || 'invalid-source';
+          console.warn(
+            `[interactions] source_setup dismiss: authoritative cancellation failed for ${sourceLabel}`,
+          );
+          return NextResponse.json(
+            {
+              error: 'Source cancellation could not be made durable; the source remains active.',
+            },
+            { status: 500 },
+          );
         }
       } else {
         console.warn(`[interactions] source_setup dismissed WITHOUT userInitiated (agent/dedup) — hiding card, keeping source ${typeof item.metadata?.sourceName === 'string' ? item.metadata.sourceName : ''}`);
@@ -272,6 +282,32 @@ export async function POST(request: Request) {
         return NextResponse.json({
           error: `Action "${chosenLabel}" is not offered by this suggestion.`,
         }, { status: 400 });
+      }
+      if (
+        getFeedSuggestionType(item) === 'source_setup'
+        && chosenAction?.kind === 'cancel_source'
+      ) {
+        // "Not this app" is an owner cancellation, not a cosmetic acknowledgement.
+        // Commit the SQLite tombstone first; only then resolve the card.
+        const cancellation = cancelSourceSetup(item);
+        if (!cancellation.cancelled) {
+          const sourceLabel = cancellation.source || 'invalid-source';
+          console.warn(
+            `[interactions] source_setup action: authoritative cancellation failed for ${sourceLabel}`,
+          );
+          return NextResponse.json(
+            {
+              error: 'Source cancellation could not be made durable; the source remains active.',
+            },
+            { status: 500 },
+          );
+        }
+        setFeedItemSuggestionStatus(feedItemId, 'dismissed');
+        return NextResponse.json({
+          ok: true,
+          suggestionStatus: 'dismissed',
+          source: cancellation.source,
+        });
       }
       const executionSpec = typeof item.metadata?.executionSpec === 'string'
         ? item.metadata.executionSpec.trim()
@@ -445,4 +481,8 @@ export async function POST(request: Request) {
   await tryRegeneratePreferenceContext();
 
   return NextResponse.json({ ok: true, liked: false, disliked: false });
+}
+
+export async function POST(request: Request) {
+  return withFeedMutationLock(() => postUnlocked(request));
 }

@@ -9,6 +9,7 @@ set -u
 TOOLS="$HOME/phone-tools"
 LOG="$HOME/evogent-boot.log"
 RELEASE_ROOT="${EVOGENT_RELEASE_ROOT:-$HOME/.local/share/evogent}"
+HOST_POLICY_INCIDENT_DIR="$TOOLS/.incident-phone-host-policy-action-required"
 export EVOGENT_API_CURL="$TOOLS/evo-curl"
 say(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
@@ -75,6 +76,46 @@ server_code() {
   fi
 }
 
+surface_host_policy_action() {
+  if ! mkdir -m 700 "$HOST_POLICY_INCIDENT_DIR" 2>/dev/null; then
+    [ -d "$HOST_POLICY_INCIDENT_DIR" ] &&
+      [ ! -L "$HOST_POLICY_INCIDENT_DIR" ]
+    return
+  fi
+  if ! "$TOOLS/evo-curl" -fsS -m8 -X POST \
+      "http://127.0.0.1:${PORT:-3001}/api/internal/curate/submit" \
+      -H 'content-type: application/json' -d '{
+        "items":[{
+          "type":"notification",
+          "source":"phone",
+          "sourceId":"phone-host-policy-action-required",
+          "title":"Phone setup needs attention",
+          "text":"Evogent left Android host policy unchanged. A technical owner can follow the stock-phone setup guide to enable the supported background-process and external-display options; app-backed work stays deferred until read-only proof passes.",
+          "metadata":{
+            "notificationId":"phone-host-policy-action-required",
+            "incidentKey":"phone-capability-host-policy",
+            "reactivateOnRepeat":true,
+            "severity":"warning",
+            "userActionKind":"phone_host_policy"
+          }
+        }]
+      }' >/dev/null 2>&1; then
+    rmdir "$HOST_POLICY_INCIDENT_DIR" 2>/dev/null || true
+    return 1
+  fi
+}
+
+clear_host_policy_action() {
+  [ -d "$HOST_POLICY_INCIDENT_DIR" ] &&
+    [ ! -L "$HOST_POLICY_INCIDENT_DIR" ] || return 0
+  "$TOOLS/evo-curl" -fsS -m8 -X POST \
+    "http://127.0.0.1:${PORT:-3001}/api/internal/notifications/resolve" \
+    -H 'content-type: application/json' \
+    -d '{"notificationId":"phone-host-policy-action-required"}' \
+    >/dev/null 2>&1 || return 1
+  rmdir "$HOST_POLICY_INCIDENT_DIR" 2>/dev/null
+}
+
 wait_for_control_owner_status() {
   local section="$1" lock="$2" max_age_seconds="$3"
   for _ in $(seq 1 20); do
@@ -130,46 +171,9 @@ fi
 # lock only for their bounded work and release it from EXIT/TERM cleanup.
 control_release_legacy_wake_if_idle
 
-# Re-apply the host-OS keep-alive settings that DON'T survive a reboot. These need shell uid;
-# Shizuku (rish) provides it. Shizuku auto-starts on boot but may lag us — retry briefly.
+# Shell access is probed later, after the private server is serving. Boot must not delay native
+# recovery or silently rewrite owner/system policy while waiting for Shizuku.
 rish(){ control_rish_bounded "$1" 2>/dev/null; }
-for i in $(seq 1 12); do
-  if rish 'id' | grep -q 'uid=2000'; then break; fi
-  sleep 5
-done
-if rish 'id' | grep -q 'uid=2000'; then
-  # Phantom-process killer OFF (else Android reaps the node server + tmux). The physical display
-  # no longer stays on merely because power is connected; hidden-display cycles own a scoped CPU
-  # wakelock instead.
-  rish 'settings put global settings_enable_monitor_phantom_procs false'
-  rish '/system/bin/device_config set_sync_disabled_for_tests persistent'
-  rish '/system/bin/device_config put activity_manager max_phantom_processes 2147483647'
-  rish 'settings put global settings_enable_monitor_phantom_procs false'
-  rish 'svc power stayon false'
-  rish 'appops set com.termux SYSTEM_ALERT_WINDOW allow'
-  # Android may not render an app launched on
-  # a shell-created virtual display unless desktop/freeform windowing is enabled — without these
-  # the display comes up committedState UNKNOWN, the activity parks visibleRequested=false, and
-  # every browse harvests zero (blank screencap, null a11y root). Confirmed with scrcpy: 0 bytes
-  # rendered before, 269KB after. These global settings enable it, non-root, no reboot needed.
-  rish 'settings put global force_desktop_mode_on_external_displays 1'
-  rish 'settings put global enable_freeform_support 1'
-  # Protect the Shizuku server itself from the low-memory killer. If LMK reaps it mid-session,
-  # every hidden-display browse silently returns zero and it cannot be restarted on-device.
-  # Pin it out of LMK range.
-  SPID=$(rish 'pgrep -f shizuku_server' | head -1)
-  [ -n "$SPID" ] && rish "echo -1000 > /proc/$SPID/oom_score_adj" && say "shizuku_server pinned against LMK (pid $SPID)"
-  say "keep-alive settings applied via rish"
-  # Re-arm accessibility + notification-listener grants (survive reboot as grants, but this
-  # guarantees the a11y service is actually connected and the listener is allowed).
-  if control_lock_live "$TOOLS/.cycle.lock"; then
-    say "a11y-heal deferred: a live cycle owns the hidden-display lease"
-  else
-    bash "$TOOLS/a11y-heal.sh" || true
-  fi
-else
-  say "WARN: Shizuku/rish not available after 60s — keep-alive settings NOT applied"
-fi
 
 # DB integrity gate: an abrupt power loss mid-write can leave media-agent.db malformed, which
 # would make the server crash-loop (watchdog restarting forever without ever fixing it). Check
@@ -205,7 +209,52 @@ for i in $(seq 1 30); do
   [ "$(server_code)" = "200" ] && break
   sleep 2
 done
-say "authenticated server http $(server_code)"
+SERVER_HTTP_CODE=$(server_code)
+SERVER_READY=0
+[ "$SERVER_HTTP_CODE" = 200 ] && SERVER_READY=1
+say "authenticated server http $SERVER_HTTP_CODE"
+
+# Read, explain, and defer when explicit technical-user host policy is absent. These settings
+# are provisioning choices, not ordinary-boot repair authority. Production boot never disables
+# DeviceConfig synchronization or writes test-only global policy.
+if [ "$SERVER_READY" = 1 ] && rish 'id' | grep -q 'uid=2000'; then
+  phantom_policy=$(rish 'settings get global settings_enable_monitor_phantom_procs' | tr -d '\r')
+  desktop_policy=$(rish 'settings get global force_desktop_mode_on_external_displays' | tr -d '\r')
+  freeform_policy=$(rish 'settings get global enable_freeform_support' | tr -d '\r')
+  if [ "$phantom_policy" = false ] &&
+     [ "$desktop_policy" = 1 ] &&
+     [ "$freeform_policy" = 1 ]; then
+    clear_host_policy_action || true
+    say "read-only phone host-policy proof ready"
+  else
+    say "USER_ACTION_REQUIRED kind=phone_host_policy purpose=durable_runtime_and_hidden_display"
+    surface_host_policy_action || true
+  fi
+elif [ "$SERVER_READY" = 1 ]; then
+  say "Shizuku/rish unavailable at boot host-policy probe; app-backed work will re-prove it when due"
+fi
+
+# Probe only after the server is available so a missing owner grant becomes one deduplicated,
+# user-visible recovery item rather than a scheduler-log-only warning. The probe never rewrites
+# Android secure settings. A live cycle owns its own just-in-time prerequisite probe.
+if [ "$SERVER_READY" != 1 ]; then
+  say "capability probes deferred until authenticated local server recovery"
+elif control_lock_live "$TOOLS/.cycle.lock"; then
+  say "accessibility probe deferred: a live cycle owns the hidden-display lease"
+else
+  BG_BROWSE_POLICY=$(awk '
+    $0=="## Background Source Browsing"{f=1;next}
+    f&&/^##[[:space:]]/{exit}
+    f&&NF{gsub(/\r/,"");print;exit}
+  ' "$HOME/evogent/data/config.md" 2>/dev/null)
+  BG_BROWSE_FEATURE_ENABLED=1
+  case "$(printf '%s' "$BG_BROWSE_POLICY" | tr '[:upper:]' '[:lower:]' |
+      sed 's/^[[:space:]]*//;s/[[:space:]]*$//')" in
+    off|disabled|disable|false|no) BG_BROWSE_FEATURE_ENABLED=0 ;;
+  esac
+  EVOGENT_CAPABILITY_FEATURE_ENABLED="$BG_BROWSE_FEATURE_ENABLED" \
+    bash "$TOOLS/a11y-heal.sh" || true
+fi
 
 # tmux sessions inherit the server's global environment, not necessarily this
 # boot client's custom variables. Bind every newly launched control process to
@@ -220,19 +269,24 @@ else
   tmux set-environment -gu EVOGENT_CONTROL_RELEASE_ROOT 2>/dev/null || true
 fi
 
-# Start the on-device periodic scheduler (source browse + curation). Must come AFTER the server.
-if control_lock_live "$TOOLS/.scheduler.lock"; then
-  say "scheduler owner lock already live"
+# Start the on-device periodic scheduler only behind authenticated server proof. The independent
+# watchdog remains available to repair the server and starts the scheduler on a later healthy tick.
+if [ "$SERVER_READY" = 1 ]; then
+  if control_lock_live "$TOOLS/.scheduler.lock"; then
+    say "scheduler owner lock already live"
+  else
+    tmux kill-session -t '=evo-sched' 2>/dev/null || true
+    tmux new -d -s evo-sched "exec bash '$TOOLS/evogent-scheduler.sh'"
+    say "scheduler launch requested"
+  fi
+  if ! wait_for_control_owner_status scheduler "$TOOLS/.scheduler.lock" 0; then
+    say "CRITICAL: scheduler did not publish a live owner status"
+    exit 70
+  fi
+  say "scheduler ready"
 else
-  tmux kill-session -t '=evo-sched' 2>/dev/null || true
-  tmux new -d -s evo-sched "exec bash '$TOOLS/evogent-scheduler.sh'"
-  say "scheduler launch requested"
+  say "scheduler deferred: authenticated local server is unavailable"
 fi
-if ! wait_for_control_owner_status scheduler "$TOOLS/.scheduler.lock" 0; then
-  say "CRITICAL: scheduler did not publish a live owner status"
-  exit 70
-fi
-say "scheduler ready"
 
 # Watchdog: keep the server alive unattended. It runs outside tmux and owns a
 # PID+start-aware single-instance lease.

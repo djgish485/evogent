@@ -8,6 +8,7 @@ import {
   getFeedSuggestionTypeBadgeLabel,
   isLifeAdminSuggestion,
   isPersonalSuggestion,
+  parseSuggestionActions,
 } from './feed-suggestions';
 import type { FeedItem } from '@/types/feed';
 
@@ -112,6 +113,19 @@ describe('feed suggestion helpers', () => {
     assert.equal(
       getFeedSuggestionBatchSummary([lifeAdminItem, codeFixItem]),
       '1 life admin task, 1 code fix',
+    );
+  });
+
+  test('preserves explicit source-cancellation actions without an instruction', () => {
+    assert.deepEqual(
+      parseSuggestionActions([
+        { label: 'Set Example up', kind: 'execute', instruction: 'Queue discovery.' },
+        { label: 'Not this app', kind: 'cancel_source' },
+      ]),
+      [
+        { label: 'Set Example up', kind: 'execute', instruction: 'Queue discovery.' },
+        { label: 'Not this app', kind: 'cancel_source' },
+      ],
     );
   });
 

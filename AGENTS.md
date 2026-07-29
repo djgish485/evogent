@@ -2,7 +2,11 @@
 
 Evogent is a personal AI-curated feed that learns what you are trying to understand, not just what you clicked on once.
 
-If pointed at this repo and asked to install Evogent for the user, follow `docs/setup-for-coding-agents.md` end-to-end.
+If pointed at this repo and asked to install Evogent for the user, treat stock
+Android as the canonical production target. Follow `docs/phone-production.md`
+and `phone-paradigm/device/MIGRATE-TO-NEW-PHONE.md`; use
+`docs/setup-for-coding-agents.md` end-to-end only when the user explicitly asks
+for the local/legacy-VM profile.
 
 ## Explain Simply
 
@@ -26,6 +30,7 @@ Try to explain things simply. If you cannot explain something simply, you do not
 | `data/config.md` | User preferences |
 | `.claude/skills/` | Runtime skill plugins |
 | `docs/phone-production.md` | Canonical production ownership, privacy, release, and verification contract |
+| `docs/phone-signing-and-bootstrap.md` | Stable Android signing identity and exact first-install APK bootstrap |
 | `phone-paradigm/device/DEV-LOOP.md` | Host-to-phone development workflow |
 | `docs/reference/` | API refs, output contracts, recipes |
 | `.intent/` | Committed product-wide laws, intentions, and backlog |

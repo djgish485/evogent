@@ -70,12 +70,14 @@ function withFixture(run) {
 function resolve(paths, task = 'browse', {
   modelOverride = '',
   effortOverride = '',
+  provider = 'codex',
   policyPath = policy,
 } = {}) {
   const args = [
     tool,
     'resolve',
     '--task', task,
+    '--provider', provider,
     '--config', paths.config,
     '--policy', policyPath,
     '--live', paths.live,
@@ -374,6 +376,106 @@ test('Terra remains the browse fallback only when no browse or Codex model is co
   });
 });
 
+test('Claude browse, source discovery, and curator resolve only their bounded provider-specific lanes', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '## Brain Provider',
+      'Claude Code',
+      '',
+      '## Browse Model',
+      'gpt-5.6-sol',
+      '',
+      '## Browse Reasoning',
+      'low',
+      '',
+      '## Claude Browse Model',
+      'claude-sonnet-4-6',
+      '',
+      '## Claude Browse Reasoning',
+      'medium',
+      '',
+      '## Claude YouTube Browse Model',
+      'claude-haiku-4-5',
+      '',
+      '## Claude YouTube Browse Reasoning',
+      'low',
+      '',
+      '## Curator Model',
+      'gpt-5.6-sol',
+      '',
+      '## Claude Curator Model',
+      'claude-opus-4-7',
+      '',
+      '## Claude Curator Reasoning',
+      'high',
+      '',
+      '## Claude Source Discovery Model',
+      'claude-opus-4-7',
+      '',
+      '## Claude Source Discovery Reasoning',
+      'xhigh',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const browse = resolve(paths, 'browse', { provider: 'claude' });
+    assert.equal(browse.provider, 'claude');
+    assert.equal(browse.model, 'claude-sonnet-4-6');
+    assert.equal(browse.effort, 'medium');
+    assert.equal(browse.origin, 'config');
+
+    const youtube = resolve(paths, 'browse_youtube', { provider: 'claude' });
+    assert.equal(youtube.provider, 'claude');
+    assert.equal(youtube.model, 'claude-haiku-4-5');
+    assert.equal(youtube.effort, 'low');
+    assert.equal(youtube.origin, 'config');
+
+    const curator = resolve(paths, 'curator', { provider: 'claude' });
+    assert.equal(curator.provider, 'claude');
+    assert.equal(curator.model, 'claude-opus-4-7');
+    assert.equal(curator.effort, 'high');
+    assert.equal(curator.origin, 'config');
+
+    const sourceDiscovery = resolve(paths, 'source_discovery', { provider: 'claude' });
+    assert.equal(sourceDiscovery.provider, 'claude');
+    assert.equal(sourceDiscovery.model, 'claude-opus-4-7');
+    assert.equal(sourceDiscovery.effort, 'xhigh');
+    assert.equal(sourceDiscovery.origin, 'config');
+  });
+});
+
+test('Claude routing visibly falls back from cross-provider config and rejects unsafe overrides', () => {
+  withFixture((paths) => {
+    fs.writeFileSync(paths.config, [
+      '## Claude Browse Model',
+      'gpt-5.6-sol',
+      '',
+      '## Claude Browse Reasoning',
+      'ultra',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
+    fs.chmodSync(paths.live, 0o600);
+
+    const baseline = resolve(paths, 'browse', { provider: 'claude' });
+    assert.equal(baseline.model, 'claude-sonnet-4-6');
+    assert.equal(baseline.effort, 'high');
+    assert.match(baseline.origin, /invalid_provider_model/);
+    assert.match(baseline.origin, /invalid_config_effort/);
+
+    const rejected = resolve(paths, 'browse', {
+      provider: 'claude',
+      modelOverride: 'gpt-5.6-terra',
+      effortOverride: 'low',
+    });
+    assert.equal(rejected.model, 'claude-sonnet-4-6');
+    assert.equal(rejected.effort, 'high');
+    assert.equal(rejected.origin, 'baseline_invalid_environment_override');
+    assert.equal(rejected.overrideRejected, true);
+  });
+});
+
 test('fresh phone config receives production routes before its first provider task', () => {
   withFixture((paths) => {
     const durableData = path.join(paths.directory, 'state-data');
@@ -391,14 +493,20 @@ test('fresh phone config receives production routes before its first provider ta
       added: [
         'Curator Model',
         'Curator Reasoning',
+        'Claude Curator Model',
+        'Claude Curator Reasoning',
         'Source Discovery Model',
         'Source Discovery Reasoning',
+        'Claude Source Discovery Model',
+        'Claude Source Discovery Reasoning',
         'Browse Model',
         'Browse Reasoning',
+        'Claude Browse Model',
+        'Claude Browse Reasoning',
         'Overseer Model',
         'Overseer Reasoning',
       ],
-      bootstrapVersion: 1,
+      bootstrapVersion: 2,
       markerChanged: true,
     });
     assert.equal(fs.statSync(paths.config).mode & 0o777, 0o600);
@@ -425,11 +533,14 @@ test('fresh phone config receives production routes before its first provider ta
     }
     assert.match(migratedContent, /## Codex Model\ngpt-5\.5\n/);
     assert.match(migratedContent, /## Curator Model\ngpt-5\.6-sol\n/);
+    assert.match(migratedContent, /## Claude Curator Model\nclaude-opus-4-7\n/);
     assert.match(migratedContent, /## Source Discovery Model\ngpt-5\.6-sol\n/);
+    assert.match(migratedContent, /## Claude Source Discovery Model\nclaude-opus-4-7\n/);
+    assert.match(migratedContent, /## Claude Browse Model\nclaude-sonnet-4-6\n/);
 
     const markerPath = path.join(durableData, '.phone-config-bootstrap.json');
     assert.deepEqual(JSON.parse(fs.readFileSync(markerPath, 'utf8')), {
-      bootstrapVersion: 1,
+      bootstrapVersion: 2,
     });
     assert.equal(fs.statSync(markerPath).mode & 0o777, 0o600);
 
@@ -439,9 +550,18 @@ test('fresh phone config receives production routes before its first provider ta
     const curator = resolve(paths, 'curator');
     assert.equal(curator.model, 'gpt-5.6-sol');
     assert.equal(curator.effort, 'high');
+    const claudeBrowse = resolve(paths, 'browse', { provider: 'claude' });
+    assert.equal(claudeBrowse.model, 'claude-sonnet-4-6');
+    assert.equal(claudeBrowse.effort, 'high');
+    const claudeCurator = resolve(paths, 'curator', { provider: 'claude' });
+    assert.equal(claudeCurator.model, 'claude-opus-4-7');
+    assert.equal(claudeCurator.effort, 'high');
     const sourceDiscovery = resolve(paths, 'source_discovery');
     assert.equal(sourceDiscovery.model, 'gpt-5.6-sol');
     assert.equal(sourceDiscovery.effort, 'high');
+    const claudeSourceDiscovery = resolve(paths, 'source_discovery', { provider: 'claude' });
+    assert.equal(claudeSourceDiscovery.model, 'claude-opus-4-7');
+    assert.equal(claudeSourceDiscovery.effort, 'high');
     const overseer = resolve(paths, 'overseer');
     assert.equal(overseer.model, 'gpt-5.6-sol');
     assert.equal(overseer.effort, 'high');
@@ -451,7 +571,7 @@ test('fresh phone config receives production routes before its first provider ta
     assert.deepEqual(ensurePhoneConfig(paths.config), {
       changed: false,
       added: [],
-      bootstrapVersion: 1,
+      bootstrapVersion: 2,
       markerChanged: false,
     });
     assert.equal(fs.readFileSync(paths.config, 'utf8'), afterFirstRun);
@@ -491,17 +611,29 @@ test('phone config bootstrap fills only absent headings and preserves selected r
       changed: true,
       added: [
         'Curator Reasoning',
+        'Claude Curator Model',
+        'Claude Curator Reasoning',
+        'Claude Source Discovery Model',
+        'Claude Source Discovery Reasoning',
         'Browse Model',
         'Browse Reasoning',
+        'Claude Browse Model',
+        'Claude Browse Reasoning',
         'Overseer Reasoning',
       ],
-      bootstrapVersion: 1,
+      bootstrapVersion: 2,
       markerChanged: true,
     });
     const content = fs.readFileSync(paths.config, 'utf8');
     assert.match(content, /## Codex Model\nuser-selected-chat\n/);
     assert.match(content, /## Curator Model\nuser-selected-curator\n/);
     assert.match(content, /## Curator Reasoning\nXHigh\n/);
+    assert.match(content, /## Claude Curator Model\nclaude-opus-4-7\n/);
+    assert.match(content, /## Claude Curator Reasoning\nHigh\n/);
+    assert.match(content, /## Claude Source Discovery Model\nclaude-opus-4-7\n/);
+    assert.match(content, /## Claude Source Discovery Reasoning\nHigh\n/);
+    assert.match(content, /## Claude Browse Model\nclaude-sonnet-4-6\n/);
+    assert.match(content, /## Claude Browse Reasoning\nHigh\n/);
     assert.match(content, /## Source Discovery Model\n\n## Source Discovery Reasoning\n\n## Overseer Model/);
     assert.match(content, /## Overseer Model\n\n## Unrelated Setting/);
     assert.match(content, /## Unrelated Setting\nleave this exactly alone\n/);
@@ -536,10 +668,16 @@ test('legacy bootstrap carries effective Codex routing into every new split lane
     assert.deepEqual(migration.added, [
       'Curator Model',
       'Curator Reasoning',
+      'Claude Curator Model',
+      'Claude Curator Reasoning',
       'Source Discovery Model',
       'Source Discovery Reasoning',
+      'Claude Source Discovery Model',
+      'Claude Source Discovery Reasoning',
       'Browse Model',
       'Browse Reasoning',
+      'Claude Browse Model',
+      'Claude Browse Reasoning',
       'Overseer Model',
       'Overseer Reasoning',
     ]);
@@ -553,6 +691,8 @@ test('legacy bootstrap carries effective Codex routing into every new split lane
     }
     assert.match(content, /## Curator Reasoning\nHigh\n/);
     assert.match(content, /## Source Discovery Reasoning\nMedium\n/);
+    assert.match(content, /## Claude Source Discovery Model\nclaude-opus-4-7\n/);
+    assert.match(content, /## Claude Source Discovery Reasoning\nHigh\n/);
     assert.match(content, /## Browse Reasoning\nMedium\n/);
     assert.match(content, /## Overseer Model\ngpt-5\.6-sol\n/);
     assert.match(content, /## Overseer Reasoning\nHigh\n/);
@@ -565,6 +705,65 @@ test('legacy bootstrap carries effective Codex routing into every new split lane
       assert.equal(route.model, 'legacy-phone-model');
       assert.equal(route.effort, 'medium');
     }
+  });
+});
+
+test('bootstrap v2 adds Claude lanes to a v1 phone without changing its Codex routes', () => {
+  withFixture((paths) => {
+    const originalConfig = [
+      '## Brain Provider',
+      'Claude Code',
+      '',
+      '## Curator Model',
+      'existing-codex-curator',
+      '',
+      '## Curator Reasoning',
+      'XHigh',
+      '',
+      '## Source Discovery Model',
+      'existing-source-author',
+      '',
+      '## Source Discovery Reasoning',
+      'High',
+      '',
+      '## Browse Model',
+      'existing-codex-browse',
+      '',
+      '## Browse Reasoning',
+      'Low',
+      '',
+      '## Overseer Model',
+      'existing-overseer',
+      '',
+      '## Overseer Reasoning',
+      'Ultra',
+      '',
+    ].join('\n');
+    fs.writeFileSync(paths.config, originalConfig);
+    const markerPath = path.join(paths.directory, '.phone-config-bootstrap.json');
+    fs.writeFileSync(markerPath, '{"bootstrapVersion":1}\n', { mode: 0o600 });
+
+    assert.deepEqual(ensurePhoneConfig(paths.config), {
+      changed: true,
+      added: [
+        'Claude Curator Model',
+        'Claude Curator Reasoning',
+        'Claude Source Discovery Model',
+        'Claude Source Discovery Reasoning',
+        'Claude Browse Model',
+        'Claude Browse Reasoning',
+      ],
+      bootstrapVersion: 2,
+      markerChanged: true,
+    });
+    const content = fs.readFileSync(paths.config, 'utf8');
+    assert.ok(content.startsWith(originalConfig));
+    assert.match(content, /## Claude Curator Model\nclaude-opus-4-7\n/);
+    assert.match(content, /## Claude Source Discovery Model\nclaude-opus-4-7\n/);
+    assert.match(content, /## Claude Browse Model\nclaude-sonnet-4-6\n/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(markerPath, 'utf8')), {
+      bootstrapVersion: 2,
+    });
   });
 });
 
@@ -592,11 +791,11 @@ test('phone bootstrap refuses a future marker before changing legacy config', ()
     ].join('\n');
     const markerPath = path.join(paths.directory, '.phone-config-bootstrap.json');
     fs.writeFileSync(paths.config, originalConfig);
-    fs.writeFileSync(markerPath, '{"bootstrapVersion":2}\n', { mode: 0o600 });
+    fs.writeFileSync(markerPath, '{"bootstrapVersion":3}\n', { mode: 0o600 });
 
     assert.throws(() => ensurePhoneConfig(paths.config));
     assert.equal(fs.readFileSync(paths.config, 'utf8'), originalConfig);
-    assert.equal(fs.readFileSync(markerPath, 'utf8'), '{"bootstrapVersion":2}\n');
+    assert.equal(fs.readFileSync(markerPath, 'utf8'), '{"bootstrapVersion":3}\n');
   });
 });
 
@@ -663,6 +862,12 @@ test('source discovery owns a strong independent route with no durable auto-prom
       '## Source Discovery Reasoning',
       'xhigh',
       '',
+      '## Claude Source Discovery Model',
+      'claude-opus-4-7',
+      '',
+      '## Claude Source Discovery Reasoning',
+      'max',
+      '',
     ].join('\n'));
     fs.writeFileSync(paths.live, JSON.stringify({ schemaVersion: 1, routes: {} }));
     fs.chmodSync(paths.live, 0o600);
@@ -671,6 +876,12 @@ test('source discovery owns a strong independent route with no durable auto-prom
     assert.equal(result.model, 'recipe-author-model');
     assert.equal(result.effort, 'xhigh');
     assert.equal(result.origin, 'config');
+
+    const claudeResult = resolve(paths, 'source_discovery', { provider: 'claude' });
+    assert.equal(claudeResult.provider, 'claude');
+    assert.equal(claudeResult.model, 'claude-opus-4-7');
+    assert.equal(claudeResult.effort, 'max');
+    assert.equal(claudeResult.origin, 'config');
 
     fs.writeFileSync(paths.live, JSON.stringify({
       schemaVersion: 1,
@@ -1728,7 +1939,7 @@ test('private route artifact validator is mode-bounded and permits first-run abs
   });
 });
 
-test('phone cycle routes browse and curator independently and passes the curator model per task', () => {
+test('phone cycle binds browse and curator routes to the selected provider', () => {
   const cycle = fs.readFileSync(
     path.join(root, 'phone-paradigm/device/phone-tools/evogent-cycle.sh'),
     'utf8',
@@ -1746,8 +1957,14 @@ test('phone cycle routes browse and curator independently and passes the curator
   assert.match(cycle, /resolve_model_route browse/);
   assert.match(cycle, /resolve_model_route browse_youtube/);
   assert.match(cycle, /resolve_model_route curator/);
+  assert.match(cycle, /--provider "\$route_provider"/);
   assert.match(cycle, /model_reasoning_effort="\$BROWSE_EFFORT"/);
-  assert.match(cycle, /"codexModel":sys\.argv\[5\]/);
+  assert.match(cycle, /claude -p "\$prompt" --model "\$route_model" --effort "\$route_effort"/);
+  assert.match(cycle, /payload\["codexReasoningEffort" if provider=="codex" else "claudeReasoningEffort"\]=effort/);
+  assert.match(cycle, /metadata\["codexModel" if provider=="codex" else "claudeModel"\]=model/);
+  assert.match(cycle, /s\.get\("provider"\)==provider and s\.get\(effort_key\)==effort/);
+  assert.doesNotMatch(cycle, /"provider"\s*:\s*"codex"/);
+  assert.doesNotMatch(cycle, /-d "\{\\"provider\\":\\"codex\\"/);
   assert.match(cycle, /EVOGENT_BACKGROUND_SOURCE_BROWSING/);
   assert.doesNotMatch(cycle, /model_reasoning_effort=medium[\s\\]*--dangerously-bypass[\s\S]{0,120}"\$prompt"/);
   assert.match(boot, /model_routing\.py" ensure-phone-config/);
@@ -1758,7 +1975,12 @@ test('phone cycle routes browse and curator independently and passes the curator
   assert.match(discovery, /model_routing\.py/);
   assert.match(discovery, /ensure-phone-config/);
   assert.match(discovery, /--task source_discovery/);
-  assert.match(discovery, /model_reasoning_effort="\$CODEX_EFFORT"/);
+  assert.match(discovery, /--provider "\$BRAIN"/);
+  assert.match(discovery, /model_reasoning_effort="\$DISCOVERY_EFFORT"/);
+  assert.match(
+    discovery,
+    /claude -p "\$PROMPT" --model "\$DISCOVERY_MODEL" --effort "\$DISCOVERY_EFFORT"/,
+  );
   assert.doesNotMatch(discovery, /gpt-5\.5|model_reasoning_effort=medium/);
 });
 
@@ -1866,15 +2088,35 @@ test('daily overseer is one bounded review and cannot become a phone-side develo
     policyValue.routes.browse.modelSections,
     ['Browse Model', 'Codex Model'],
   );
+  assert.deepEqual(
+    policyValue.routes.browse.providerRoutes.claude.modelSections,
+    ['Claude Browse Model'],
+  );
+  assert.equal(
+    policyValue.routes.browse.providerRoutes.claude.fallbackModel,
+    'claude-sonnet-4-6',
+  );
   assert.equal(policyValue.routes.browse.persistentOverrideAllowed, false);
   assert.deepEqual(
     policyValue.routes.browse_youtube.modelSections,
     ['YouTube Browse Model', 'Browse Model', 'Codex Model'],
   );
+  assert.deepEqual(
+    policyValue.routes.browse_youtube.providerRoutes.claude.modelSections,
+    ['Claude YouTube Browse Model', 'Claude Browse Model'],
+  );
   assert.equal(policyValue.routes.browse_youtube.persistentOverrideAllowed, false);
   assert.deepEqual(
     policyValue.routes.curator.modelSections,
     ['Curator Model', 'Codex Model'],
+  );
+  assert.deepEqual(
+    policyValue.routes.curator.providerRoutes.claude.modelSections,
+    ['Claude Curator Model'],
+  );
+  assert.equal(
+    policyValue.routes.curator.providerRoutes.claude.fallbackModel,
+    'claude-opus-4-7',
   );
   assert.equal(policyValue.routes.curator.persistentOverrideAllowed, false);
   assert.deepEqual(
@@ -1884,6 +2126,18 @@ test('daily overseer is one bounded review and cannot become a phone-side develo
   assert.deepEqual(
     policyValue.routes.source_discovery.effortSections,
     ['Source Discovery Reasoning'],
+  );
+  assert.deepEqual(
+    policyValue.routes.source_discovery.providerRoutes.claude.modelSections,
+    ['Claude Source Discovery Model'],
+  );
+  assert.deepEqual(
+    policyValue.routes.source_discovery.providerRoutes.claude.effortSections,
+    ['Claude Source Discovery Reasoning'],
+  );
+  assert.equal(
+    policyValue.routes.source_discovery.providerRoutes.claude.fallbackModel,
+    'claude-opus-4-7',
   );
   assert.equal(policyValue.routes.source_discovery.persistentOverrideAllowed, false);
   assert.deepEqual(policyValue.routes.diagnosis.modelSections, []);

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -14,6 +15,11 @@ from typing import Literal
 
 
 MAX_PRIVATE_ARTIFACT_BYTES = 49_152
+MAX_PREFERENCE_COMPACTION_SOURCE_BYTES = 1_048_576
+PREFERENCE_COMPACTED_TARGET_BYTES = 32_768
+PREFERENCE_ARTIFACT_NAME = "preference-insights.md"
+PREFERENCE_COMPACTION_SCHEMA = "evogent.preference-insights-compaction.v1"
+PREFERENCE_COMPACTION_STRATEGY = "heading-outline-head-recent-tail-v1"
 PRODUCTION_RUNTIME_DATA_LINK = "../../../state/data"
 ArtifactKind = Literal["preference", "cadence"]
 
@@ -206,25 +212,31 @@ def _artifact_signature(info: os.stat_result) -> tuple[int, ...]:
     )
 
 
-def _private_metadata_valid(info: os.stat_result) -> bool:
+def _private_metadata_valid(
+    info: os.stat_result,
+    *,
+    maximum_bytes: int = MAX_PRIVATE_ARTIFACT_BYTES,
+) -> bool:
     return (
         stat.S_ISREG(info.st_mode)
         and stat.S_IMODE(info.st_mode) == 0o600
         and info.st_uid == os.getuid()
         and info.st_nlink == 1
         and info.st_size > 0
-        and info.st_size <= MAX_PRIVATE_ARTIFACT_BYTES
+        and info.st_size <= maximum_bytes
     )
 
 
 def _read_private_artifact_at(
     parent_descriptor: int,
     name: str,
+    *,
+    maximum_bytes: int = MAX_PRIVATE_ARTIFACT_BYTES,
 ) -> tuple[bytes, tuple[int, ...]] | None:
     descriptor = -1
     try:
         expected = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
-        if not _private_metadata_valid(expected):
+        if not _private_metadata_valid(expected, maximum_bytes=maximum_bytes):
             return None
         descriptor = os.open(
             name,
@@ -233,13 +245,13 @@ def _read_private_artifact_at(
         )
         opened = os.fstat(descriptor)
         if (
-            not _private_metadata_valid(opened)
+            not _private_metadata_valid(opened, maximum_bytes=maximum_bytes)
             or opened.st_dev != expected.st_dev
             or opened.st_ino != expected.st_ino
         ):
             return None
         chunks: list[bytes] = []
-        remaining = MAX_PRIVATE_ARTIFACT_BYTES + 1
+        remaining = maximum_bytes + 1
         while remaining > 0:
             chunk = os.read(descriptor, min(remaining, 16_384))
             if not chunk:
@@ -252,7 +264,7 @@ def _read_private_artifact_at(
         signature = _artifact_signature(opened)
         if (
             len(payload) != opened.st_size
-            or len(payload) > MAX_PRIVATE_ARTIFACT_BYTES
+            or len(payload) > maximum_bytes
             or _artifact_signature(after) != signature
             or _artifact_signature(current) != signature
         ):
@@ -390,6 +402,401 @@ def _write_all(descriptor: int, payload: bytes) -> None:
         if written <= 0:
             raise OSError("private artifact temporary write stopped")
         offset += written
+
+
+def _bounded_utf8_prefix(payload: bytes, maximum_bytes: int) -> str:
+    if maximum_bytes <= 0:
+        return ""
+    clipped = payload[:maximum_bytes].decode("utf-8", errors="ignore")
+    if len(payload) > maximum_bytes:
+        boundary = clipped.rfind("\n")
+        if boundary >= len(clipped) // 2:
+            clipped = clipped[: boundary + 1]
+    return clipped.strip("\n")
+
+
+def _bounded_utf8_suffix(payload: bytes, maximum_bytes: int) -> str:
+    if maximum_bytes <= 0:
+        return ""
+    clipped = payload[-maximum_bytes:].decode("utf-8", errors="ignore")
+    if len(payload) > maximum_bytes:
+        boundary = clipped.find("\n")
+        if 0 <= boundary <= len(clipped) // 2:
+            clipped = clipped[boundary + 1 :]
+    return clipped.strip("\n")
+
+
+def _preference_heading_outline(payload: bytes, maximum_bytes: int = 4_096) -> str:
+    lines: list[str] = []
+    used = 0
+    text = payload.decode("utf-8")
+    for raw_line in text.splitlines():
+        heading = raw_line.strip()
+        marker_length = len(heading) - len(heading.lstrip("#"))
+        if (
+            marker_length < 1
+            or marker_length > 6
+            or len(heading) <= marker_length
+            or not heading[marker_length].isspace()
+        ):
+            continue
+        heading = _bounded_utf8_prefix(heading.encode("utf-8"), 240)
+        candidate = f"- {heading}\n"
+        candidate_size = len(candidate.encode("utf-8"))
+        if used + candidate_size > maximum_bytes:
+            break
+        lines.append(candidate)
+        used += candidate_size
+    return "".join(lines).rstrip("\n") or "- No Markdown headings were present."
+
+
+def _compacted_preference_payload(
+    source: bytes,
+    *,
+    source_sha256: str,
+    preserved_name: str,
+) -> bytes | None:
+    """Build one deterministic, truthful bounded view of an oversized synthesis.
+
+    This is deliberately structural rather than inferential: a deterministic
+    helper must not guess which private preference is important. It retains an
+    outline, a beginning excerpt, and a larger recent-tail excerpt while the
+    exact source remains available in the content-addressed private archive.
+    """
+
+    outline = _preference_heading_outline(source)
+    receipt = (
+        "# Preference Insights\n\n"
+        "## Deterministic compaction receipt\n\n"
+        f"- Original synthesis: `{len(source)}` bytes; SHA-256 `{source_sha256}`.\n"
+        f"- Exact original preserved privately as `{preserved_name}` (mode `0600`).\n"
+        f"- Bounded-view strategy: `{PREFERENCE_COMPACTION_STRATEGY}`.\n"
+        "- This file is a bounded working view. Text omitted from the view remains "
+        "unchanged in the exact preserved source.\n\n"
+    )
+    outline_block = f"## Original heading outline\n\n{outline}\n\n"
+    beginning_label = "## Beginning synthesis excerpt\n\n"
+    omission = (
+        "\n\n## Omission boundary\n\n"
+        "The intervening private text is omitted only from this working view and "
+        "remains in the exact preserved source named in the receipt.\n\n"
+    )
+    recent_label = "## Most recent synthesis excerpt\n\n"
+    fixed = (
+        receipt
+        + outline_block
+        + beginning_label
+        + omission
+        + recent_label
+        + "\n"
+    ).encode("utf-8")
+    available = PREFERENCE_COMPACTED_TARGET_BYTES - len(fixed)
+    if available < 4_096:
+        return None
+    beginning_budget = (available * 45) // 100
+    recent_budget = available - beginning_budget
+    beginning = _bounded_utf8_prefix(source, beginning_budget)
+    recent = _bounded_utf8_suffix(source, recent_budget)
+    compacted = (
+        receipt
+        + outline_block
+        + beginning_label
+        + beginning
+        + omission
+        + recent_label
+        + recent
+        + "\n"
+    ).encode("utf-8")
+    if (
+        len(compacted) > PREFERENCE_COMPACTED_TARGET_BYTES
+        or not _preference_insights_payload_valid(compacted)
+    ):
+        return None
+    return compacted
+
+
+def _publish_immutable_private_file_at(
+    parent_descriptor: int,
+    name: str,
+    payload: bytes,
+    *,
+    maximum_bytes: int,
+) -> bool:
+    """Create a content-addressed private file, or validate the exact existing one."""
+
+    existing = _read_private_artifact_at(
+        parent_descriptor,
+        name,
+        maximum_bytes=maximum_bytes,
+    )
+    if existing is not None:
+        if existing[0] != payload:
+            return False
+        try:
+            os.fsync(parent_descriptor)
+        except OSError:
+            return False
+        return True
+    try:
+        os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        return False
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+
+    descriptor = -1
+    created = False
+    complete = False
+    try:
+        descriptor = os.open(
+            name,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        created = True
+        os.fchmod(descriptor, 0o600)
+        _write_all(descriptor, payload)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        complete = True
+        published = _read_private_artifact_at(
+            parent_descriptor,
+            name,
+            maximum_bytes=maximum_bytes,
+        )
+        if published is None or published[0] != payload:
+            return False
+        os.fsync(parent_descriptor)
+        return True
+    except FileExistsError:
+        existing = _read_private_artifact_at(
+            parent_descriptor,
+            name,
+            maximum_bytes=maximum_bytes,
+        )
+        return existing is not None and existing[0] == payload
+    except OSError:
+        return False
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if created and not complete:
+            try:
+                os.unlink(name, dir_fd=parent_descriptor)
+                os.fsync(parent_descriptor)
+            except OSError:
+                pass
+
+
+def _replace_private_artifact_exact_at(
+    parent_descriptor: int,
+    name: str,
+    *,
+    original_payload: bytes,
+    original_signature: tuple[int, ...],
+    original_maximum_bytes: int,
+    replacement_payload: bytes,
+) -> tuple[bytes, tuple[int, ...]] | None:
+    temporary_name = ""
+    temporary_descriptor = -1
+    try:
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        for _attempt in range(32):
+            temporary_name = (
+                f".private-artifact-{os.getpid()}-{secrets.token_hex(8)}.tmp"
+            )
+            try:
+                temporary_descriptor = os.open(
+                    temporary_name,
+                    flags,
+                    0o600,
+                    dir_fd=parent_descriptor,
+                )
+                break
+            except FileExistsError:
+                temporary_name = ""
+        if temporary_descriptor < 0:
+            return None
+        os.fchmod(temporary_descriptor, 0o600)
+        _write_all(temporary_descriptor, replacement_payload)
+        os.fsync(temporary_descriptor)
+        os.close(temporary_descriptor)
+        temporary_descriptor = -1
+
+        current = _read_private_artifact_at(
+            parent_descriptor,
+            name,
+            maximum_bytes=original_maximum_bytes,
+        )
+        if (
+            current is None
+            or current[0] != original_payload
+            or current[1] != original_signature
+        ):
+            return None
+        temporary = _read_private_artifact_at(parent_descriptor, temporary_name)
+        if temporary is None or temporary[0] != replacement_payload:
+            return None
+        os.replace(
+            temporary_name,
+            name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        temporary_name = ""
+        os.fsync(parent_descriptor)
+        final = _read_private_artifact_at(parent_descriptor, name)
+        if (
+            final is None
+            or final[0] != replacement_payload
+            or final[1][:2] == original_signature[:2]
+        ):
+            return None
+        return final
+    except OSError:
+        return None
+    finally:
+        if temporary_descriptor >= 0:
+            os.close(temporary_descriptor)
+        if temporary_name:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+
+
+def compact_oversized_preference_for_snapshot(
+    path: Path,
+    *,
+    trusted_data_root: Path | None,
+) -> str:
+    """Preserve and compact only the canonical preference artifact for admission."""
+
+    if (
+        path.name != PREFERENCE_ARTIFACT_NAME
+        or trusted_data_root is None
+    ):
+        return "missing"
+    parent_descriptor = _safe_parent_descriptor(
+        path,
+        trusted_data_root=trusted_data_root,
+    )
+    if parent_descriptor < 0:
+        return "missing"
+    try:
+        original = _read_private_artifact_at(
+            parent_descriptor,
+            path.name,
+            maximum_bytes=MAX_PREFERENCE_COMPACTION_SOURCE_BYTES,
+        )
+        if original is None:
+            return "missing"
+        source, source_signature = original
+        if (
+            len(source) <= MAX_PRIVATE_ARTIFACT_BYTES
+            or not _preference_insights_payload_valid(source)
+        ):
+            return "missing"
+
+        source_sha256 = hashlib.sha256(source).hexdigest()
+        preserved_name = (
+            f".{PREFERENCE_ARTIFACT_NAME}.preserved.{source_sha256}.md"
+        )
+        compacted = _compacted_preference_payload(
+            source,
+            source_sha256=source_sha256,
+            preserved_name=preserved_name,
+        )
+        if compacted is None:
+            return "missing"
+        compacted_sha256 = hashlib.sha256(compacted).hexdigest()
+        receipt = (
+            json.dumps(
+                {
+                    "artifact": PREFERENCE_ARTIFACT_NAME,
+                    "boundedView": {
+                        "bytes": len(compacted),
+                        "sha256": compacted_sha256,
+                        "strategy": PREFERENCE_COMPACTION_STRATEGY,
+                    },
+                    "preservedSource": {
+                        "bytes": len(source),
+                        "file": preserved_name,
+                        "sha256": source_sha256,
+                    },
+                    "schema": PREFERENCE_COMPACTION_SCHEMA,
+                    "status": "source_preserved_before_atomic_compaction",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode("utf-8")
+        receipt_name = (
+            f".{PREFERENCE_ARTIFACT_NAME}.compaction.{source_sha256}.json"
+        )
+
+        # The exact source and a content-free plan receipt are durable before
+        # the only destructive step. The replacement itself contains the
+        # human-readable receipt, so a crash cannot install an unlabelled
+        # truncated view.
+        if not _publish_immutable_private_file_at(
+            parent_descriptor,
+            preserved_name,
+            source,
+            maximum_bytes=MAX_PREFERENCE_COMPACTION_SOURCE_BYTES,
+        ):
+            return "missing"
+        if not _publish_immutable_private_file_at(
+            parent_descriptor,
+            receipt_name,
+            receipt,
+            maximum_bytes=MAX_PRIVATE_ARTIFACT_BYTES,
+        ):
+            return "missing"
+        final = _replace_private_artifact_exact_at(
+            parent_descriptor,
+            path.name,
+            original_payload=source,
+            original_signature=source_signature,
+            original_maximum_bytes=MAX_PREFERENCE_COMPACTION_SOURCE_BYTES,
+            replacement_payload=compacted,
+        )
+        if final is None or not _preference_insights_payload_valid(final[0]):
+            return "missing"
+        return f"{final[1][0]}:{final[1][1]}"
+    finally:
+        os.close(parent_descriptor)
+
+
+def snapshot_artifact(
+    path: Path,
+    *,
+    trusted_data_root: Path | None = None,
+) -> str:
+    identity = artifact_identity(
+        path,
+        trusted_data_root=trusted_data_root,
+    )
+    if identity != "missing":
+        return identity
+    return compact_oversized_preference_for_snapshot(
+        path,
+        trusted_data_root=trusted_data_root,
+    )
 
 
 def atomic_rewrite_private_artifact(
@@ -538,7 +945,7 @@ def main(argv: list[str] | None = None) -> int:
         else None
     )
     if args.command == "snapshot":
-        print(artifact_identity(path, trusted_data_root=trusted_data_root))
+        print(snapshot_artifact(path, trusted_data_root=trusted_data_root))
         return 0
     if args.command == "verify":
         return 0 if artifact_was_atomically_rewritten(

@@ -4,12 +4,15 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import { getDb } from '@/lib/db/client';
 import {
   getCurationLogByRequestId,
   insertCurationLogStart,
 } from '@/lib/db/activity';
+import {
+  getFeedItemBySourceId,
+} from '@/lib/db/feed';
 
 type GlobalWithDb = typeof globalThis & {
   evogentDb?: {
@@ -28,32 +31,55 @@ describe('/api/internal/curate/submit completion receipts', { concurrency: false
   let originalDbPath: string | undefined;
   let originalFeedNotifyUrl: string | undefined;
   let notifyServer: http.Server | null = null;
-  let tempDir = '';
+  let suiteTempDir = '';
+  let suiteDataDir = '';
+  let testDbPath = '';
+  let notifyBodies: Array<Record<string, unknown>> = [];
 
-  beforeEach(async () => {
+  before(async () => {
     originalDataDir = process.env.DATA_DIR;
     originalDbPath = process.env.MEDIA_AGENT_DB_PATH;
     originalFeedNotifyUrl = process.env.INTERNAL_FEED_NOTIFY_URL;
-    tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'evogent-curate-submit-route-test-'));
-    await fs.promises.mkdir(path.join(tempDir, 'data'), { recursive: true });
+    suiteTempDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), 'evogent-curate-submit-route-test-'),
+    );
+    suiteDataDir = path.join(suiteTempDir, 'data');
+    await fs.promises.mkdir(suiteDataDir, { recursive: true });
+    process.env.DATA_DIR = suiteDataDir;
+    await fs.promises.writeFile(
+      path.join(suiteDataDir, 'config.md'),
+      '## Usage Level\nlow\n',
+      'utf8',
+    );
+  });
 
+  beforeEach(async () => {
     if (globalWithDb.evogentDb) {
       globalWithDb.evogentDb.close();
       delete globalWithDb.evogentDb;
     }
 
-    process.env.DATA_DIR = path.join(tempDir, 'data');
-    process.env.MEDIA_AGENT_DB_PATH = path.join(tempDir, 'data', 'media-agent.db');
-    await fs.promises.writeFile(
-      path.join(tempDir, 'data', 'config.md'),
-      '## Usage Level\nlow\n',
-      'utf8',
+    testDbPath = path.join(
+      suiteDataDir,
+      `media-agent-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
     );
+    process.env.MEDIA_AGENT_DB_PATH = testDbPath;
+    notifyBodies = [];
 
     notifyServer = http.createServer((request, response) => {
-      request.resume();
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end('{"ok":true}');
+      let rawBody = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk: string) => {
+        rawBody += chunk;
+      });
+      request.on('end', () => {
+        if (rawBody) {
+          const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+          notifyBodies.push(parsed);
+        }
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end('{"ok":true}');
+      });
     });
     await new Promise<void>((resolve) => {
       notifyServer?.listen(0, '127.0.0.1', resolve);
@@ -76,6 +102,14 @@ describe('/api/internal/curate/submit completion receipts', { concurrency: false
       delete globalWithDb.evogentDb;
     }
 
+    if (testDbPath) {
+      await fs.promises.rm(testDbPath, { force: true });
+      await fs.promises.rm(`${testDbPath}-shm`, { force: true });
+      await fs.promises.rm(`${testDbPath}-wal`, { force: true });
+    }
+  });
+
+  after(async () => {
     if (originalDataDir === undefined) {
       delete process.env.DATA_DIR;
     } else {
@@ -94,14 +128,24 @@ describe('/api/internal/curate/submit completion receipts', { concurrency: false
       process.env.INTERNAL_FEED_NOTIFY_URL = originalFeedNotifyUrl;
     }
 
-    if (tempDir) {
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
+    if (suiteTempDir) {
+      await fs.promises.rm(suiteTempDir, { recursive: true, force: true });
     }
   });
 
   async function importRoute(): Promise<RouteModule> {
     const routePath = path.join(process.cwd(), 'src/app/api/internal/curate/submit/route.ts');
     return import(`${pathToFileURL(routePath).href}?t=${Date.now()}-${Math.random().toString(36).slice(2)}`) as Promise<RouteModule>;
+  }
+
+  async function importResolveRoute(): Promise<RouteModule> {
+    const routePath = path.join(
+      process.cwd(),
+      'src/app/api/internal/notifications/resolve/route.ts',
+    );
+    return import(
+      `${pathToFileURL(routePath).href}?t=${Date.now()}-${Math.random().toString(36).slice(2)}`
+    ) as Promise<RouteModule>;
   }
 
   function curatedItem(id: string, threadId?: string) {
@@ -156,6 +200,32 @@ describe('/api/internal/curate/submit completion receipts', { concurrency: false
     });
   }
 
+  function capabilityNotice(
+    sourceId: string,
+    options: {
+      id?: string;
+      type?: string;
+      source?: string;
+      metadata?: Record<string, unknown>;
+    } = {},
+  ) {
+    return {
+      id: options.id ?? `${sourceId}-row`,
+      type: options.type ?? 'notification',
+      source: options.source ?? 'phone',
+      sourceId,
+      title: 'Owner action required',
+      text: 'Open the platform Settings control to restore this optional capability.',
+      metadata: {
+        notificationId: sourceId,
+        incidentKey: `phone-capability-${sourceId}`,
+        reactivateOnRepeat: true,
+        userActionKind: 'android_accessibility_access',
+        ...options.metadata,
+      },
+    };
+  }
+
   test('accepts cache-derived publishedAtMs for source-owned publish dates', async () => {
     getDb();
 
@@ -185,6 +255,364 @@ describe('/api/internal/curate/submit completion receipts', { concurrency: false
     const row = getDb().prepare('SELECT published_at FROM feed WHERE id = ?')
       .get('published-ms-hn-item') as { published_at: string } | undefined;
     assert.strictEqual(row?.published_at, '2026-06-06T12:00:00.000Z');
+  });
+
+  test('reactivatable system notice is visible again after resolve then recurrence', async () => {
+    getDb();
+    const { POST } = await importRoute();
+    const { POST: resolveNotification } = await importResolveRoute();
+    const item = {
+      id: 'capability-notice-row',
+      type: 'notification',
+      source: 'phone',
+      sourceId: 'capability-notice-source',
+      title: 'Owner action required',
+      text: 'Open the platform Settings control to restore this optional capability.',
+      metadata: {
+        notificationId: 'capability-notice-source',
+        incidentKey: 'phone-capability-test',
+        reactivateOnRepeat: true,
+        userActionKind: 'android_accessibility_access',
+      },
+    };
+    const submit = () => POST(new Request(
+      'http://127.0.0.1/api/internal/curate/submit',
+      { method: 'POST', body: JSON.stringify({ items: [item] }) },
+    ));
+
+    const first = await submit();
+    assert.strictEqual(first.status, 200);
+    assert.strictEqual((await first.json() as { accepted: number }).accepted, 1);
+    const stored = getFeedItemBySourceId(item.sourceId);
+    assert.ok(stored);
+    const resolved = await resolveNotification(new Request(
+      'http://127.0.0.1/api/internal/notifications/resolve',
+      {
+        method: 'POST',
+        body: JSON.stringify({ notificationId: item.sourceId }),
+      },
+    ));
+    assert.strictEqual(resolved.status, 200);
+    assert.strictEqual(
+      getFeedItemBySourceId(item.sourceId)?.suggestionStatus,
+      'dismissed',
+    );
+
+    const broadcastsBeforeRecurrence = notifyBodies.length;
+    const recurring = await submit();
+    assert.strictEqual(recurring.status, 200);
+    const recurringBody = await recurring.json() as {
+      accepted: number;
+      duplicates: number;
+      reactivated: number;
+    };
+    assert.strictEqual(recurringBody.accepted, 0);
+    assert.strictEqual(recurringBody.duplicates, 1);
+    assert.strictEqual(recurringBody.reactivated, 1);
+    assert.strictEqual(
+      getFeedItemBySourceId(item.sourceId)?.suggestionStatus,
+      'pending',
+    );
+    assert.strictEqual(notifyBodies.length, broadcastsBeforeRecurrence + 1);
+    const recurrenceBroadcast = notifyBodies.at(-1) as {
+      count?: unknown;
+      items?: Array<{ id?: unknown; sourceId?: unknown; suggestionStatus?: unknown }>;
+    };
+    assert.strictEqual(recurrenceBroadcast.count, 1);
+    assert.deepStrictEqual(
+      recurrenceBroadcast.items?.map(({ id, sourceId, suggestionStatus }) => ({
+        id,
+        sourceId,
+        suggestionStatus,
+      })),
+      [{
+        id: item.id,
+        sourceId: item.sourceId,
+        suggestionStatus: 'pending',
+      }],
+    );
+
+    const stillActive = await submit();
+    const activeBody = await stillActive.json() as {
+      accepted: number;
+      duplicates: number;
+      reactivated: number;
+    };
+    assert.strictEqual(activeBody.accepted, 0);
+    assert.strictEqual(activeBody.duplicates, 1);
+    assert.strictEqual(activeBody.reactivated, 0);
+  });
+
+  test('recurrence rejects every incomplete or mismatched capability identity guard', async () => {
+    getDb();
+    const { POST } = await importRoute();
+    const { POST: resolveNotification } = await importResolveRoute();
+    type Scenario = {
+      name: string;
+      incoming?: {
+        type?: string;
+        source?: string;
+        metadata?: Record<string, unknown>;
+      };
+      mutateStored?: (stored: NonNullable<ReturnType<typeof getFeedItemBySourceId>>) => {
+        type?: string;
+        source?: string;
+        metadata?: Record<string, unknown>;
+      };
+    };
+    const scenarios: Scenario[] = [
+      {
+        name: 'incoming opt-in is absent',
+        incoming: { metadata: { reactivateOnRepeat: undefined } },
+      },
+      {
+        name: 'stored opt-in is absent',
+        mutateStored: (stored) => ({
+          metadata: { ...stored.metadata, reactivateOnRepeat: undefined },
+        }),
+      },
+      {
+        name: 'incoming type is not notification',
+        incoming: { type: 'analysis' },
+      },
+      {
+        name: 'stored type is not notification',
+        mutateStored: () => ({ type: 'analysis' }),
+      },
+      {
+        name: 'incoming source is not phone',
+        incoming: { source: 'curation' },
+      },
+      {
+        name: 'stored source is not phone',
+        mutateStored: () => ({ source: 'curation' }),
+      },
+      {
+        name: 'incoming action is not allowlisted',
+        incoming: { metadata: { userActionKind: 'arbitrary_phone_action' } },
+      },
+      {
+        name: 'stored action is not allowlisted',
+        mutateStored: (stored) => ({
+          metadata: { ...stored.metadata, userActionKind: 'arbitrary_phone_action' },
+        }),
+      },
+      {
+        name: 'incoming and stored allowlisted actions differ',
+        incoming: { metadata: { userActionKind: 'phone_host_policy' } },
+      },
+      {
+        name: 'incoming notification ID differs from canonical source ID',
+        incoming: { metadata: { notificationId: 'different-notification-id' } },
+      },
+      {
+        name: 'stored notification ID differs from canonical source ID',
+        mutateStored: (stored) => ({
+          metadata: { ...stored.metadata, notificationId: 'different-notification-id' },
+        }),
+      },
+      {
+        name: 'incoming incident key is absent',
+        incoming: { metadata: { incidentKey: undefined } },
+      },
+      {
+        name: 'incoming incident key differs',
+        incoming: { metadata: { incidentKey: 'different-incident-key' } },
+      },
+      {
+        name: 'stored incident key is absent',
+        mutateStored: (stored) => ({
+          metadata: { ...stored.metadata, incidentKey: undefined },
+        }),
+      },
+    ];
+
+    for (const [index, scenario] of scenarios.entries()) {
+      const sourceId = `guarded-capability-${index}`;
+      const initial = await POST(new Request(
+        'http://127.0.0.1/api/internal/curate/submit',
+        {
+          method: 'POST',
+          body: JSON.stringify({ items: [capabilityNotice(sourceId)] }),
+        },
+      ));
+      assert.strictEqual(initial.status, 200, scenario.name);
+      assert.strictEqual(
+        (await initial.json() as { accepted: number }).accepted,
+        1,
+        scenario.name,
+      );
+      const resolved = await resolveNotification(new Request(
+        'http://127.0.0.1/api/internal/notifications/resolve',
+        {
+          method: 'POST',
+          body: JSON.stringify({ notificationId: sourceId }),
+        },
+      ));
+      assert.strictEqual(resolved.status, 200, scenario.name);
+
+      const stored = getFeedItemBySourceId(sourceId);
+      assert.ok(stored, scenario.name);
+      const storedMutation = scenario.mutateStored?.(stored);
+      if (storedMutation) {
+        getDb().prepare(`
+          UPDATE feed
+          SET type = ?, source = ?, metadata = ?
+          WHERE id = ?
+        `).run(
+          storedMutation.type ?? stored.type,
+          storedMutation.source ?? stored.source,
+          JSON.stringify(storedMutation.metadata ?? stored.metadata),
+          stored.id,
+        );
+      }
+
+      const duplicate = capabilityNotice(sourceId, {
+        id: `${sourceId}-duplicate`,
+        type: scenario.incoming?.type,
+        source: scenario.incoming?.source,
+        metadata: scenario.incoming?.metadata,
+      });
+      const response = await POST(new Request(
+        'http://127.0.0.1/api/internal/curate/submit',
+        {
+          method: 'POST',
+          body: JSON.stringify({ items: [duplicate] }),
+        },
+      ));
+      assert.strictEqual(response.status, 200, scenario.name);
+      const body = await response.json() as {
+        duplicates: number;
+        reactivated: number;
+      };
+      assert.strictEqual(body.duplicates, 1, scenario.name);
+      assert.strictEqual(body.reactivated, 0, scenario.name);
+      assert.strictEqual(
+        getFeedItemBySourceId(sourceId)?.suggestionStatus,
+        'dismissed',
+        scenario.name,
+      );
+    }
+  });
+
+  test('a valid automated-cycle receipt cannot reactivate a dismissed capability notice', async () => {
+    getDb();
+    const { POST } = await importRoute();
+    const { POST: resolveNotification } = await importResolveRoute();
+    const sourceId = 'rejected-cycle-capability-notice';
+    const notice = {
+      id: 'rejected-cycle-capability-row',
+      type: 'notification',
+      source: 'phone',
+      sourceId,
+      title: 'Owner action required',
+      text: 'Open the platform Settings control to restore this optional capability.',
+      metadata: {
+        notificationId: sourceId,
+        incidentKey: 'phone-capability-rejected-cycle',
+        reactivateOnRepeat: true,
+        userActionKind: 'phone_host_policy',
+        interest: { score: 0.5, durability: 'dated' },
+      },
+    };
+    await POST(new Request('http://127.0.0.1/api/internal/curate/submit', {
+      method: 'POST',
+      body: JSON.stringify({ items: [notice] }),
+    }));
+    await resolveNotification(new Request(
+      'http://127.0.0.1/api/internal/notifications/resolve',
+      { method: 'POST', body: JSON.stringify({ notificationId: sourceId }) },
+    ));
+
+    const cycleId = 'phone-curation-valid-capability-no-reactivation';
+    startAutomatedCycle(cycleId, 1);
+
+    const terminal = await POST(new Request(
+      'http://127.0.0.1/api/internal/curate/submit',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          items: [{ ...notice, id: 'automated-cycle-duplicate-row' }],
+          cycleSummary: cycleSummary(cycleId, 1),
+        }),
+      },
+    ));
+    assert.strictEqual(terminal.status, 200);
+    const terminalBody = await terminal.json() as {
+      duplicates: number;
+      reactivated: number;
+      completionRejected: boolean;
+    };
+    assert.strictEqual(terminalBody.duplicates, 1);
+    assert.strictEqual(terminalBody.reactivated, 0);
+    assert.strictEqual(terminalBody.completionRejected, false);
+    assert.strictEqual(
+      getFeedItemBySourceId(sourceId)?.suggestionStatus,
+      'dismissed',
+    );
+    assert.strictEqual(
+      getCurationLogByRequestId(cycleId)?.completionStatus,
+      'successful_empty',
+    );
+  });
+
+  test('a mixed one-off request with an item error cannot reactivate a dismissed notice', async () => {
+    getDb();
+    const { POST } = await importRoute();
+    const { POST: resolveNotification } = await importResolveRoute();
+    const sourceId = 'mixed-error-capability-notice';
+
+    const initial = await POST(new Request(
+      'http://127.0.0.1/api/internal/curate/submit',
+      {
+        method: 'POST',
+        body: JSON.stringify({ items: [capabilityNotice(sourceId)] }),
+      },
+    ));
+    assert.strictEqual(initial.status, 200);
+    const resolved = await resolveNotification(new Request(
+      'http://127.0.0.1/api/internal/notifications/resolve',
+      {
+        method: 'POST',
+        body: JSON.stringify({ notificationId: sourceId }),
+      },
+    ));
+    assert.strictEqual(resolved.status, 200);
+
+    const mixed = await POST(new Request(
+      'http://127.0.0.1/api/internal/curate/submit',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          items: [
+            capabilityNotice(sourceId, { id: 'mixed-error-capability-duplicate' }),
+            {
+              id: 'mixed-error-invalid-item',
+              type: 'not-a-feed-type',
+              source: 'unit-test',
+              sourceId: 'mixed-error-invalid-source',
+              title: 'Invalid item',
+              text: 'This item intentionally fails shape validation.',
+            },
+          ],
+        }),
+      },
+    ));
+    assert.strictEqual(mixed.status, 200);
+    const mixedBody = await mixed.json() as {
+      duplicates: number;
+      reactivated: number;
+      errors: Array<{ scope: string; index?: number }>;
+    };
+    assert.strictEqual(mixedBody.duplicates, 1);
+    assert.strictEqual(mixedBody.reactivated, 0);
+    assert.ok(mixedBody.errors.some((error) => (
+      error.scope === 'item' && error.index === 1
+    )));
+    assert.strictEqual(
+      getFeedItemBySourceId(sourceId)?.suggestionStatus,
+      'dismissed',
+    );
   });
 
   test('rejects an article URL that reaches a loopback service', async () => {

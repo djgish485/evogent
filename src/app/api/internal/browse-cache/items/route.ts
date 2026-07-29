@@ -31,6 +31,7 @@ export async function GET(request: Request) {
   const requirePublishedAt = parseBoolean(searchParams.get('requirePublishedAt'));
   const excludeFeedDuplicates = parseBoolean(searchParams.get('excludeFeedDuplicates'));
   const unseenFirst = parseBoolean(searchParams.get('unseenFirst'));
+  const eligibleForCuration = parseBoolean(searchParams.get('eligibleForCuration'));
   const items = listBrowseCacheItems({
     source,
     freshAfterMs,
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
     requirePublishedAt,
     excludeFeedDuplicates,
     unseenFirst,
+    eligibleForCuration,
     limit,
   });
 

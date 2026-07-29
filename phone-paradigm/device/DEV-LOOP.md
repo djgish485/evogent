@@ -107,7 +107,11 @@ the supported signal path and let the owner claim it.
 ## Build and install a release
 
 Commit the intended source first; release builds deliberately reject dirty
-trees. Build into the default sibling output directory:
+trees. A first phone install also requires one stable private signing identity
+and an exact APK bootstrap from the resulting archive; follow
+[`docs/phone-signing-and-bootstrap.md`](../../docs/phone-signing-and-bootstrap.md)
+before using the deploy command below. Build into the default sibling output
+directory:
 
 ```bash
 bash scripts/build-phone-release.sh

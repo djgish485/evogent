@@ -63,19 +63,29 @@ an opaque native Starting/Error surface with Retry and stock-app escape actions.
 
 Model routing follows the same scope law. Notifications are deterministic and
 model-free. Before provider work, a phone with no config receives the complete
-generic config baseline plus curator/Sol-high, source-discovery/Sol-high,
-browse/Terra-medium, and overseer/Sol-high headings. On an existing phone,
+generic config baseline plus Codex curator and source-discovery/Sol-high,
+Codex browse/Terra-medium, Claude curator and source-discovery/Opus-high,
+Claude browse/Sonnet-high, and overseer/Sol-high headings.
+On an existing phone,
 missing curator, source-discovery, and browse model headings inherit the
 effective Codex model. Curator inherits effective Codex reasoning, while browse
-and source discovery retain their prior medium effort; existing or blank
-headings remain untouched. The version-only bootstrap marker is private,
+and source discovery retain their prior medium effort. Missing Claude lanes
+receive provider-compatible Opus/high curator and source-discovery plus
+Sonnet/high browse baselines instead of
+inheriting Codex names; existing or blank headings remain untouched. The
+version-only bootstrap marker is private,
 mode-`0600`, and written in durable data behind the production `runtime/data`
 symlink.
 
-`Curator Model` is preferred by the phone curation route. An explicit
-`Browse Model` wins; otherwise the resolver preserves an older deployment's
-existing `Codex Model`, with Terra as the public fallback when neither is
-configured. Automatic diagnosis is separately pinned to Sol/high, never
+`Brain Provider` governs both fresh curator-session creation and direct browse
+invocations. Codex uses `Curator Model` and `Browse Model` (with the existing
+`Codex Model` compatibility fallback); Claude uses `Claude Curator Model` and
+`Claude Browse Model`; source discovery likewise uses the selected provider's
+independent source-discovery lane. Provider-compatible public fallbacks are
+Sol/high and Terra/medium for Codex, and Opus/high and Sonnet/high for Claude. Every direct
+Claude browse receives its resolved model and effort; cross-provider or
+unsupported values are rejected before launch. Automatic diagnosis is
+separately pinned to Sol/high, never
 inherits overseer Max/Ultra, and accepts no private persistent override.
 Persistent overrides for global browse, YouTube browse, curation, source
 discovery, and automatic diagnosis are disabled in policy and code. The current

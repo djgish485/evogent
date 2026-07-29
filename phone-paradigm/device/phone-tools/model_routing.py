@@ -28,6 +28,7 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
 ALLOWED_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
+ALLOWED_PROVIDERS = frozenset({"claude", "codex"})
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,159}$")
 BENCHMARK_KIND_BY_TASK = {
     # This identity remains parseable for screening and historical ledgers, but
@@ -66,7 +67,7 @@ PERSISTENT_OVERRIDE_DISABLED_TASKS = frozenset({
     "source_discovery",
     "diagnosis",
 })
-PHONE_CONFIG_BOOTSTRAP_VERSION = 1
+PHONE_CONFIG_BOOTSTRAP_VERSION = 2
 PHONE_CONFIG_BOOTSTRAP_MARKER = ".phone-config-bootstrap.json"
 PHONE_CONFIG_MAX_BYTES = 1024 * 1024
 PHONE_CONFIG_MARKER_MAX_BYTES = 4096
@@ -114,10 +115,16 @@ On
 PHONE_CONFIG_DEFAULTS = (
     ("Curator Model", "gpt-5.6-sol"),
     ("Curator Reasoning", "High"),
+    ("Claude Curator Model", "claude-opus-4-7"),
+    ("Claude Curator Reasoning", "High"),
     ("Source Discovery Model", "gpt-5.6-sol"),
     ("Source Discovery Reasoning", "High"),
+    ("Claude Source Discovery Model", "claude-opus-4-7"),
+    ("Claude Source Discovery Reasoning", "High"),
     ("Browse Model", "gpt-5.6-terra"),
     ("Browse Reasoning", "Medium"),
+    ("Claude Browse Model", "claude-sonnet-4-6"),
+    ("Claude Browse Reasoning", "High"),
     ("Overseer Model", "gpt-5.6-sol"),
     ("Overseer Reasoning", "High"),
 )
@@ -625,6 +632,38 @@ def _safe_model(value: Any) -> str:
     return normalized if SAFE_TOKEN.fullmatch(normalized) else ""
 
 
+def _safe_provider(value: Any, fallback: str = "codex") -> str:
+    normalized = (
+        re.sub(r"[^a-z0-9]+", "", value.strip().lower())
+        if isinstance(value, str)
+        else ""
+    )
+    if normalized in {"claude", "claudecode", "claudecodecli"}:
+        return "claude"
+    if normalized in {"codex", "codexcli"}:
+        return "codex"
+    return fallback
+
+
+def _safe_model_for_provider(value: Any, provider: str) -> str:
+    """Reject an obviously cross-provider model before a paid invocation."""
+
+    model = _safe_model(value)
+    if not model:
+        return ""
+    normalized = model.lower()
+    if provider == "claude":
+        if normalized in {"haiku", "sonnet", "opus"}:
+            return normalized
+        return model if model.startswith("claude-") else ""
+    if provider == "codex" and (
+        normalized.startswith("claude-")
+        or normalized in {"haiku", "sonnet", "opus"}
+    ):
+        return ""
+    return model
+
+
 def _safe_effort(value: Any, fallback: str = "medium") -> str:
     normalized = value.strip().lower() if isinstance(value, str) else ""
     return normalized if normalized in ALLOWED_EFFORTS else fallback
@@ -715,45 +754,95 @@ def live_route_file_valid(
     return True
 
 
+def _provider_route_policy(route: dict[str, Any], provider: str) -> dict[str, Any]:
+    """Merge a provider-specific lane onto its task-wide safety policy."""
+
+    selected = dict(route)
+    provider_routes = route.get("providerRoutes")
+    if isinstance(provider_routes, dict):
+        provider_route = provider_routes.get(provider)
+        if isinstance(provider_route, dict):
+            selected.update(provider_route)
+    selected.pop("providerRoutes", None)
+    return selected
+
+
 def _route_defaults(
     task: str,
     *,
     config_path: Path,
     policy_path: Path,
+    provider: str = "codex",
 ) -> dict[str, Any]:
+    provider = _safe_provider(provider)
     policy = _read_json(policy_path)
     route = (policy.get("routes") or {}).get(task)
     if not isinstance(route, dict):
         return {"execution": "unsupported", "model": "", "effort": "", "origin": "missing"}
+    route = _provider_route_policy(route, provider)
     execution = route.get("execution")
     if execution != "agent":
-        return {"execution": execution or "unsupported", "model": "", "effort": "", "origin": "policy"}
+        return {
+            "execution": execution or "unsupported",
+            "model": "",
+            "effort": "",
+            "origin": "policy",
+            "provider": provider,
+        }
 
     sections = _markdown_sections(config_path)
     model = ""
+    invalid_config_model = False
     for name in route.get("modelSections") or []:
         if isinstance(name, str):
-            model = _safe_model(sections.get(name.strip().lower()))
-            if model:
+            candidate = sections.get(name.strip().lower())
+            if candidate:
+                model = _safe_model_for_provider(candidate, provider)
+                invalid_config_model = not bool(model)
+            if model or invalid_config_model:
                 break
-    origin = "config" if model else "policy"
-    model = model or _safe_model(route.get("fallbackModel"))
+    origin = (
+        "config"
+        if model
+        else "policy_invalid_provider_model"
+        if invalid_config_model
+        else "policy"
+    )
+    fallback_model = _safe_model_for_provider(route.get("fallbackModel"), provider)
+    if not fallback_model:
+        raise ValueError(f"{task} has no safe {provider} fallback model")
+    model = model or fallback_model
 
     allowed_efforts = _allowed_efforts(route)
     effort = ""
+    invalid_config_effort = False
     for name in route.get("effortSections") or []:
         if isinstance(name, str):
             candidate = sections.get(name.strip().lower())
-            if isinstance(candidate, str) and candidate.strip().lower() in allowed_efforts:
-                effort = candidate.strip().lower()
+            if isinstance(candidate, str) and candidate.strip():
+                normalized_effort = candidate.strip().lower()
+                if normalized_effort in allowed_efforts:
+                    effort = normalized_effort
+                else:
+                    invalid_config_effort = True
+            if effort or invalid_config_effort:
                 break
     fallback_effort = _safe_effort(route.get("fallbackEffort"))
-    effort = effort or (fallback_effort if fallback_effort in allowed_efforts else sorted(allowed_efforts)[0])
+    if fallback_effort not in allowed_efforts:
+        raise ValueError(f"{task} has no safe {provider} fallback effort")
+    effort = effort or fallback_effort
+    if invalid_config_effort:
+        origin = (
+            "policy_invalid_config_effort"
+            if origin == "policy"
+            else f"{origin}_invalid_config_effort"
+        )
     return {
         "execution": "agent",
         "model": model,
         "effort": effort,
         "origin": origin,
+        "provider": provider,
         "policy": policy,
         "routePolicy": route,
     }
@@ -1067,19 +1156,36 @@ def resolve_route(
     policy_path: Path,
     live_path: Path,
     receipts_path: Path,
+    provider: str = "codex",
     model_override: str = "",
     effort_override: str = "",
     now_ms: int | None = None,
 ) -> dict[str, Any]:
-    baseline = _route_defaults(task, config_path=config_path, policy_path=policy_path)
+    provider = _safe_provider(provider)
+    baseline = _route_defaults(
+        task,
+        config_path=config_path,
+        policy_path=policy_path,
+        provider=provider,
+    )
     if baseline.get("execution") != "agent":
         return baseline
 
-    explicit_model = _safe_model(model_override)
+    requested_model_override = isinstance(model_override, str) and bool(model_override.strip())
+    requested_effort_override = isinstance(effort_override, str) and bool(effort_override.strip())
+    explicit_model = _safe_model_for_provider(model_override, provider)
     allowed_efforts = _allowed_efforts(baseline.get("routePolicy") or {})
     explicit_effort = _safe_effort(effort_override, "") if effort_override else ""
-    if explicit_effort not in allowed_efforts:
-        explicit_effort = ""
+    invalid_model_override = requested_model_override and not explicit_model
+    invalid_effort_override = (
+        requested_effort_override and explicit_effort not in allowed_efforts
+    )
+    if invalid_model_override or invalid_effort_override:
+        return {
+            **baseline,
+            "origin": "baseline_invalid_environment_override",
+            "overrideRejected": True,
+        }
     if explicit_model or explicit_effort:
         return {
             **baseline,
@@ -1098,7 +1204,7 @@ def resolve_route(
         or route_policy.get("persistentOverrideAllowed") is False
     ):
         return {**baseline, "origin": "baseline_persistent_override_disabled"}
-    candidate_model = _safe_model(entry.get("model"))
+    candidate_model = _safe_model_for_provider(entry.get("model"), provider)
     candidate_effort = _safe_effort(entry.get("effort"), "")
     if not candidate_model or candidate_effort not in allowed_efforts:
         return {**baseline, "origin": "baseline_invalid_live"}
@@ -1304,6 +1410,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     resolve = sub.add_parser("resolve")
     resolve.add_argument("--task", required=True)
+    resolve.add_argument("--provider", choices=sorted(ALLOWED_PROVIDERS), default="codex")
     resolve.add_argument("--config", required=True)
     resolve.add_argument("--policy", required=True)
     resolve.add_argument("--live", required=True)
@@ -1343,6 +1450,7 @@ def main(argv: list[str] | None = None) -> int:
             policy_path=Path(args.policy),
             live_path=Path(args.live),
             receipts_path=Path(args.receipts),
+            provider=args.provider,
             model_override=args.model_override,
             effort_override=args.effort_override,
             now_ms=args.now_ms,

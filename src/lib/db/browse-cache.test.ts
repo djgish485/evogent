@@ -7,7 +7,13 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 import { getDb } from './client';
 import {
   PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY,
+  PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY,
+  SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
   SOURCE_SETUP_REFRESH_TRIGGERED_BY,
+  activateSourceDiscoveryRun,
+  cancelBrowseCacheSource,
+  deleteBrowseCacheItemsForSource,
+  discardUnactivatedSourceDiscoveryRun,
   getLatestBrowseCacheRefreshRun,
   getLatestBrowseCacheSourceSetupRun,
   listBrowseCacheItems,
@@ -136,6 +142,408 @@ describe('browse cache refresh run timestamps', () => {
         status: 'completed',
       });
     }, /Completed browse cache refresh runs require completedAtMs/);
+  });
+
+  test('source discovery receipt counts server-accepted rows, not a declared count', () => {
+    const now = Date.now();
+    const runId = `source-discovery-${randomUUID()}`;
+    getDb().prepare(`
+      INSERT INTO browse_cache_items (
+        source, source_id, title, payload_json, fetched_at_ms, expires_at_ms,
+        seen_by_curation_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'test-source',
+      'accepted-one',
+      'Previously seen item',
+      JSON.stringify({ text: 'Previously seen item' }),
+      now - 10_000,
+      now + 60_000,
+      now - 5_000,
+    );
+    const run = recordBrowseCacheRefresh({
+      runId,
+      source: 'test-source',
+      triggeredBy: SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+      startedAtMs: now - 1_000,
+      completedAtMs: now,
+      status: 'completed',
+      itemsAdded: 999,
+      items: [{
+        source: 'test-source',
+        sourceId: 'accepted-one',
+        title: 'One server-accepted item',
+        payload: {
+          type: 'test-source',
+          text: 'One server-accepted item',
+          captureMethod: 'phone-source-discovery',
+          discoveryRunId: runId,
+        },
+        fetchedAtMs: now,
+        expiresAtMs: now + 60_000,
+      }, {
+        source: 'test-source',
+        sourceId: '',
+        title: 'Rejected because sourceId is empty',
+        payload: { type: 'test-source' },
+        fetchedAtMs: now,
+        expiresAtMs: now + 60_000,
+      }],
+    });
+
+    assert.strictEqual(run.itemsAdded, 1);
+    assert.throws(() => recordBrowseCacheRefresh({
+      runId,
+      source: 'test-source',
+      triggeredBy: SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+      startedAtMs: now,
+      completedAtMs: now + 1,
+      status: 'completed',
+      items: [{
+        source: 'test-source',
+        sourceId: 'replacement',
+        title: 'A replay must roll back this row',
+        payload: {
+          type: 'test-source',
+          text: 'A replay must roll back this row',
+          captureMethod: 'phone-source-discovery',
+          discoveryRunId: runId,
+        },
+        fetchedAtMs: now,
+        expiresAtMs: now + 60_000,
+      }],
+    }), /UNIQUE constraint failed: browse_cache_refresh_runs\.id/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      runId,
+      source: 'test-source',
+      triggeredBy: 'phone-browse',
+      startedAtMs: now,
+      completedAtMs: now + 1,
+      status: 'completed',
+      itemsAdded: 42,
+    }), /Browse cache refresh run identity is immutable/);
+    const persistedRun = getLatestBrowseCacheRefreshRun('test-source');
+    assert.strictEqual(persistedRun?.id, runId);
+    assert.strictEqual(persistedRun?.itemsAdded, 1);
+    assert.deepStrictEqual(
+      listBrowseCacheItems({ source: 'test-source', includeExpired: true, limit: 10 }),
+      [{
+        source: 'test-source',
+        sourceId: 'accepted-one',
+        url: null,
+        title: 'Previously seen item',
+        authorUsername: null,
+        authorDisplayName: null,
+        publishedAtMs: null,
+        payload: { text: 'Previously seen item' },
+        fetchedAtMs: now - 10_000,
+        expiresAtMs: now + 60_000,
+        seenByCurationAtMs: now - 5_000,
+      }],
+      'unactivated discovery evidence must not replace the prior live row',
+    );
+    assert.strictEqual(
+      (getDb().prepare(`
+        SELECT COUNT(*) AS value
+        FROM browse_cache_source_discovery_staging
+        WHERE run_id = ?
+      `).get(runId) as { value: number }).value,
+      1,
+    );
+    const activation = activateSourceDiscoveryRun({
+      source: 'test-source',
+      runId,
+      recipeSha256: 'a'.repeat(64),
+    });
+    assert.strictEqual(activation.itemsActivated, 1);
+    assert.deepStrictEqual(
+      listBrowseCacheItems({ source: 'test-source', includeExpired: true, limit: 10 })
+        .map((entry) => ({
+          sourceId: entry.sourceId,
+          seenByCurationAtMs: entry.seenByCurationAtMs,
+        })),
+      [{ sourceId: 'accepted-one', seenByCurationAtMs: null }],
+      'a newly activated capture must not inherit a prior row’s seen state',
+    );
+  });
+
+  test('source discovery rejects cross-source, stale, expired, and empty completed evidence', () => {
+    const now = Date.now();
+    const base = {
+      source: 'test-source',
+      triggeredBy: SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+      startedAtMs: now - 1_000,
+      completedAtMs: now,
+      status: 'completed',
+    };
+    const item = {
+      source: 'test-source',
+      sourceId: 'attempt-bound',
+      title: 'Attempt-bound item',
+      payload: { type: 'test-source', text: 'Attempt-bound item' },
+      fetchedAtMs: now - 500,
+      expiresAtMs: now + 60_000,
+    };
+
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: `source-discovery-${randomUUID()}`,
+      items: [{ ...item, source: 'other-source' }],
+    }), /must match the attempt source/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: `source-discovery-${randomUUID()}`,
+      items: [{ ...item, fetchedAtMs: now - 2_000 }],
+    }), /must be fetched during the current attempt/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: `source-discovery-${randomUUID()}`,
+      items: [{ ...item, expiresAtMs: now }],
+    }), /must remain live after attempt completion/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: `source-discovery-${randomUUID()}`,
+      items: [],
+    }), /requires at least one valid current-attempt item/);
+
+    const evidenceRunId = `source-discovery-${randomUUID()}`;
+    const evidenceItem = {
+      ...item,
+      payload: {
+        type: 'test-source',
+        text: 'Attempt-bound item',
+        captureMethod: 'phone-source-discovery',
+        discoveryRunId: evidenceRunId,
+      },
+    };
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      items: [{
+        ...evidenceItem,
+        payload: { ...evidenceItem.payload, discoveryRunId: 'another-attempt' },
+      }],
+    }), /must carry the exact discovery run identity/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      items: [{
+        ...evidenceItem,
+        payload: { ...evidenceItem.payload, captureMethod: 'unknown' },
+      }],
+    }), /must carry the exact capture method/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      items: [{
+        ...evidenceItem,
+        title: '',
+        payload: { ...evidenceItem.payload, text: '' },
+      }],
+    }), /must contain real title or text evidence/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      status: 'failed',
+      items: [evidenceItem],
+    }), /Non-completed source discovery runs may not publish cache items/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      error: 'contradictory completed error',
+      items: [evidenceItem],
+    }), /Completed source discovery runs may not carry an error/);
+    assert.throws(() => recordBrowseCacheRefresh({
+      ...base,
+      runId: evidenceRunId,
+      items: Array.from({ length: 101 }, (_, index) => ({
+        ...evidenceItem,
+        sourceId: `too-many-${index}`,
+      })),
+    }), /may submit at most 100 items/);
+  });
+
+  test('source opt-out removes every cached row for only the cancelled source', () => {
+    const now = Date.now();
+    for (const [source, sourceId] of [
+      ['cancelled-source', 'cancelled-one'],
+      ['kept-source', 'kept-one'],
+    ]) {
+      recordBrowseCacheRefresh({
+        source,
+        triggeredBy: 'phone-browse',
+        startedAtMs: now - 1_000,
+        completedAtMs: now,
+        status: 'completed',
+        items: [{
+          source,
+          sourceId,
+          payload: { type: source, text: sourceId },
+          fetchedAtMs: now,
+          expiresAtMs: now + 60_000,
+        }],
+      });
+    }
+
+    assert.strictEqual(deleteBrowseCacheItemsForSource('cancelled-source'), 1);
+    assert.deepStrictEqual(
+      listBrowseCacheItems({ source: 'cancelled-source', includeExpired: true }),
+      [],
+    );
+    assert.deepStrictEqual(
+      listBrowseCacheItems({ source: 'kept-source', includeExpired: true })
+        .map((entry) => entry.sourceId),
+      ['kept-one'],
+    );
+  });
+
+  test('source cancellation tombstone defeats late generic submits and activation', () => {
+    const now = Date.now();
+    const runId = `source-discovery-${randomUUID()}`;
+    recordBrowseCacheRefresh({
+      runId,
+      source: 'cancelled-source',
+      triggeredBy: SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+      startedAtMs: now - 1_000,
+      completedAtMs: now,
+      status: 'completed',
+      items: [{
+        source: 'cancelled-source',
+        sourceId: 'staged-before-cancel',
+        title: 'Staged before cancellation',
+        payload: {
+          text: 'Staged before cancellation',
+          captureMethod: 'phone-source-discovery',
+          discoveryRunId: runId,
+        },
+        fetchedAtMs: now - 100,
+        expiresAtMs: now + 60_000,
+      }],
+    });
+    const cancellation = cancelBrowseCacheSource('cancelled-source');
+    assert.strictEqual(cancellation.stagedDeleted, 1);
+
+    assert.throws(() => recordBrowseCacheRefresh({
+      source: 'cancelled-source',
+      triggeredBy: 'phone-browse',
+      startedAtMs: now,
+      completedAtMs: now + 1,
+      status: 'completed',
+      items: [{
+        source: 'cancelled-source',
+        sourceId: 'late-generic-row',
+        title: 'Must not return after cancellation',
+        payload: { text: 'Must not return after cancellation' },
+        fetchedAtMs: now,
+        expiresAtMs: now + 60_000,
+      }],
+    }), /Cancelled sources cannot publish browse-cache evidence/);
+    assert.throws(() => activateSourceDiscoveryRun({
+      source: 'cancelled-source',
+      runId,
+      recipeSha256: 'c'.repeat(64),
+    }), /Cancelled sources cannot activate discovery evidence/);
+    assert.deepStrictEqual(
+      listBrowseCacheItems({ source: 'cancelled-source', includeExpired: true }),
+      [],
+    );
+  });
+
+  test('source discovery discard is exact and stale staging cannot activate', () => {
+    const now = Date.now();
+    const createStagedRun = (runId: string, sourceId: string) => recordBrowseCacheRefresh({
+      runId,
+      source: 'staged-source',
+      triggeredBy: SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+      startedAtMs: now - 1_000,
+      completedAtMs: now,
+      status: 'completed',
+      items: [{
+        source: 'staged-source',
+        sourceId,
+        title: sourceId,
+        payload: {
+          text: sourceId,
+          captureMethod: 'phone-source-discovery',
+          discoveryRunId: runId,
+        },
+        fetchedAtMs: now - 100,
+        expiresAtMs: now + 60_000,
+      }],
+    });
+    const firstRunId = `source-discovery-${randomUUID()}`;
+    const secondRunId = `source-discovery-${randomUUID()}`;
+    createStagedRun(firstRunId, 'first');
+    createStagedRun(secondRunId, 'second');
+
+    assert.strictEqual(
+      discardUnactivatedSourceDiscoveryRun('staged-source', secondRunId),
+      1,
+    );
+    assert.strictEqual(
+      (getDb().prepare(`
+        SELECT COUNT(*) AS value
+        FROM browse_cache_source_discovery_staging
+        WHERE run_id = ?
+      `).get(firstRunId) as { value: number }).value,
+      1,
+    );
+
+    getDb().prepare(`
+      UPDATE browse_cache_source_discovery_staging
+      SET expires_at_ms = ?
+      WHERE run_id = ?
+    `).run(now - 1, firstRunId);
+    assert.throws(() => activateSourceDiscoveryRun({
+      source: 'staged-source',
+      runId: firstRunId,
+      recipeSha256: 'd'.repeat(64),
+    }), /incomplete, expired, or already consumed/);
+  });
+
+  test('recurring discovered sources require distinct exact worker-owned receipts', () => {
+    const now = Date.now();
+    const recordRecurring = (runId: string, startedAtMs: number, sourceId: string) => (
+      recordBrowseCacheRefresh({
+        runId,
+        source: 'recurring-source',
+        triggeredBy: PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY,
+        startedAtMs,
+        completedAtMs: startedAtMs + 100,
+        status: 'completed',
+        itemsAdded: 999,
+        items: [{
+          source: 'recurring-source',
+          sourceId,
+          title: sourceId,
+          payload: {
+            text: sourceId,
+            captureMethod: 'phone-source-recurring',
+            recurringRunId: runId,
+          },
+          fetchedAtMs: startedAtMs + 50,
+          expiresAtMs: now + 60_000,
+        }],
+      })
+    );
+    const firstRunId = `phone-source-recurring-${randomUUID()}`;
+    const secondRunId = `phone-source-recurring-${randomUUID()}`;
+    assert.strictEqual(recordRecurring(firstRunId, now - 1_000, 'first').itemsAdded, 1);
+    assert.strictEqual(recordRecurring(secondRunId, now - 500, 'second').itemsAdded, 1);
+    assert.notStrictEqual(firstRunId, secondRunId);
+    assert.deepStrictEqual(
+      getDb().prepare(`
+        SELECT id
+        FROM browse_cache_refresh_runs
+        WHERE source = ?
+        ORDER BY started_at_ms
+      `).all('recurring-source'),
+      [{ id: firstRunId }, { id: secondRunId }],
+    );
+    assert.throws(
+      () => recordRecurring(firstRunId, now - 100, 'replay'),
+      /UNIQUE constraint|immutable/,
+    );
   });
 
   test('benchmark share receipts are insert-only and replay rolls back its item mutation', () => {

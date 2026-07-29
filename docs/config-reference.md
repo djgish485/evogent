@@ -57,7 +57,7 @@ Do not ask for this separately during install. Derive it from Usage Level: Low -
 
 ## Phone task routing
 
-The canonical phone profile may split the Codex route by workload without
+The canonical phone profile may split either provider route by workload without
 changing the model used by ordinary chat:
 
 ```markdown
@@ -70,17 +70,41 @@ changing the model used by ordinary chat:
 ## Curator Reasoning
 low|medium|high|xhigh
 
+## Claude Curator Model
+<Claude curation baseline>
+
+## Claude Curator Reasoning
+low|medium|high|xhigh|max
+
 ## Source Discovery Model
 <one-time source-recipe authoring baseline>
 
 ## Source Discovery Reasoning
 low|medium|high|xhigh
 
+## Claude Source Discovery Model
+<Claude one-time source-recipe authoring baseline>
+
+## Claude Source Discovery Reasoning
+low|medium|high|xhigh|max
+
 ## Browse Model
 <computer-use baseline>
 
 ## Browse Reasoning
 low|medium|high|xhigh
+
+## Claude Browse Model
+<Claude computer-use baseline>
+
+## Claude Browse Reasoning
+low|medium|high|xhigh|max
+
+## Claude YouTube Browse Model
+<optional Claude YouTube override>
+
+## Claude YouTube Browse Reasoning
+low|medium|high|xhigh|max
 
 ## Overseer Model
 <daily review model>
@@ -92,24 +116,33 @@ high|xhigh|max|ultra
 These values remain private deployment choices. Use the lowest route that
 passes the representative workload. Before provider work, a phone with no
 config receives the complete generic config baseline, followed by
-curator/Sol-high, source-discovery/Sol-high, browse/Terra-medium, and
+Codex curator and source-discovery/Sol-high, Codex browse/Terra-medium,
+Claude curator and source-discovery/Opus-high, Claude browse/Sonnet-high, and
 overseer/Sol-high task headings.
 
 An existing config is migrated differently: missing curator, source-discovery,
 and browse model headings inherit its effective `Codex Model`. Curator
 reasoning inherits its effective Codex reasoning (including the Usage Level
 fallback), while the previously medium-effort browse and source-discovery lanes
-remain medium and overseer remains Sol/high. Existing headings—including
+remain medium and overseer remains Sol/high. Missing Claude lane headings use
+the provider-compatible Opus/high curator and source-discovery plus Sonnet/high browse baselines;
+they never inherit a Codex model name. Existing headings—including
 intentionally blank ones—are never rewritten. A version-only mode-`0600`
 `.phone-config-bootstrap.json` beside the private config makes this migration
 explicit and repeatable through the production `runtime/data` symlink without
 recording private choices.
 
-`Curator Model` is authoritative for phone curation. `Codex Model` remains its
-compatibility fallback when the phone bootstrap has not run. An explicit
-`Browse Model` wins; otherwise browse similarly preserves an older
-deployment's `Codex Model`, with Terra/medium as the public fallback when
-neither model heading is configured.
+`Brain Provider` selects the provider before task routing. For Codex,
+`Curator Model` is authoritative and `Codex Model` remains its compatibility
+fallback; `Browse Model` similarly wins over `Codex Model`, with Terra/medium
+as the public fallback. For Claude, the corresponding `Claude Curator Model`
+`Claude Source Discovery Model`, and `Claude Browse Model` headings are
+authoritative, with Opus/high for curator and source discovery and Sonnet/high
+for browse as their respective
+provider-compatible public fallbacks. Optional `Claude YouTube
+Browse Model` and reasoning headings override only that lane. A model name
+from the other provider or an unsupported effort is rejected and reported as
+a fallback instead of being sent to a paid CLI invocation.
 
 Automatic diagnosis is independently pinned to Sol/high. It does not inherit
 `Codex Model`, `Overseer Model`, or `Overseer Reasoning`, and no private

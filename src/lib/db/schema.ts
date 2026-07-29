@@ -1088,6 +1088,56 @@ const createBrowseCacheRefreshRunIndexesSql = [
   `CREATE INDEX IF NOT EXISTS browse_cache_refresh_runs_source_status_idx ON browse_cache_refresh_runs (source, status, started_at_ms DESC);`,
 ];
 
+// Source discovery is instruction-authoring work. Its first captured items remain staged until
+// the phone worker independently validates and atomically publishes the matching recipe. This
+// prevents a clean HTTP receipt plus a bad/partial recipe from leaking unproved evidence into
+// curation, and preserves an older proven cache while a rediscovery attempt is still tentative.
+const createBrowseCacheSourceDiscoveryStagingTableSql = `
+CREATE TABLE IF NOT EXISTS browse_cache_source_discovery_staging (
+  run_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  url TEXT,
+  title TEXT,
+  author_username TEXT,
+  author_display_name TEXT,
+  published_at_ms INTEGER,
+  payload_json TEXT NOT NULL,
+  fetched_at_ms INTEGER NOT NULL,
+  expires_at_ms INTEGER NOT NULL,
+  seen_by_curation_at_ms INTEGER,
+  PRIMARY KEY (run_id, source, source_id)
+);
+`;
+
+const createBrowseCacheSourceDiscoveryStagingIndexesSql = [
+  `CREATE INDEX IF NOT EXISTS browse_cache_source_discovery_staging_source_idx ON browse_cache_source_discovery_staging (source, run_id);`,
+];
+
+const createBrowseCacheSourceDiscoveryActivationsTableSql = `
+CREATE TABLE IF NOT EXISTS browse_cache_source_discovery_activations (
+  run_id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  recipe_sha256 TEXT NOT NULL,
+  activated_at_ms INTEGER NOT NULL,
+  items_activated INTEGER NOT NULL
+);
+`;
+
+const createBrowseCacheSourceDiscoveryActivationIndexesSql = [
+  `CREATE INDEX IF NOT EXISTS browse_cache_source_discovery_activations_source_idx ON browse_cache_source_discovery_activations (source, activated_at_ms DESC);`,
+];
+
+// A user cancellation is a database tombstone as well as a filesystem opt-out. Activation and
+// cancellation therefore serialize in SQLite: a late worker can never move staged rows back into
+// the live cache after the owner has cancelled the source.
+const createBrowseCacheSourceOptoutsTableSql = `
+CREATE TABLE IF NOT EXISTS browse_cache_source_optouts (
+  source TEXT PRIMARY KEY,
+  opted_out_at_ms INTEGER NOT NULL
+);
+`;
+
 // The anticipation demand ledger: one row per user "ask" for content or an action, classified
 // by how well the system had anticipated it. feed_hit = it was already in the feed;
 // cache_hit = not in the feed but the browse cache had it (seconds of wait, not minutes);
@@ -2271,6 +2321,15 @@ export function ensureFeedSchema(db: Database.Database): void {
   for (const stmt of createBrowseCacheRefreshRunIndexesSql) {
     db.exec(stmt);
   }
+  db.exec(createBrowseCacheSourceDiscoveryStagingTableSql);
+  for (const stmt of createBrowseCacheSourceDiscoveryStagingIndexesSql) {
+    db.exec(stmt);
+  }
+  db.exec(createBrowseCacheSourceDiscoveryActivationsTableSql);
+  for (const stmt of createBrowseCacheSourceDiscoveryActivationIndexesSql) {
+    db.exec(stmt);
+  }
+  db.exec(createBrowseCacheSourceOptoutsTableSql);
   db.exec(createSetupReadinessStateTableSql);
   purgeLegacyPhoneNotificationAgentEvidence(db);
   db.exec(purgeLegacyNotificationBrowseSignalsSql);

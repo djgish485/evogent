@@ -11,6 +11,7 @@ import {
   normalizeFeedInput,
   normalizeType,
   normalizeTweetSourceId,
+  setFeedItemSuggestionStatus,
 } from '@/lib/db/feed';
 import { getDb } from '@/lib/db/client';
 import { fetchInternal } from '@/lib/internal-request-auth';
@@ -95,6 +96,11 @@ const publishDateBypassSources = new Set([
   'openclaw',
   'chat-curator',
   'curation',
+]);
+const recurringPhoneCapabilityActions = new Set([
+  'android_accessibility_access',
+  'termux_display_over_apps',
+  'phone_host_policy',
 ]);
 const missingRealPublishDateError = (source: string) => (
   `Submission missing real publish date. Source <${source}> requires a published_at from the original source. `
@@ -198,6 +204,26 @@ function getInputSourceId(input: Record<string, unknown>): string | null {
 
 function normalizeSourceName(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function isCancelledSourceDiscoverySuccess(item: FeedInsertInput): boolean {
+  const metadata = isRecord(item.metadata) ? item.metadata : null;
+  const source = normalizeSourceName(metadata?.sourceName);
+  if (
+    item.type !== 'notification'
+    || item.source !== 'phone'
+    || metadata?.notificationKind !== 'source_discovery_success'
+    || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(source)
+    || item.sourceId !== `source-discovery-${source}`
+    || metadata.notificationId !== item.sourceId
+  ) {
+    return false;
+  }
+  return Boolean(getDb().prepare(`
+    SELECT 1
+    FROM browse_cache_source_optouts
+    WHERE source = ?
+  `).get(source));
 }
 
 function requiredSourceOwnedPublishDateSource(
@@ -1572,6 +1598,8 @@ async function postUnlocked(request: Request) {
   const errors: SubmitError[] = [];
   const acceptedItems: FeedInsertInput[] = [];
   const acceptedFeedItems: FeedItem[] = [];
+  const reactivatedFeedItems: FeedItem[] = [];
+  const pendingNotificationReactivations = new Map<string, FeedItem>();
   const acceptedIds: string[] = [];
   const duplicateSourceIds = new Set<string>();
   const acceptedIdentifiers = new Map<string, string>();
@@ -1660,9 +1688,55 @@ async function postUnlocked(request: Request) {
       normalizedWithProvenance.sourceId = canonicalSourceId;
     }
 
+    // Source cancellation and notification submission share the feed mutation lock. Whichever
+    // arrives first now closes the race: cancellation-first makes the late success a silent
+    // duplicate, while notification-first lets cancellation find and dismiss the stored row.
+    if (isCancelledSourceDiscoverySuccess(normalizedWithProvenance)) {
+      duplicates += 1;
+      if (canonicalSourceId) duplicateSourceIds.add(canonicalSourceId);
+      continue;
+    }
+
     if (canonicalSourceId) {
       const existing = getFeedItemBySourceId(canonicalSourceId);
       if (existing) {
+        const incomingMetadata = normalizedWithProvenance.metadata;
+        const existingMetadata = existing.metadata;
+        const incomingIncidentKey = typeof incomingMetadata?.incidentKey === 'string'
+          ? incomingMetadata.incidentKey.trim()
+          : '';
+        const existingIncidentKey = typeof existingMetadata?.incidentKey === 'string'
+          ? existingMetadata.incidentKey.trim()
+          : '';
+        const incomingActionKind = typeof incomingMetadata?.userActionKind === 'string'
+          ? incomingMetadata.userActionKind.trim()
+          : '';
+        const existingActionKind = typeof existingMetadata?.userActionKind === 'string'
+          ? existingMetadata.userActionKind.trim()
+          : '';
+        const incomingNotificationId = typeof incomingMetadata?.notificationId === 'string'
+          ? incomingMetadata.notificationId.trim()
+          : '';
+        const existingNotificationId = typeof existingMetadata?.notificationId === 'string'
+          ? existingMetadata.notificationId.trim()
+          : '';
+        if (
+          normalizedWithProvenance.type === 'notification'
+          && normalizedWithProvenance.source === 'phone'
+          && normalizedWithProvenance.metadata?.reactivateOnRepeat === true
+          && existing.type === 'notification'
+          && existing.source === 'phone'
+          && existing.metadata?.reactivateOnRepeat === true
+          && existing.suggestionStatus === 'dismissed'
+          && recurringPhoneCapabilityActions.has(incomingActionKind)
+          && incomingActionKind === existingActionKind
+          && incomingIncidentKey.length > 0
+          && incomingIncidentKey === existingIncidentKey
+          && incomingNotificationId === canonicalSourceId
+          && existingNotificationId === canonicalSourceId
+        ) {
+          pendingNotificationReactivations.set(existing.id, existing);
+        }
         duplicates += 1;
         duplicateSourceIds.add(canonicalSourceId);
         continue;
@@ -1833,6 +1907,21 @@ async function postUnlocked(request: Request) {
 
   }
 
+  // Recurrence may undo a prior dismissal only after the entire one-off request is valid.
+  // Automated cycle receipts never carry this authority, and a rejected/mixed request has no
+  // notification-status side effect.
+  if (
+    !hasCycleSummaryInput
+    && !hasStrictValidationError
+    && errors.length === 0
+  ) {
+    for (const existing of pendingNotificationReactivations.values()) {
+      setFeedItemSuggestionStatus(existing.id, 'pending');
+      const reactivated = getFeedItemById(existing.id);
+      if (reactivated) reactivatedFeedItems.push(reactivated);
+    }
+  }
+
   try {
     await appendAcceptedFeedItems(acceptedItems);
   } catch (error) {
@@ -1850,9 +1939,12 @@ async function postUnlocked(request: Request) {
     applyCachedItemEnrichment(acceptedFeedItem);
   }
 
-  let notificationItems = acceptedFeedItems.map((acceptedFeedItem) => (
-    acceptedFeedItem.id ? getFeedItemById(acceptedFeedItem.id) ?? acceptedFeedItem : acceptedFeedItem
-  ));
+  let notificationItems = [
+    ...acceptedFeedItems.map((acceptedFeedItem) => (
+      acceptedFeedItem.id ? getFeedItemById(acceptedFeedItem.id) ?? acceptedFeedItem : acceptedFeedItem
+    )),
+    ...reactivatedFeedItems,
+  ];
   const shouldSkipBulkEnrichment = isPhoneRuntime() || readUsageLevelConfig().level === 'low';
   const acceptedEnrichmentTargets = shouldSkipBulkEnrichment
     ? []
@@ -1908,9 +2000,14 @@ async function postUnlocked(request: Request) {
     }
   }
 
-  notificationItems = acceptedFeedItems.map((acceptedFeedItem) => (
-    acceptedFeedItem.id ? getFeedItemById(acceptedFeedItem.id) ?? acceptedFeedItem : acceptedFeedItem
-  ));
+  notificationItems = [
+    ...acceptedFeedItems.map((acceptedFeedItem) => (
+      acceptedFeedItem.id ? getFeedItemById(acceptedFeedItem.id) ?? acceptedFeedItem : acceptedFeedItem
+    )),
+    ...reactivatedFeedItems.map((reactivatedFeedItem) => (
+      getFeedItemById(reactivatedFeedItem.id) ?? reactivatedFeedItem
+    )),
+  ];
 
   try {
     await notifyFeedUpdate(notificationItems);
@@ -2009,6 +2106,7 @@ async function postUnlocked(request: Request) {
 
   return NextResponse.json({
     accepted: acceptedIds.length,
+    reactivated: reactivatedFeedItems.length,
     duplicates,
     errors,
     acceptedIds,

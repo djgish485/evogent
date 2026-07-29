@@ -16,6 +16,7 @@
 import hashlib, json, os, re, shlex, subprocess, sys, time, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 from evogent_api import ORIGIN as BASE, post_json
+from provider_cli import run_provider, selected_provider
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
@@ -78,6 +79,7 @@ def cfg(key, default):
 
 BROWSE_MODEL = os.environ.get("EVOGENT_BROWSE_MODEL") or cfg("Browse Model", "gpt-5.6-terra")
 BROWSE_EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
+BROWSE_PROVIDER = selected_provider()
 
 
 def fetch_text(url, cap=6000):
@@ -375,24 +377,15 @@ create the file."""
         os.remove(OUT_FILE)
     except OSError:
         pass
-    cmd = [
-        "codex",
-        "exec",
-        "--model",
-        BROWSE_MODEL,
-        "-c",
-        f"model_reasoning_effort={BROWSE_EFFORT}",
-        "--dangerously-bypass-approvals-and-sandbox",
-    ]
-    for (_, _, _, path) in all_shots:
-        cmd += ["-i", path]
-    cmd.append("-")
     try:
-        completed = subprocess.run(
-            cmd,
+        completed = run_provider(
+            prompt,
+            provider=BROWSE_PROVIDER,
+            model=BROWSE_MODEL,
+            effort=BROWSE_EFFORT,
             cwd=EVO,
-            input=prompt.encode(),
             timeout=int(os.environ.get("INTEREST_BUDGET", "360")),
+            image_paths=[path for (_, _, _, path) in all_shots],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

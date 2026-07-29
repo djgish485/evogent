@@ -54,8 +54,14 @@ export interface BrowseCacheRefreshRunRecord {
 }
 
 export const SOURCE_SETUP_REFRESH_TRIGGERED_BY = 'setup-source-smoke';
+export const SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY = 'source-discovery';
+export const PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY = 'phone-source-recurring';
 export const PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY =
   'phone-benchmark-full-browse-share';
+const SOURCE_DISCOVERY_RUN_ID_PATTERN =
+  /^source-discovery-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PHONE_SOURCE_RECURRING_RUN_ID_PATTERN =
+  /^phone-source-recurring-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export interface UpsertBrowseCacheItemInput {
   source: string;
@@ -82,6 +88,14 @@ export interface RecordBrowseCacheRefreshInput {
   error?: string | null;
   items?: UpsertBrowseCacheItemInput[];
   metadata?: Record<string, unknown> | null;
+}
+
+export interface SourceDiscoveryActivationRecord {
+  source: string;
+  runId: string;
+  recipeSha256: string;
+  activatedAtMs: number;
+  itemsActivated: number;
 }
 
 export interface CachedTweetEnrichmentState {
@@ -393,6 +407,7 @@ export function listBrowseCacheItems(input: {
   requirePublishedAt?: boolean;
   excludeFeedDuplicates?: boolean;
   unseenFirst?: boolean;
+  eligibleForCuration?: boolean;
   limit?: number;
 } = {}): BrowseCacheItemRecord[] {
   const source = trimToNull(input.source);
@@ -401,26 +416,35 @@ export function listBrowseCacheItems(input: {
   const requirePublishedAt = input.requirePublishedAt === true;
   const excludeFeedDuplicates = input.excludeFeedDuplicates === true;
   const unseenFirst = input.unseenFirst === true;
+  const eligibleForCuration = input.eligibleForCuration === true;
+  // Eligibility is one server-owned boundary, not a collection of caller-owned
+  // query hints. Capture the cutoff once so conflicting legacy flags cannot
+  // admit expired, already-reviewed, or already-shipped rows.
+  const curationCutoffMs = eligibleForCuration ? Date.now() : null;
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit!)) : 200;
 
   const where: string[] = [];
   const params: Array<string | number> = [];
 
-  if (source) {
+  if (source && !eligibleForCuration) {
     where.push(`source = ?`);
     params.push(source);
   }
 
-  if (!includeExpired && freshAfterMs !== null) {
+  if (eligibleForCuration && curationCutoffMs !== null) {
+    where.push(`expires_at_ms >= ?`);
+    params.push(curationCutoffMs);
+    where.push(`seen_by_curation_at_ms IS NULL`);
+  } else if (!includeExpired && freshAfterMs !== null) {
     where.push(`expires_at_ms >= ?`);
     params.push(freshAfterMs);
   }
 
-  if (requirePublishedAt) {
+  if (!eligibleForCuration && requirePublishedAt) {
     where.push(`published_at_ms IS NOT NULL`);
   }
 
-  if (excludeFeedDuplicates) {
+  if (eligibleForCuration || excludeFeedDuplicates) {
     where.push(`
       NOT EXISTS (
         SELECT 1
@@ -447,6 +471,21 @@ export function listBrowseCacheItems(input: {
     'expires_at_ms',
     'seen_by_curation_at_ms',
   ].join(',\n          ');
+
+  if (eligibleForCuration) {
+    // Full curation owns the editorial subset. Return the complete structurally
+    // eligible set in stable evidence order; a legacy limit or source-balancing
+    // shortlist must never become a mechanical editorial cap.
+    const rows = getDb().prepare(`
+      SELECT
+        ${selectColumns}
+      FROM browse_cache_items
+      ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY fetched_at_ms ASC, source ASC, source_id ASC
+    `).all(...params) as BrowseCacheItemRow[];
+
+    return rows.map(rowToBrowseCacheItem);
+  }
 
   if (!source) {
     const rows = getDb().prepare(`
@@ -487,6 +526,242 @@ export function listBrowseCacheItems(input: {
   `).all(...params, limit) as BrowseCacheItemRow[];
 
   return rows.map(rowToBrowseCacheItem);
+}
+
+export function deleteBrowseCacheItemsForSource(sourceInput: string): number {
+  const source = normalizeSource(sourceInput);
+  if (!source) {
+    throw new Error('Browse cache source is required');
+  }
+  return getDb().prepare(`
+    DELETE FROM browse_cache_items
+    WHERE source = ?
+  `).run(source).changes;
+}
+
+export function discardUnactivatedSourceDiscoveryRun(
+  sourceInput: string,
+  runIdInput: string,
+): number {
+  const source = normalizeSource(sourceInput);
+  const runId = trimToNull(runIdInput);
+  if (!source || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(source)) {
+    throw new Error('A canonical source slug is required');
+  }
+  if (!runId || !SOURCE_DISCOVERY_RUN_ID_PATTERN.test(runId)) {
+    throw new Error('An exact source discovery run identity is required');
+  }
+  return getDb().prepare(`
+    DELETE FROM browse_cache_source_discovery_staging
+    WHERE source = ?
+      AND run_id = ?
+  `).run(source, runId).changes;
+}
+
+export function cancelBrowseCacheSource(sourceInput: string): {
+  source: string;
+  deleted: number;
+  stagedDeleted: number;
+  optedOutAtMs: number;
+} {
+  const source = normalizeSource(sourceInput);
+  if (!source || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(source)) {
+    throw new Error('A canonical source slug is required');
+  }
+
+  const tx = getDb().transaction(() => {
+    const optedOutAtMs = Date.now();
+    getDb().prepare(`
+      INSERT INTO browse_cache_source_optouts (source, opted_out_at_ms)
+      VALUES (?, ?)
+      ON CONFLICT(source) DO UPDATE SET opted_out_at_ms = excluded.opted_out_at_ms
+    `).run(source, optedOutAtMs);
+    const deleted = getDb().prepare(`
+      DELETE FROM browse_cache_items
+      WHERE source = ?
+    `).run(source).changes;
+    const stagedDeleted = getDb().prepare(`
+      DELETE FROM browse_cache_source_discovery_staging
+      WHERE source = ?
+    `).run(source).changes;
+    return { source, deleted, stagedDeleted, optedOutAtMs };
+  });
+
+  return tx();
+}
+
+export function activateSourceDiscoveryRun(input: {
+  source: string;
+  runId: string;
+  recipeSha256: string;
+}): SourceDiscoveryActivationRecord {
+  const source = normalizeSource(input.source);
+  const runId = trimToNull(input.runId);
+  const recipeSha256 = trimToNull(input.recipeSha256)?.toLowerCase() ?? null;
+  if (!source || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(source)) {
+    throw new Error('A canonical source slug is required');
+  }
+  if (!runId || !SOURCE_DISCOVERY_RUN_ID_PATTERN.test(runId)) {
+    throw new Error('An exact source discovery run identity is required');
+  }
+  if (!recipeSha256 || !/^[0-9a-f]{64}$/.test(recipeSha256)) {
+    throw new Error('An exact lowercase recipe SHA-256 is required');
+  }
+
+  const tx = getDb().transaction((): SourceDiscoveryActivationRecord => {
+    const optedOut = getDb().prepare(`
+      SELECT 1
+      FROM browse_cache_source_optouts
+      WHERE source = ?
+    `).get(source);
+    if (optedOut) {
+      throw new Error('Cancelled sources cannot activate discovery evidence');
+    }
+
+    const existing = getDb().prepare(`
+      SELECT source, recipe_sha256, activated_at_ms, items_activated
+      FROM browse_cache_source_discovery_activations
+      WHERE run_id = ?
+    `).get(runId) as {
+      source: string;
+      recipe_sha256: string;
+      activated_at_ms: number;
+      items_activated: number;
+    } | undefined;
+    if (existing) {
+      if (existing.source !== source || existing.recipe_sha256 !== recipeSha256) {
+        throw new Error('Source discovery activation identity is immutable');
+      }
+      return {
+        source,
+        runId,
+        recipeSha256,
+        activatedAtMs: existing.activated_at_ms,
+        itemsActivated: existing.items_activated,
+      };
+    }
+
+    const run = getDb().prepare(`
+      SELECT source, triggered_by, started_at_ms, completed_at_ms, status, items_added, error
+      FROM browse_cache_refresh_runs
+      WHERE id = ?
+    `).get(runId) as {
+      source: string;
+      triggered_by: string;
+      started_at_ms: number;
+      completed_at_ms: number | null;
+      status: string;
+      items_added: number;
+      error: string | null;
+    } | undefined;
+    if (
+      !run
+      || run.source !== source
+      || run.triggered_by !== SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY
+      || run.status.toLowerCase() !== 'completed'
+      || run.error !== null
+      || !Number.isInteger(run.started_at_ms)
+      || !Number.isInteger(run.completed_at_ms)
+      || (run.completed_at_ms ?? -1) < run.started_at_ms
+      || !Number.isInteger(run.items_added)
+      || run.items_added < 1
+      || run.items_added > 100
+    ) {
+      throw new Error('Source discovery run is not eligible for activation');
+    }
+
+    const stagedCount = getDb().prepare(`
+      SELECT
+        COUNT(*) AS value,
+        SUM(CASE WHEN expires_at_ms > ? THEN 1 ELSE 0 END) AS live_value,
+        SUM(CASE WHEN seen_by_curation_at_ms IS NULL THEN 1 ELSE 0 END) AS unseen_value
+      FROM browse_cache_source_discovery_staging
+      WHERE run_id = ?
+        AND source = ?
+    `).get(Date.now(), runId, source) as {
+      value: number;
+      live_value: number;
+      unseen_value: number;
+    };
+    if (
+      stagedCount.value !== run.items_added
+      || stagedCount.live_value !== stagedCount.value
+      || stagedCount.unseen_value !== stagedCount.value
+    ) {
+      throw new Error('Source discovery staging is incomplete, expired, or already consumed');
+    }
+
+    const itemsActivated = getDb().prepare(`
+      INSERT INTO browse_cache_items (
+        source,
+        source_id,
+        url,
+        title,
+        author_username,
+        author_display_name,
+        published_at_ms,
+        payload_json,
+        fetched_at_ms,
+        expires_at_ms,
+        seen_by_curation_at_ms
+      )
+      SELECT
+        source,
+        source_id,
+        url,
+        title,
+        author_username,
+        author_display_name,
+        published_at_ms,
+        payload_json,
+        fetched_at_ms,
+        expires_at_ms,
+        seen_by_curation_at_ms
+      FROM browse_cache_source_discovery_staging
+      WHERE run_id = ?
+        AND source = ?
+        AND 1 = 1
+      ON CONFLICT(source, source_id) DO UPDATE SET
+        url = excluded.url,
+        title = excluded.title,
+        author_username = excluded.author_username,
+        author_display_name = excluded.author_display_name,
+        published_at_ms = excluded.published_at_ms,
+        payload_json = excluded.payload_json,
+        fetched_at_ms = excluded.fetched_at_ms,
+        expires_at_ms = excluded.expires_at_ms,
+        seen_by_curation_at_ms = NULL
+    `).run(runId, source).changes;
+    if (itemsActivated !== stagedCount.value) {
+      throw new Error('Source discovery activation did not publish every staged item');
+    }
+
+    const activatedAtMs = Date.now();
+    getDb().prepare(`
+      INSERT INTO browse_cache_source_discovery_activations (
+        run_id,
+        source,
+        recipe_sha256,
+        activated_at_ms,
+        items_activated
+      ) VALUES (?, ?, ?, ?, ?)
+    `).run(runId, source, recipeSha256, activatedAtMs, itemsActivated);
+    getDb().prepare(`
+      DELETE FROM browse_cache_source_discovery_staging
+      WHERE run_id = ?
+        AND source = ?
+    `).run(runId, source);
+
+    return {
+      source,
+      runId,
+      recipeSha256,
+      activatedAtMs,
+      itemsActivated,
+    };
+  });
+
+  return tx();
 }
 
 /**
@@ -848,6 +1123,7 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
   const source = normalizeSource(input.source);
   const triggeredBy = trimToNull(input.triggeredBy);
   const status = trimToNull(input.status);
+  const runError = trimToNull(input.error);
   const startedAtMs = normalizeTimestampMs(input.startedAtMs);
   const completedAtMs = normalizeTimestampMs(input.completedAtMs ?? null);
 
@@ -876,6 +1152,42 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
 
   const runId = trimToNull(input.runId) ?? `browse-cache-refresh-${randomUUID()}`;
   const items = Array.isArray(input.items) ? input.items : [];
+  const isSourceDiscovery = triggeredBy === SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY;
+  const isRecurringPhoneSource = triggeredBy === PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY;
+  if (isSourceDiscovery) {
+    if (!SOURCE_DISCOVERY_RUN_ID_PATTERN.test(runId)) {
+      throw new Error('Source discovery attempts require an exact UUID-backed run identity');
+    }
+    if (completedAtMs !== null && completedAtMs < startedAtMs) {
+      throw new Error('Source discovery completedAtMs must not be before startedAtMs');
+    }
+    if (items.length > 100) {
+      throw new Error('Source discovery attempts may submit at most 100 items');
+    }
+    if (status.toLowerCase() !== 'completed' && items.length > 0) {
+      throw new Error('Non-completed source discovery runs may not publish cache items');
+    }
+    if (status.toLowerCase() === 'completed' && runError) {
+      throw new Error('Completed source discovery runs may not carry an error');
+    }
+  }
+  if (isRecurringPhoneSource) {
+    if (!PHONE_SOURCE_RECURRING_RUN_ID_PATTERN.test(runId)) {
+      throw new Error('Recurring phone sources require a fresh UUID-backed run identity');
+    }
+    if (completedAtMs !== null && completedAtMs < startedAtMs) {
+      throw new Error('Recurring phone source completedAtMs must not be before startedAtMs');
+    }
+    if (items.length > 100) {
+      throw new Error('Recurring phone source attempts may submit at most 100 items');
+    }
+    if (status.toLowerCase() !== 'completed' && items.length > 0) {
+      throw new Error('Non-completed recurring phone source runs may not publish cache items');
+    }
+    if (status.toLowerCase() === 'completed' && runError) {
+      throw new Error('Completed recurring phone source runs may not carry an error');
+    }
+  }
   // Phone-paradigm ingestion: an app the phone background-browses (a YouTube video, a Substack
   // post) rarely exposes a machine-readable publish date in the share, so phone rows arrive with
   // publishedAtMs unset. The curator's read tool defaults to requirePublishedAt (WHERE
@@ -889,14 +1201,63 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
   let canonicalSourceIdDuplicates = 0;
 
   for (const item of items) {
-    const itemSource = normalizeSource(item.source) ?? source;
+    const itemSource: string | null = normalizeSource(item.source) ?? source;
     if (!itemSource) continue;
+    if (
+      (isSourceDiscovery || isRecurringPhoneSource)
+      && itemSource !== source
+    ) {
+      throw new Error('Phone source items must match the attempt source');
+    }
 
     const sourceId = normalizeBrowseCacheSourceId(itemSource, item.sourceId);
     const fetchedAtMs = normalizeTimestampMs(item.fetchedAtMs);
     const expiresAtMs = normalizeTimestampMs(item.expiresAtMs);
     if (!sourceId || fetchedAtMs === null || expiresAtMs === null) {
       continue;
+    }
+    if (isSourceDiscovery || isRecurringPhoneSource) {
+      if (normalizeTimestampMs(item.seenByCurationAtMs ?? null) !== null) {
+        throw new Error('Phone source items must enter curation unseen');
+      }
+      if (
+        fetchedAtMs < startedAtMs
+        || fetchedAtMs > (completedAtMs ?? startedAtMs)
+      ) {
+        throw new Error('Phone source items must be fetched during the current attempt');
+      }
+      if (expiresAtMs <= (completedAtMs ?? startedAtMs)) {
+        throw new Error('Phone source items must remain live after attempt completion');
+      }
+      const payload = getRecord(item.payload);
+      const payloadText = trimToNull(
+        typeof payload?.text === 'string' ? payload.text : null,
+      );
+      if (isSourceDiscovery && (
+        trimToNull(typeof payload?.discoveryRunId === 'string' ? payload.discoveryRunId : null)
+          !== runId
+      )) {
+        throw new Error('Source discovery items must carry the exact discovery run identity');
+      }
+      if (isSourceDiscovery && payload?.captureMethod !== 'phone-source-discovery') {
+        throw new Error('Source discovery items must carry the exact capture method');
+      }
+      if (
+        isRecurringPhoneSource
+        && trimToNull(typeof payload?.recurringRunId === 'string' ? payload.recurringRunId : null)
+          !== runId
+      ) {
+        throw new Error('Recurring phone source items must carry the exact current run identity');
+      }
+      if (
+        isRecurringPhoneSource
+        && payload?.captureMethod !== PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY
+      ) {
+        throw new Error('Recurring phone source items must carry the exact capture method');
+      }
+      if (!trimToNull(item.title) && !payloadText) {
+        throw new Error('Phone source items must contain real title or text evidence');
+      }
     }
 
     const normalizedItem: UpsertBrowseCacheItemInput = {
@@ -919,6 +1280,22 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
     }
 
     normalizedItems.set(key, normalizedItem);
+  }
+  if (
+    isSourceDiscovery
+    && status.toLowerCase() === 'completed'
+    && normalizedItems.size === 0
+  ) {
+    throw new Error('Completed source discovery requires at least one valid current-attempt item');
+  }
+  const provenEmpty = getRecord(getRecord(input.metadata)?.outcomeEvidence)?.provenEmpty === true;
+  if (
+    isRecurringPhoneSource
+    && status.toLowerCase() === 'completed'
+    && normalizedItems.size === 0
+    && !provenEmpty
+  ) {
+    throw new Error('Completed recurring phone source requires items or explicit proven-empty evidence');
   }
 
   const runMetadata = mergeBrowseCacheRunMetadata(input.metadata, { canonicalSourceIdDuplicates });
@@ -947,6 +1324,22 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       expires_at_ms = excluded.expires_at_ms,
       seen_by_curation_at_ms = COALESCE(excluded.seen_by_curation_at_ms, browse_cache_items.seen_by_curation_at_ms)
   `);
+  const stageSourceDiscoveryItem = getDb().prepare(`
+    INSERT INTO browse_cache_source_discovery_staging (
+      run_id,
+      source,
+      source_id,
+      url,
+      title,
+      author_username,
+      author_display_name,
+      published_at_ms,
+      payload_json,
+      fetched_at_ms,
+      expires_at_ms,
+      seen_by_curation_at_ms
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
   const insertRunSql = `
     INSERT INTO browse_cache_refresh_runs (
@@ -973,14 +1366,24 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       items_added = excluded.items_added,
       error = excluded.error,
       metadata_json = excluded.metadata_json
-    WHERE browse_cache_refresh_runs.triggered_by <> ?
+    WHERE browse_cache_refresh_runs.triggered_by NOT IN (?, ?, ?)
   `);
 
   const tx = getDb().transaction(() => {
     let itemsAdded = 0;
 
+    if (
+      getDb().prepare(`
+        SELECT 1
+        FROM browse_cache_source_optouts
+        WHERE source = ?
+      `).get(source)
+    ) {
+      throw new Error('Cancelled sources cannot publish browse-cache evidence');
+    }
+
     for (const item of normalizedItems.values()) {
-      itemsAdded += upsertItem.run(
+      const itemValues = [
         item.source,
         item.sourceId,
         trimToNull(item.url),
@@ -992,9 +1395,20 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
         item.fetchedAtMs,
         item.expiresAtMs,
         normalizeTimestampMs(item.seenByCurationAtMs ?? null),
-      ).changes;
+      ] as const;
+      itemsAdded += isSourceDiscovery
+        ? stageSourceDiscoveryItem.run(runId, ...itemValues).changes
+        : upsertItem.run(...itemValues).changes;
     }
 
+    // A source-discovery receipt is terminal authority for an expensive one-time provider run.
+    // Its item count therefore comes only from rows the server accepted in this transaction;
+    // never trust the provider's declared count for that boundary.
+    const recordedItemsAdded = (isSourceDiscovery || isRecurringPhoneSource)
+      ? itemsAdded
+      : Number.isFinite(input.itemsAdded)
+        ? Math.max(0, Math.floor(Number(input.itemsAdded)))
+        : itemsAdded;
     const runValues = [
       runId,
       source,
@@ -1002,13 +1416,22 @@ export function recordBrowseCacheRefresh(input: RecordBrowseCacheRefreshInput): 
       startedAtMs,
       completedAtMs,
       status,
-      Number.isFinite(input.itemsAdded) ? Math.max(0, Math.floor(Number(input.itemsAdded))) : itemsAdded,
-      trimToNull(input.error),
+      recordedItemsAdded,
+      runError,
       runMetadata ? JSON.stringify(runMetadata) : null,
     ] as const;
-    const writeResult = triggeredBy === PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY
+    const writeResult = (
+      triggeredBy === PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY
+      || isSourceDiscovery
+      || isRecurringPhoneSource
+    )
       ? insertRun.run(...runValues)
-      : upsertRun.run(...runValues, PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY);
+      : upsertRun.run(
+        ...runValues,
+        PHONE_BENCHMARK_SHARE_REFRESH_TRIGGERED_BY,
+        SOURCE_DISCOVERY_REFRESH_TRIGGERED_BY,
+        PHONE_SOURCE_RECURRING_REFRESH_TRIGGERED_BY,
+      );
     if (writeResult.changes !== 1) {
       throw new Error('Browse cache refresh run identity is immutable');
     }

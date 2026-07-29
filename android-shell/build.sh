@@ -3,21 +3,147 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SDK="$HOME/Library/Android/sdk"
-export JAVA_HOME="/usr/local/opt/openjdk@11"
-export PATH="$JAVA_HOME/bin:$PATH"
-BTN="$SDK/build-tools/36.1.0"      # current aapt2, d8, apksigner, aidl, and zipalign
-PLATFORM="$SDK/platforms/android-35/android.jar"
-JAVAC="$JAVA_HOME/bin/javac"
-JAVA="$JAVA_HOME/bin/java"
-KEYTOOL="$JAVA_HOME/bin/keytool"
-
 ANDROID_VERSION_CODE="${EVOGENT_ANDROID_VERSION_CODE:-3}"
 if ! [[ "$ANDROID_VERSION_CODE" =~ ^[1-9][0-9]{0,9}$ ]] \
         || [ "$ANDROID_VERSION_CODE" -gt 2147483647 ]; then
     echo "BUILD FAILED: EVOGENT_ANDROID_VERSION_CODE must be an integer from 1 through 2147483647" >&2
     exit 1
 fi
+
+resolve_android_sdk_root() {
+    local candidate="" sdkmanager=""
+    if [ "${EVOGENT_ANDROID_SDK_ROOT+x}" = x ]; then
+        candidate="$EVOGENT_ANDROID_SDK_ROOT"
+        [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+        (cd "$candidate" && pwd -P)
+        return
+    fi
+    if [ "${ANDROID_SDK_ROOT+x}" = x ]; then
+        candidate="$ANDROID_SDK_ROOT"
+        [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+        (cd "$candidate" && pwd -P)
+        return
+    fi
+    if [ "${ANDROID_HOME+x}" = x ]; then
+        candidate="$ANDROID_HOME"
+        [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+        (cd "$candidate" && pwd -P)
+        return
+    fi
+    for candidate in \
+        "$HOME/Library/Android/sdk" \
+        "$HOME/Android/Sdk" \
+        "$HOME/Android/sdk"; do
+        if [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ]; then
+            (cd "$candidate" && pwd -P)
+            return
+        fi
+    done
+    sdkmanager="$(command -v sdkmanager 2>/dev/null || true)"
+    [ -n "$sdkmanager" ] || return 1
+    python3 - "$sdkmanager" <<'PY'
+import pathlib
+import sys
+
+tool = pathlib.Path(sys.argv[1]).resolve()
+for parent in tool.parents:
+    if (parent / "build-tools").is_dir() and (parent / "platforms").is_dir():
+        print(parent)
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+java_home_has_build_tools() {
+    local candidate="$1"
+    [ -x "$candidate/bin/java" ] \
+        && [ -x "$candidate/bin/javac" ] \
+        && [ -x "$candidate/bin/keytool" ]
+}
+
+resolve_java_home() {
+    local candidate="" javac_path="" formula=""
+    if [ "${EVOGENT_JAVA_HOME+x}" = x ]; then
+        java_home_has_build_tools "$EVOGENT_JAVA_HOME" || return 1
+        (cd "$EVOGENT_JAVA_HOME" && pwd -P)
+        return
+    fi
+    if [ "${JAVA_HOME+x}" = x ] && [ -n "$JAVA_HOME" ]; then
+        java_home_has_build_tools "$JAVA_HOME" || return 1
+        (cd "$JAVA_HOME" && pwd -P)
+        return
+    fi
+    if [ -x /usr/libexec/java_home ]; then
+        candidate="$(/usr/libexec/java_home 2>/dev/null || true)"
+        if [ -n "$candidate" ] && java_home_has_build_tools "$candidate"; then
+            (cd "$candidate" && pwd -P)
+            return
+        fi
+    fi
+    if command -v brew >/dev/null 2>&1; then
+        for formula in openjdk@17 openjdk@11 openjdk; do
+            candidate="$(brew --prefix "$formula" 2>/dev/null || true)"
+            if [ -n "$candidate" ] && java_home_has_build_tools "$candidate"; then
+                (cd "$candidate" && pwd -P)
+                return
+            fi
+        done
+    fi
+    javac_path="$(command -v javac 2>/dev/null || true)"
+    [ -n "$javac_path" ] || return 1
+    candidate="$(python3 - "$javac_path" <<'PY'
+import pathlib
+import sys
+
+print(pathlib.Path(sys.argv[1]).resolve().parent.parent)
+PY
+)"
+    java_home_has_build_tools "$candidate" || return 1
+    (cd "$candidate" && pwd -P)
+}
+
+android_build_tools_complete() {
+    local directory="$1" tool=""
+    [ -d "$directory" ] || return 1
+    for tool in aapt2 aidl apksigner d8 zipalign; do
+        [ -x "$directory/$tool" ] || return 1
+    done
+}
+
+find_android_build_tools_dir() {
+    local sdk="$1"
+    python3 - "$sdk" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1]) / "build-tools"
+required = ("aapt2", "aidl", "apksigner", "d8", "zipalign")
+
+def version(path):
+    parts = tuple(int(part) for part in re.findall(r"\d+", path.name))
+    return parts, path.name
+
+candidates = [
+    path
+    for path in root.iterdir()
+    if path.is_dir() and all((path / tool).is_file() for tool in required)
+] if root.is_dir() else []
+if not candidates:
+    raise SystemExit(1)
+print(max(candidates, key=version))
+PY
+}
+
+file_mode() {
+    python3 - "$1" <<'PY'
+import os
+import stat
+import sys
+
+print(f"{stat.S_IMODE(os.stat(sys.argv[1], follow_symlinks=False).st_mode):o}")
+PY
+}
 
 # Signing configuration. Key material is deployment-private and must live outside the checkout.
 # Supply secrets through the environment so they never enter argv:
@@ -93,6 +219,49 @@ unset EVOGENT_ANDROID_KEYSTORE_PASSWORD EVOGENT_ANDROID_KEY_PASSWORD
 export EVOGENT_SIGNING_STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD_VALUE"
 export EVOGENT_SIGNING_KEY_PASSWORD="$ANDROID_KEY_PASSWORD_VALUE"
 
+SDK="$(resolve_android_sdk_root)" || {
+    echo "BUILD FAILED: Android SDK not found; set EVOGENT_ANDROID_SDK_ROOT or ANDROID_SDK_ROOT" >&2
+    exit 69
+}
+JAVA_HOME="$(resolve_java_home)" || {
+    echo "BUILD FAILED: JDK not found; set EVOGENT_JAVA_HOME or JAVA_HOME" >&2
+    exit 69
+}
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Prefer the version already proven for this project, but discover the newest
+# complete installed build-tools directory when that exact version is absent.
+BTN="$SDK/build-tools/36.1.0"
+if [ "${EVOGENT_ANDROID_BUILD_TOOLS_DIR+x}" = x ]; then
+    BTN="$EVOGENT_ANDROID_BUILD_TOOLS_DIR"
+elif ! android_build_tools_complete "$BTN"; then
+    BTN="$(find_android_build_tools_dir "$SDK")" || {
+        echo "BUILD FAILED: complete Android build tools were not found under $SDK" >&2
+        exit 69
+    }
+fi
+android_build_tools_complete "$BTN" || {
+    echo "BUILD FAILED: Android build-tools override is incomplete" >&2
+    exit 69
+}
+
+ANDROID_PLATFORM_API="${EVOGENT_ANDROID_PLATFORM_API:-35}"
+[[ "$ANDROID_PLATFORM_API" =~ ^[1-9][0-9]{1,2}$ ]] || {
+    echo "BUILD FAILED: EVOGENT_ANDROID_PLATFORM_API must be a positive API level" >&2
+    exit 69
+}
+PLATFORM_DIR="$SDK/platforms/android-$ANDROID_PLATFORM_API"
+PLATFORM="$PLATFORM_DIR/android.jar"
+FRAMEWORK_AIDL="$PLATFORM_DIR/framework.aidl"
+[ -f "$PLATFORM" ] && [ -f "$FRAMEWORK_AIDL" ] || {
+    echo "BUILD FAILED: Android platform API $ANDROID_PLATFORM_API is incomplete under $SDK" >&2
+    exit 69
+}
+JAVAC="$JAVA_HOME/bin/javac"
+JAVA="$JAVA_HOME/bin/java"
+KEYTOOL="$JAVA_HOME/bin/keytool"
+
 if [ ! -f "$ANDROID_KEYSTORE" ]; then
     mkdir -p "$(dirname "$ANDROID_KEYSTORE")"
     (
@@ -105,7 +274,7 @@ if [ ! -f "$ANDROID_KEYSTORE" ]; then
     )
     chmod 600 "$ANDROID_KEYSTORE"
 fi
-ANDROID_KEYSTORE_MODE="$(stat -f '%Lp' "$ANDROID_KEYSTORE")"
+ANDROID_KEYSTORE_MODE="$(file_mode "$ANDROID_KEYSTORE")"
 if [ $((8#$ANDROID_KEYSTORE_MODE & 077)) -ne 0 ]; then
     echo "SIGNING FAILED: Android keystore must not be accessible to group or other users" >&2
     exit 1
@@ -286,7 +455,7 @@ SHIZUKU_LIBS="libs/shizuku-api.jar:libs/shizuku-provider.jar:libs/shizuku-aidl.j
 # Generate AIDL stubs (IEvoPrivileged used by the Shizuku UserService).
 mkdir -p build/aidl-gen
 for a in $(find src -name '*.aidl'); do
-    "$BTN/aidl" -p"$SDK/platforms/android-35/framework.aidl" -Isrc -obuild/aidl-gen "$a"
+    "$BTN/aidl" -p"$FRAMEWORK_AIDL" -Isrc -obuild/aidl-gen "$a"
 done
 
 "$JAVAC" -source 8 -target 8 -bootclasspath "$PLATFORM" -classpath "$SHIZUKU_LIBS" \
@@ -515,7 +684,7 @@ if grep -Eqi '(server-key|ca-key|private.*key)' build/apk-files.txt; then
     exit 1
 fi
 [ -s build/server-cert.pem ] && [ -s build/server-key.pem ] \
-    && [ "$(stat -f '%Lp' build/server-key.pem)" = 600 ] || {
+    && [ "$(file_mode build/server-key.pem)" = 600 ] || {
         echo "BUILD CHECK FAILED: matching server TLS material was not emitted safely" >&2
         exit 1
     }

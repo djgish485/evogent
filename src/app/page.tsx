@@ -5,6 +5,7 @@ import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningS
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
 import { AssistantSurfaceActions } from '@/components/assistant-surface-actions';
+import { AndroidHomeControl } from '@/components/android-home-control';
 import { ConfigPanel } from '@/components/config-panel';
 import { AnalysisSeriesCard } from '@/components/feed/analysis-series-card';
 import { CompactInfoPopover } from '@/components/feed/compact-info-popover';
@@ -2656,14 +2657,6 @@ export default function Home() {
       }
     })();
   }, [hidePullIndicator, pullStatus]);
-
-  // The authenticated Android shell installs window.EvogentShell for the proved top document;
-  // when present, the composer's control row shows the Android-home switcher button.
-  const [hasShellBridge, setHasShellBridge] = useState(false);
-  useEffect(() => {
-    const shell = (window as typeof window & { EvogentShell?: { openAndroidHome?: () => void } }).EvogentShell;
-    setHasShellBridge(typeof shell?.openAndroidHome === 'function');
-  }, []);
 
   // The native digest is a doorway, not a dead-end launcher tap. Native stores a one-shot marker
   // before dispatching this event so a tap that races React hydration still lands on the local
@@ -6955,14 +6948,19 @@ export default function Home() {
         }
 
         const acceptResult = await acceptResponse.json() as { suggestionStatus?: SuggestionStatus };
-        const nextAcceptStatus: SuggestionStatus = acceptResult.suggestionStatus === 'dispatched' ? 'dispatched' : 'accepted';
+        const nextAcceptStatus: SuggestionStatus = acceptResult.suggestionStatus === 'dispatched'
+          || acceptResult.suggestionStatus === 'dismissed'
+          ? acceptResult.suggestionStatus
+          : 'accepted';
         setSuggestionStatusOverrides((current) => ({ ...current, [item.id]: nextAcceptStatus }));
         if (previousStatus === 'pending') {
           adjustPendingCounts({ suggestion: -1 });
         }
         setSuggestionFeedback((current) => ({
           ...current,
-          [item.id]: nextAcceptStatus === 'dispatched'
+          [item.id]: nextAcceptStatus === 'dismissed'
+            ? `${chosenAction?.label || 'This source'} — it will stay out of Evogent.`
+            : nextAcceptStatus === 'dispatched'
             ? chosenAction
               ? `Approved: ${chosenAction.label} - executing this now. Watch the life-actions chat for the report.`
               : 'Approved - executing this now. Watch the life-actions chat for the report.'
@@ -8180,27 +8178,7 @@ export default function Home() {
             />
           </div>
           <div className="mt-1.5 flex items-center gap-2">
-            {hasShellBridge && (
-              <>
-                {/* Launcher switch — a system control, not a composer tool: filled, larger,
-                    and fenced off from the utility icons by a divider. */}
-                <button
-                  type="button"
-                  onClick={() => (window as typeof window & { EvogentShell?: { openAndroidHome?: () => void } }).EvogentShell?.openAndroidHome?.()}
-                  data-testid="android-home-button"
-                  aria-label="Android home screen"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-[0_2px_6px_rgba(0,0,0,0.4)] transition hover:bg-violet-500 active:scale-95"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[22px] w-[22px]">
-                    <path
-                      d="M12 3.1 3.8 10v9.4c0 .6.5 1.1 1.1 1.1h4.9v-6.3h4.4v6.3h4.9c.6 0 1.1-.5 1.1-1.1V10L12 3.1Z"
-                      className="fill-current"
-                    />
-                  </svg>
-                </button>
-                <div aria-hidden="true" className="mx-0.5 h-5 w-px shrink-0 bg-zinc-700/80" />
-              </>
-            )}
+            <AndroidHomeControl />
             <button
               type="button"
               onClick={() => chatAttachmentInputRef.current?.click()}

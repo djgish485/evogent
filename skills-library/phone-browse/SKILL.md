@@ -25,14 +25,31 @@ provides the two things a normal app can't do (make a trusted hidden display, la
 onto it) via Shizuku, and provides the "eyes" (screenshot a hidden display) via its accessibility
 service, because `screencap -d` cannot read a virtual display.
 
-## Prerequisites (the phone's baseline; verify once)
+## Prerequisites (verify without changing owner grants)
 
-- Device attached over adb (`adb devices`; serial is usually `emulator-5554`).
+- A development device may be attached over adb (`adb devices`); use the deployment's private
+  device selector rather than embedding a serial in public instructions.
 - Evogent's accessibility service is enabled:
-  `adb shell dumpsys accessibility | grep -qi 'label=Evogent' && echo ok`
-  (if not: `adb shell settings put secure enabled_accessibility_services net.dangish.evogent/.EvogentAccessibilityService && adb shell settings put secure accessibility_enabled 1`, then relaunch Evogent home).
+  `~/phone-tools/phone.sh health`. If it is not ready, stop app-backed work and emit
+  `USER_ACTION_REQUIRED kind=android_accessibility_access purpose=background_app_browsing`.
+  The owner may enable Evogent visibly in **Android Settings → Accessibility**. Never write
+  accessibility secure settings or silently restore a revoked grant.
 - Shizuku is running and Evogent is authorized (`adb shell 'ps -A | grep shizuku_server'`). If a
   Shizuku permission dialog appears the first time, it must be approved once (tap "Allow all the time").
+- Read the Termux background-launch app-op through the shell bridge:
+  `rish -c 'appops get com.termux SYSTEM_ALERT_WINDOW'`. Continue only for a
+  successfully parsed `allow`. A parsed `deny`, `ignore`, `default`, or
+  `foreground` result is
+  `USER_ACTION_REQUIRED kind=termux_display_over_apps purpose=hidden_display_launch`;
+  the owner may enable **Display over other apps** for Termux in Android
+  Settings. A query/transport failure is `unknown`, not proof of revocation:
+  defer without opening Settings or consuming source/spend state.
+- Run `~/phone-tools/provision-host-policy.sh --status`. The current technical
+  path requires `phantom=false desktop=1 freeform=1`. Missing parsed values are
+  `USER_ACTION_REQUIRED kind=phone_host_policy`; an unknown result defers
+  without claiming owner intent. `--apply` is a separate explicit,
+  owner-authorized, reversible provisioning action; ordinary browsing never
+  invokes it.
 - Read the control token once — the accessibility ops are gated by a per-install secret so no
   other app can drive the phone through Evogent:
   `TOKEN=$(adb shell run-as net.dangish.evogent cat files/control-token.txt 2>/dev/null || adb pull /storage/emulated/0/Android/data/net.dangish.evogent/files/control-token.txt /tmp/evo-tok >/dev/null 2>&1 && cat /tmp/evo-tok)`

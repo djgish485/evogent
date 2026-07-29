@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python3
 # On-device X/Twitter scraper: deterministic MECHANICS, brain EXTRACTION.
 # The driving is code (launch X on a hidden display, tap Following, swipe + capture the a11y
-# tree each pass — codex driving X was flaky, this is reliable). The EXTRACTION is one codex
+# tree each pass — an agent driving X was flaky, this is reliable). EXTRACTION is one brain
 # text pass over all captured trees: X can decompose timeline cells instead of exposing the
 # aggregate content-desc blobs a regex parser expects. A brain reading the raw tree survives
 # UI reshuffles that break any fixed parser (project law: hard-code mechanics only, agents do
@@ -10,6 +10,7 @@
 import json, math, re, subprocess, time, sys, os, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evogent_api import ORIGIN as BASE, post_json
+from provider_cli import run_provider, selected_provider
 from tweet_clean import (
     clean_tweet_text,
     extract_quote,
@@ -41,7 +42,7 @@ PASSES = int(sys.argv[1]) if len(sys.argv) > 1 else 30  # volume: the pool wants
 
 # BOUNDED PHASE 1: the scheduler kills the driver at 900s. Phase 1
 # (scroll+capture+extract) must stay bounded against that wall — slow
-# see_stable retries plus a 240s codex extract could eat the whole window BEFORE the first
+# see_stable retries plus a 240s brain extract could eat the whole window BEFORE the first
 # submit, so a killed run can lose a full in-memory harvest. Every stage now spends from one
 # shared budget: the harvest is landed before
 # the wall and the permalink dance gets only what remains.
@@ -284,10 +285,11 @@ def collect():
 
 EXTRACT_MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
 EXTRACT_EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
+EXTRACT_PROVIDER = selected_provider()
 EXTRACT_BUDGET_S = int(os.environ.get("X_EXTRACT_BUDGET_S", "240"))
 # brain_extract is the SOLE path from captured screens -> tweets (the legacy a11y parser yields 0
-# on the current X cell shape). It calls the codex backend, which intermittently returns 503 /
-# circuit-open ("high demand"). The old code sent codex stderr to /dev/null and returned silently
+# on the current X cell shape). Provider backends can intermittently return 503 /
+# circuit-open ("high demand"). The old code sent provider stderr to /dev/null and returned silently
 # on failure, so a backend outage was indistinguishable from "X had no tweets". This flag lets
 # the run record an HONEST service-unavailable
 # failure (reachable source, extraction backend down) instead of a barren-source zero.
@@ -295,7 +297,7 @@ EXTRACT_STATE = {"unavailable": False}
 
 
 def brain_extract(trees, reserve_s=0):
-    """THE BRAIN'S HALF: one codex TEXT pass turns raw a11y dumps into structured tweets.
+    """THE BRAIN'S HALF: one routed TEXT pass turns raw a11y dumps into structured tweets.
     Survives whatever node shape X ships next. Emits into `seen` using the same keys/shape the
     legacy parser produced, so the permalink dance and submit path downstream are untouched."""
     EVO = os.path.expanduser("~/evogent")
@@ -345,15 +347,19 @@ Write JSON to {out_file}: a list of
   "mediaDescription": null,
   "promotionLabel": false, "language": null}}
 Use the Write tool or bash to create the file."""
-    cmd = ["codex", "exec", "--model", EXTRACT_MODEL, "-c",
-           f"model_reasoning_effort={EXTRACT_EFFORT}",
-           "--dangerously-bypass-approvals-and-sandbox", "-"]
     try:
         # Never let one extract call outspend the run: cap by the shared budget (floor 30s so a
         # near-wall call still has a chance; the scheduler wall is the true backstop).
-        cp = subprocess.run(cmd, cwd=EVO, input=(prompt + "\n\n" + blob).encode(),
-                       timeout=max(30, min(EXTRACT_BUDGET_S, int(remaining() - reserve_s))),
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        cp = run_provider(
+            prompt + "\n\n" + blob,
+            provider=EXTRACT_PROVIDER,
+            model=EXTRACT_MODEL,
+            effort=EXTRACT_EFFORT,
+            cwd=EVO,
+            timeout=max(30, min(EXTRACT_BUDGET_S, int(remaining() - reserve_s))),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
         cerr = (cp.stderr or b"").decode("utf-8", "replace")
     except Exception as e:
         cerr = str(e)
@@ -361,16 +367,17 @@ Use the Write tool or bash to create the file."""
     try:
         rows = json.load(open(out_file))
     except Exception:
-        # Distinguish a codex BACKEND outage (503 / circuit-open / reconnect storm) from a genuine
+        # Distinguish a provider BACKEND outage (503 / circuit-open / reconnect storm) from a genuine
         # empty parse, and surface the real reason to the log (was /dev/null before -> invisible).
         if re.search(r"503|Service Unavailable|circuit_open|biscuit_baker|Reconnecting|high demand",
                      cerr, re.I):
             EXTRACT_STATE["unavailable"] = True
-            print("brain extract: codex backend UNAVAILABLE (503/circuit-open) — X was reachable, "
-                  f"NOT a barren source. codex stderr tail: {cerr.strip()[-300:]}", file=sys.stderr)
+            print(f"brain extract: {EXTRACT_PROVIDER} backend UNAVAILABLE "
+                  "(503/circuit-open) — X was reachable, NOT a barren source. "
+                  f"provider stderr tail: {cerr.strip()[-300:]}", file=sys.stderr)
         else:
             print("brain extract: no output file — keeping legacy-parser results only. "
-                  f"codex stderr tail: {cerr.strip()[-300:]}", file=sys.stderr)
+                  f"provider stderr tail: {cerr.strip()[-300:]}", file=sys.stderr)
         return
     added = 0
     for r in rows if isinstance(rows, list) else []:
@@ -651,7 +658,7 @@ for i in range(PASSES):
     print(f"pass {i+1}: {len(seen)} legacy-parsed, {len(captured_trees)} screens", file=sys.stderr)
     # CHECKPOINT: one brain_extract over every screen followed by a single submit can overrun the
     # scheduler cap and lose the in-memory harvest. Extract and submit in small chunks DURING
-    # scrolling: bounded codex calls, and tweets are persisted
+    # scrolling: bounded selected-provider calls, and tweets are persisted
     # incrementally so a kill at any later point can never erase the harvest (resilience law).
     if len(captured_trees) - extracted_upto >= 8:
         brain_extract(captured_trees[extracted_upto:])
@@ -687,11 +694,11 @@ if len(captured_trees) > extracted_upto:
     brain_extract(captured_trees[extracted_upto:], reserve_s=DANCE_MIN_S)  # keep the dance floor intact
 print(f"total unique tweets after extraction: {len(seen)}", file=sys.stderr)
 # Record an HONEST failure reason when nothing was extracted, so harvest_watch/logs/audits see the
-# TRUE cause instead of a silent barren zero: codex-backend-down != scheduler-timeout != empty-X.
+# TRUE cause instead of a silent barren zero: provider-backend-down != scheduler-timeout != empty-X.
 _pd_err = None
 if not seen:
     if EXTRACT_STATE["unavailable"]:
-        _pd_err = ("extraction_service_unavailable: codex backend 503/circuit_open during extract — "
+        _pd_err = ("extraction_service_unavailable: provider backend 503/circuit_open during extract — "
                    f"{len(captured_trees)} X screens captured (source reachable, NOT barren)")
     elif elapsed() > PHASE1_DEADLINE_S:
         _pd_err = (f"phase1_timeout: deadline after {int(elapsed())}s with {len(captured_trees)} "

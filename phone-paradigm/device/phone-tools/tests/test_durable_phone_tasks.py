@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import os
 import socket
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -22,11 +24,13 @@ sys.path.insert(0, str(TOOLS))
 
 from durable_task_queue import (  # noqa: E402
     BASE_BACKOFF_MS,
+    TaskQueueError,
     acknowledge_queued_task,
     claim_task,
     enqueue_task,
     ensure_nightly_task,
     finish_task,
+    mark_discovery_reconciliation_only,
     mark_provider_launch_spent,
 )
 from interest_browse_runtime import (  # noqa: E402
@@ -38,6 +42,8 @@ from interest_browse_runtime import (  # noqa: E402
 )
 from private_artifact import (  # noqa: E402
     MAX_PRIVATE_ARTIFACT_BYTES,
+    MAX_PREFERENCE_COMPACTION_SOURCE_BYTES,
+    PREFERENCE_COMPACTED_TARGET_BYTES,
     artifact_identity,
     artifact_was_atomically_rewritten,
     atomic_rewrite_private_artifact,
@@ -46,13 +52,28 @@ from private_artifact import (  # noqa: E402
     source_cadence_valid,
 )
 from scheduler_timing import (  # noqa: E402
+    advance_cycle_stamp,
+    bind_curation_attempt_generation,
+    bind_curation_attempt_task,
+    clear_curation_attempt,
     clear_cycle_failure_backoff,
+    clear_failed_curation_generation,
+    clear_source_failure_backoff,
+    compare_curation_generation,
+    compare_failed_curation_generation,
+    compute_curation_input_generation,
     cycle_failure_remaining_seconds,
-    ensure_watchdog_success_reference,
+    ensure_curation_attempt,
+    ensure_watchdog_completion_reference,
     initial_floor_remaining_seconds,
+    nightly_task_admission,
     normalize_scheduler_bounds,
+    publish_curation_generation,
     record_cycle_failure,
-    watchdog_success_reference_overdue,
+    record_failed_curation_generation,
+    record_source_failure_backoff,
+    source_failure_admission,
+    watchdog_completion_reference_overdue,
 )
 import source_cadence  # noqa: E402
 from source_cadence import (  # noqa: E402
@@ -160,6 +181,74 @@ class DurableQueueTests(unittest.TestCase):
         self.assertEqual(json.loads(final_path.read_text())["state"], "acknowledged")
         self.assertIsNone(claim_task(self.root, owner="other", stamp=50_000))
 
+    def test_terminal_authority_suppresses_a_replayed_base_request(self) -> None:
+        payload = {
+            "kind": "discovery",
+            "pkg": "example.app",
+            "name": "Example",
+            "source": "example",
+        }
+        enqueue_task(self.root, payload, task_id="example", stamp=1_000)
+        lease = claim_task(self.root, owner="worker", stamp=2_000)
+        finish_task(
+            self.root,
+            lease["leasePath"],
+            result="ack",
+            outcome="discovery_fresh",
+            stamp=3_000,
+        )
+
+        # Model a journal replay of the base directory entry after the final receipt was
+        # already durable. The scheduler must clean it, never lease it.
+        replayed = self.root / "example.json"
+        replayed.write_text(
+            json.dumps({**payload, "taskId": "example"}) + "\n",
+            encoding="utf-8",
+        )
+        self.assertIsNone(claim_task(self.root, owner="must-not-run", stamp=4_000))
+        self.assertFalse(replayed.exists())
+
+    def test_discovery_identity_is_validated_at_enqueue_and_claim(self) -> None:
+        valid = {
+            "kind": "discovery",
+            "pkg": "com.example_reader.app",
+            "name": "Example Reader",
+            "source": "example-reader",
+        }
+        for field, invalid in (
+            ("pkg", "../outside"),
+            ("pkg", "com.example;input"),
+            ("name", "Example\nInjected"),
+            ("name", "x" * 121),
+            ("source", "../outside"),
+            ("source", "MixedCase"),
+            ("source", "source_with_underscore"),
+        ):
+            payload = {**valid, field: invalid}
+            with self.assertRaises(TaskQueueError):
+                enqueue_task(
+                    self.root,
+                    payload,
+                    task_id=f"invalid-{field}",
+                    stamp=1_000,
+                )
+
+        # Legacy/on-disk records are revalidated at claim, not trusted merely because they
+        # bypassed the modern enqueue helper.
+        self.root.mkdir(parents=True, exist_ok=True)
+        unsafe_path = self.root / "legacy-invalid.json"
+        unsafe_path.write_text(
+            json.dumps({**valid, "source": "../../outside"}) + "\n",
+            encoding="utf-8",
+        )
+        self.assertIsNone(claim_task(self.root, owner="claim-validator", stamp=2_000))
+        quarantined = self.root / ".quarantine" / "legacy-invalid.json"
+        self.assertTrue(quarantined.exists())
+        self.assertEqual(
+            json.loads(quarantined.read_text(encoding="utf-8"))["outcome"],
+            "invalid_request",
+        )
+
     def test_prelease_duplicate_resolution_has_a_terminal_receipt(self) -> None:
         enqueue_task(
             self.root,
@@ -236,6 +325,101 @@ class DurableQueueTests(unittest.TestCase):
             stamp=queued["notBeforeMs"],
         )
         self.assertEqual(recovered["attempt"], 2)
+
+    def test_validated_discovery_reconciliation_survives_attempt_limit_and_expiry(
+        self,
+    ) -> None:
+        enqueue_task(
+            self.root,
+            {
+                "kind": "discovery",
+                "pkg": "example.app",
+                "name": "Example",
+                "source": "example",
+                "maxAttempts": 1,
+            },
+            task_id="example",
+            stamp=1_000,
+        )
+        first = claim_task(
+            self.root,
+            owner="proof-worker",
+            stamp=1_000,
+            lease_ms=1_000,
+        )
+        marked = mark_discovery_reconciliation_only(
+            self.root,
+            first["leasePath"],
+            stamp=1_500,
+        )
+        self.assertEqual(marked["action"], "marked")
+        self.assertTrue(
+            json.loads(Path(first["leasePath"]).read_text(encoding="utf-8"))[
+                "reconciliationOnly"
+            ]
+        )
+
+        # A generic failure path from an older worker is promoted to reconciliation
+        # instead of quarantining at maxAttempts.
+        reconciled = finish_task(
+            self.root,
+            first["leasePath"],
+            result="retry",
+            outcome="activation_pending",
+            stamp=2_000,
+        )
+        self.assertEqual(reconciled["action"], "reconcile")
+        self.assertTrue(reconciled["task"]["reconciliationOnly"])
+        self.assertFalse((self.root / ".quarantine" / "example.json").exists())
+
+        second = claim_task(
+            self.root,
+            owner="reconciliation-worker",
+            stamp=reconciled["notBeforeMs"],
+            lease_ms=1_000,
+        )
+        self.assertEqual(second["attempt"], 2)
+        self.assertTrue(second["reconciliationOnly"])
+
+        # A restart after that worker dies also preserves the proof-only state,
+        # regardless of the already-exhausted attempt count.
+        self.assertIsNone(
+            claim_task(
+                self.root,
+                owner="expiry-recovery",
+                stamp=second["lease"]["expiresAtMs"] + 1,
+            )
+        )
+        queued = json.loads((self.root / "example.json").read_text(encoding="utf-8"))
+        self.assertEqual(queued["lastOutcome"], "reconciliation_lease_expired")
+        self.assertTrue(queued["reconciliationOnly"])
+        self.assertFalse((self.root / ".quarantine" / "example.json").exists())
+        third = claim_task(
+            self.root,
+            owner="final-reconciliation-worker",
+            stamp=queued["notBeforeMs"],
+        )
+        self.assertEqual(third["attempt"], 3)
+        self.assertTrue(third["reconciliationOnly"])
+
+    def test_only_discovery_can_enter_reconciliation_only_state(self) -> None:
+        enqueue_task(
+            self.root,
+            {
+                "kind": "research",
+                "pkg": "example.research",
+                "installedDaysAgo": 0,
+            },
+            task_id="research-example",
+            stamp=1_000,
+        )
+        lease = claim_task(self.root, owner="research-worker", stamp=1_000)
+        with self.assertRaises(TaskQueueError):
+            mark_discovery_reconciliation_only(
+                self.root,
+                lease["leasePath"],
+                stamp=1_500,
+            )
 
     def test_spent_overseer_lease_crash_quarantines_at_expiry(self) -> None:
         enqueue_task(
@@ -1051,6 +1235,462 @@ class SchedulerTimingTests(unittest.TestCase):
             (45, 180),
         )
 
+    def test_curation_attempt_identity_and_generation_survive_restarts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".pending-curation-attempt.json"
+            first_id = "phone-curation-11111111-1111-4111-8111-111111111111"
+            other_id = "phone-curation-22222222-2222-4222-8222-222222222222"
+            generation = "curation-input-v1:" + ("a" * 64)
+
+            first = ensure_curation_attempt(
+                state_path,
+                candidate_cycle_id=first_id,
+                now_seconds=10_000,
+            )
+            restarted = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS / "scheduler_timing.py"),
+                    "--curation-attempt-state",
+                    str(state_path),
+                    "--curation-attempt-action",
+                    "ensure",
+                    "--curation-attempt-cycle-id",
+                    other_id,
+                    "--now-seconds",
+                    "20000",
+                ],
+                cwd=TOOLS,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(restarted.returncode, 0, restarted.stderr)
+            retained_id, _, = (restarted.stdout.rstrip("\n") + "\t").split("\t")[:2]
+            self.assertEqual(first["cycleId"], first_id)
+            self.assertEqual(retained_id, first_id)
+            self.assertEqual(state_path.stat().st_mode & 0o777, 0o600)
+
+            bound = bind_curation_attempt_generation(
+                state_path,
+                expected_cycle_id=first_id,
+                generation=generation,
+                now_seconds=10_001,
+            )
+            self.assertEqual(bound["editorialGeneration"], generation)
+            task_bound = bind_curation_attempt_task(
+                state_path,
+                expected_cycle_id=first_id,
+                task_request_id="chat-queue-33333333-3333-4333-8333-333333333333",
+                now_seconds=10_002,
+            )
+            self.assertEqual(
+                task_bound["taskRequestId"],
+                "chat-queue-33333333-3333-4333-8333-333333333333",
+            )
+            with self.assertRaises(ValueError):
+                bind_curation_attempt_task(
+                    state_path,
+                    expected_cycle_id=first_id,
+                    task_request_id="chat-queue-44444444-4444-4444-8444-444444444444",
+                    now_seconds=10_003,
+                )
+            with self.assertRaises(ValueError):
+                clear_curation_attempt(
+                    state_path,
+                    expected_cycle_id=other_id,
+                )
+            self.assertTrue(state_path.exists())
+            clear_curation_attempt(
+                state_path,
+                expected_cycle_id=first_id,
+            )
+            self.assertFalse(state_path.exists())
+
+    def test_terminal_curation_failure_latches_only_its_exact_input_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_path = Path(temporary) / ".last-failed-curation-input-generation.json"
+            failed_generation = "curation-input-v1:" + ("a" * 64)
+            changed_generation = "curation-input-v1:" + ("b" * 64)
+
+            self.assertEqual(
+                compare_failed_curation_generation(state_path, failed_generation),
+                "missing",
+            )
+            record_failed_curation_generation(
+                state_path,
+                failed_generation,
+                "cancelled",
+                now_seconds=10_000,
+            )
+            self.assertEqual(
+                compare_failed_curation_generation(state_path, failed_generation),
+                "failed_unchanged",
+            )
+            self.assertEqual(
+                compare_failed_curation_generation(state_path, changed_generation),
+                "changed",
+            )
+            self.assertEqual(state_path.stat().st_mode & 0o777, 0o600)
+            state_text = state_path.read_text(encoding="utf-8")
+            self.assertIn('"terminalStatus":"cancelled"', state_text)
+            self.assertNotIn("editorial content", state_text)
+            with self.assertRaises(ValueError):
+                record_failed_curation_generation(
+                    state_path,
+                    failed_generation,
+                    "pending",
+                    now_seconds=10_001,
+                )
+            clear_failed_curation_generation(state_path)
+            self.assertFalse(state_path.exists())
+
+    def test_source_failure_backoff_is_distinct_and_new_signals_override_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state_root = root / ".source-failure-backoff"
+            state_path = state_root / "youtube.json"
+            signal_root = root / "source-due-signals"
+            signal_root.mkdir(mode=0o700)
+            signal_path = signal_root / "youtube.due"
+            signal_path.write_bytes(SOURCE_DUE_SIGNAL_MARKER)
+            signal_path.chmod(0o600)
+            os.utime(signal_path, ns=(98_000_000_000, 98_000_000_000))
+
+            first = record_source_failure_backoff(
+                state_path,
+                "youtube",
+                attempt_started_ns=99_000_000_000,
+                now_seconds=100,
+                base_seconds=10,
+                max_seconds=60,
+            )
+            self.assertEqual(first["delaySeconds"], 10)
+            self.assertEqual(state_path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(state_root.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=105,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("backoff", 5),
+            )
+
+            # A source-specific marker published after the failed attempt is an exact,
+            # one-attempt override. The marker stays unacknowledged until real success.
+            os.utime(signal_path, ns=(106_000_000_000, 106_000_000_000))
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=105,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("backoff", 5),
+            )
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=107,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("source_signal_override", 0),
+            )
+            second = record_source_failure_backoff(
+                state_path,
+                "youtube",
+                attempt_started_ns=108_000_000_000,
+                now_seconds=109,
+                base_seconds=10,
+                max_seconds=60,
+            )
+            self.assertEqual(second["delaySeconds"], 20)
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=110,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("backoff", 19),
+            )
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    manual_override=True,
+                    now_seconds=110,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("manual_override", 0),
+            )
+            clear_source_failure_backoff(state_path, "youtube")
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=110,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("ready", 0),
+            )
+            state_path.write_text("{broken\n", encoding="utf-8")
+            state_path.chmod(0o600)
+            self.assertEqual(
+                source_failure_admission(
+                    state_path,
+                    "youtube",
+                    signal_path=signal_path,
+                    now_seconds=200,
+                    base_seconds=10,
+                    max_seconds=60,
+                ),
+                ("backoff", 10),
+            )
+
+    def test_curation_generation_covers_exact_editorial_inputs_only_as_a_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            database = root / "media-agent.db"
+            instruction = root / "curation-prompt.md"
+            instruction.write_text("deployment guidance\n", encoding="utf-8")
+            connection = sqlite3.connect(database)
+            connection.executescript(
+                """
+                CREATE TABLE browse_cache_items (
+                  source TEXT NOT NULL,
+                  source_id TEXT NOT NULL,
+                  url TEXT,
+                  title TEXT,
+                  author_username TEXT,
+                  author_display_name TEXT,
+                  published_at_ms INTEGER,
+                  payload_json TEXT NOT NULL,
+                  fetched_at_ms INTEGER NOT NULL,
+                  expires_at_ms INTEGER NOT NULL,
+                  seen_by_curation_at_ms INTEGER,
+                  PRIMARY KEY (source, source_id)
+                );
+                CREATE TABLE feed (
+                  id TEXT PRIMARY KEY,
+                  type TEXT NOT NULL,
+                  source TEXT,
+                  source_id TEXT,
+                  author_username TEXT,
+                  title TEXT,
+                  text TEXT NOT NULL,
+                  excerpt TEXT,
+                  reason TEXT,
+                  url TEXT,
+                  created_at TEXT,
+                  created_at_ms INTEGER,
+                  published_at TEXT,
+                  display_order INTEGER,
+                  thread_id TEXT,
+                  metadata TEXT,
+                  parent_id TEXT
+                );
+                CREATE TABLE interactions (
+                  id INTEGER PRIMARY KEY,
+                  feed_item_id TEXT NOT NULL,
+                  action TEXT NOT NULL,
+                  created_at TEXT
+                );
+                CREATE TABLE preferences (
+                  id TEXT PRIMARY KEY,
+                  feed_item_id TEXT,
+                  signal_type TEXT,
+                  source TEXT,
+                  text TEXT,
+                  reason TEXT,
+                  author_username TEXT,
+                  weight REAL,
+                  source_id TEXT,
+                  created_at TEXT
+                );
+                CREATE TABLE thread_feedback (
+                  id TEXT PRIMARY KEY,
+                  thread_id TEXT,
+                  cycle_id TEXT,
+                  feed_item_id TEXT,
+                  vote TEXT,
+                  thread_title TEXT,
+                  reason TEXT,
+                  category TEXT,
+                  probe_reason TEXT,
+                  probe_uncertainty TEXT,
+                  source_item_ids TEXT,
+                  origin_session_id TEXT,
+                  created_at TEXT
+                );
+                """
+            )
+            connection.commit()
+
+            initial = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertRegex(initial, r"^curation-input-v1:[0-9a-f]{64}$")
+            self.assertNotIn("deployment guidance", initial)
+
+            connection.execute(
+                """
+                INSERT INTO browse_cache_items (
+                  source, source_id, title, payload_json, fetched_at_ms, expires_at_ms
+                ) VALUES ('unit', 'eligible-1', 'Candidate', '{"text":"private"}', 900, 5000)
+                """
+            )
+            connection.commit()
+            cache_changed = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertNotEqual(cache_changed, initial)
+
+            connection.execute(
+                """
+                INSERT INTO preferences (
+                  id, signal_type, source, text, weight, created_at
+                ) VALUES ('preference-1', 'explicit', 'app', 'More depth', 1, '2035-01-01')
+                """
+            )
+            connection.commit()
+            preference_changed = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertNotEqual(preference_changed, cache_changed)
+
+            instruction.write_text("revised guidance\n", encoding="utf-8")
+            file_changed = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertNotEqual(file_changed, preference_changed)
+
+            connection.execute(
+                """
+                INSERT INTO feed (
+                  id, type, source, source_id, text, created_at, created_at_ms,
+                  published_at, metadata
+                ) VALUES (
+                  'carry-1', 'article', 'unit', 'carry-source-1', 'Accepted item',
+                  '2035-01-01', 900, '2035-01-01', '{}'
+                )
+                """
+            )
+            connection.commit()
+            carry_changed = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertNotEqual(carry_changed, file_changed)
+            connection.execute(
+                """
+                INSERT INTO interactions (feed_item_id, action, created_at)
+                VALUES ('carry-1', 'view', '2035-01-02')
+                """
+            )
+            connection.commit()
+            interaction_changed = compute_curation_input_generation(
+                database,
+                input_files=[instruction],
+                now_ms=1_000,
+            )
+            self.assertNotEqual(interaction_changed, carry_changed)
+
+            generation_state = root / ".last-curation-input-generation.json"
+            self.assertEqual(
+                compare_curation_generation(generation_state, interaction_changed),
+                "missing",
+            )
+            publish_curation_generation(
+                generation_state,
+                interaction_changed,
+                now_seconds=2_000,
+            )
+            self.assertEqual(
+                compare_curation_generation(generation_state, interaction_changed),
+                "unchanged",
+            )
+            self.assertEqual(generation_state.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn(
+                "revised guidance",
+                generation_state.read_text(encoding="utf-8"),
+            )
+            connection.close()
+
+    def test_nightly_state_is_classified_before_wake_and_expiry_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "tasks"
+            zone = dt.datetime.now().astimezone().tzinfo
+            service_date = dt.date(2035, 6, 1)
+            before_due = dt.datetime.combine(service_date, dt.time(1, 0), tzinfo=zone)
+            ensured = ensure_nightly_task(
+                root,
+                task="oversee",
+                hour=3,
+                stamp=int(before_due.timestamp() * 1000),
+            )
+            due_at_ms = int(ensured["dueAtMs"])
+            self.assertEqual(
+                nightly_task_admission(ensured, root, now_ms=due_at_ms - 1),
+                ("not_due", "queued", due_at_ms),
+            )
+            self.assertEqual(
+                nightly_task_admission(ensured, root, now_ms=due_at_ms),
+                ("due", "queued", due_at_ms),
+            )
+
+            lease = claim_task(
+                root,
+                owner="scheduler",
+                kind="oversee",
+                stamp=due_at_ms,
+                lease_ms=10_000,
+            )
+            self.assertEqual(
+                nightly_task_admission(ensured, root, now_ms=due_at_ms + 1),
+                ("leased", "leased", due_at_ms),
+            )
+            self.assertEqual(
+                nightly_task_admission(ensured, root, now_ms=due_at_ms + 10_001),
+                ("due_recovery", "leased", due_at_ms),
+            )
+
+            finish_task(
+                root,
+                lease["leasePath"],
+                result="ack",
+                outcome="overseer_completed",
+                stamp=due_at_ms + 2,
+            )
+            self.assertEqual(
+                nightly_task_admission(ensured, root, now_ms=due_at_ms + 3),
+                ("terminal", "acknowledged", due_at_ms),
+            )
+
     def test_cycle_failure_backoff_is_private_bounded_and_success_clears_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             state_path = Path(temporary) / ".cycle-failure-backoff.json"
@@ -1172,7 +1812,7 @@ class SchedulerTimingTests(unittest.TestCase):
 
     def test_restart_with_recent_completion_waits_for_remaining_minimum(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            stamp = Path(temporary) / "last-cycle-newitems"
+            stamp = Path(temporary) / ".last-completed-cycle"
             stamp.touch()
             os.utime(stamp, (10_000, 10_000))
             self.assertEqual(
@@ -1186,7 +1826,7 @@ class SchedulerTimingTests(unittest.TestCase):
 
     def test_no_stamp_or_overdue_stamp_is_immediately_due(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            stamp = Path(temporary) / "last-cycle-newitems"
+            stamp = Path(temporary) / ".last-completed-cycle"
             self.assertEqual(
                 initial_floor_remaining_seconds(
                     stamp,
@@ -1206,48 +1846,220 @@ class SchedulerTimingTests(unittest.TestCase):
                 0,
             )
 
-    def test_watchdog_missing_success_baseline_eventually_becomes_overdue(self) -> None:
+    def test_future_completion_stamp_is_repaired_once_and_countdown_decreases(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            stamp = Path(temporary) / ".last-completed-cycle"
+            stamp.touch()
+            os.utime(stamp, (20_000, 20_000))
+            first = initial_floor_remaining_seconds(
+                stamp,
+                minimum_interval_minutes=120,
+                now_seconds=10_000,
+            )
+            self.assertEqual(first, 120 * 60)
+            self.assertAlmostEqual(stamp.stat().st_mtime, 10_000, places=3)
+            second = initial_floor_remaining_seconds(
+                stamp,
+                minimum_interval_minutes=120,
+                now_seconds=10_060,
+            )
+            self.assertEqual(second, 119 * 60)
+            self.assertEqual(
+                initial_floor_remaining_seconds(
+                    stamp,
+                    minimum_interval_minutes=120,
+                    now_seconds=10_000 + 120 * 60,
+                ),
+                0,
+            )
+
+    def test_completion_floor_refuses_symlink_timestamp_authority(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            success = root / ".last-successful-cycle"
-            baseline = root / ".no-success-cycle-baseline"
-            reference = ensure_watchdog_success_reference(
-                success,
+            victim = root / "victim"
+            victim.write_text("untouched\n", encoding="utf-8")
+            victim.chmod(0o644)
+            os.utime(victim, (20_000, 20_000))
+            stamp = root / ".last-completed-cycle"
+            stamp.symlink_to(victim)
+            self.assertEqual(
+                initial_floor_remaining_seconds(
+                    stamp,
+                    minimum_interval_minutes=120,
+                    now_seconds=10_000,
+                ),
+                0,
+            )
+            self.assertEqual(victim.read_text(encoding="utf-8"), "untouched\n")
+            self.assertEqual(victim.stat().st_mode & 0o777, 0o644)
+            self.assertAlmostEqual(victim.stat().st_mtime, 20_000, places=3)
+
+    def test_cycle_stamp_publish_refuses_a_colliding_symlink_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stamp = root / ".last-completed-cycle"
+            victim = root / "victim"
+            victim.write_text("untouched\n", encoding="utf-8")
+            token = "fixed-token"
+            temp = stamp.with_name(
+                f".{stamp.name}.tmp-{os.getpid()}-{token}"
+            )
+            temp.symlink_to(victim)
+            with patch("scheduler_timing.secrets.token_hex", return_value=token):
+                with self.assertRaises(FileExistsError):
+                    advance_cycle_stamp(stamp, now_seconds=12_345)
+            self.assertEqual(victim.read_text(encoding="utf-8"), "untouched\n")
+            self.assertFalse(stamp.exists())
+
+    def test_cycle_stamp_publish_is_private_and_replaces_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            stamp = Path(temporary) / ".last-completed-cycle"
+            stamp.write_text("old\n", encoding="utf-8")
+            stamp.chmod(0o644)
+            self.assertEqual(
+                advance_cycle_stamp(stamp, now_seconds=12_345),
+                12_345,
+            )
+            self.assertEqual(stamp.read_text(encoding="utf-8"), "12345\n")
+            self.assertEqual(stamp.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(
+                list(stamp.parent.glob(f".{stamp.name}.tmp-*")),
+                [],
+            )
+
+    def test_cycle_stamp_does_not_redispatch_after_post_replace_dir_fsync_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            stamp = Path(temporary) / ".last-completed-cycle"
+            with patch(
+                "scheduler_timing._fsync_parent",
+                side_effect=OSError("directory fsync unsupported"),
+            ):
+                self.assertEqual(
+                    advance_cycle_stamp(stamp, now_seconds=12_345),
+                    12_345,
+                )
+            self.assertEqual(stamp.read_text(encoding="utf-8"), "12345\n")
+            self.assertEqual(stamp.stat().st_mode & 0o777, 0o600)
+
+    def test_watchdog_missing_completion_baseline_eventually_becomes_overdue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            completion = root / ".last-completed-cycle"
+            legacy_success = root / ".last-successful-cycle"
+            baseline = root / ".no-completed-cycle-baseline"
+            reference = ensure_watchdog_completion_reference(
+                completion,
+                legacy_success,
                 baseline,
                 now_seconds=10_000,
             )
             self.assertEqual(reference, baseline)
             self.assertTrue(baseline.exists())
             self.assertEqual(baseline.stat().st_mode & 0o777, 0o600)
-            self.assertFalse(watchdog_success_reference_overdue(
+            self.assertFalse(watchdog_completion_reference_overdue(
                 reference,
                 overdue_minutes=780,
                 now_seconds=10_000 + 780 * 60,
             ))
-            self.assertTrue(watchdog_success_reference_overdue(
+            self.assertTrue(watchdog_completion_reference_overdue(
                 reference,
                 overdue_minutes=780,
                 now_seconds=10_000 + 781 * 60,
             ))
 
-            success.write_text("completed\n", encoding="utf-8")
-            success.chmod(0o600)
-            os.utime(success, (60_000, 60_000))
-            reference = ensure_watchdog_success_reference(
-                success,
+            legacy_success.write_text("completed\n", encoding="utf-8")
+            legacy_success.chmod(0o600)
+            os.utime(legacy_success, (60_000, 60_000))
+            reference = ensure_watchdog_completion_reference(
+                completion,
+                legacy_success,
                 baseline,
                 now_seconds=60_001,
             )
-            self.assertEqual(reference, success)
+            self.assertEqual(reference, legacy_success)
             self.assertFalse(baseline.exists())
-            self.assertFalse(watchdog_success_reference_overdue(
+            self.assertFalse(watchdog_completion_reference_overdue(
                 reference,
                 overdue_minutes=780,
                 now_seconds=60_001,
             ))
 
+            completion.write_text("completed\n", encoding="utf-8")
+            completion.chmod(0o600)
+            os.utime(completion, (70_000, 70_000))
+            reference = ensure_watchdog_completion_reference(
+                completion,
+                legacy_success,
+                baseline,
+                now_seconds=70_001,
+            )
+            self.assertEqual(reference, completion)
+
+    def test_watchdog_replaces_same_owner_baseline_symlink_without_touching_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            completion = root / ".last-completed-cycle"
+            legacy_success = root / ".last-successful-cycle"
+            baseline = root / ".no-completed-cycle-baseline"
+            victim = root / "victim"
+            victim.write_text("untouched\n", encoding="utf-8")
+            victim.chmod(0o644)
+            baseline.symlink_to(victim)
+
+            reference = ensure_watchdog_completion_reference(
+                completion,
+                legacy_success,
+                baseline,
+                now_seconds=10_000,
+            )
+
+            self.assertEqual(reference, baseline)
+            self.assertFalse(baseline.is_symlink())
+            self.assertTrue(baseline.is_file())
+            self.assertEqual(baseline.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(victim.read_text(encoding="utf-8"), "untouched\n")
+            self.assertEqual(victim.stat().st_mode & 0o777, 0o644)
+
+    def test_watchdog_ignores_symlink_completion_and_overdue_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            victim = root / "victim"
+            victim.write_text("untouched\n", encoding="utf-8")
+            victim.chmod(0o644)
+            os.utime(victim, (20_000, 20_000))
+            completion = root / ".last-completed-cycle"
+            completion.symlink_to(victim)
+            baseline = root / ".no-completed-cycle-baseline"
+
+            reference = ensure_watchdog_completion_reference(
+                completion,
+                None,
+                baseline,
+                now_seconds=10_000,
+            )
+            self.assertEqual(reference, baseline)
+            self.assertFalse(
+                watchdog_completion_reference_overdue(
+                    completion,
+                    overdue_minutes=1,
+                    now_seconds=30_000,
+                )
+            )
+            self.assertEqual(victim.stat().st_mode & 0o777, 0o644)
+            self.assertAlmostEqual(victim.stat().st_mtime, 20_000, places=3)
+
 
 class PrivateArtifactPostconditionTests(unittest.TestCase):
+    @staticmethod
+    def _snapshot_result(path: Path, trusted_root: Path | None) -> tuple[int, str]:
+        arguments = ["snapshot", "--path", str(path)]
+        if trusted_root is not None:
+            arguments.extend(["--trusted-data-root", str(trusted_root)])
+        with patch("builtins.print") as output:
+            result = private_artifact_main(arguments)
+        output.assert_called_once()
+        return result, str(output.call_args.args[0])
+
     def test_preference_memory_rejects_binary_or_non_text_content(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "preference-insights.md"
@@ -1284,6 +2096,262 @@ class PrivateArtifactPostconditionTests(unittest.TestCase):
             oversized.write_bytes(b"x" * (MAX_PRIVATE_ARTIFACT_BYTES + 1))
             oversized.chmod(0o600)
             self.assertEqual(artifact_identity(oversized), "missing")
+
+    def test_snapshot_compacts_oversized_preference_deterministically_and_preserves_it(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            payload = (
+                "# Preference Insights\n\n"
+                "BEGINNING-PRIVATE-SYNTHESIS\n"
+                + "".join(
+                    f"## Durable section {index}\nEvidence line {index}: "
+                    + ("x" * 96)
+                    + "\n"
+                    for index in range(900)
+                )
+                + "MOST-RECENT-PRIVATE-SYNTHESIS\n"
+            ).encode("utf-8")
+            self.assertGreater(len(payload), MAX_PRIVATE_ARTIFACT_BYTES)
+            compacted_payloads: list[bytes] = []
+            receipt_payloads: list[bytes] = []
+
+            for name in ("first", "second"):
+                root = parent / name
+                root.mkdir()
+                path = root / "preference-insights.md"
+                path.write_bytes(payload)
+                path.chmod(0o600)
+                result, before = self._snapshot_result(path, root)
+
+                self.assertEqual(result, 0)
+                self.assertRegex(before, r"^[0-9]+:[0-9]+$")
+                compacted = path.read_bytes()
+                self.assertLessEqual(
+                    len(compacted),
+                    PREFERENCE_COMPACTED_TARGET_BYTES,
+                )
+                self.assertTrue(preference_insights_valid(path))
+                self.assertIn(b"BEGINNING-PRIVATE-SYNTHESIS", compacted)
+                self.assertIn(b"MOST-RECENT-PRIVATE-SYNTHESIS", compacted)
+                self.assertIn(b"Deterministic compaction receipt", compacted)
+                self.assertIn(b"remains unchanged in the exact preserved source", compacted)
+
+                digest = hashlib.sha256(payload).hexdigest()
+                preserved = (
+                    root
+                    / f".preference-insights.md.preserved.{digest}.md"
+                )
+                receipt = (
+                    root
+                    / f".preference-insights.md.compaction.{digest}.json"
+                )
+                self.assertEqual(preserved.read_bytes(), payload)
+                self.assertEqual(preserved.stat().st_mode & 0o777, 0o600)
+                receipt_value = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertEqual(receipt_value["preservedSource"]["sha256"], digest)
+                self.assertEqual(receipt_value["preservedSource"]["bytes"], len(payload))
+                self.assertEqual(
+                    receipt_value["boundedView"]["sha256"],
+                    hashlib.sha256(compacted).hexdigest(),
+                )
+                self.assertEqual(
+                    receipt_value["status"],
+                    "source_preserved_before_atomic_compaction",
+                )
+                self.assertNotIn(
+                    "BEGINNING-PRIVATE-SYNTHESIS",
+                    receipt.read_text(encoding="utf-8"),
+                )
+                self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                compacted_payloads.append(compacted)
+                receipt_payloads.append(receipt.read_bytes())
+
+                # A normal second snapshot is read-only and returns the same
+                # admission identity without creating another archive.
+                files_before = sorted(child.name for child in root.iterdir())
+                second_result, second_identity = self._snapshot_result(path, root)
+                self.assertEqual(second_result, 0)
+                self.assertEqual(second_identity, before)
+                self.assertEqual(
+                    sorted(child.name for child in root.iterdir()),
+                    files_before,
+                )
+
+                # The unchanged daily overseer finalizer still changes the live
+                # inode and satisfies the scheduler's existing postcondition.
+                self.assertEqual(
+                    private_artifact_main([
+                        "rewrite",
+                        "--path",
+                        str(path),
+                        "--kind",
+                        "preference",
+                        "--trusted-data-root",
+                        str(root),
+                    ]),
+                    0,
+                )
+                self.assertTrue(artifact_was_atomically_rewritten(
+                    path,
+                    before_identity=before,
+                    kind="preference",
+                    trusted_data_root=root,
+                ))
+                self.assertEqual(preserved.read_bytes(), payload)
+
+            self.assertEqual(compacted_payloads[0], compacted_payloads[1])
+            self.assertEqual(receipt_payloads[0], receipt_payloads[1])
+
+    def test_oversized_preference_snapshot_fails_closed_outside_narrow_contract(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            valid_oversized = (
+                b"# Preference Insights\n"
+                + b"private synthesis\n" * 4_000
+            )
+            cases = (
+                ("wrong-name", "other-private-state.md", valid_oversized, 0o600, True),
+                ("unsafe-mode", "preference-insights.md", valid_oversized, 0o644, True),
+                (
+                    "malformed",
+                    "preference-insights.md",
+                    b"\xff" * (MAX_PRIVATE_ARTIFACT_BYTES + 1),
+                    0o600,
+                    True,
+                ),
+                (
+                    "too-large",
+                    "preference-insights.md",
+                    b"x" * (MAX_PREFERENCE_COMPACTION_SOURCE_BYTES + 1),
+                    0o600,
+                    True,
+                ),
+                (
+                    "no-trust-root",
+                    "preference-insights.md",
+                    valid_oversized,
+                    0o600,
+                    False,
+                ),
+            )
+            for case, filename, payload, mode, use_trust_root in cases:
+                root = parent / case
+                root.mkdir()
+                path = root / filename
+                path.write_bytes(payload)
+                path.chmod(mode)
+                result, identity = self._snapshot_result(
+                    path,
+                    root if use_trust_root else None,
+                )
+                self.assertEqual(result, 0)
+                self.assertEqual(identity, "missing")
+                self.assertEqual(path.read_bytes(), payload)
+                self.assertEqual(
+                    [
+                        child.name
+                        for child in root.iterdir()
+                        if child.name.startswith(".preference-insights.md.")
+                    ],
+                    [],
+                )
+
+    def test_compaction_failure_keeps_live_source_and_retry_reuses_exact_archive(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            path = root / "preference-insights.md"
+            payload = (
+                b"# Preference Insights\n"
+                + b"durable private synthesis\n" * 4_000
+            )
+            path.write_bytes(payload)
+            path.chmod(0o600)
+            digest = hashlib.sha256(payload).hexdigest()
+
+            with patch(
+                "private_artifact.os.replace",
+                side_effect=OSError("simulated replacement failure"),
+            ):
+                result, identity = self._snapshot_result(path, root)
+            self.assertEqual(result, 0)
+            self.assertEqual(identity, "missing")
+            self.assertEqual(path.read_bytes(), payload)
+            preserved = (
+                root
+                / f".preference-insights.md.preserved.{digest}.md"
+            )
+            receipt = (
+                root
+                / f".preference-insights.md.compaction.{digest}.json"
+            )
+            self.assertEqual(preserved.read_bytes(), payload)
+            self.assertTrue(receipt.is_file())
+
+            result, identity = self._snapshot_result(path, root)
+            self.assertEqual(result, 0)
+            self.assertRegex(identity, r"^[0-9]+:[0-9]+$")
+            self.assertTrue(preference_insights_valid(path))
+            self.assertEqual(preserved.read_bytes(), payload)
+
+    def test_compaction_race_never_overwrites_a_newer_live_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            path = root / "preference-insights.md"
+            original = (
+                b"# Preference Insights\n"
+                + b"original private synthesis\n" * 4_000
+            )
+            concurrent = (
+                b"# Preference Insights\n"
+                + b"newer concurrent synthesis\n" * 4_000
+            )
+            path.write_bytes(original)
+            path.chmod(0o600)
+            artifact_module = sys.modules["private_artifact"]
+            replace_exact = artifact_module._replace_private_artifact_exact_at
+
+            def race_before_compare(*args, **kwargs):
+                replacement = root / ".concurrent-preference.tmp"
+                replacement.write_bytes(concurrent)
+                replacement.chmod(0o600)
+                os.replace(replacement, path)
+                return replace_exact(*args, **kwargs)
+
+            with patch(
+                "private_artifact._replace_private_artifact_exact_at",
+                side_effect=race_before_compare,
+            ):
+                result, identity = self._snapshot_result(path, root)
+            self.assertEqual(result, 0)
+            self.assertEqual(identity, "missing")
+            self.assertEqual(path.read_bytes(), concurrent)
+            original_digest = hashlib.sha256(original).hexdigest()
+            self.assertEqual(
+                (
+                    root
+                    / f".preference-insights.md.preserved.{original_digest}.md"
+                ).read_bytes(),
+                original,
+            )
+
+            result, identity = self._snapshot_result(path, root)
+            self.assertEqual(result, 0)
+            self.assertRegex(identity, r"^[0-9]+:[0-9]+$")
+            concurrent_digest = hashlib.sha256(concurrent).hexdigest()
+            self.assertEqual(
+                (
+                    root
+                    / f".preference-insights.md.preserved.{concurrent_digest}.md"
+                ).read_bytes(),
+                concurrent,
+            )
 
     def test_empty_or_zero_cadence_cannot_ack_the_daily_overseer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1389,6 +2457,41 @@ class PrivateArtifactPostconditionTests(unittest.TestCase):
                 trusted_data_root=real,
             ))
             self.assertEqual(target.read_bytes(), payload)
+
+    def test_compaction_uses_the_bound_release_runtime_data_link(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            release_root = Path(temporary).resolve() / "evogent"
+            private_data = release_root / "state" / "data"
+            runtime = release_root / "releases" / "release-id" / "runtime"
+            private_data.mkdir(parents=True)
+            runtime.mkdir(parents=True)
+            (runtime / "data").symlink_to("../../../state/data")
+            target = private_data / "preference-insights.md"
+            payload = (
+                b"# Preference Insights\n"
+                + b"private durable synthesis\n" * 4_000
+            )
+            target.write_bytes(payload)
+            target.chmod(0o600)
+            linked_path = runtime / "data" / target.name
+
+            self.assertEqual(
+                self._snapshot_result(linked_path, None),
+                (0, "missing"),
+            )
+            result, identity = self._snapshot_result(linked_path, private_data)
+            self.assertEqual(result, 0)
+            self.assertRegex(identity, r"^[0-9]+:[0-9]+$")
+            self.assertTrue(preference_insights_valid(
+                linked_path,
+                trusted_data_root=private_data,
+            ))
+            digest = hashlib.sha256(payload).hexdigest()
+            preserved = (
+                private_data
+                / f".preference-insights.md.preserved.{digest}.md"
+            )
+            self.assertEqual(preserved.read_bytes(), payload)
 
     def test_release_runtime_data_link_binds_to_canonical_private_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

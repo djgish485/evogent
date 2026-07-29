@@ -5,6 +5,7 @@ The queue intentionally contains no editorial policy.  It only provides mechanic
 
     queued -> leased -> acknowledged
                         -> queued (bounded retry)
+                        -> queued (model-free discovery reconciliation)
                         -> quarantined
 
 A daily overseer lease has one additional cost guard: immediately before its
@@ -39,6 +40,10 @@ DEFAULT_LEASE_MS = 30 * 60 * 1000
 BASE_BACKOFF_MS = 5 * 60 * 1000
 MAX_BACKOFF_MS = 6 * 60 * 60 * 1000
 TASK_ID_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+ANDROID_PACKAGE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$"
+)
+SOURCE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 PROVIDER_LAUNCH_SPENT_FIELD = "providerLaunchSpent"
 
 
@@ -48,6 +53,32 @@ class TaskQueueError(RuntimeError):
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directories(*paths: Path) -> None:
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        _fsync_directory(path)
+
+
+def _unlink_durable(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    _fsync_directory(path.parent)
 
 
 def safe_task_id(value: object) -> str:
@@ -67,15 +98,7 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             os.fsync(stream.fileno())
         os.replace(temp, path)
         os.chmod(path, 0o600)
-        try:
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError:
-            # Some Android filesystems do not permit fsync on directory descriptors.
-            pass
+        _fsync_directory(path.parent)
     finally:
         try:
             temp.unlink()
@@ -155,6 +178,29 @@ def _request_is_valid(request: dict[str, Any]) -> tuple[bool, str]:
     for field in required:
         if not str(request.get(field) or "").strip():
             return False, f"missing required field {field}"
+    if kind == "discovery":
+        package = str(request.get("pkg") or "")
+        name = str(request.get("name") or "")
+        source = str(request.get("source") or "")
+        if (
+            package != package.strip()
+            or len(package) > 253
+            or ANDROID_PACKAGE_RE.fullmatch(package) is None
+        ):
+            return False, "discovery package is not a canonical Android package name"
+        if (
+            name != name.strip()
+            or len(name) > 120
+            or not all(character.isprintable() for character in name)
+        ):
+            return False, "discovery name must be bounded printable text"
+        if SOURCE_SLUG_RE.fullmatch(source) is None:
+            return False, "discovery source must be a canonical lowercase slug"
+    reconciliation_only = request.get("reconciliationOnly")
+    if reconciliation_only is not None and (
+        kind != "discovery" or not isinstance(reconciliation_only, bool)
+    ):
+        return False, "reconciliationOnly is valid only as a discovery boolean"
     return True, ""
 
 
@@ -260,10 +306,7 @@ def _quarantine_locked(
         detail=detail,
         stamp=stamp,
     )
-    try:
-        source_path.unlink()
-    except FileNotFoundError:
-        pass
+    _unlink_durable(source_path)
     return {"action": "quarantine", "path": str(destination), "task": quarantined}
 
 
@@ -291,16 +334,51 @@ def _recover_expired_leases_locked(root: Path, stamp: int) -> None:
         final_receipt = _paths(root)["receipts"] / f"{task_id}-final.json"
         if final_receipt.exists():
             # Ack was made durable before an abrupt stop prevented lease cleanup.
-            lease_path.unlink(missing_ok=True)
+            _unlink_durable(lease_path)
             continue
         quarantine_path = _paths(root)["quarantine"] / f"{task_id}.json"
         if quarantine_path.exists():
             # Quarantine was made durable before an abrupt stop prevented lease cleanup.
-            lease_path.unlink(missing_ok=True)
+            _unlink_durable(lease_path)
             continue
         lease = request.get("lease") if isinstance(request.get("lease"), dict) else {}
         expires = int(lease.get("expiresAtMs") or 0)
         if expires > stamp:
+            continue
+        if (
+            request.get("kind") == "discovery"
+            and request.get("reconciliationOnly") is True
+        ):
+            # A worker has already proved the expensive provider result. Expiry may delay
+            # model-free activation/notification reconciliation, but must never turn that
+            # durable proof into quarantine or authorize another provider launch.
+            attempt = max(1, int(request.get("attempt") or 1))
+            queued = dict(request)
+            queued.update(
+                {
+                    "state": "queued",
+                    "updatedAtMs": stamp,
+                    "notBeforeMs": stamp + retry_backoff_ms(attempt),
+                    "lastOutcome": "reconciliation_lease_expired",
+                    "lastDetail": (
+                        "validated discovery proof retained for model-free reconciliation"
+                    ),
+                }
+            )
+            queued.pop("lease", None)
+            destination = root / f"{task_id}.json"
+            atomic_write_json(destination, queued)
+            _write_transition_receipt(
+                root,
+                queued,
+                transition="reconcile",
+                outcome="reconciliation_lease_expired",
+                detail=(
+                    "expired reconciliation lease returned without provider replay"
+                ),
+                stamp=stamp,
+            )
+            _unlink_durable(lease_path)
             continue
         if _provider_launch_spent(request):
             _quarantine_locked(
@@ -348,7 +426,7 @@ def _recover_expired_leases_locked(root: Path, stamp: int) -> None:
             detail="expired lease recovered by the next scheduler pass",
             stamp=stamp,
         )
-        lease_path.unlink(missing_ok=True)
+        _unlink_durable(lease_path)
 
 
 def _priority(request: dict[str, Any], path: Path) -> tuple[float, float, str]:
@@ -421,6 +499,16 @@ def claim_task(
             if kind and request.get("kind") != kind:
                 continue
             task_id = safe_task_id(request.get("taskId") or path.stem)
+            final_receipt = (
+                _paths(root)["receipts"] / f"{task_id}-final.json"
+            )
+            quarantine_path = _paths(root)["quarantine"] / f"{task_id}.json"
+            if final_receipt.exists() or quarantine_path.exists():
+                # A terminal record is authoritative. A base file can reappear after an
+                # interrupted legacy transition or filesystem replay, but must never become
+                # launchable again.
+                _unlink_durable(path)
+                continue
             # A retry transition writes the replacement queue file before dropping its lease.
             # If power dies between those two operations, never claim the duplicate base file
             # while the original lease remains authoritative.
@@ -437,6 +525,7 @@ def claim_task(
         # The rename is the ownership linearization point.  If power dies before the
         # following rewrite, the next pass treats the missing lease metadata as expired.
         os.replace(queue_path, lease_path)
+        _fsync_directories(root, lease_path.parent)
         attempt = int(request.get("attempt") or 0) + 1
         leased = dict(request)
         leased.update(
@@ -514,6 +603,55 @@ def mark_provider_launch_spent(
         }
 
 
+def mark_discovery_reconciliation_only(
+    root: Path | str,
+    lease_path: Path | str,
+    *,
+    stamp: int | None = None,
+) -> dict[str, Any]:
+    """Durably forbid provider replay after exact discovery proof validation.
+
+    The active lease remains owned by its worker so activation, notification, and
+    acknowledgement can finish normally. If any of those model-free steps fail,
+    expiry recovery and retry preserve this marker without applying maxAttempts.
+    """
+
+    root = Path(root)
+    lease_path = Path(lease_path)
+    stamp = now_ms() if stamp is None else int(stamp)
+    with queue_lock(root):
+        expected_parent = _paths(root)["leased"].resolve()
+        try:
+            resolved = lease_path.resolve(strict=True)
+        except FileNotFoundError as error:
+            raise TaskQueueError("lease no longer exists") from error
+        if resolved.parent != expected_parent:
+            raise TaskQueueError("lease path is outside this queue")
+        request = read_json(resolved)
+        lease = request.get("lease")
+        if request.get("state") != "leased" or not isinstance(lease, dict):
+            raise TaskQueueError("request is not an active lease")
+        if request.get("kind") != "discovery":
+            raise TaskQueueError(
+                "only source discovery can enter model-free reconciliation"
+            )
+        if request.get("reconciliationOnly") is True:
+            return {
+                "action": "already_marked",
+                "leasePath": str(resolved),
+                "taskId": safe_task_id(request.get("taskId") or resolved.stem),
+            }
+        marked = dict(request)
+        marked["reconciliationOnly"] = True
+        marked["updatedAtMs"] = stamp
+        atomic_write_json(resolved, marked)
+        return {
+            "action": "marked",
+            "leasePath": str(resolved),
+            "taskId": safe_task_id(marked.get("taskId") or resolved.stem),
+        }
+
+
 def finish_task(
     root: Path | str,
     lease_path: Path | str,
@@ -527,8 +665,8 @@ def finish_task(
     lease_path = Path(lease_path)
     stamp = now_ms() if stamp is None else int(stamp)
     result = result.strip().lower()
-    if result not in {"ack", "retry", "quarantine"}:
-        raise TaskQueueError("result must be ack, retry, or quarantine")
+    if result not in {"ack", "retry", "reconcile", "quarantine"}:
+        raise TaskQueueError("result must be ack, retry, reconcile, or quarantine")
     with queue_lock(root):
         expected_parent = _paths(root)["leased"].resolve()
         try:
@@ -543,6 +681,14 @@ def finish_task(
         task_id = safe_task_id(request.get("taskId") or resolved.stem)
         attempt = max(1, int(request.get("attempt") or 1))
         max_attempts = max(1, int(request.get("maxAttempts") or DEFAULT_MAX_ATTEMPTS))
+        if (
+            result == "retry"
+            and request.get("kind") == "discovery"
+            and request.get("reconciliationOnly") is True
+        ):
+            # Once exact proof has been validated, even an old worker's generic retry
+            # transition must remain model-free and immune to maxAttempts quarantine.
+            result = "reconcile"
         if result == "ack":
             acknowledged = dict(request)
             acknowledged.update(
@@ -565,8 +711,45 @@ def finish_task(
                 detail=detail,
                 stamp=stamp,
             )
-            resolved.unlink(missing_ok=True)
+            _unlink_durable(resolved)
             return {"action": "ack", "path": str(final_path), "task": acknowledged}
+        if result == "reconcile":
+            if request.get("kind") != "discovery":
+                raise TaskQueueError(
+                    "only source discovery can enter model-free reconciliation"
+                )
+            # This is deliberately separate from ordinary retry. The provider result and
+            # run-scoped candidate/staging proof already exist, so maxAttempts is no longer
+            # a spend guard and must not quarantine the only activation authority.
+            queued = dict(request)
+            queued.update(
+                {
+                    "state": "queued",
+                    "reconciliationOnly": True,
+                    "updatedAtMs": stamp,
+                    "notBeforeMs": stamp + retry_backoff_ms(attempt),
+                    "lastOutcome": outcome or "reconciliation_pending",
+                    "lastDetail": str(detail or "")[:500],
+                }
+            )
+            queued.pop("lease", None)
+            queue_path = root / f"{task_id}.json"
+            atomic_write_json(queue_path, queued)
+            _write_transition_receipt(
+                root,
+                queued,
+                transition="reconcile",
+                outcome=outcome,
+                detail=detail,
+                stamp=stamp,
+            )
+            _unlink_durable(resolved)
+            return {
+                "action": "reconcile",
+                "path": str(queue_path),
+                "notBeforeMs": queued["notBeforeMs"],
+                "task": queued,
+            }
         if result == "retry" and _provider_launch_spent(request):
             return _quarantine_locked(
                 root,
@@ -609,7 +792,7 @@ def finish_task(
             detail=detail,
             stamp=stamp,
         )
-        resolved.unlink(missing_ok=True)
+        _unlink_durable(resolved)
         return {
             "action": "retry",
             "path": str(queue_path),
@@ -668,7 +851,7 @@ def acknowledge_queued_task(
             detail=detail,
             stamp=stamp,
         )
-        queue_path.unlink(missing_ok=True)
+        _unlink_durable(queue_path)
         return {"action": "ack", "path": str(final_path), "task": acknowledged}
 
 
@@ -781,7 +964,11 @@ def build_parser() -> argparse.ArgumentParser:
     finish = sub.add_parser("finish")
     finish.add_argument("--root", required=True)
     finish.add_argument("--lease", required=True)
-    finish.add_argument("--result", required=True, choices=("ack", "retry", "quarantine"))
+    finish.add_argument(
+        "--result",
+        required=True,
+        choices=("ack", "retry", "reconcile", "quarantine"),
+    )
     finish.add_argument("--outcome", required=True)
     finish.add_argument("--detail", default="")
     finish.add_argument("--now-ms", type=int)
@@ -790,6 +977,11 @@ def build_parser() -> argparse.ArgumentParser:
     provider_spent.add_argument("--root", required=True)
     provider_spent.add_argument("--lease", required=True)
     provider_spent.add_argument("--now-ms", type=int)
+
+    reconciliation_only = sub.add_parser("mark-discovery-reconciliation-only")
+    reconciliation_only.add_argument("--root", required=True)
+    reconciliation_only.add_argument("--lease", required=True)
+    reconciliation_only.add_argument("--now-ms", type=int)
 
     ack_queued = sub.add_parser("ack-queued")
     ack_queued.add_argument("--root", required=True)
@@ -860,6 +1052,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "mark-provider-launch-spent":
             _json_print(
                 mark_provider_launch_spent(
+                    args.root,
+                    args.lease,
+                    stamp=args.now_ms,
+                )
+            )
+        elif args.command == "mark-discovery-reconciliation-only":
+            _json_print(
+                mark_discovery_reconciliation_only(
                     args.root,
                     args.lease,
                     stamp=args.now_ms,

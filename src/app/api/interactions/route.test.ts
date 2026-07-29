@@ -177,6 +177,204 @@ describe('/api/interactions thread feedback', () => {
     ]);
   });
 
+  test('keeps source undo actionable when authoritative cancellation fails', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, metadata, published_at
+      ) VALUES (
+        'source-undo-failure', 'suggestion', 'phone', 'source-scout-v2-example',
+        'Adding Example as a source', 'Source setup', ?, ?
+      )
+    `).run(
+      JSON.stringify({
+        suggestionType: 'source_setup',
+        suggestionStatus: 'pending',
+        sourceName: 'example',
+        sourcePackage: 'com.example.app',
+      }),
+      '2026-04-26T12:00:00.000Z',
+    );
+    db.exec(`
+      CREATE TRIGGER reject_test_source_optout
+      BEFORE INSERT ON browse_cache_source_optouts
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated tombstone failure');
+      END;
+    `);
+
+    const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedItemId: 'source-undo-failure',
+        action: 'dismiss_suggestion',
+        userInitiated: true,
+      }),
+    }));
+
+    assert.strictEqual(response.status, 500);
+    const row = db.prepare(`
+      SELECT metadata
+      FROM feed
+      WHERE id = 'source-undo-failure'
+    `).get() as { metadata: string };
+    assert.strictEqual(JSON.parse(row.metadata).suggestionStatus, 'pending');
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM browse_cache_source_optouts
+        WHERE source = 'example'
+      `).get(),
+      { count: 0 },
+    );
+  });
+
+  test('"Not this app" commits source cancellation before dismissing the card', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    const sourceRoot = path.join(tempDir, 'phone-sources');
+    fs.mkdirSync(path.join(sourceRoot, '.queue'), {
+      recursive: true,
+      mode: 0o700,
+    });
+    fs.writeFileSync(
+      path.join(sourceRoot, 'manual-example.txt'),
+      'validated recipe fixture\n',
+      { mode: 0o600 },
+    );
+    fs.writeFileSync(
+      path.join(sourceRoot, '.queue', 'discovery-v2-manual-example.json'),
+      '{}\n',
+      { mode: 0o600 },
+    );
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, metadata, published_at
+      ) VALUES (
+        'manual-source-decline', 'suggestion', 'phone', 'source-scout-v2-example',
+        'Add Example as a source?', 'Source setup', ?, ?
+      )
+    `).run(
+      JSON.stringify({
+        suggestionType: 'source_setup',
+        suggestionStatus: 'pending',
+        sourceName: 'manual-example',
+        sourcePackage: 'com.example.manual',
+        actions: [
+          {
+            label: 'Set Example up as a source',
+            kind: 'execute',
+            instruction: 'Queue discovery.',
+          },
+          { label: 'Not this app', kind: 'cancel_source' },
+        ],
+      }),
+      '2026-04-26T12:00:00.000Z',
+    );
+
+    const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedItemId: 'manual-source-decline',
+        action: 'accept_suggestion',
+        chosenAction: { label: 'Not this app' },
+      }),
+    }));
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), {
+      ok: true,
+      suggestionStatus: 'dismissed',
+      source: 'manual-example',
+    });
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT source
+        FROM browse_cache_source_optouts
+        WHERE source = 'manual-example'
+      `).get(),
+      { source: 'manual-example' },
+    );
+    const row = db.prepare(`
+      SELECT metadata
+      FROM feed
+      WHERE id = 'manual-source-decline'
+    `).get() as { metadata: string };
+    assert.strictEqual(JSON.parse(row.metadata).suggestionStatus, 'dismissed');
+    assert.strictEqual(
+      fs.readFileSync(path.join(sourceRoot, '.optout'), 'utf8'),
+      'manual-example com.example.manual\n',
+    );
+    assert.strictEqual(
+      fs.existsSync(path.join(sourceRoot, 'manual-example.txt')),
+      false,
+    );
+    assert.strictEqual(
+      fs.existsSync(
+        path.join(sourceRoot, '.queue', 'discovery-v2-manual-example.json'),
+      ),
+      false,
+    );
+  });
+
+  test('"Not this app" stays pending when its tombstone cannot commit', async () => {
+    const { POST } = await import(`./route?t=${Date.now()}`);
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO feed (
+        id, type, source, source_id, title, text, metadata, published_at
+      ) VALUES (
+        'manual-source-decline-failure', 'suggestion', 'phone',
+        'source-scout-v2-reject', 'Add Reject as a source?', 'Source setup', ?, ?
+      )
+    `).run(
+      JSON.stringify({
+        suggestionType: 'source_setup',
+        suggestionStatus: 'pending',
+        sourceName: 'manual-reject',
+        sourcePackage: 'com.example.reject',
+        actions: [{ label: 'Not this app', kind: 'cancel_source' }],
+      }),
+      '2026-04-26T12:00:00.000Z',
+    );
+    db.exec(`
+      CREATE TRIGGER reject_manual_source_optout
+      BEFORE INSERT ON browse_cache_source_optouts
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated tombstone failure');
+      END;
+    `);
+
+    const response = await POST(new Request('http://127.0.0.1/api/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedItemId: 'manual-source-decline-failure',
+        action: 'accept_suggestion',
+        chosenAction: { label: 'Not this app' },
+      }),
+    }));
+
+    assert.strictEqual(response.status, 500);
+    const row = db.prepare(`
+      SELECT metadata
+      FROM feed
+      WHERE id = 'manual-source-decline-failure'
+    `).get() as { metadata: string };
+    assert.strictEqual(JSON.parse(row.metadata).suggestionStatus, 'pending');
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM browse_cache_source_optouts
+        WHERE source = 'manual-reject'
+      `).get(),
+      { count: 0 },
+    );
+  });
+
   test('records validated detail engagement sessions separately from explicit interactions', async () => {
     const { POST } = await import(`./route?t=${Date.now()}`);
     const db = getDb();

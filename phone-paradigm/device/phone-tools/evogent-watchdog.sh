@@ -168,34 +168,41 @@ while true; do
   WATCHDOG_MUTATION_GATE_HELD=1
   # GUARD THE GUARDS: every flow-health check (barren tripwire, sources-flowing, verify-intents)
   # runs INSIDE the cycle — if the scheduler dies, all of them die with it and the system is
-  # blind. A cycle advances .last-successful-cycle only after every required phase succeeds; if
-  # that stamp goes stale beyond the configured maximum plus a one-hour completion grace, signal
-  # the owner. The every-attempt productivity counter cannot mask repeated degraded cycles.
+  # blind. A cycle advances .last-completed-cycle only after a validated terminal curation
+  # receipt, even if a source or owner-controlled capability was degraded. If that stamp goes
+  # stale beyond the configured maximum plus a one-hour completion grace, signal the owner.
+  # Full-quality success remains separate telemetry and cannot amplify provider work.
   # Scheduler PID+start liveness first, stamp staleness second. A completion stamp says a cycle
   # once finished, not that its scheduler still exists.
   if ! control_lock_live "$TOOLS/.scheduler.lock"; then
-    say "scheduler-liveness: evo-sched session is GONE — restarting now"
-    tmux kill-session -t '=evo-sched' 2>/dev/null || true
-    tmux new-session -d -s evo-sched \
-      "exec bash '$TOOLS/evogent-scheduler.sh' >> '$HOME/evo-sched.log' 2>&1"
+    if "$TOOLS/evo-health" >/dev/null 2>&1; then
+      say "scheduler-liveness: evo-sched session is GONE — restarting now"
+      tmux kill-session -t '=evo-sched' 2>/dev/null || true
+      tmux new-session -d -s evo-sched \
+        "exec bash '$TOOLS/evogent-scheduler.sh' >> '$HOME/evo-sched.log' 2>&1"
+    else
+      say "scheduler-liveness: local server unavailable — provider scheduler remains stopped"
+    fi
   fi
-  STAMP="$TOOLS/.last-successful-cycle"
-  NO_SUCCESS_BASELINE="$TOOLS/.no-success-cycle-baseline"
+  COMPLETION_STAMP="$TOOLS/.last-completed-cycle"
+  LEGACY_SUCCESS_STAMP="$TOOLS/.last-successful-cycle"
+  NO_COMPLETION_BASELINE="$TOOLS/.no-completed-cycle-baseline"
   OVERDUE_SIGNAL="$TOOLS/.cycle-overdue-signalled"
   MAX_CYCLE_MIN="$(max_cycle_interval_min)"
   [[ "$MAX_CYCLE_MIN" =~ ^[0-9]+$ ]] || MAX_CYCLE_MIN=720
   OVERDUE_MIN=$((MAX_CYCLE_MIN + 60))
-  SUCCESS_REFERENCE_PATH=""
-  SUCCESS_REFERENCE_OVERDUE=0
-  if SUCCESS_REFERENCE_RECORD=$(python3 "$TOOLS/scheduler_timing.py" \
-    --watchdog-success-stamp "$STAMP" \
-    --watchdog-missing-baseline "$NO_SUCCESS_BASELINE" \
+  COMPLETION_REFERENCE_PATH=""
+  COMPLETION_REFERENCE_OVERDUE=0
+  if COMPLETION_REFERENCE_RECORD=$(python3 "$TOOLS/scheduler_timing.py" \
+    --watchdog-completion-stamp "$COMPLETION_STAMP" \
+    --watchdog-legacy-success-stamp "$LEGACY_SUCCESS_STAMP" \
+    --watchdog-missing-baseline "$NO_COMPLETION_BASELINE" \
     --watchdog-overdue-minutes "$OVERDUE_MIN" 2>/dev/null); then
-    IFS=$'\t' read -r SUCCESS_REFERENCE_PATH SUCCESS_REFERENCE_OVERDUE \
-      <<< "$SUCCESS_REFERENCE_RECORD"
+    IFS=$'\t' read -r COMPLETION_REFERENCE_PATH COMPLETION_REFERENCE_OVERDUE \
+      <<< "$COMPLETION_REFERENCE_RECORD"
   fi
-  [[ "$SUCCESS_REFERENCE_OVERDUE" =~ ^[01]$ ]] || SUCCESS_REFERENCE_OVERDUE=0
-  if [ "$SUCCESS_REFERENCE_OVERDUE" = 1 ]; then
+  [[ "$COMPLETION_REFERENCE_OVERDUE" =~ ^[01]$ ]] || COMPLETION_REFERENCE_OVERDUE=0
+  if [ "$COMPLETION_REFERENCE_OVERDUE" = 1 ]; then
     if control_lock_live "$TOOLS/.cycle.lock"; then
       say "cycle-liveness: completion stamp stale but a proved-live cycle owns the lease — preserving work"
     elif [ ! -f "$OVERDUE_SIGNAL" ] ||

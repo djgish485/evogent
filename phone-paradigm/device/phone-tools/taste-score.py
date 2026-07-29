@@ -13,12 +13,17 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from provider_cli import run_provider, selected_provider
 
 EVO = os.path.expanduser("~/evogent")
 DB = os.path.join(EVO, "data", "media-agent.db")
 BRIEF = os.path.expanduser("~/phone-tools/taste-score.md")
 OUT = os.path.join(EVO, "data", "tmp", "freshness-shipment-judgments.json")
+PROVIDER = selected_provider()
 MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
 EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "medium")
 SCHEMA = "evogent.freshness-shipment.v1"
@@ -233,19 +238,12 @@ def main():
     except OSError:
         pass
     try:
-        subprocess.run(
-            [
-                "codex",
-                "exec",
-                "--model",
-                MODEL,
-                "-c",
-                f"model_reasoning_effort={EFFORT}",
-                "--dangerously-bypass-approvals-and-sandbox",
-                "-",
-            ],
+        run_provider(
+            prompt,
+            provider=PROVIDER,
+            model=MODEL,
+            effort=EFFORT,
             cwd=EVO,
-            input=prompt.encode(),
             timeout=BUDGET_S,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

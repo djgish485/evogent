@@ -22,13 +22,40 @@ A full cycle is a curation opportunity, not an all-source sweep.
 3. Deterministic retrieval and parsing run before agent-driven computer use
    where both can produce the same evidence.
 4. A failed, timed-out, or partial browse never advances the source's cadence
-   stamp. The next owner can retry it honestly.
+   stamp. A separate device-local failure clock defers that source's retry
+   exponentially from 15 minutes up to 6 hours, without claiming freshness.
 5. The daily overseer adjusts cadence from private yield, freshness, attention,
    battery, latency, and provider-use receipts. Mechanics never infer source
    value from a public schedule or a fixed source quota.
 
 The public cadence template is bootstrap-only. It deliberately cannot encode a
 person's routine.
+
+## Failure retry boundaries
+
+Success cadence and failure retry cadence are separate authorities. Each
+prompt-driven source failure records only its source slug, consecutive failure
+count, bounded retry deadline, and exact attempt-start time under
+`phone-tools/.source-failure-backoff/`. A newer validated, content-free signal
+for that exact source may override the active window once; if that attempt also
+fails, the same still-unacknowledged marker cannot override again. An explicit
+manual or supervised cycle may name one source with
+`EVOGENT_SOURCE_FAILURE_RETRY_SOURCE`. Successful refresh is still the only
+operation that advances `.last-browse-*` freshness and acknowledges a covered
+source signal. These device-local retry records do not migrate in backups.
+
+Automatic curation also has an exact-input spend boundary. After an accepted
+dispatch ends `failed`, `aborted`, `cancelled`, `empty`, or `invalid` (including
+an exact bound task that is terminal without a usable receipt), the phone
+durably records only the pre-dispatch editorial digest and terminal status in
+`.last-failed-curation-input-generation.json`. Natural scheduler, watchdog,
+and signal cycles will not pay to judge that same unchanged generation again,
+will not publish it as successfully covered, and will not advance the
+completed-cycle clock. Changed editorial input reopens automatic admission.
+A direct `manual` or `supervised` cycle is the explicit retry route. An exact
+successful receipt publishes only its bound pre-dispatch generation and
+retires the obsolete failure latch. The latch is device-local spend authority
+and does not migrate in backups.
 
 ## Latency and judgment lanes
 
@@ -104,7 +131,8 @@ only eligible top-level rows in bounded chunks.
 
 ## Route resolution
 
-`phone-tools/model_routing.py` resolves each task from:
+`phone-tools/model_routing.py` first binds the task to the owner-selected
+`Brain Provider`, then resolves that provider's lane from:
 
 1. an explicit one-run environment override, used by a benchmark;
 2. an enabled private, benchmark-qualified route in `data/model-routing.json`;
@@ -112,24 +140,35 @@ only eligible top-level rows in bounded chunks.
 4. the public safe fallback in
    `phone-tools/model-routing.default.json`.
 
-An explicit `Browse Model` is authoritative. If it is absent, browse preserves
-the deployment's existing `Codex Model`; Terra is only the public model fallback
-when neither heading exists. Browse reasoning remains independently selectable
-through `Browse Reasoning`, with medium as its fallback.
+For Codex, an explicit `Browse Model` is authoritative. If it is absent, browse
+preserves the deployment's existing `Codex Model`; Terra/medium is the public
+fallback when neither heading exists. For Claude, `Claude Browse Model` and
+`Claude Browse Reasoning` are authoritative, with Sonnet/high as the bounded
+public fallback. Optional `Claude YouTube Browse Model` and reasoning headings
+override only YouTube. Claude curation similarly uses `Claude Curator Model`
+and reasoning, with Opus/high as its fallback. One-time source discovery uses
+the selected provider's independent `Source Discovery` or
+`Claude Source Discovery` lane, with Sol/high or Opus/high respectively.
+Cross-provider model names and
+unsupported efforts are rejected before provider launch and visibly fall back
+to the selected provider's safe lane.
 
 Before phone-owned provider work, `model_routing.py ensure-phone-config` seeds
 a genuinely absent config with the complete generic config baseline, then adds
-fresh-phone routes: curator/Sol-high, source-discovery/Sol-high,
-browse/Terra-medium, and overseer/Sol-high. The on-phone generic baseline is
-regression-checked against the shared desktop/VM template.
+fresh-phone routes: Codex curator and source-discovery/Sol-high, Codex
+browse/Terra-medium, Claude curator and source-discovery/Opus-high, Claude
+browse/Sonnet-high, and overseer/Sol-high. The on-phone generic baseline is regression-checked against
+the shared desktop/VM template.
 
 For an existing config, missing curator, source-discovery, and browse model
 headings instead inherit its effective `Codex Model`. Curator reasoning
 inherits effective Codex reasoning, including reasoning derived from
 `Usage Level`; the browse and source-discovery lanes preserve their prior
-medium effort, and overseer preserves Sol/high. Existing headings—including
-intentionally blank headings—are never rewritten, so an upgrade cannot
-silently replace a deployment choice. A version-only private
+medium effort, and overseer preserves Sol/high. Missing Claude lanes receive
+the provider-compatible Opus/high curator and source-discovery plus Sonnet/high browse baselines
+rather than inheriting a Codex model. Existing headings—including intentionally
+blank headings—are never rewritten, so an upgrade cannot silently replace a
+deployment choice. A version-only private
 `.phone-config-bootstrap.json`, atomically written mode-`0600` beside
 `config.md`, records the applied migration through the production
 `runtime/data` symlink without storing route values.
@@ -274,6 +313,21 @@ curator, or overseer route while the qualifying harnesses are unavailable. It
 never drives an app, edits product code or committed instructions, or launches
 a development agent on the phone. Observable product or instruction failures
 become directional `code_fix` suggestions for host review.
+
+The pre-provider snapshot keeps the normal 49,152-byte postcondition strict.
+When, and only when, the exact canonical private
+`data/preference-insights.md` is valid UTF-8 text, owner-only mode `0600`,
+single-linked, larger than that limit, no larger than 1 MiB, and bound to the
+explicit canonical private data root, the snapshot performs one deterministic
+admission repair. It first durably preserves the exact source in a
+content-addressed private archive and writes a content-free JSON receipt. It
+then atomically installs a view of at most 32,768 bytes containing the heading
+outline, bounded beginning and recent excerpts, and an inline receipt naming
+the preserved source. Malformed, unsafe, differently named, or still larger
+files remain unavailable and cannot authorize provider spend. The scheduler
+snapshots the repaired inode, so the overseer must still perform its final
+atomic rewrite and pass the unchanged bounded postcondition. Archives and
+receipts are private migration state, not public defaults or model evidence.
 
 The overseer replaces overlapping daily reflection/dream work. Do not run three
 broad reviews over the same evidence.

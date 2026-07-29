@@ -7,7 +7,7 @@
 # Two paths, mirroring the outer parser's split:
 #   - FAST: tweet_clean.extract_quote handles the formats its regex already knows (free,
 #     network-free). That regex is frozen — it never grows for a new X format.
-#   - ESCALATION: rows the regex can't structure go to ONE bounded brain (codex) pass per
+#   - ESCALATION: rows the regex can't structure go to ONE bounded selected-provider pass per
 #     cycle instead of silently failing forever (the old behavior: re-run the same static
 #     regex every cycle and fix nothing). Brain-confirmed no-quote rows are marked
 #     (quoteExtract: "none") so they never re-escalate.
@@ -16,11 +16,13 @@
 # Rows that already carry a canonical quotedTweet (e.g. richer syndication data) are left alone.
 import json, os, re, sqlite3, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from provider_cli import run_provider, selected_provider
 from tweet_clean import extract_quote
 
 EVO = os.path.expanduser('~/evogent')
 MODEL = os.environ.get("EVOGENT_BROWSE_MODEL", "gpt-5.6-terra")
 EFFORT = os.environ.get("EVOGENT_BROWSE_REASONING", "low")
+PROVIDER = selected_provider()
 ESCALATE_CAP = 20        # rows per brain pass — the legacy set is finite and shrinking
 ESCALATE_BUDGET_S = 180
 HANDLE = re.compile(r'^[A-Za-z0-9_]{1,15}$')
@@ -167,11 +169,16 @@ Write JSON to {out_file}: a list, one element per ROW, in order:
 {{"row": 0, "own": "...", "quotedHandle": "..." or null, "quotedText": "..." or null}}
 Use the Write tool or bash to create the file."""
     try:
-        subprocess.run(["codex", "exec", "--model", MODEL, "-c",
-                        f"model_reasoning_effort={EFFORT}",
-                        "--dangerously-bypass-approvals-and-sandbox", "-"],
-                       cwd=EVO, input=(prompt + "\n\n" + numbered).encode(),
-                       timeout=ESCALATE_BUDGET_S, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run_provider(
+            prompt + "\n\n" + numbered,
+            provider=PROVIDER,
+            model=MODEL,
+            effort=EFFORT,
+            cwd=EVO,
+            timeout=ESCALATE_BUDGET_S,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception as e:
         print(f"quote escalation: brain call failed: {e}", file=sys.stderr)
     rows = None

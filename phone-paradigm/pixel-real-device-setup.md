@@ -28,24 +28,59 @@ versioned component set and restore compatible private data separately.
 
 ## Bring-up sequence
 
-1. Install and open Termux and Shizuku from trusted sources.
+1. Install and open Termux and Shizuku from trusted sources, then pair and start
+   Shizuku. Do not pre-grant a not-yet-installed Evogent package.
 2. Install the current Evogent APK and launch it once. A Play Protect scan,
    package-installer confirmation, or developer-verification screen is a
    foreground `user_action_required` step. Preserve the release transaction and
    resume it after fresh package proof; never disable or bypass the platform
-   control. During initial bootstrap before the versioned installer is
-   available, select Evogent as both the Home app and digital assistant through
-   Android's role UI.
-3. Enable the accessibility service, notification access, and any restricted
-   settings Android requires for a sideloaded accessibility tool. On Android
+   control. Android does not offer a scan on every install, but whenever it
+   offers or recommends one, the supported path requires the scan and prohibits
+   an install-without-scanning path. During initial bootstrap before the
+   versioned installer is available, select Evogent as both the Home app and
+   digital assistant through Android's role UI.
+3. After proving the exact installed APK bytes and version, authorize Evogent in
+   Shizuku and enable the accessibility service, notification access, and any
+   restricted settings Android requires for a sideloaded accessibility tool.
+   Where the current Android build requires Termux's **Display over other apps**
+   special access for the supported hidden-display mechanics, enable it visibly
+   through Android Settings. Ordinary boot and browse cycles only probe these
+   owner-granted capabilities; they defer after revocation rather than writing
+   secure settings or `appops`. On Android
    13+, return to the Evogent HOME surface after notification access is enabled:
    Evogent asks once for permission to post its own curated digest. Denial is
    respected and leaves every original notification untouched.
-4. Pair/start Shizuku and authorize Evogent.
-5. Enable the Android windowing capabilities required by the current OS build for
-   an app launched onto a shell-created virtual display to render. Verify this
-   with a harmless app; a created display ID alone is not proof.
-6. Install the current phone release with the versioned bundle installer. It
+4. Probe the three Android host-policy values through the exact reviewed helper
+   from the same hash-verified release payload:
+
+   ```bash
+   ~/phone-tools/provision-host-policy.sh --status
+   ```
+
+   If the status is not ready, explain the settings and obtain explicit owner
+   authorization before running:
+
+   ```bash
+   ~/phone-tools/provision-host-policy.sh --apply
+   ```
+
+   The helper saves the original values privately with mode 0600, changes only
+   the documented phantom-process/desktop/freeform settings, and proves
+   readback. Ordinary boot and browsing never apply them. Restore and prove the
+   saved values with:
+
+   ```bash
+   ~/phone-tools/provision-host-policy.sh --restore
+   ```
+
+   A bootstrap copy at this command path must come from the exact candidate
+   release and is replaced by the canonical versioned dispatch when installation
+   completes.
+5. Verify the resulting windowing capability with a harmless app on a
+   shell-created virtual display. A created display ID alone is not proof that
+   the app rendered.
+6. Resume or run the current phone release transaction with the versioned bundle
+   installer. It
    privately snapshots both prior role holders, proves the APK, assigns and
    verifies HOME and ASSISTANT, and restores both prior holders on rollback.
    The installed runtime starts through the canonical `device/start-prod.sh`
@@ -158,6 +193,16 @@ the Node server. Authentication stays in private device files. Android binary
 compatibility, DNS, and certificate handling belong in the provider wrapper and
 canonical start path, not in scattered one-off shell invocations.
 
+The standard phone backup never sweeps provider login directories, `.env*`, SSH
+configuration, or keys. Prefer fresh sign-in and a new SSH key after migration.
+Transfer authentication only when the owner explicitly chooses an exact,
+provider-supported export kept separately in encrypted storage.
+Device-local host-policy rollback, dedicated-wake authority, cycle signals, and
+live scheduler/source queues or leases are also never transferred. Keep the old
+scheduler offline after the final handoff snapshot before starting this phone.
+The final backup must prove and hold the canonical cycle fence across its
+database/state cut; it is not valid if taken through a live provider cycle.
+
 Provider stderr is diagnostic evidence. A task that exits without a valid
 stdout/provider response fails; stderr text must never become the delivered
 reply.
@@ -181,6 +226,12 @@ grants that its platform management mode authorizes; unavoidable consent and
 account sign-in remain visible setup actions. It must preserve per-device
 private state, the same local-data boundary, one scheduler owner,
 agent/mechanics separation, and the host-built release contract.
+
+That rule includes accessibility, notification access, and special app access
+such as **Display over other apps**. If the selected platform or OEM management
+mode does not explicitly authorize a required grant, fleet setup must present a
+visible owner step or declare the configuration unsupported; it must not
+automate Settings taps or silently restore a revoked grant.
 
 This is a roadmap, not a currently shipped installer. Repeating ADB sideloads or
 automating Settings taps across phones does not qualify as fleet provisioning.

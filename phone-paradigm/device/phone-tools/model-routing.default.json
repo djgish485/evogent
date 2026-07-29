@@ -11,6 +11,15 @@
       "fallbackModel": "gpt-5.6-terra",
       "fallbackEffort": "medium",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "providerRoutes": {
+        "claude": {
+          "modelSections": ["Claude Browse Model"],
+          "effortSections": ["Claude Browse Reasoning"],
+          "fallbackModel": "claude-sonnet-4-6",
+          "fallbackEffort": "high",
+          "allowedEfforts": ["low", "medium", "high", "xhigh", "max"]
+        }
+      },
       "qualificationRequired": true,
       "persistentOverrideAllowed": false
     },
@@ -21,6 +30,15 @@
       "fallbackModel": "gpt-5.6-terra",
       "fallbackEffort": "medium",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "providerRoutes": {
+        "claude": {
+          "modelSections": ["Claude YouTube Browse Model", "Claude Browse Model"],
+          "effortSections": ["Claude YouTube Browse Reasoning", "Claude Browse Reasoning"],
+          "fallbackModel": "claude-sonnet-4-6",
+          "fallbackEffort": "high",
+          "allowedEfforts": ["low", "medium", "high", "xhigh", "max"]
+        }
+      },
       "qualificationRequired": true,
       "persistentOverrideAllowed": false
     },
@@ -31,6 +49,15 @@
       "fallbackModel": "gpt-5.6-sol",
       "fallbackEffort": "high",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "providerRoutes": {
+        "claude": {
+          "modelSections": ["Claude Curator Model"],
+          "effortSections": ["Claude Curator Reasoning", "Claude Reasoning Effort"],
+          "fallbackModel": "claude-opus-4-7",
+          "fallbackEffort": "high",
+          "allowedEfforts": ["low", "medium", "high", "xhigh", "max"]
+        }
+      },
       "qualificationRequired": true,
       "persistentOverrideAllowed": false
     },
@@ -41,6 +68,15 @@
       "fallbackModel": "gpt-5.6-sol",
       "fallbackEffort": "high",
       "allowedEfforts": ["low", "medium", "high", "xhigh"],
+      "providerRoutes": {
+        "claude": {
+          "modelSections": ["Claude Source Discovery Model"],
+          "effortSections": ["Claude Source Discovery Reasoning"],
+          "fallbackModel": "claude-opus-4-7",
+          "fallbackEffort": "high",
+          "allowedEfforts": ["low", "medium", "high", "xhigh", "max"]
+        }
+      },
       "qualificationRequired": false,
       "persistentOverrideAllowed": false
     },

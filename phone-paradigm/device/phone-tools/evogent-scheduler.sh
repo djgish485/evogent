@@ -72,6 +72,7 @@ SCHED_CONTRACT="$TOOLS/.curation-control"
 TASK_QUEUE="$TOOLS/durable_task_queue.py"
 SCHEDULED_TASK_ROOT="$EVO/data/.scheduler-tasks"
 CYCLE_FAILURE_BACKOFF_STATE="$TOOLS/.cycle-failure-backoff.json"
+CURATION_ATTEMPT_STATE="$TOOLS/.pending-curation-attempt.json"
 OVERSEER_STAMP="$TOOLS/.overseer-stamp"
 # One-release migration only: if the old comprehensive reflection already
 # completed today, do not add an overseer pass over the same evidence.
@@ -181,14 +182,20 @@ maintenance_hour(){
 }
 
 scheduled_task_wake_acquire() {
-  local label="$1"
+  local label="$1" wake_rc=0
   if control_wake_acquire; then
     SCHEDULED_WAKE_HELD=1
     return 0
+  else
+    wake_rc=$?
   fi
   [ "$CONTROL_WAKE_HELD" = 1 ] && SCHEDULED_WAKE_HELD=1
-  say "$label: scoped CPU wake lock unavailable — continuing without Doze protection"
-  return 1
+  if [ "$wake_rc" -eq 125 ]; then
+    say "$label: power_unprotected — owner policy has not opted this dedicated Termux install into scoped wake control"
+    return 0
+  fi
+  say "$label: scoped CPU wake acquisition failed (rc=$wake_rc) — provider dispatch deferred"
+  return 76
 }
 
 scheduled_task_wake_release() {
@@ -210,8 +217,15 @@ scheduled_task_wake_release() {
 run_due_overseer() {
   local ensured claim lease instruction route model effort route_origin prompt rc
   local transition action review_hour insights_before cadence_before output terminal_result
-  local provider_spend provider_spend_action
+  local provider_spend provider_spend_action nightly_admission nightly_action
+  local nightly_state nightly_due_at_ms
   review_hour=$(maintenance_hour)
+  if ! "$TOOLS/evo-health" >/dev/null 2>&1; then
+    say "overseer: authenticated local server unavailable — daily review remains due"
+    control_status_write overseer - degraded server_unavailable 0 76 \
+      "provider not claimed or launched"
+    return 2
+  fi
   # Boot deliberately keeps the native recovery surface and local web server
   # available when private config bootstrap fails. Every provider lane must
   # still re-prove that bootstrap independently before claiming or spending.
@@ -241,15 +255,57 @@ run_due_overseer() {
       control_status_write overseer - failed ledger_failure 0 2 "ensure-nightly failed"
       return 2
     }
+  # ensure-nightly intentionally creates today's queued record before its local due hour.
+  # Parse that exact task's dueAtMs and durable queued/leased/terminal state before touching
+  # the process-global Termux wake reference. A live lease, terminal day, or future boundary
+  # is model-free idle state; an expired lease is due recovery. The wake still precedes the
+  # atomic claim whenever a queued provider launch is actually due.
+  nightly_admission=$(printf '%s' "$ensured" | python3 "$TOOLS/scheduler_timing.py" \
+    --nightly-admission-root "$SCHEDULED_TASK_ROOT" 2>>"$LOG") || {
+      say "overseer-ledger: exact nightly due/state authority could not be parsed"
+      control_status_write overseer - failed ledger_failure 0 2 \
+        "provider not claimed; nightly due/state authority invalid"
+      return 2
+    }
+  IFS=$'\t' read -r nightly_action nightly_state nightly_due_at_ms \
+    <<< "$nightly_admission"
+  case "$nightly_action:$nightly_state" in
+    not_due:queued|leased:leased|terminal:acknowledged|terminal:quarantined)
+      return 0
+      ;;
+    due:queued|due_recovery:leased)
+      ;;
+    *)
+      say "overseer-ledger: unexpected nightly admission state"
+      control_status_write overseer - failed ledger_failure 0 2 \
+        "provider not claimed; nightly admission state invalid"
+      return 2
+      ;;
+  esac
+  [[ "$nightly_due_at_ms" =~ ^[0-9]+$ ]] || {
+    say "overseer-ledger: nightly due boundary is invalid"
+    control_status_write overseer - failed ledger_failure 0 2 \
+      "provider not claimed; nightly due boundary invalid"
+    return 2
+  }
+  if ! scheduled_task_wake_acquire overseer; then
+    control_status_write overseer - degraded wake_acquire_failed 0 76 \
+      "daily review remains due; provider not claimed or launched"
+    scheduled_task_wake_release || true
+    return 2
+  fi
   claim=$(python3 "$TASK_QUEUE" claim --root "$SCHEDULED_TASK_ROOT" \
     --kind oversee --owner "$CONTROL_OWNER_ID" --lease-ms 1500000 2>>"$LOG") || {
       say "overseer-ledger: claim failed"
       control_status_write overseer - failed ledger_failure 0 2 "claim failed"
+      scheduled_task_wake_release
       return 2
     }
   lease=$(printf '%s' "$claim" | python3 -c 'import json,sys;print((json.load(sys.stdin) or {}).get("leasePath") or "")' 2>/dev/null)
-  [ -n "$lease" ] || return 0
-  scheduled_task_wake_acquire overseer || true
+  if [ -z "$lease" ]; then
+    scheduled_task_wake_release
+    return 0
+  fi
 
   instruction="$EVO/.claude/commands/oversee.md"
   control_status_write overseer - running daily_due "" "" \
@@ -608,17 +664,24 @@ while true; do
   [ "$NEXT_MIN" -gt "$MAX" ] 2>/dev/null && NEXT_MIN="$MAX"
 
   # A process restart is not a content signal. Seed the first dispatch from the durable
-  # successful-cycle completion stamp, so deploy/watchdog restarts cannot bypass the configured
-  # minimum interval. No stamp or an overdue stamp remains immediately due.
+  # completed-cycle stamp, so deploy/watchdog restarts cannot bypass the configured minimum
+  # interval merely because a source or owner-controlled capability was degraded. A pre-upgrade
+  # successful-cycle stamp is also proof that the old cycle completed; use it only when the new
+  # authority does not exist. No stamp or an overdue stamp remains immediately due.
   if [ "$INITIAL_FLOOR_CHECKED" = 0 ]; then
     INITIAL_FLOOR_CHECKED=1
+    STARTUP_COMPLETION_STAMP="$TOOLS/.last-completed-cycle"
+    if [ ! -f "$STARTUP_COMPLETION_STAMP" ] &&
+       [ -f "$TOOLS/.last-successful-cycle" ]; then
+      STARTUP_COMPLETION_STAMP="$TOOLS/.last-successful-cycle"
+    fi
     while true; do
       INITIAL_REMAIN=$(python3 "$TOOLS/scheduler_timing.py" \
-        --completion-stamp "$TOOLS/.last-successful-cycle" \
+        --completion-stamp "$STARTUP_COMPLETION_STAMP" \
         --minimum-minutes "$MIN" 2>/dev/null || echo 0)
       [[ "$INITIAL_REMAIN" =~ ^[0-9]+$ ]] || INITIAL_REMAIN=0
       [ "$INITIAL_REMAIN" -gt 0 ] || break
-      say "startup respects last successful cycle: next dispatch in $(( INITIAL_REMAIN / 60 ))m (minimum ${MIN}m)"
+      say "startup respects last completed cycle: next dispatch in $(( INITIAL_REMAIN / 60 ))m (minimum ${MIN}m)"
       SLICE=$(( INITIAL_REMAIN < 60 ? INITIAL_REMAIN : 60 ))
       sleep "$SLICE"
       control_lock_renew "$SCHED_LOCK" || true
@@ -641,9 +704,30 @@ while true; do
   else
     CYCLE_TRIGGER=scheduler
   fi
-  CURATION_CYCLE_ID=$(python3 -c 'import uuid; print("phone-curation-" + str(uuid.uuid4()))' 2>/dev/null)
+  CURATION_CYCLE_CANDIDATE=$(python3 -c \
+    'import uuid; print("phone-curation-" + str(uuid.uuid4()))' 2>/dev/null)
+  if ! [[ "$CURATION_CYCLE_CANDIDATE" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$ ]]; then
+    say "could not mint a valid curation cycle candidate; request claim retained"
+    sleep 60
+    continue
+  fi
+  # This fsync'd private attempt record outlives the 20-minute observer. The server may run the
+  # accepted user_chat task for up to 24 hours, so every retry and scheduler restart must reuse
+  # the same curationCycleId until its exact receipt is reconciled. A fresh random candidate is
+  # used only when no unresolved attempt exists.
+  CURATION_ATTEMPT_RECORD=$(python3 "$TOOLS/scheduler_timing.py" \
+    --curation-attempt-state "$CURATION_ATTEMPT_STATE" \
+    --curation-attempt-action ensure \
+    --curation-attempt-cycle-id "$CURATION_CYCLE_CANDIDATE" 2>>"$LOG") || {
+      say "could not establish durable curation attempt identity; request claim retained"
+      sleep 60
+      continue
+    }
+  IFS=$'\t' read -r CURATION_CYCLE_ID CURATION_BOUND_GENERATION \
+    CURATION_TASK_REQUEST_ID \
+    <<< "$CURATION_ATTEMPT_RECORD"
   if ! [[ "$CURATION_CYCLE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$ ]]; then
-    say "could not mint a valid curation cycle identity; request claim retained"
+    say "durable curation attempt returned an invalid identity; request claim retained"
     sleep 60
     continue
   fi
@@ -651,14 +735,40 @@ while true; do
     "dispatching cycle trigger=$CYCLE_TRIGGER" || exit 70
   EVOGENT_CYCLE_TRIGGER="$CYCLE_TRIGGER" \
     EVOGENT_CURATION_CYCLE_ID="$CURATION_CYCLE_ID" \
+    EVOGENT_CURATION_ATTEMPT_STATE="$CURATION_ATTEMPT_STATE" \
     bash "$CYCLE"
   CYCLE_RC=$?
   if [ "$CYCLE_RC" -eq 0 ]; then
-    [ -n "$CONTROL_CYCLE_CLAIM" ] && control_ack_cycle_claims
-    if ! python3 "$TOOLS/scheduler_timing.py" \
-      --cycle-failure-state "$CYCLE_FAILURE_BACKOFF_STATE" \
-      --cycle-failure-action clear >/dev/null 2>>"$LOG"; then
-      say "cycle succeeded, but durable failure-backoff retirement could not be confirmed"
+    if python3 "$TOOLS/scheduler_timing.py" \
+        --curation-attempt-state "$CURATION_ATTEMPT_STATE" \
+        --curation-attempt-action clear \
+        --curation-attempt-cycle-id "$CURATION_CYCLE_ID" \
+        >/dev/null 2>>"$LOG"; then
+      [ -n "$CONTROL_CYCLE_CLAIM" ] && control_ack_cycle_claims
+      if ! python3 "$TOOLS/scheduler_timing.py" \
+        --cycle-failure-state "$CYCLE_FAILURE_BACKOFF_STATE" \
+        --cycle-failure-action clear >/dev/null 2>>"$LOG"; then
+        say "cycle succeeded, but durable failure-backoff retirement could not be confirmed"
+      fi
+    else
+      # Keep the exact identity and any claimed signal until retirement succeeds. Re-running
+      # the cycle can reconcile its receipt model-free; it cannot enqueue this id twice.
+      CYCLE_RC=76
+      say "cycle completed, but exact curation attempt retirement failed; identity retained"
+    fi
+  elif [ "$CYCLE_RC" -eq 77 ]; then
+    # An exact failed receipt or the bound exact server task's terminal state proves no old
+    # provider can still be running. The cycle durably latched that exact failed editorial
+    # generation before returning 77, so retiring this identity cannot reopen unchanged spend.
+    if python3 "$TOOLS/scheduler_timing.py" \
+        --curation-attempt-state "$CURATION_ATTEMPT_STATE" \
+        --curation-attempt-action clear \
+        --curation-attempt-cycle-id "$CURATION_CYCLE_ID" \
+        >/dev/null 2>>"$LOG"; then
+      say "terminal failed curation attempt reconciled; fresh identity requires changed inputs or an explicit manual retry before spend"
+    else
+      CYCLE_RC=76
+      say "terminal curation identity could not be retired; retained without another provider launch"
     fi
   else
     say "cycle exited non-zero (rc=$CYCLE_RC); request claim retained for retry"

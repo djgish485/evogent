@@ -36,6 +36,16 @@ require_command unzip
 require_command openssl
 require_command ps
 
+file_mode() {
+  python3 - "$1" <<'PY'
+import os
+import stat
+import sys
+
+print(f"{stat.S_IMODE(os.stat(sys.argv[1], follow_symlinks=False).st_mode):o}")
+PY
+}
+
 prepare_phone_live_defaults() {
   local defaults_data="$1"
   python3 - "$defaults_data" <<'PY'
@@ -484,11 +494,6 @@ release_build_lock() {
 trap release_build_lock EXIT
 acquire_build_lock
 
-if [ -z "${JAVA_HOME:-}" ] && [ -d /usr/local/opt/openjdk@11 ]; then
-  export JAVA_HOME=/usr/local/opt/openjdk@11
-  export PATH="$JAVA_HOME/bin:$PATH"
-fi
-
 assert_clean_source() {
   local status
   status="$(git status --porcelain=v1 --untracked-files=all)"
@@ -499,8 +504,58 @@ assert_clean_source() {
   fi
 }
 
+resolve_android_sdk_root() {
+  local candidate="" sdkmanager=""
+  if [ "${EVOGENT_ANDROID_SDK_ROOT+x}" = x ]; then
+    candidate="$EVOGENT_ANDROID_SDK_ROOT"
+    [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+    (cd "$candidate" && pwd -P)
+    return
+  fi
+  if [ "${ANDROID_SDK_ROOT+x}" = x ]; then
+    candidate="$ANDROID_SDK_ROOT"
+    [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+    (cd "$candidate" && pwd -P)
+    return
+  fi
+  if [ "${ANDROID_HOME+x}" = x ]; then
+    candidate="$ANDROID_HOME"
+    [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ] || return 1
+    (cd "$candidate" && pwd -P)
+    return
+  fi
+  for candidate in \
+      "$HOME/Library/Android/sdk" \
+      "$HOME/Android/Sdk" \
+      "$HOME/Android/sdk"; do
+    if [ -d "$candidate/build-tools" ] && [ -d "$candidate/platforms" ]; then
+      (cd "$candidate" && pwd -P)
+      return
+    fi
+  done
+  sdkmanager="$(command -v sdkmanager 2>/dev/null || true)"
+  [ -n "$sdkmanager" ] || return 1
+  python3 - "$sdkmanager" <<'PY'
+import pathlib
+import sys
+
+tool = pathlib.Path(sys.argv[1]).resolve()
+for parent in tool.parents:
+    if (parent / "build-tools").is_dir() and (parent / "platforms").is_dir():
+        print(parent)
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 find_android_tool() {
-  local name="$1" sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
+  local name="$1" sdk="" override="${EVOGENT_ANDROID_BUILD_TOOLS_DIR:-}"
+  if [ -n "$override" ]; then
+    [ -x "$override/$name" ] || return 1
+    printf '%s\n' "$override/$name"
+    return
+  fi
+  sdk="$(resolve_android_sdk_root)" || return 1
   python3 - "$sdk" "$name" <<'PY'
 import glob
 import os
@@ -1317,7 +1372,7 @@ EMBEDDED_CA="$WORK_DIR/evogent-phone-ca.pem"
     echo "phone release: Android build did not emit regular TLS certificate/key artifacts" >&2
     exit 66
   }
-[ "$(stat -f '%Lp' "$TLS_KEY")" = 600 ] || {
+[ "$(file_mode "$TLS_KEY")" = 600 ] || {
   echo "phone release: Android TLS private key permissions must be 0600" >&2
   exit 66
 }
@@ -1468,6 +1523,7 @@ git archive "$SOURCE_COMMIT" \
   phone-paradigm/device/start-prod.sh \
   phone-paradigm/device/restart-evo.sh \
   phone-paradigm/device/install-release.sh \
+  phone-paradigm/device/attest-install-review.py \
   phone-paradigm/device/forward-rescue.sh \
   phone-paradigm/device/android-role-state.py \
   phone-paradigm/device/dependency-tree-state.py \
@@ -1690,6 +1746,7 @@ manifest = {
         "device/start-prod.sh",
         "device/restart-evo.sh",
         "device/install-release.sh",
+        "device/attest-install-review.py",
         "device/forward-rescue.sh",
         "device/android-role-state.py",
         "device/dependency-tree-state.py",
@@ -1750,7 +1807,7 @@ with tarfile.open(sys.argv[1], "r:gz") as bundle:
                     f"phone release: symlink escapes release: {name!r}",
                 )
 PY
-[ "$(stat -f '%Lp' "$ARCHIVE")" = 600 ] || {
+[ "$(file_mode "$ARCHIVE")" = 600 ] || {
   echo "phone release: archive containing TLS key is not mode 0600" >&2
   exit 66
 }
@@ -1761,7 +1818,7 @@ PY
 )"
 printf '%s  %s\n' "$ARCHIVE_SHA256" "$(basename "$ARCHIVE")" > "$ARCHIVE.sha256"
 chmod 600 "$ARCHIVE.sha256"
-[ "$(stat -f '%Lp' "$ARCHIVE.sha256")" = 600 ] || {
+[ "$(file_mode "$ARCHIVE.sha256")" = 600 ] || {
   echo "phone release: archive checksum sidecar is not mode 0600" >&2
   exit 66
 }

@@ -24,15 +24,20 @@ drilled is a guess — this command is how guards stay real.
 
 1. **Server death**: `pkill -9 -x node` → watchdog must restore within ~3 min (2 failed 60s
    checks → evogent-boot.sh). Verify `/api/feed` returns 200 again.
-2. **Scheduler death + stale cycle**: `tmux kill-session -t evo-sched` and age
-   `~/phone-tools/last-cycle-newitems` mtime past 8h → watchdog's cycle-liveness must restart
-   evo-sched and ship the `cycle-liveness` card. Delete the card after; stamp self-resets.
+2. **Scheduler death + stale cycle**: `tmux kill-session -t '=evo-sched'` and, on an isolated
+   test install, age `~/phone-tools/.last-completed-cycle` beyond the configured maximum plus
+   completion grace → watchdog's cycle-liveness must restart evo-sched and ship the
+   `cycle-liveness` card. Delete the card after; the next receipt-valid completion advances the
+   stamp. A stale full-quality-success stamp alone must not signal or dispatch work.
 3. **Judgment-file corruption**: back up `data/account-tiers.json` (to `~/`, NOT `/tmp` —
    Termux has no /tmp), overwrite with invalid JSON → server must keep serving (graceful
    degradation) AND `verify-intents.py` must FAIL its `datafile-*` check. Restore the file.
-4. **a11y revocation**: `settings put secure enabled_accessibility_services none` via rish →
-   `a11y-heal.sh` must re-arm; confirm with `a11y-check.sh` (live probe, not the settings
-   string). The cycle runs heal automatically, so real revocations self-heal within a cycle.
+4. **a11y revocation**: do not induce this on the owner's live phone under the standing
+   display-0 rule. On an isolated test device, or during an explicitly owner-attended
+   physical acceptance pass, revoke Evogent in Android's visible Accessibility settings.
+   `a11y-heal.sh` must emit the typed owner action and leave the service revoked; app-backed
+   work must defer. Restore only through the visible Settings control, then confirm with
+   `a11y-check.sh` (live authenticated probe, not the settings string).
 5. **Missing browse recipe**: move a `browse-*.txt` aside → the cycle must say
    "prompt file missing, skipping" and keep going; harvest_watch counts the source barren and
    alarms at 3 cycles. Restore immediately (verify the skip line only).

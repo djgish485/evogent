@@ -55,8 +55,14 @@ reversible actions.
    life-admin candidates inside this same slate decision, alongside all other
    candidates. The skill is not a separate publisher or scheduled sweep, and
    zero life-admin output is valid.
-3. Inspect the full eligible pool and assess each candidate on substance,
-   private relevance, novelty, source quality, and coherence.
+3. Read raw cache candidates through
+   `/api/internal/browse-cache/items?eligibleForCuration=1`. The eligibility
+   mode uses the server's current time and returns the complete stable set of
+   unexpired, unseen rows that are not already in the feed; legacy source,
+   limit, and ordering flags cannot cap or broaden it. Do not substitute the
+   legacy broad cache listing: `unseenFirst` alone only changes ordering.
+   Inspect the eligible pool plus carry-forward and assess each candidate on
+   substance, private relevance, novelty, source quality, and coherence.
 4. Submit selected candidates through `/api/internal/curate/submit`.
 5. Put up to 25 qualified near-misses on `/api/internal/curate/bench`. Each
    entry must be the exact submit-ready item you would be willing to surface
