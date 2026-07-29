@@ -41,7 +41,7 @@ public final class EvogentNotificationListenerService extends NotificationListen
     private static final String TAG = "EvogentNotif";
     private static final String INGEST_URL = EvogentSecurityPolicy.PHONE_NOTIFICATION_INGEST_URL;
     private static final String REMOVE_URL = EvogentSecurityPolicy.PHONE_NOTIFICATION_REMOVE_URL;
-    private static final String DIGEST_CHANNEL_ID = "evogent_curated_notifications_v2_silent";
+    static final String DIGEST_CHANNEL_ID = "evogent_curated_notifications_v2_silent";
     private static final int DIGEST_NOTIFICATION_ID = 0x45564f4e;
     private static final int MAX_LIVE_PENDING_EVENTS = 16;
     private static final int MAX_HISTORICAL_PENDING_EVENTS = 128;

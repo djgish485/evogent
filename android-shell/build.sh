@@ -221,6 +221,8 @@ mkdir -p build/test
     src/net/dangish/evogent/EvogentHomeNavigationPolicy.java \
     src/net/dangish/evogent/EvogentHomeChoicePolicy.java \
     src/net/dangish/evogent/EvogentHomeAvailabilityGate.java \
+    src/net/dangish/evogent/EvogentAndroidHomeResolution.java \
+    src/net/dangish/evogent/EvogentMainFrameLoadPolicy.java \
     src/net/dangish/evogent/EvogentAssistantLaunchGate.java \
     src/net/dangish/evogent/EvogentAssistantContextStore.java \
     src/net/dangish/evogent/EvogentAssistantTraversalPolicy.java \
@@ -237,6 +239,8 @@ mkdir -p build/test
     tests/EvogentHomeNavigationPolicyTest.java \
     tests/EvogentHomeChoicePolicyTest.java \
     tests/EvogentHomeAvailabilityGateTest.java \
+    tests/EvogentAndroidHomeResolutionTest.java \
+    tests/EvogentMainFrameLoadPolicyTest.java \
     tests/EvogentAssistantLaunchGateTest.java \
     tests/EvogentAssistantContextStoreTest.java \
     tests/EvogentAccessibilityActionPolicyTest.java \
@@ -252,6 +256,8 @@ mkdir -p build/test
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeNavigationPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeChoicePolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentHomeAvailabilityGateTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentAndroidHomeResolutionTest
+"$JAVA" -cp build/test net.dangish.evogent.EvogentMainFrameLoadPolicyTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantLaunchGateTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAssistantContextStoreTest
 "$JAVA" -cp build/test net.dangish.evogent.EvogentAccessibilityActionPolicyTest

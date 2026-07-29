@@ -224,7 +224,19 @@ may show a ranked multi-app summary. Detailed preview uses
 `VISIBILITY_PUBLIC` only after the user chooses it. Evogent requests
 notification-posting permission once, only after notification-listener access
 is already enabled; a denial is not nagged and disables replacement rather than
-hiding originals.
+hiding originals. The authenticated HOME shell exposes a content-free native
+capability status only to the current process-proved top document. When Observe
+or Curated shade is selected but listener access is unavailable, Settings →
+Phone Alerts shows an accessible degraded-state warning with an explicit
+Android notification-access-settings action. When Curated shade is selected, a
+denied posting permission, disabled app notifications, or a disabled digest
+channel has a separate Android app-notification-settings action. Returning from
+either platform-owned screen refreshes the native status. Focus, page-show,
+visibility, and late authenticated-bridge-ready events are coalesced into at
+most one native capability proof per short event burst, and an unchanged
+content-free snapshot does not update React state. Recovery never resets the
+one-shot prompt receipt, silently grants a permission, or changes the safe
+preservation fallback.
 
 ## Private data and retention
 
@@ -345,13 +357,24 @@ Automated checks must cover:
 - settings grant and revocation synchronizing the temporary file, final inode,
   and parent directory before success;
 - server failure, digest failure, missing permission, stale receipt, and changed
-  generation preserving the original; and
-- accessible controls for modes, lock-screen preview, and per-app preservation.
+  generation preserving the original;
+- accessible controls for modes, lock-screen preview, and per-app preservation;
+  and
+- authenticated native capability reporting, an accessible Curated-mode
+  degraded warning, supported listener-access and posting-settings recovery
+  actions, one coalesced capability proof per return-event burst, and refreshed
+  status after returning from Android without an automatic re-prompt or grant.
 
 Physical verification uses benign synthetic notifications, not private content.
 At the glass:
 
-1. enable notification access, then verify the one-time Android posting request;
+1. enable notification access, then deny the one-time Android posting request;
+   choose Curated shade and verify Phone Alerts reports the exact degraded
+   posting state while every original remains; use its Android notification
+   settings action, grant posting, return, and verify the warning clears without
+   another app-driven prompt; then disable listener access, verify the distinct
+   notification-access action appears, restore access, and verify one return
+   event burst produces one capability refresh;
 2. in Observe, post an ordinary notification and confirm both the unchanged
    Android original and the local Evogent card;
 3. choose Curated shade and private preview, then post a fresh ordinary,

@@ -2,6 +2,7 @@ package net.dangish.evogent;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -19,9 +20,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.webkit.JsPromptResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -41,6 +44,10 @@ import org.json.JSONObject;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Evogent home screen: renders the real Evogent web UI from the phone's loopback server.
@@ -82,10 +89,18 @@ public class MainActivity extends Activity {
             + "value:Object.freeze({"
             + "openExternal:function(url){return call('openExternal',[String(url)]);},"
             + "openAndroidHome:function(){return call('openAndroidHome',[]);},"
+            + "getNotificationCapability:function(){"
+            + "return call('getNotificationCapability',[]);},"
+            + "openNotificationSettings:function(){"
+            + "return call('openNotificationSettings',[]);},"
+            + "openNotificationListenerSettings:function(){"
+            + "return call('openNotificationListenerSettings',[]);},"
             + "dismissPhoneNotification:function(eventId){"
             + "return call('dismissPhoneNotification',[String(eventId)]);}"
             + "}),writable:false,configurable:false});"
             + "})();";
+    private static final String NATIVE_BRIDGE_READY_EVENT =
+            "evogent:native-bridge-ready";
     private static final String ASSISTANT_COMPOSER_FACADE_SCRIPT =
             "(function(){'use strict';"
             + "if(window.top!==window||window.EvogentOverlay)return;"
@@ -113,9 +128,11 @@ public class MainActivity extends Activity {
     private static final long RUNTIME_REVIVE_DEBOUNCE_MS = 2000L;
     // A HOME gesture must never strand the user behind a slow/hung private loopback process.
     private static final long SYSTEM_HOME_READY_TIMEOUT_MS = 2500L;
+    private static final long SYSTEM_HOME_RESOLUTION_POLL_MS = 25L;
     private static final Pattern YT_ID = Pattern.compile(
             "(?:v=|/shorts/|youtu\\.be/|/embed/)([A-Za-z0-9_-]{11})");
     private WebView webView;
+    private FrameLayout activityRoot;
     private View recoverySurface;
     private TextView recoveryTitle;
     private TextView recoveryMessage;
@@ -142,12 +159,34 @@ public class MainActivity extends Activity {
     private boolean backInFlight;
     private boolean pendingBackPress;
     private long lastRuntimeReviveRequestMs;
-    private long systemHomeAvailabilityRequest;
+    private volatile long systemHomeAvailabilityRequest;
+    private long nextMainFrameLoadGeneration;
+    private EvogentMainFrameLoadPolicy.Binding pendingMainFrameLoad;
+    private EvogentMainFrameLoadPolicy.Binding activeMainFrameLoad;
+    private EvogentMainFrameLoadPolicy.Binding readyMainFrameLoad;
     private SharedPreferences homeChoicePreferences;
-    private boolean destroyed;
+    private volatile boolean destroyed;
     private boolean pendingNotificationView;
+    private boolean pendingExplicitEvogentRefresh;
+    private boolean pendingSystemHomeResume;
+    private boolean shizukuReceiverRegistered;
+    private final ScheduledThreadPoolExecutor systemHomeWatchdog =
+            createSystemHomeWatchdog();
+    private volatile ScheduledFuture<?> systemHomeWatchdogFuture;
+    private final EvogentAndroidHomeResolution<ComponentName> androidHomeResolution =
+            new EvogentAndroidHomeResolution<ComponentName>();
+    private volatile long systemHomeDeadlineRequest;
+    private volatile long systemHomeDeadlineElapsedMs;
+    private boolean nativeRecoveryHasDrawn;
     private final Runnable systemHomeReadyTimeout = new Runnable() {
         @Override public void run() {
+            if (!resumed) {
+                // onNewIntent may be delivered while this singleTask Activity is still paused.
+                // Retire the expired request, but keep the content-free pending intent so onResume
+                // can arm a fresh full availability budget instead of trusting a cached document.
+                cancelSystemHomeAvailabilityWait();
+                return;
+            }
             fallBackFromUnavailableSystemHome(
                     systemHomeAvailabilityRequest,
                     "authenticated surface readiness timed out");
@@ -170,7 +209,21 @@ public class MainActivity extends Activity {
      * transitions so returning from a native source preserves page and scroll state.
      * HOME's explicit reset path remains separate.
      */
-    private boolean resumed = false;
+    private volatile boolean resumed = false;
+
+    private static ScheduledThreadPoolExecutor createSystemHomeWatchdog() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(
+                1,
+                new ThreadFactory() {
+                    @Override public Thread newThread(Runnable work) {
+                        Thread thread = new Thread(work, "evogent-home-watchdog");
+                        thread.setDaemon(true);
+                        return thread;
+                    }
+                });
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
 
     /** Root document for this hardened WebView host. The assistant overrides only this URL. */
     protected String rootDocumentUrl() {
@@ -207,6 +260,14 @@ public class MainActivity extends Activity {
         return supportsAssistantComposerBridge()
                 ? ASSISTANT_COMPOSER_FACADE_SCRIPT
                 : SHELL_FACADE_SCRIPT;
+    }
+
+    private String authenticatedFallbackFacadeReadyScript() {
+        return "(function(){'use strict';try{"
+                + nativeFacadeScript()
+                + "window.dispatchEvent(new Event('" + NATIVE_BRIDGE_READY_EVENT + "'));"
+                + "return 'ready';"
+                + "}catch(e){return 'error';}})();";
     }
 
     /**
@@ -270,14 +331,59 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        maybeRequestNotificationPermissionOnce();
         resumed = true;
+        final boolean resumePendingSystemHome =
+                pendingSystemHomeResume && !pendingExplicitEvogentRefresh;
+        long pendingHomeRequest = 0L;
+        if (resumePendingSystemHome) {
+            pendingSystemHomeResume = false;
+            // Always give a HOME intent received while paused one new foreground budget. Replacing
+            // its old token and entering foreground are atomic, so an expired background watchdog
+            // cannot launch in between those lifecycle actions.
+            armSystemHomeAvailabilityWait(true);
+            pendingHomeRequest = systemHomeAvailabilityRequest;
+        } else {
+            homeAvailability.enterForeground();
+        }
+        if (pendingExplicitEvogentRefresh) {
+            pendingExplicitEvogentRefresh = false;
+            refreshExplicitEvogentLaunch();
+        } else if (resumePendingSystemHome) {
+            continueSystemHomeInvocation(pendingHomeRequest);
+        }
+        maybeRequestNotificationPermissionOnce();
         main.removeCallbacks(periodicProofRefresh);
         main.postDelayed(periodicProofRefresh, PERIODIC_REFRESH_MS);
         if (isCurrentFeedDocumentAuthenticated()
                 && !hasFreshServerProof(FOREGROUND_REFRESH_AFTER_MS)
                 && !authInFlight) {
             refreshCurrentDocumentAuthentication(null);
+        }
+        resumeAutomaticRecoveryIfNeeded();
+    }
+
+    /**
+     * onPause cancels every automatic retry. Resume only after the native recovery surface has
+     * actually drawn, so the first Activity resume cannot move WebView/provider work ahead of the
+     * first usable native frame.
+     */
+    private void resumeAutomaticRecoveryIfNeeded() {
+        if (destroyed
+                || !resumed
+                || !nativeRecoveryHasDrawn
+                || authInFlight
+                || !homeNavigation.shouldShowRecoverySurface()) return;
+        long availabilityRequest = systemHomeAvailabilityRequest;
+        if (availabilityRequest != 0L
+                && !homeAvailability.isActive(availabilityRequest)) {
+            // A committed fallback launch owns cleanup; a normal explicit/new HOME intent will
+            // cancel or supersede it before asking Evogent to load again.
+            return;
+        }
+        if (webView == null) {
+            beginColdWebViewAuthentication(0L, availabilityRequest);
+        } else if (!isCurrentFeedDocumentAuthenticated()) {
+            authenticateAndLoad(rootDocumentUrl(), 0L, availabilityRequest);
         }
     }
 
@@ -316,9 +422,121 @@ public class MainActivity extends Activity {
                 NOTIFICATION_PERMISSION_REQUEST_CODE);
     }
 
+    private String getNotificationCapability() {
+        if (!isHomeSurface()) return null;
+        try {
+            NotificationManager notifications =
+                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            boolean digestSupported = Build.VERSION.SDK_INT >= 26;
+            boolean listenerAccessGranted =
+                    notificationListenerAccessGranted(notifications);
+            boolean postingPermissionGranted = Build.VERSION.SDK_INT < 33
+                    || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                            == PackageManager.PERMISSION_GRANTED;
+            boolean appNotificationsEnabled =
+                    notifications != null && notifications.areNotificationsEnabled();
+            boolean digestChannelEnabled = false;
+            if (digestSupported && notifications != null) {
+                NotificationChannel channel = notifications.getNotificationChannel(
+                        EvogentNotificationListenerService.DIGEST_CHANNEL_ID);
+                // The listener creates the channel on first publication. Absence is therefore
+                // usable; only an existing channel explicitly disabled by the user is blocked.
+                digestChannelEnabled = channel == null
+                        || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+            }
+            boolean canPostDigest = digestSupported
+                    && listenerAccessGranted
+                    && postingPermissionGranted
+                    && appNotificationsEnabled
+                    && digestChannelEnabled;
+            return new JSONObject()
+                    .put("schemaVersion", 1)
+                    .put("digestSupported", digestSupported)
+                    .put("listenerAccessGranted", listenerAccessGranted)
+                    .put("postingPermissionGranted", postingPermissionGranted)
+                    .put("appNotificationsEnabled", appNotificationsEnabled)
+                    .put("digestChannelEnabled", digestChannelEnabled)
+                    .put("canPostDigest", canPostDigest)
+                    .toString();
+        } catch (Throwable error) {
+            Log.w("EvogentMain", "notification capability unavailable");
+            return null;
+        }
+    }
+
+    private boolean notificationListenerAccessGranted(
+            NotificationManager notifications) {
+        ComponentName listener = new ComponentName(
+                this,
+                EvogentNotificationListenerService.class);
+        if (Build.VERSION.SDK_INT >= 27) {
+            return notifications != null
+                    && notifications.isNotificationListenerAccessGranted(listener);
+        }
+        String enabled = Settings.Secure.getString(
+                getContentResolver(),
+                "enabled_notification_listeners");
+        if (enabled == null || enabled.trim().isEmpty()) return false;
+        for (String flattened : enabled.split(":")) {
+            ComponentName candidate = ComponentName.unflattenFromString(flattened);
+            if (listener.equals(candidate)) return true;
+        }
+        return false;
+    }
+
+    private boolean openNotificationSettings() {
+        if (!isHomeSurface()) return false;
+        Intent notificationSettings = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+        try {
+            startActivity(notificationSettings);
+            return true;
+        } catch (Throwable unavailable) {
+            try {
+                startActivity(new Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+                return true;
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+    }
+
+    private String openNotificationListenerSettings() {
+        if (!isHomeSurface()) return "unavailable";
+        try {
+            startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+            return "opened";
+        } catch (Throwable unavailable) {
+            try {
+                // Some managed/vendor builds omit the dedicated activity. General Settings is a
+                // safe escape which cannot grant access on Evogent's behalf.
+                startActivity(new Intent(Settings.ACTION_SETTINGS));
+                return "opened";
+            } catch (Throwable ignored) {
+                return "unavailable";
+            }
+        }
+    }
+
     @Override
     protected void onPause() {
+        long availabilityRequest = systemHomeAvailabilityRequest;
+        boolean preserveCommittedFallback =
+                homeAvailability.leaveForeground(availabilityRequest);
         resumed = false;
+        if (!preserveCommittedFallback) {
+            // Leaving for an ordinary app abandons this HOME invocation. Its old watchdog must
+            // never pull the user back to stock HOME after they have moved on.
+            systemHomeAvailabilityRequest = 0L;
+            main.removeCallbacks(systemHomeReadyTimeout);
+            cancelSystemHomeWatchdog();
+        }
+        // Token-zero native recovery and assistant loads have retries too. Invalidate every
+        // automatic authentication attempt while backgrounded; onResume restarts only if needed.
+        ++authRequestId;
+        authInFlight = false;
         main.removeCallbacks(periodicProofRefresh);
         super.onPause();
     }
@@ -326,62 +544,72 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        boolean explicitEvogent = isHomeSurface() && isExplicitEvogentIntent(intent);
+        boolean systemHome = isHomeSurface() && isSystemHomeIntent(intent);
+        if (isHomeSurface()) {
+            // Supersede an old watchdog before routing or persisting this newer user intent.
+            cancelSystemHomeAvailabilityWait();
+            pendingExplicitEvogentRefresh = false;
+            pendingSystemHomeResume = false;
+        }
         setIntent(intent);
         captureNotificationViewIntent(intent);
-        boolean explicitEvogent = isHomeSurface() && isExplicitEvogentIntent(intent);
         if (isHomeSurface() && routeHomeIntent(intent)) {
-            cancelSystemHomeAvailabilityWait();
             return;
         }
-        boolean systemHome = isHomeSurface() && isSystemHomeIntent(intent);
         if (systemHome) {
             armSystemHomeAvailabilityWait();
-        } else {
-            // In particular, an explicit Evogent icon/action launch must not be redirected by a
-            // stale timeout from an earlier system-HOME invocation.
-            cancelSystemHomeAvailabilityWait();
         }
+        final long availabilityRequest =
+                systemHome ? systemHomeAvailabilityRequest : 0L;
         if (explicitEvogent) {
+            if (!resumed) {
+                pendingExplicitEvogentRefresh = true;
+                return;
+            }
             refreshExplicitEvogentLaunch();
             return;
         }
         dispatchPendingNotificationView();
-        if (intent == null || !Intent.ACTION_MAIN.equals(intent.getAction())
-                || !intent.hasCategory(Intent.CATEGORY_HOME) || webView == null) {
+        if (!systemHome) return;
+        if (!resumed) {
+            pendingSystemHomeResume = true;
+            return;
+        }
+        continueSystemHomeInvocation(availabilityRequest);
+    }
+
+    private void continueSystemHomeInvocation(long availabilityRequest) {
+        if (destroyed
+                || !resumed
+                || availabilityRequest == 0L
+                || availabilityRequest != systemHomeAvailabilityRequest
+                || !homeAvailability.isActive(availabilityRequest)) return;
+        if (webView == null) {
+            // A cold pre-WebView authentication may still be in flight. Supersede it so this
+            // exact HOME request owns readiness/fallback instead of borrowing an older token.
+            beginColdWebViewAuthentication(0L, availabilityRequest);
             return;
         }
         if (!isCurrentFeedDocumentAuthenticated()
-                || (systemHome && !isCurrentFeedDocumentTrusted())) {
+                || !isCurrentFeedDocumentTrusted()) {
             // A merely bound/in-flight document is not a usable HOME surface. Keep the fresh
             // availability request armed until the replacement load passes its post-load proof.
-            loadFeedRoot();
+            loadFeedRoot(availabilityRequest);
             return;
         }
         final boolean fullReset = resumed;
-        if (systemHome) {
-            final long availabilityRequest = systemHomeAvailabilityRequest;
-            refreshCurrentDocumentAuthentication(new Runnable() {
-                @Override public void run() {
-                    // A timeout, a repeated HOME, or an explicit icon launch may have superseded
-                    // this proof. Never dispatch JS for a stale availability request.
-                    if (markSystemHomeUsable(availabilityRequest)) {
-                        homeNavigation.markAuthenticatedDocumentReady();
-                        renderRecoverySurface();
-                        dispatchHomeGesture(fullReset);
-                    }
-                }
-            });
-            return;
-        }
-        if (!hasFreshServerProof(FOREGROUND_REFRESH_AFTER_MS)) {
-            refreshCurrentDocumentAuthentication(new Runnable() {
-                @Override public void run() {
+        refreshCurrentDocumentAuthentication(new Runnable() {
+            @Override public void run() {
+                // A timeout, a repeated HOME, or an explicit icon launch may have superseded this
+                // proof. Never dispatch JS for a stale availability request.
+                if (markSystemHomeUsable(availabilityRequest)) {
+                    homeNavigation.markAuthenticatedDocumentReady();
+                    renderRecoverySurface();
                     dispatchHomeGesture(fullReset);
                 }
-            });
-            return;
-        }
-        dispatchHomeGesture(fullReset);
+            }
+        }, availabilityRequest);
     }
 
     /**
@@ -391,7 +619,11 @@ public class MainActivity extends Activity {
      * could leave an explicit Evogent launch on stale web UI instead of native recovery.
      */
     private void refreshExplicitEvogentLaunch() {
-        if (destroyed || webView == null) return;
+        if (destroyed) return;
+        if (webView == null) {
+            beginColdWebViewAuthentication(0L, 0L);
+            return;
+        }
         if (!isCurrentFeedDocumentTrusted()) {
             loadFeedRoot();
             return;
@@ -416,10 +648,50 @@ public class MainActivity extends Activity {
     }
 
     private void armSystemHomeAvailabilityWait() {
+        armSystemHomeAvailabilityWait(false);
+    }
+
+    private void armSystemHomeAvailabilityWait(boolean enterForegroundAtomically) {
         main.removeCallbacks(systemHomeReadyTimeout);
+        cancelSystemHomeWatchdog();
         // A cached proof can outlive a just-crashed loopback process. Every system-HOME return to
         // remembered Evogent therefore gets one fresh, bounded local proof before page dispatch.
-        systemHomeAvailabilityRequest = homeAvailability.arm();
+        systemHomeAvailabilityRequest = enterForegroundAtomically
+                ? homeAvailability.enterForegroundAndArm()
+                : homeAvailability.arm();
+        final long request = systemHomeAvailabilityRequest;
+        final long deadlineElapsedMs =
+                SystemClock.elapsedRealtime() + SYSTEM_HOME_READY_TIMEOUT_MS;
+        systemHomeDeadlineElapsedMs = deadlineElapsedMs;
+        systemHomeDeadlineRequest = request;
+        final EvogentAndroidHomeResolution.Attempt<ComponentName> resolutionAttempt =
+                androidHomeResolution.begin(request);
+        new Thread(new Runnable() {
+            @Override public void run() {
+                ComponentName resolved = resolveStockAndroidHome();
+                if (!destroyed
+                        && systemHomeAvailabilityRequest == request
+                        && homeAvailability.isActive(request)) {
+                    androidHomeResolution.complete(
+                            resolutionAttempt,
+                            resolved);
+                }
+            }
+        }, "evogent-home-resolver").start();
+        long delayMs = Math.max(
+                0L,
+                deadlineElapsedMs - SystemClock.elapsedRealtime());
+        systemHomeWatchdogFuture = systemHomeWatchdog.schedule(
+                new Runnable() {
+                    @Override public void run() {
+                        requestAndroidHomeFromWatchdog(
+                                request,
+                                deadlineElapsedMs,
+                                false);
+                    }
+                },
+                delayMs,
+                TimeUnit.MILLISECONDS);
         main.postDelayed(systemHomeReadyTimeout, SYSTEM_HOME_READY_TIMEOUT_MS);
     }
 
@@ -427,17 +699,125 @@ public class MainActivity extends Activity {
         if (!homeAvailability.markUsable(request)) return false;
         systemHomeAvailabilityRequest = 0L;
         main.removeCallbacks(systemHomeReadyTimeout);
+        cancelSystemHomeWatchdog();
         return true;
-    }
-
-    private boolean markCurrentSystemHomeUsable() {
-        return markSystemHomeUsable(systemHomeAvailabilityRequest);
     }
 
     private void cancelSystemHomeAvailabilityWait() {
         homeAvailability.cancel();
         systemHomeAvailabilityRequest = 0L;
         main.removeCallbacks(systemHomeReadyTimeout);
+        cancelSystemHomeWatchdog();
+    }
+
+    private void cancelSystemHomeWatchdog() {
+        ScheduledFuture<?> pending = systemHomeWatchdogFuture;
+        systemHomeWatchdogFuture = null;
+        if (pending != null) pending.cancel(false);
+        androidHomeResolution.cancel();
+        systemHomeDeadlineRequest = 0L;
+        systemHomeDeadlineElapsedMs = 0L;
+    }
+
+    /**
+     * Main-looper provider work can delay Handler delivery. The watchdog owns only the exact gate
+     * token, resolves/launches off-main, and never touches Activity UI from its worker.
+     */
+    private void requestAndroidHomeFromWatchdog(
+            final long request,
+            long deadlineElapsedMs,
+            final boolean launchWhenResolved) {
+        if (destroyed
+                || systemHomeAvailabilityRequest != request
+                || !homeAvailability.isActive(request)) {
+            return;
+        }
+        final EvogentAndroidHomeResolution.Attempt<ComponentName> resolution =
+                androidHomeResolution.snapshot(request);
+        final boolean resolutionComplete =
+                resolution != null && resolution.complete;
+        long remainingMs = deadlineElapsedMs - SystemClock.elapsedRealtime();
+        if (remainingMs > 0L
+                && (!launchWhenResolved || !resolutionComplete)) {
+            long nextDelayMs = launchWhenResolved
+                    ? Math.min(SYSTEM_HOME_RESOLUTION_POLL_MS, remainingMs)
+                    : remainingMs;
+            systemHomeWatchdogFuture = systemHomeWatchdog.schedule(
+                    new Runnable() {
+                        @Override public void run() {
+                            requestAndroidHomeFromWatchdog(
+                                    request,
+                                    deadlineElapsedMs,
+                                    launchWhenResolved);
+                        }
+                    },
+                    nextDelayMs,
+                    TimeUnit.MILLISECONDS);
+            return;
+        }
+        final ComponentName target = resolutionComplete
+                ? resolution.target
+                : null;
+        EvogentHomeAvailabilityGate.FallbackResult fallbackResult =
+                homeAvailability.launchFallbackIfCurrent(
+                        request,
+                        new EvogentHomeAvailabilityGate.FallbackAction() {
+                            @Override public boolean launch() {
+                                if (destroyed
+                                        || !resumed
+                                        || systemHomeAvailabilityRequest != request
+                                        || target == null
+                                        || getPackageName().equals(
+                                                target.getPackageName())) {
+                                    return false;
+                                }
+                                try {
+                                    Intent fallback = new Intent(Intent.ACTION_MAIN)
+                                            .addCategory(Intent.CATEGORY_HOME)
+                                            .setComponent(target)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    getApplicationContext().startActivity(fallback);
+                                    return true;
+                                } catch (Throwable ignored) {
+                                    return false;
+                                }
+                            }
+                        });
+        if (fallbackResult == EvogentHomeAvailabilityGate.FallbackResult.NOT_CURRENT
+                || fallbackResult
+                        == EvogentHomeAvailabilityGate.FallbackResult
+                                .EXPIRED_WHILE_BACKGROUND) {
+            return;
+        }
+        final boolean launchRequested =
+                fallbackResult == EvogentHomeAvailabilityGate.FallbackResult.LAUNCHED;
+        main.post(new Runnable() {
+            @Override public void run() {
+                if (destroyed || systemHomeAvailabilityRequest != request) return;
+                systemHomeAvailabilityRequest = 0L;
+                homeAvailability.cancel();
+                main.removeCallbacks(systemHomeReadyTimeout);
+                cancelSystemHomeWatchdog();
+                requestRuntimeReviveIfDue();
+                ++authRequestId;
+                authInFlight = false;
+                if (!launchRequested) {
+                    revokeDocumentTrust();
+                    showRecoveryError();
+                    Log.w("EvogentMain",
+                            "watchdog could not request Android HOME; native recovery remains");
+                    if (webView == null) {
+                        beginColdWebViewAuthentication(AUTH_RETRY_MS, 0L);
+                    } else {
+                        authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS, 0L);
+                    }
+                    return;
+                }
+                Log.i("EvogentMain",
+                        "watchdog requested Android HOME at the availability deadline");
+                finish();
+            }
+        });
     }
 
     /**
@@ -448,19 +828,35 @@ public class MainActivity extends Activity {
     private boolean fallBackFromUnavailableSystemHome(long request, String reason) {
         if (!isHomeSurface()
                 || destroyed
-                || homeAvailability.onUnavailable(request)
-                        != EvogentHomeAvailabilityGate.Decision.FALL_BACK_TO_ANDROID) {
+                || !resumed
+                || request == 0L
+                || request != systemHomeAvailabilityRequest
+                || !homeAvailability.isActive(request)) {
             return false;
         }
-        systemHomeAvailabilityRequest = 0L;
-        main.removeCallbacks(systemHomeReadyTimeout);
         requestRuntimeReviveIfDue();
-        if (!launchAndroidHomeWithoutChangingChoice()) {
-            Log.w("EvogentMain", "Android HOME fallback unavailable; native recovery remains");
+        try {
+            // Even a definite authentication failure must not query PackageManager or call
+            // startActivity on the launcher thread. Reuse the pre-resolved, lifecycle-arbitrated
+            // watchdog path. It launches as soon as the generic stock-HOME resolver finishes and
+            // otherwise waits only until the original absolute deadline; it never guesses a
+            // vendor launcher package or loops an implicit HOME intent back into Evogent.
+            final long deadlineElapsedMs =
+                    systemHomeDeadlineRequest == request
+                            ? systemHomeDeadlineElapsedMs
+                            : SystemClock.elapsedRealtime();
+            systemHomeWatchdog.execute(new Runnable() {
+                @Override public void run() {
+                    requestAndroidHomeFromWatchdog(
+                            request,
+                            deadlineElapsedMs,
+                            true);
+                }
+            });
+        } catch (Throwable executorUnavailable) {
             return false;
         }
-        Log.i("EvogentMain", "system HOME fell back to Android: " + reason);
-        finish();
+        Log.i("EvogentMain", "system HOME scheduled Android fallback: " + reason);
         return true;
     }
 
@@ -484,20 +880,182 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        captureNotificationViewIntent(getIntent());
-        // An update from the legacy APK may leave its repeating browse PendingIntent behind.
-        BrowseAlarmReceiver.cancelLegacySchedule(this);
-        retireLegacyOverlayArtifacts();
-        boolean systemHomeInvocation = isHomeSurface() && isSystemHomeIntent(getIntent());
+        boolean systemHomeInvocation =
+                isHomeSurface() && isSystemHomeIntent(getIntent());
+        // Arm immediately at Activity invocation entry. A remembered-stock route cancels the
+        // timer as it leaves directly; an Evogent route installs native recovery before any
+        // binder cleanup or WebView provider work.
+        if (systemHomeInvocation) {
+            armSystemHomeAvailabilityWait();
+            // onCreate precedes the first foreground lifecycle edge. Keep this content-free HOME
+            // intent pending so onResume atomically replaces any background-expired token with a
+            // fresh foreground budget.
+            pendingSystemHomeResume = true;
+        } else {
+            cancelSystemHomeAvailabilityWait();
+        }
         if (isHomeSurface() && routeHomeIntent(getIntent())) {
             // This was a cold system-HOME invocation while Android HOME was remembered. There
             // is no Evogent document state to preserve, so do not create an invisible WebView
             // task behind the stock launcher.
+            pendingSystemHomeResume = false;
             cancelSystemHomeAvailabilityWait();
             finish();
             return;
         }
 
+        installNativeRecoveryContent();
+        captureNotificationViewIntent(getIntent());
+        deferColdWebViewAuthenticationUntilAfterFirstDraw();
+    }
+
+    private void installNativeRecoveryContent() {
+        activityRoot = new FrameLayout(this);
+        recoverySurface = createRecoverySurface();
+        activityRoot.addView(recoverySurface, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(activityRoot);
+        renderRecoverySurface();
+    }
+
+    /**
+     * A Handler deadline cannot run while the main looper is blocked in WebView provider startup.
+     * Put the opaque native surface on glass first, then authenticate off-thread. A server-down
+     * cold launch never constructs WebView or clears its cache at all.
+     */
+    private void deferColdWebViewAuthenticationUntilAfterFirstDraw() {
+        if (activityRoot == null) return;
+        activityRoot.getViewTreeObserver().addOnDrawListener(
+                new ViewTreeObserver.OnDrawListener() {
+                    private boolean posted;
+
+                    @Override public void onDraw() {
+                        if (posted) return;
+                        posted = true;
+                        nativeRecoveryHasDrawn = true;
+                        final ViewTreeObserver.OnDrawListener listener = this;
+                        main.post(new Runnable() {
+                            @Override public void run() {
+                                if (activityRoot != null) {
+                                    ViewTreeObserver observer =
+                                            activityRoot.getViewTreeObserver();
+                                    if (observer.isAlive()) {
+                                        observer.removeOnDrawListener(listener);
+                                    }
+                                }
+                                if (destroyed || !resumed) return;
+                                // Legacy binder/system-service cleanup is independent of HOME
+                                // readiness. Keep it off the main looper so it cannot delay the
+                                // bounded fallback after the first native frame.
+                                new Thread(new Runnable() {
+                                    @Override public void run() {
+                                        BrowseAlarmReceiver.cancelLegacySchedule(
+                                                MainActivity.this);
+                                        retireLegacyOverlayArtifacts();
+                                    }
+                                }, "evogent-legacy-cleanup").start();
+                                beginColdWebViewAuthentication(
+                                        0L,
+                                        systemHomeAvailabilityRequest);
+                            }
+                        });
+                    }
+                });
+    }
+
+    private void beginColdWebViewAuthentication(
+            long delayMs,
+            final long homeAvailabilityRequest) {
+        if (destroyed
+                || !resumed
+                || !nativeRecoveryHasDrawn
+                || webView != null) return;
+        if (delayMs > 0L) {
+            final long scheduledRequestId = ++authRequestId;
+            authInFlight = false;
+            main.postDelayed(new Runnable() {
+                @Override public void run() {
+                    if (destroyed
+                            || !resumed
+                            || webView != null
+                            || scheduledRequestId != authRequestId) return;
+                    beginColdWebViewAuthentication(0L, homeAvailabilityRequest);
+                }
+            }, delayMs);
+            return;
+        }
+
+        final long requestId = ++authRequestId;
+        ++backRequestId;
+        backInFlight = false;
+        authInFlight = true;
+        homeNavigation.beginAutomaticAttempt();
+        revokeDocumentTrust();
+        renderRecoverySurface();
+        EvogentLoopbackAuth.authenticateWeb(this, new EvogentLoopbackAuth.Callback() {
+            @Override public void onResult(
+                    EvogentLoopbackAuth.WebSession session,
+                    Exception error) {
+                if (destroyed
+                        || !resumed
+                        || webView != null
+                        || requestId != authRequestId
+                        || (homeAvailabilityRequest != 0L
+                                && !homeAvailability.isActive(
+                                        homeAvailabilityRequest))) return;
+                authInFlight = false;
+                if (session == null || error != null) {
+                    Log.i("EvogentMain",
+                            "cold loopback authentication unavailable — staying native");
+                    showRecoveryError();
+                    if (fallBackFromUnavailableSystemHome(
+                            homeAvailabilityRequest,
+                            "cold loopback authentication unavailable")) {
+                        return;
+                    }
+                    beginColdWebViewAuthentication(
+                            AUTH_RETRY_MS,
+                            homeAvailabilityRequest);
+                    return;
+                }
+                try {
+                    initializeAuthenticatedWebView(
+                            session,
+                            homeAvailabilityRequest);
+                } catch (Throwable providerFailure) {
+                    abandonFailedWebViewInitialization();
+                    Log.w("EvogentMain",
+                            "WebView provider unavailable — staying on native recovery");
+                    showRecoveryError();
+                    if (fallBackFromUnavailableSystemHome(
+                            homeAvailabilityRequest,
+                            "WebView provider unavailable")) {
+                        return;
+                    }
+                    beginColdWebViewAuthentication(
+                            AUTH_RETRY_MS,
+                            homeAvailabilityRequest);
+                }
+            }
+        });
+    }
+
+    private void abandonFailedWebViewInitialization() {
+        shellDocumentStartInstalled = false;
+        if (webView == null) return;
+        if (activityRoot != null) {
+            try { activityRoot.removeView(webView); } catch (Throwable ignored) {}
+        }
+        try { webView.stopLoading(); } catch (Throwable ignored) {}
+        try { webView.destroy(); } catch (Throwable ignored) {}
+        webView = null;
+    }
+
+    private void initializeAuthenticatedWebView(
+            EvogentLoopbackAuth.WebSession initialSession,
+            long homeAvailabilityRequest) {
+        if (destroyed || webView != null || activityRoot == null) return;
         webView = new WebView(this);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
@@ -551,7 +1109,27 @@ public class MainActivity extends Activity {
             }
             @Override
             public void onPageStarted(WebView v, String url, android.graphics.Bitmap favicon) {
-                boolean authenticated = EvogentSecurityPolicy.isTrustedWebUrl(url)
+                EvogentMainFrameLoadPolicy.Binding callbackLoad =
+                        EvogentMainFrameLoadPolicy.parse(url);
+                boolean exactPendingLoad =
+                        EvogentMainFrameLoadPolicy.acceptsPendingStart(
+                                pendingMainFrameLoad,
+                                callbackLoad);
+                if (!exactPendingLoad) {
+                    if (EvogentMainFrameLoadPolicy.isRendererReloadOfActiveDocument(
+                            activeMainFrameLoad,
+                            callbackLoad)) {
+                        // onPageStarted fires once per main-frame load. Reusing the active URL
+                        // means location.reload()/WebView.reload() created a new document; it must
+                        // become opaque and obtain a new native generation before it can be shown.
+                        restartRendererReload(url, callbackLoad);
+                    }
+                    // A different generation is a late callback from stopped/replaced work. It
+                    // owns neither the current authorization nor the current HOME request.
+                    return;
+                }
+                boolean authenticated = exactPendingLoad
+                        && EvogentSecurityPolicy.isTrustedWebUrl(url)
                         && activeWebSession != null
                         && authorizedLoadGeneration == activeWebSession.generation
                         && authorizedDocumentNonce != null
@@ -559,6 +1137,8 @@ public class MainActivity extends Activity {
                                 authorizedLoadGeneration,
                                 activeWebSession.serverInstanceId)
                         && activeWebSession.isFresh(SERVER_PROOF_MAX_AGE_MS);
+                activeMainFrameLoad = authenticated ? callbackLoad : null;
+                if (exactPendingLoad) pendingMainFrameLoad = null;
                 documentAuthGeneration = authenticated ? authorizedLoadGeneration : 0;
                 documentNonce = authenticated ? authorizedDocumentNonce : null;
                 authorizedLoadGeneration = 0;
@@ -568,7 +1148,16 @@ public class MainActivity extends Activity {
             }
             @Override
             public void onPageFinished(WebView v, String url) {
-                verifyLoadedDocument(v, url);
+                EvogentMainFrameLoadPolicy.Binding callbackLoad =
+                        EvogentMainFrameLoadPolicy.parse(url);
+                if (activeMainFrameLoad == null
+                        || !activeMainFrameLoad.matches(callbackLoad)) return;
+                // WebView does not promise exactly one finish callback. Once this exact load has
+                // passed its post-load proof, a duplicate must be inert: re-running readiness would
+                // try to consume an already-won system-HOME token and cover a healthy document.
+                if (readyMainFrameLoad != null
+                        && readyMainFrameLoad.matches(callbackLoad)) return;
+                verifyLoadedDocument(v, url, callbackLoad);
             }
             @Override
             public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
@@ -582,10 +1171,15 @@ public class MainActivity extends Activity {
                 if (req != null && req.isForMainFrame()
                         && req.getUrl() != null
                         && EvogentSecurityPolicy.isTrustedWebUrl(req.getUrl().toString())) {
+                    EvogentMainFrameLoadPolicy.Binding callbackLoad =
+                            EvogentMainFrameLoadPolicy.parse(req.getUrl().toString());
+                    if (!ownsMainFrameCallback(callbackLoad)) return;
                     int errorCode = err == null ? -1 : err.getErrorCode();
                     Log.i("EvogentMain", "feed load failed (" + errorCode
                             + ") — retrying in 2s");
-                    handleAuthenticatedMainFrameFailure(req.getUrl().toString());
+                    handleAuthenticatedMainFrameFailure(
+                            req.getUrl().toString(),
+                            callbackLoad.homeAvailabilityRequest);
                 }
             }
             @Override
@@ -597,12 +1191,17 @@ public class MainActivity extends Activity {
                         && req.isForMainFrame()
                         && req.getUrl() != null
                         && EvogentSecurityPolicy.isTrustedWebUrl(req.getUrl().toString())) {
+                    EvogentMainFrameLoadPolicy.Binding callbackLoad =
+                            EvogentMainFrameLoadPolicy.parse(req.getUrl().toString());
+                    if (!ownsMainFrameCallback(callbackLoad)) return;
                     int statusCode = response == null ? -1 : response.getStatusCode();
                     if (EvogentLoopbackAuth.isPhoneSessionGateResponse(response)
                             || EvogentHomeNavigationPolicy.rejectsMainFrameHttpStatus(statusCode)) {
                         Log.i("EvogentMain", "feed HTTP " + statusCode
                                 + " — keeping native recovery available");
-                        handleAuthenticatedMainFrameFailure(req.getUrl().toString());
+                        handleAuthenticatedMainFrameFailure(
+                                req.getUrl().toString(),
+                                callbackLoad.homeAvailabilityRequest);
                     }
                 }
             }
@@ -682,29 +1281,33 @@ public class MainActivity extends Activity {
             }
         });
 
-        FrameLayout root = new FrameLayout(this);
-        root.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        recoverySurface = createRecoverySurface();
-        root.addView(recoverySurface, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        setContentView(root);
+        // Insert beneath the already-drawn opaque recovery surface. Provider initialization and
+        // cache clearing can no longer expose Chromium's network-error UI or delay native escape.
+        activityRoot.addView(
+                webView,
+                0,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
         renderRecoverySurface();
 
         // The web shell renders the intentional Android-home switch in its own control row.
         // No persistent or app-wide floating control is created by this Activity.
-        if (systemHomeInvocation) {
-            armSystemHomeAvailabilityWait();
-        } else {
-            cancelSystemHomeAvailabilityWait();
-        }
-        loadFeedRoot();
+        loadAuthenticatedMainFrame(
+                initialSession,
+                rootDocumentUrl(),
+                homeAvailabilityRequest);
+        if (resumed) maybeRequestNotificationPermissionOnce();
 
-        // Shizuku bridge for the privileged ops (create hidden display + launch app).
-        // Triggered by a token-gated broadcast from the on-device Termux phone helper.
-        shizuku = new ShizukuController(this);
-        registerReceiver(shizukuReceiver, new IntentFilter("net.dangish.evogent.SHIZUKU"),
-                Context.RECEIVER_EXPORTED);
+        // HOME-only Shizuku bridge for token-gated hidden-display/app-launch requests.
+        if (isHomeSurface() && !shizukuReceiverRegistered) {
+            shizuku = new ShizukuController(this);
+            registerReceiver(
+                    shizukuReceiver,
+                    new IntentFilter("net.dangish.evogent.SHIZUKU"),
+                    Context.RECEIVER_EXPORTED);
+            shizukuReceiverRegistered = true;
+        }
     }
 
     /** Remove the old bubble service's orphaned ongoing notification/channel after upgrade. */
@@ -847,17 +1450,19 @@ public class MainActivity extends Activity {
     }
 
     private void renderRecoverySurface() {
-        if (recoverySurface == null || webView == null) return;
-        if (!homeNavigation.shouldShowRecoverySurface()) {
+        if (recoverySurface == null) return;
+        if (webView != null && !homeNavigation.shouldShowRecoverySurface()) {
             recoverySurface.setVisibility(View.GONE);
             webView.setVisibility(View.VISIBLE);
             webView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
             return;
         }
 
-        webView.setVisibility(View.INVISIBLE);
-        webView.setImportantForAccessibility(
-                View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        if (webView != null) {
+            webView.setVisibility(View.INVISIBLE);
+            webView.setImportantForAccessibility(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        }
         recoverySurface.setVisibility(View.VISIBLE);
         recoverySurface.bringToFront();
 
@@ -875,7 +1480,7 @@ public class MainActivity extends Activity {
     }
 
     private void retryFeedFromRecovery() {
-        if (destroyed || webView == null) return;
+        if (destroyed) return;
         requestRuntimeReviveIfDue();
         ++authRequestId;
         authInFlight = false;
@@ -883,6 +1488,12 @@ public class MainActivity extends Activity {
         backInFlight = false;
         revokeDocumentTrust();
         showRecoveryStarting();
+        if (webView == null) {
+            beginColdWebViewAuthentication(
+                    0L,
+                    systemHomeAvailabilityRequest);
+            return;
+        }
         webView.stopLoading();
         authenticateAndLoad(rootDocumentUrl(), 0);
     }
@@ -907,6 +1518,7 @@ public class MainActivity extends Activity {
 
     private final BroadcastReceiver shizukuReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
+            if (!isHomeSurface() || shizuku == null) return;
             String op = i.getStringExtra("op");
             // Same per-install secret as the accessibility control channel: launching apps onto
             // hidden displays is privileged, so gate it too.
@@ -964,6 +1576,9 @@ public class MainActivity extends Activity {
     private boolean isCurrentFeedDocumentAuthenticated() {
         return webView != null
                 && activeWebSession != null
+                && activeMainFrameLoad != null
+                && activeMainFrameLoad.matches(
+                        EvogentMainFrameLoadPolicy.parse(webView.getUrl()))
                 && documentAuthGeneration == activeWebSession.generation
                 && documentNonce != null
                 && documentAuthority.isBound(
@@ -976,9 +1591,74 @@ public class MainActivity extends Activity {
         return activeWebSession != null && activeWebSession.isFresh(maxAgeMs);
     }
 
+    private boolean ownsMainFrameCallback(
+            EvogentMainFrameLoadPolicy.Binding callbackLoad) {
+        return callbackLoad != null
+                && ((pendingMainFrameLoad != null
+                                && pendingMainFrameLoad.matches(callbackLoad))
+                        || (activeMainFrameLoad != null
+                                && activeMainFrameLoad.matches(callbackLoad)));
+    }
+
+    private void restartRendererReload(
+            String callbackUrl,
+            EvogentMainFrameLoadPolicy.Binding callbackLoad) {
+        if (destroyed || webView == null || callbackLoad == null) return;
+        long currentHomeRequest = systemHomeAvailabilityRequest;
+        // The active URL retains the request that originally loaded it even after that gate was
+        // consumed. A later app-update reload must not resurrect that stale nonzero token.
+        long homeAvailabilityRequest = currentHomeRequest != 0L
+                && homeAvailability.isActive(currentHomeRequest)
+                ? currentHomeRequest
+                : 0L;
+        String targetUrl = EvogentSecurityPolicy.isTrustedWebUrl(callbackUrl)
+                ? callbackUrl
+                : rootDocumentUrl();
+        Log.i("EvogentMain", "renderer reload requires a fresh authenticated document");
+        authenticateAndLoad(targetUrl, 0L, homeAvailabilityRequest);
+    }
+
+    private String prepareAuthenticatedMainFrameLoad(
+            String targetUrl,
+            long homeAvailabilityRequest) {
+        long loadGeneration = ++nextMainFrameLoadGeneration;
+        pendingMainFrameLoad = new EvogentMainFrameLoadPolicy.Binding(
+                loadGeneration,
+                Math.max(0L, homeAvailabilityRequest));
+        return EvogentMainFrameLoadPolicy.bind(
+                targetUrl,
+                pendingMainFrameLoad.loadGeneration,
+                pendingMainFrameLoad.homeAvailabilityRequest);
+    }
+
+    private void loadAuthenticatedMainFrame(
+            EvogentLoopbackAuth.WebSession session,
+            String targetUrl,
+            long homeAvailabilityRequest) {
+        if (destroyed || webView == null || session == null) return;
+        activeWebSession = session;
+        authorizedLoadGeneration = session.generation;
+        authorizedDocumentNonce = EvogentLoopbackAuth.newDocumentNonce();
+        documentAuthority.begin(
+                session.generation,
+                session.serverInstanceId,
+                authorizedDocumentNonce);
+        webView.loadUrl(prepareAuthenticatedMainFrameLoad(
+                targetUrl,
+                homeAvailabilityRequest));
+    }
+
     private void loadFeedRoot() {
+        loadFeedRoot(0L);
+    }
+
+    private void loadFeedRoot(long homeAvailabilityRequest) {
         showRecoveryStarting();
-        authenticateAndLoad(rootDocumentUrl(), 0);
+        if (webView == null) {
+            beginColdWebViewAuthentication(0L, homeAvailabilityRequest);
+            return;
+        }
+        authenticateAndLoad(rootDocumentUrl(), 0, homeAvailabilityRequest);
     }
 
     /**
@@ -986,14 +1666,23 @@ public class MainActivity extends Activity {
      * has proved the device secret and the WebView cookie write has completed.
      */
     private void authenticateAndLoad(final String targetUrl, long delayMs) {
-        if (destroyed || webView == null) return;
+        authenticateAndLoad(targetUrl, delayMs, 0L);
+    }
+
+    private void authenticateAndLoad(
+            final String targetUrl,
+            long delayMs,
+            final long homeAvailabilityRequest) {
+        if (destroyed || !resumed || webView == null) return;
         if (delayMs > 0) {
             final long scheduledRequestId = ++authRequestId;
             authInFlight = false;
             main.postDelayed(new Runnable() {
                 @Override public void run() {
-                    if (destroyed || scheduledRequestId != authRequestId) return;
-                    authenticateAndLoad(targetUrl, 0);
+                    if (destroyed
+                            || !resumed
+                            || scheduledRequestId != authRequestId) return;
+                    authenticateAndLoad(targetUrl, 0, homeAvailabilityRequest);
                 }
             }, delayMs);
             return;
@@ -1003,34 +1692,39 @@ public class MainActivity extends Activity {
         backInFlight = false;
         authInFlight = true;
         homeNavigation.beginAutomaticAttempt();
-        renderRecoverySurface();
         revokeDocumentTrust();
+        renderRecoverySurface();
         webView.stopLoading();
         EvogentLoopbackAuth.authenticateWeb(this, new EvogentLoopbackAuth.Callback() {
             @Override public void onResult(
                     EvogentLoopbackAuth.WebSession session,
                     Exception error) {
-                if (destroyed || requestId != authRequestId || webView == null) return;
+                if (destroyed
+                        || !resumed
+                        || requestId != authRequestId
+                        || webView == null
+                        || (homeAvailabilityRequest != 0L
+                                && !homeAvailability.isActive(
+                                        homeAvailabilityRequest))) return;
                 authInFlight = false;
                 if (session == null || error != null) {
                     Log.i("EvogentMain", "loopback authentication unavailable — retrying");
                     showRecoveryError();
                     if (fallBackFromUnavailableSystemHome(
-                            systemHomeAvailabilityRequest,
+                            homeAvailabilityRequest,
                             "loopback authentication unavailable")) {
                         return;
                     }
-                    authenticateAndLoad(targetUrl, AUTH_RETRY_MS);
+                    authenticateAndLoad(
+                            targetUrl,
+                            AUTH_RETRY_MS,
+                            homeAvailabilityRequest);
                     return;
                 }
-                activeWebSession = session;
-                authorizedLoadGeneration = session.generation;
-                authorizedDocumentNonce = EvogentLoopbackAuth.newDocumentNonce();
-                documentAuthority.begin(
-                        session.generation,
-                        session.serverInstanceId,
-                        authorizedDocumentNonce);
-                webView.loadUrl(targetUrl);
+                loadAuthenticatedMainFrame(
+                        session,
+                        targetUrl,
+                        homeAvailabilityRequest);
             }
         });
     }
@@ -1040,7 +1734,13 @@ public class MainActivity extends Activity {
      * proof revokes native authority immediately and returns to the authenticated load loop.
      */
     private void refreshCurrentDocumentAuthentication(final Runnable afterSuccess) {
-        if (destroyed || webView == null) return;
+        refreshCurrentDocumentAuthentication(afterSuccess, 0L);
+    }
+
+    private void refreshCurrentDocumentAuthentication(
+            final Runnable afterSuccess,
+            final long homeAvailabilityRequest) {
+        if (destroyed || !resumed || webView == null) return;
         final long requestId = ++authRequestId;
         final String expectedUrl = webView.getUrl();
         final boolean expectedTrusted = isCurrentFeedDocumentAuthenticated();
@@ -1050,7 +1750,10 @@ public class MainActivity extends Activity {
             @Override public void onResult(
                     EvogentLoopbackAuth.WebSession session,
                     Exception error) {
-                if (destroyed || requestId != authRequestId || webView == null) return;
+                if (destroyed
+                        || !resumed
+                        || requestId != authRequestId
+                        || webView == null) return;
                 authInFlight = false;
                 if (session == null || error != null
                         || !expectedTrusted
@@ -1066,11 +1769,14 @@ public class MainActivity extends Activity {
                     revokeDocumentTrust();
                     showRecoveryError();
                     if (fallBackFromUnavailableSystemHome(
-                            systemHomeAvailabilityRequest,
+                            homeAvailabilityRequest,
                             "server identity refresh failed")) {
                         return;
                     }
-                    authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
+                    authenticateAndLoad(
+                            rootDocumentUrl(),
+                            AUTH_RETRY_MS,
+                            homeAvailabilityRequest);
                     return;
                 }
                 activeWebSession = session;
@@ -1084,11 +1790,13 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void handleAuthenticatedMainFrameFailure(String failedUrl) {
+    private void handleAuthenticatedMainFrameFailure(
+            String failedUrl,
+            long homeAvailabilityRequest) {
         revokeDocumentTrust();
         showRecoveryError();
         if (fallBackFromUnavailableSystemHome(
-                systemHomeAvailabilityRequest,
+                homeAvailabilityRequest,
                 "authenticated document failed")) {
             return;
         }
@@ -1096,7 +1804,10 @@ public class MainActivity extends Activity {
         String retryUrl = EvogentSecurityPolicy.isTrustedWebUrl(failedUrl)
                 ? failedUrl
                 : rootDocumentUrl();
-        authenticateAndLoad(retryUrl, AUTH_RETRY_MS);
+        authenticateAndLoad(
+                retryUrl,
+                AUTH_RETRY_MS,
+                homeAvailabilityRequest);
     }
 
     private void revokeDocumentTrust() {
@@ -1105,21 +1816,22 @@ public class MainActivity extends Activity {
         trustedFeedDocument = false;
         documentAuthGeneration = 0;
         authorizedLoadGeneration = 0;
+        pendingMainFrameLoad = null;
+        activeMainFrameLoad = null;
+        readyMainFrameLoad = null;
         documentNonce = null;
         authorizedDocumentNonce = null;
     }
 
-    private void verifyLoadedDocument(final WebView loadedView, final String loadedUrl) {
-        // stopLoading() can still deliver onPageFinished for the document we just replaced.
-        // Do not let that stale callback revoke the newer authenticated load between its cookie
-        // handshake and onPageStarted.
-        boolean authenticatedLoadPending = activeWebSession != null
-                && authorizedLoadGeneration == activeWebSession.generation
-                && authorizedDocumentNonce != null;
-        if (authenticatedLoadPending) return;
+    private void verifyLoadedDocument(
+            final WebView loadedView,
+            final String loadedUrl,
+            final EvogentMainFrameLoadPolicy.Binding callbackLoad) {
         if (destroyed
                 || loadedView == null
                 || loadedView != webView
+                || activeMainFrameLoad == null
+                || !activeMainFrameLoad.matches(callbackLoad)
                 || !EvogentSecurityPolicy.isTrustedWebUrl(loadedUrl)
                 || activeWebSession == null
                 || documentNonce == null
@@ -1129,12 +1841,15 @@ public class MainActivity extends Activity {
             revokeDocumentTrust();
             showRecoveryError();
             if (fallBackFromUnavailableSystemHome(
-                    systemHomeAvailabilityRequest,
+                    callbackLoad.homeAvailabilityRequest,
                     "loaded document was not authenticated")) {
                 return;
             }
             if (!authInFlight) {
-                authenticateAndLoad(rootDocumentUrl(), AUTH_RETRY_MS);
+                authenticateAndLoad(
+                        rootDocumentUrl(),
+                        AUTH_RETRY_MS,
+                        callbackLoad.homeAvailabilityRequest);
             }
             return;
         }
@@ -1156,7 +1871,9 @@ public class MainActivity extends Activity {
                                 || !expectedInstance.equals(
                                         activeWebSession.serverInstanceId)
                                 || !expectedNonce.equals(documentNonce)
-                                || !loadedUrl.equals(webView.getUrl())) {
+                                || !loadedUrl.equals(webView.getUrl())
+                                || activeMainFrameLoad == null
+                                || !activeMainFrameLoad.matches(callbackLoad)) {
                             return;
                         }
                         trustedFeedDocument = documentAuthority.confirmAfterLoad(
@@ -1165,22 +1882,80 @@ public class MainActivity extends Activity {
                                 expectedNonce,
                                 verified);
                         if (!trustedFeedDocument) {
-                            handleAuthenticatedMainFrameFailure(loadedUrl);
+                            handleAuthenticatedMainFrameFailure(
+                                    loadedUrl,
+                                    callbackLoad.homeAvailabilityRequest);
                             return;
                         }
-                        homeNavigation.markAuthenticatedDocumentReady();
-                        markCurrentSystemHomeUsable();
-                        renderRecoverySurface();
-                        dispatchPendingNotificationView();
-                        if (backInFlight) backInFlight = false;
-                        drainPendingBackPress();
                         // Compatibility fallback is injected only after the loaded document has
-                        // proved the same server process that authorized its navigation.
+                        // proved the same server process that authorized its navigation. Keep the
+                        // recovery surface opaque until the facade exists and its readiness event
+                        // has run, so a mounted page can safely retry its one-shot bridge capture.
                         if (!shellDocumentStartInstalled) {
-                            webView.evaluateJavascript(nativeFacadeScript(), null);
+                            installAuthenticatedFallbackFacade(
+                                    loadedView,
+                                    loadedUrl,
+                                    expectedGeneration,
+                                    expectedInstance,
+                                    expectedNonce,
+                                    callbackLoad);
+                            return;
                         }
+                        finishAuthenticatedDocumentReady(callbackLoad);
                     }
                 });
+    }
+
+    private void installAuthenticatedFallbackFacade(
+            final WebView loadedView,
+            final String loadedUrl,
+            final long expectedGeneration,
+            final String expectedInstance,
+            final String expectedNonce,
+            final EvogentMainFrameLoadPolicy.Binding callbackLoad) {
+        loadedView.evaluateJavascript(
+                authenticatedFallbackFacadeReadyScript(),
+                new android.webkit.ValueCallback<String>() {
+                    @Override public void onReceiveValue(String value) {
+                        boolean sameDocument = !destroyed
+                                && webView == loadedView
+                                && activeWebSession != null
+                                && activeWebSession.generation == expectedGeneration
+                                && expectedInstance.equals(activeWebSession.serverInstanceId)
+                                && expectedNonce.equals(documentNonce)
+                                && loadedUrl.equals(webView.getUrl())
+                                && activeMainFrameLoad != null
+                                && activeMainFrameLoad.matches(callbackLoad)
+                                && isCurrentFeedDocumentTrusted();
+                        if (!sameDocument) return;
+                        if (!"\"ready\"".equals(value)) {
+                            handleAuthenticatedMainFrameFailure(
+                                    loadedUrl,
+                                    callbackLoad.homeAvailabilityRequest);
+                            return;
+                        }
+                        finishAuthenticatedDocumentReady(callbackLoad);
+                    }
+                });
+    }
+
+    private void finishAuthenticatedDocumentReady(
+            EvogentMainFrameLoadPolicy.Binding callbackLoad) {
+        if (callbackLoad.homeAvailabilityRequest != 0L
+                && !markSystemHomeUsable(
+                        callbackLoad.homeAvailabilityRequest)) {
+            // A timeout or newer HOME invocation already owns the surface. Never reveal a
+            // document whose exact availability request lost that race.
+            revokeDocumentTrust();
+            showRecoveryError();
+            return;
+        }
+        readyMainFrameLoad = callbackLoad;
+        homeNavigation.markAuthenticatedDocumentReady();
+        renderRecoverySurface();
+        dispatchPendingNotificationView();
+        if (backInFlight) backInFlight = false;
+        drainPendingBackPress();
     }
 
     private boolean authorizeCurrentDocumentForNativeAction() {
@@ -1234,6 +2009,17 @@ public class MainActivity extends Activity {
             boolean shellPrompt = SHELL_PROMPT_MARKER.equals(marker);
             boolean assistantPrompt = ASSISTANT_PROMPT_MARKER.equals(marker)
                     && supportsAssistantComposerBridge();
+            boolean assistantEscapeOperation = assistantPrompt
+                    && args != null
+                    && args.length() == 0
+                    && ("close".equals(method)
+                            || "openApp".equals(method));
+            boolean shellHomeEscapeOperation = shellPrompt
+                    && args != null
+                    && args.length() == 0
+                    && "openAndroidHome".equals(method);
+            boolean boundEscapeOperation =
+                    assistantEscapeOperation || shellHomeEscapeOperation;
             boolean validOperation =
                     (shellPrompt
                             && "openExternal".equals(method)
@@ -1241,6 +2027,21 @@ public class MainActivity extends Activity {
                             && args.length() == 1)
                     || (shellPrompt
                             && "openAndroidHome".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (shellPrompt
+                            && isHomeSurface()
+                            && "getNotificationCapability".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (shellPrompt
+                            && isHomeSurface()
+                            && "openNotificationSettings".equals(method)
+                            && args != null
+                            && args.length() == 0)
+                    || (shellPrompt
+                            && isHomeSurface()
+                            && "openNotificationListenerSettings".equals(method)
                             && args != null
                             && args.length() == 0)
                     || (shellPrompt
@@ -1263,7 +2064,22 @@ public class MainActivity extends Activity {
                             && "openApp".equals(method)
                             && args != null
                             && args.length() == 0);
-            if (!validOperation || !authorizeCurrentDocumentForNativeAction()) {
+            if (!validOperation) {
+                throw new IllegalArgumentException("unauthorized shell operation");
+            }
+            // Capability is content-free device state. The exact document binding is sufficient
+            // and avoids a 1.8s network proof on mount/focus. Both settings opens and every
+            // sensitive/mutating operation deliberately remain on fresh process authorization.
+            boolean boundCapabilityReadOperation = shellPrompt
+                    && args != null
+                    && args.length() == 0
+                    && "getNotificationCapability".equals(method);
+            boolean boundDocumentOperation =
+                    boundEscapeOperation || boundCapabilityReadOperation;
+            boolean authorizedOperation = boundDocumentOperation
+                    ? isCurrentFeedDocumentAuthenticated()
+                    : authorizeCurrentDocumentForNativeAction();
+            if (!authorizedOperation) {
                 throw new IllegalArgumentException("unauthorized shell operation");
             }
             if ("openExternal".equals(method) && args != null && args.length() == 1) {
@@ -1277,6 +2093,29 @@ public class MainActivity extends Activity {
                     && args != null
                     && args.length() == 0) {
                 openAndroidHome();
+            } else if ("getNotificationCapability".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && isHomeSurface()) {
+                String capability = getNotificationCapability();
+                if (capability == null) {
+                    throw new IllegalStateException(
+                            "notification capability unavailable");
+                }
+                result.confirm(capability);
+                return;
+            } else if ("openNotificationSettings".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && isHomeSurface()) {
+                result.confirm(openNotificationSettings() ? "opened" : "unavailable");
+                return;
+            } else if ("openNotificationListenerSettings".equals(method)
+                    && args != null
+                    && args.length() == 0
+                    && isHomeSurface()) {
+                result.confirm(openNotificationListenerSettings());
+                return;
             } else if ("dismissPhoneNotification".equals(method)
                     && args != null
                     && args.length() == 1) {
@@ -1484,7 +2323,10 @@ public class MainActivity extends Activity {
 
     /**
      * Native-only escape used by the recovery surface. Web content cannot call this method
-     * directly; the shell prompt still goes through openAndroidHome() and a fresh process proof.
+     * directly. The shell prompt goes through openAndroidHome() and remains authorized only while
+     * it is the exact authenticated/trusted document that received the facade. That bound escape
+     * deliberately survives a later loopback outage; every non-escape native operation still
+     * requires a fresh process proof.
      */
     private void openAndroidHomeOrApps() {
         if (chooseAndLaunchAndroidHome()) return;
@@ -1506,15 +2348,6 @@ public class MainActivity extends Activity {
     /** Follow remembered Android intent without rewriting the preference on each HOME gesture. */
     private boolean launchRememberedAndroidHome() {
         return EvogentHomeChoicePolicy.launchRememberedAndroidHome(
-                androidHomeActions());
-    }
-
-    /**
-     * Server-down failover is availability recovery, not an explicit surface choice. Keep
-     * last_explicit_surface untouched so a transient outage cannot silently rewrite user intent.
-     */
-    private boolean launchAndroidHomeWithoutChangingChoice() {
-        return EvogentHomeChoicePolicy.launchAndroidHomeWithoutChangingChoice(
                 androidHomeActions());
     }
 
@@ -1628,7 +2461,7 @@ public class MainActivity extends Activity {
                         trustedFeedDocument = authorized;
                         if (!authorized) {
                             backInFlight = false;
-                            handleAuthenticatedMainFrameFailure(expectedUrl);
+                            handleAuthenticatedMainFrameFailure(expectedUrl, 0L);
                             return;
                         }
                         evaluateAuthenticatedPageBack(requestId, expectedGeneration, expectedUrl);
@@ -1720,6 +2553,13 @@ public class MainActivity extends Activity {
             backInFlight = false;
             return;
         }
+        final EvogentMainFrameLoadPolicy.Binding historyLoad =
+                EvogentMainFrameLoadPolicy.parse(expectedPreviousUrl);
+        if (historyLoad == null) {
+            backInFlight = false;
+            loadFeedRoot();
+            return;
+        }
 
         final long requestId = ++authRequestId;
         authInFlight = true;
@@ -1750,6 +2590,10 @@ public class MainActivity extends Activity {
                         session.generation,
                         session.serverInstanceId,
                         authorizedDocumentNonce);
+                // goBack() reuses the exact prior history URL instead of accepting a new URL.
+                // Re-arm that history entry's content-free binding so only its callbacks can
+                // consume this newly authenticated traversal.
+                pendingMainFrameLoad = historyLoad;
                 webView.goBack();
             }
         });
@@ -1758,14 +2602,22 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         destroyed = true;
+        resumed = false;
         ++authRequestId;
         ++backRequestId;
         authInFlight = false;
         backInFlight = false;
         pendingBackPress = false;
+        pendingExplicitEvogentRefresh = false;
+        pendingSystemHomeResume = false;
         revokeDocumentTrust();
         main.removeCallbacksAndMessages(null);
-        try { unregisterReceiver(shizukuReceiver); } catch (Throwable ignored) {}
+        cancelSystemHomeAvailabilityWait();
+        systemHomeWatchdog.shutdownNow();
+        if (shizukuReceiverRegistered) {
+            try { unregisterReceiver(shizukuReceiver); } catch (Throwable ignored) {}
+            shizukuReceiverRegistered = false;
+        }
         if (shizuku != null) shizuku.shutdown();
         if (webView != null) {
             try { webView.stopLoading(); } catch (Throwable ignored) {}
@@ -1777,6 +2629,7 @@ public class MainActivity extends Activity {
         recoveryMessage = null;
         recoveryProgress = null;
         recoveryRetry = null;
+        activityRoot = null;
         super.onDestroy();
     }
 }

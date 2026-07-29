@@ -5,17 +5,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Explicit taste capture from the anywhere-overlay's Like / Bookmark buttons. The user is looking
- * at any post in any app; the overlay already captured the foreground screen (app package + visible
- * text) via the accessibility bridge. This turns one tap into a durable signal in the SAME
- * `preferences` table the curator reads and migrations can fill — so "like this" from inside X
- * or Instagram teaches the feed exactly like a historical like does.
+ * Explicit taste capture from the Android assistant surface's Like / Bookmark buttons. The user
+ * invokes Add Message while viewing another app and deliberately shares bounded, filtered
+ * AssistStructure text. This turns one tap into a durable signal in the SAME `preferences` table
+ * the curator reads and migrations can fill.
  *
  * - like     -> signal_type 'liked'  (weight 1.5, same as an imported bookmark-like)
  * - bookmark -> signal_type 'liked'  PLUS reason "bookmark" (a stronger save-for-the-feed intent)
  *
- * Screenshot enrichment (the actual image for Instagram) is attached later by the vision path; the
- * text signal is written immediately so a tap never fails or blocks on capture.
+ * This path accepts text only. The assistant privacy contract does not capture screenshots.
  */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -25,10 +23,10 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-// The overlay captures the foreground app's accessibility tree as a raw dump: lines like
+// Historical callers may supply accessibility-tree-shaped text with lines like
 // `LinearLayout desc="Example Author @example_author Verified. <post text>. 2h. 12 likes" [clickable]`.
-// Pull out the substantive CONTENT (the post itself), dropping class names, [clickable]/nav
-// chrome, and one-word tab labels — so the stored taste signal is the post, not the UI.
+// Normalize that legacy shape defensively while treating current AssistStructure text as already
+// clean. The stored taste signal should describe the content, not surrounding UI chrome.
 const CHROME = /^(show navigation|navigate up|home|search|notifications|messages|for you|following|post|reply|repost|like|bookmark|share|profile|more|back|settings|upgrade|watch again|show more|show original|translated from)/i;
 
 function extractContent(dump: string): string {

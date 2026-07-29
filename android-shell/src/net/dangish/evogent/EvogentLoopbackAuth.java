@@ -92,32 +92,50 @@ final class EvogentLoopbackAuth {
                     final long verifiedAt = SystemClock.elapsedRealtime();
                     MAIN.post(new Runnable() {
                         @Override public void run() {
-                            CookieManager cookies = CookieManager.getInstance();
-                            cookies.setAcceptCookie(true);
-                            long remainingSeconds = Math.max(
-                                    1L,
-                                    (material.sessionExpiresAtMs
-                                            - System.currentTimeMillis()) / 1000L);
-                            String cookie = COOKIE_NAME + "=" + material.sessionToken
-                                    + "; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age="
-                                    + remainingSeconds;
-                            cookies.setCookie(ORIGIN, cookie, new ValueCallback<Boolean>() {
-                                @Override public void onReceiveValue(Boolean installed) {
-                                    if (!Boolean.TRUE.equals(installed)) {
-                                        callback.onResult(
-                                                null,
-                                                new AuthException("cookie_install_failed", -1));
-                                        return;
+                            try {
+                                CookieManager cookies = CookieManager.getInstance();
+                                cookies.setAcceptCookie(true);
+                                long remainingSeconds = Math.max(
+                                        1L,
+                                        (material.sessionExpiresAtMs
+                                                - System.currentTimeMillis()) / 1000L);
+                                String cookie = COOKIE_NAME + "=" + material.sessionToken
+                                        + "; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age="
+                                        + remainingSeconds;
+                                cookies.setCookie(ORIGIN, cookie, new ValueCallback<Boolean>() {
+                                    @Override public void onReceiveValue(Boolean installed) {
+                                        try {
+                                            if (!Boolean.TRUE.equals(installed)) {
+                                                callback.onResult(
+                                                        null,
+                                                        new AuthException(
+                                                                "cookie_install_failed",
+                                                                -1));
+                                                return;
+                                            }
+                                            CookieManager.getInstance().flush();
+                                            callback.onResult(
+                                                    new WebSession(
+                                                            GENERATIONS.incrementAndGet(),
+                                                            verifiedAt,
+                                                            material.serverInstanceId),
+                                                    null);
+                                        } catch (Throwable providerFailure) {
+                                            callback.onResult(
+                                                    null,
+                                                    new AuthException(
+                                                            "cookie_install_failed",
+                                                            -1));
+                                        }
                                     }
-                                    CookieManager.getInstance().flush();
-                                    callback.onResult(
-                                            new WebSession(
-                                                    GENERATIONS.incrementAndGet(),
-                                                    verifiedAt,
-                                                    material.serverInstanceId),
-                                            null);
-                                }
-                            });
+                                });
+                            } catch (Throwable providerFailure) {
+                                callback.onResult(
+                                        null,
+                                        new AuthException(
+                                                "cookie_install_failed",
+                                                -1));
+                            }
                         }
                     });
                 } catch (final Exception error) {

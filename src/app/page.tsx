@@ -4,6 +4,7 @@ import { ChatAttachmentCard } from '@/components/chat/chat-attachment-card';
 import { BrainProviderSwitcherModal, ChatCurationStatusBanner, CodeFixReasoningSwitcherModal, CurationTaskCard, FeedEmptyLoadingState, SidebarAutomationControls, SidebarCodeFixReasoningButton, UsageSummaryModal, useUsageSummaryLabels } from '@/components/chat/chat-control-panels';
 import { ChatStopButton, ChatWorkingIndicator } from '@/components/chat/chat-working-indicator';
 import { NewSessionModal } from '@/components/chat/new-session-modal';
+import { AssistantSurfaceActions } from '@/components/assistant-surface-actions';
 import { ConfigPanel } from '@/components/config-panel';
 import { AnalysisSeriesCard } from '@/components/feed/analysis-series-card';
 import { CompactInfoPopover } from '@/components/feed/compact-info-popover';
@@ -52,7 +53,7 @@ import { getThreadFeedbackProbe, getThreadSourceItemIds } from '@/lib/feedback-p
 import { buildInlineCodeFixChatMessage, getInlineCodeFixSuggestion, type InlineCodeFixChatSuggestion } from '@/lib/inline-code-fix-messages';
 import { type OrchestratorStatusResponse, type OrchestratorTaskStatus } from '@/lib/orchestrator';
 import { useOverlayDismiss } from '@/lib/overlay-dismiss';
-import { createOverlayScreenContextHandoff, type OverlayScreenContext, type OverlayScreenContextPreview } from '@/lib/overlay-screen-context';
+import { ASSISTANT_SCREEN_CONTEXT_TTL_MS, captureOverlayScreenContextFromBridge, createOverlayScreenContextHandoff, EVOGENT_NATIVE_BRIDGE_READY_EVENT, type OverlayScreenContext, type OverlayScreenContextPreview } from '@/lib/overlay-screen-context';
 import { ACTIVE_CHAT_STATUS_SYNC_INTERVAL_MS, APP_HEADER_HEIGHT_FALLBACK_PX, CHAT_ACTIVITY_STALE_TIMEOUT_MS, CHAT_COMPOSER_GAP_PX, CHAT_COMPOSER_MIN_RESERVED_HEIGHT_PX, CHAT_HISTORY_PAGE_SIZE, CHAT_HISTORY_TOP_LOAD_THRESHOLD_PX, CHAT_INPUT_MAX_HEIGHT_PX, CHAT_SESSION_COMPACTION_STALE_TIMEOUT_MS, COMPACT_FEEDBACK_TIMEOUT_MS, CONVERSATION_SESSION_PAGE_SIZE, CURATION_FEED_POLL_INTERVAL_MS, CURATION_STATUS_POLL_INTERVAL_MS, DEFAULT_FEED_SORT_ORDER, FEED_BANNER_COMPLETED_TASK_TIMEOUT_MS, MAX_RESET_FEED_BATCHES, MIN_PRIMARY_FEED_ITEMS, PAGE_SIZE, POST_CONTEXT_SEPARATOR, RESTART_APPLY_POLL_INTERVAL_MS, RESTART_APPLY_WAIT_TIMEOUT_MS, RESTART_STATUS_POLL_INTERVAL_MS, SELECTED_CHAT_SESSION_AUTOCORRECT_GRACE_MS, SELECTED_CHAT_SESSION_STORAGE_KEY, STATUS_SYNC_INTERVAL_MS, SUGGESTION_PAGE_SIZE } from '@/lib/page-constants';
 import { CLAUDE_REASONING_OPTIONS, CODEX_REASONING_OPTIONS, deriveCodexReasoningEffortFromConfig, formatClaudeReasoningEffortLabel, formatCodexReasoningEffortLabel } from '@/lib/reasoning-effort';
 import { createReconnectingWs } from '@/lib/reconnecting-ws';
@@ -93,6 +94,30 @@ type DetailViewEntry =
     title: string;
     items: FeedItem[];
   };
+
+type EvogentAssistantBridge = {
+  close?: () => string;
+  getScreenContext?: () => string;
+  openApp?: () => string;
+};
+
+function getEvogentAssistantBridge(): EvogentAssistantBridge | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as typeof window & {
+    EvogentOverlay?: EvogentAssistantBridge;
+  }).EvogentOverlay;
+}
+
+function isEvogentAssistantBridgeReady(
+  bridge: EvogentAssistantBridge | undefined,
+): bridge is EvogentAssistantBridge & Required<Pick<
+  EvogentAssistantBridge,
+  'close' | 'getScreenContext' | 'openApp'
+>> {
+  return typeof bridge?.close === 'function'
+    && typeof bridge.getScreenContext === 'function'
+    && typeof bridge.openApp === 'function';
+}
 
 interface FeedArrangementSnapshot {
   items: FeedItem[];
@@ -1196,27 +1221,20 @@ function RenameSessionModal({
 
 
 /**
- * Like / Bookmark bar for the anywhere-overlay. When the bubble is opened over any app, the
- * native accessibility bridge (EvogentOverlay.getScreenContext) has already captured what the
- * user is looking at. One tap turns that into a durable taste signal in the same `preferences`
- * table the curator reads — "like this" from inside X or Instagram teaches the feed directly.
+ * Like / Bookmark bar for the explicitly invoked Android assistant surface. The native assistant
+ * bridge (EvogentOverlay.getScreenContext) has already captured what the user chose to share. One
+ * tap turns that into a durable taste signal in the same `preferences` table the curator reads —
+ * "like this" from inside X or Instagram teaches the feed directly.
  */
 function OverlaySignalBar({
   preview,
   takeContext,
-  onActive,
 }: {
   preview: OverlayScreenContextPreview | null | undefined;
   takeContext: () => OverlayScreenContext | null;
-  onActive?: (active: boolean) => void;
 }) {
   const [state, setState] = useState<{ kind: 'like' | 'bookmark'; msg: string } | null>(null);
   const [busy, setBusy] = useState<null | 'like' | 'bookmark'>(null);
-
-  useEffect(() => {
-    // Tell the host the bar is showing so the compact panel reserves height for it.
-    onActive?.(Boolean(preview || busy || state));
-  }, [busy, onActive, preview, state]);
 
   const send = async (kind: 'like' | 'bookmark') => {
     if (!preview || busy) return;
@@ -1273,7 +1291,7 @@ function OverlaySignalBar({
         onClick={() => void send('like')}
         data-testid="overlay-like-button"
         aria-label={`Like ${label}`}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-base text-white shadow-[0_1px_4px_rgba(0,0,0,0.45)] transition active:scale-95 disabled:opacity-50"
+        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-base text-white shadow-[0_1px_4px_rgba(0,0,0,0.45)] transition active:scale-95 disabled:opacity-50"
       >
         <span aria-hidden="true">👍</span>
       </button>
@@ -1283,7 +1301,7 @@ function OverlaySignalBar({
         onClick={() => void send('bookmark')}
         data-testid="overlay-bookmark-button"
         aria-label={`Bookmark ${label}`}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-base text-white shadow-[0_1px_4px_rgba(0,0,0,0.45)] transition active:scale-95 disabled:opacity-50"
+        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-600 text-base text-white shadow-[0_1px_4px_rgba(0,0,0,0.45)] transition active:scale-95 disabled:opacity-50"
       >
         <span aria-hidden="true">🔖</span>
       </button>
@@ -2040,23 +2058,25 @@ export default function Home() {
     return null;
   }, []);
 
-  // Overlay mode: this same page rendered inside the anywhere-composer bottom sheet
-  // (the floating bubble's WebView loads /?overlay=1). It shows ONLY the main-session
-  // conversation + the normal composer, targets the main session regardless of the
-  // localStorage selection shared with the home-screen instance, and offers captured
-  // screen context (via the EvogentOverlay JS bridge) once to either a signal or Chat.
+  // Assistant mode: this same page rendered inside the explicitly invoked Android assistant
+  // Activity (whose WebView loads /?overlay=1). It shows only the new assistant conversation and
+  // the normal composer, and offers user-invoked screen context (via the narrow EvogentOverlay JS
+  // bridge) once to either a signal or Chat.
   const [overlayMode, setOverlayMode] = useState(false);
-  // The overlay opens BLANK: no session loaded, just the composer + empty state. The first
-  // send mints a fresh session (server-side, titled from the source app) whose id lands here;
-  // follow-ups in the same open continue it. Each bubble-tap reloads /?overlay=1 in a fresh
-  // WebView, so this resets to null on every open — no stale thread from last time.
+  // The assistant opens blank. The first send mints a fresh session (server-side, titled from the
+  // source app) whose id lands here; follow-ups in the same invocation continue it. Each assistant
+  // invocation loads a fresh /?overlay=1 document, so no stale thread crosses invocations.
   const [overlaySessionId, setOverlaySessionId] = useState<string | null>(null);
   const overlayScreenContextHandoffRef = useRef<ReturnType<typeof createOverlayScreenContextHandoff> | null>(null);
   if (!overlayScreenContextHandoffRef.current) {
     overlayScreenContextHandoffRef.current = createOverlayScreenContextHandoff();
   }
   const [overlayScreenContextPreview, setOverlayScreenContextPreview] = useState<OverlayScreenContextPreview | null | undefined>(undefined);
-  const [overlaySignalActive, setOverlaySignalActive] = useState(false);
+  const [assistantBridgeReady, setAssistantBridgeReady] = useState(false);
+  const clearOverlayScreenContext = useCallback(() => {
+    overlayScreenContextHandoffRef.current?.clear();
+    setOverlayScreenContextPreview(null);
+  }, []);
   const takeOverlayScreenContext = useCallback(() => {
     const captured = overlayScreenContextHandoffRef.current?.take() ?? null;
     // Clear the only UI preview before the caller starts its request. A failed request never
@@ -2065,20 +2085,76 @@ export default function Home() {
     return captured;
   }, []);
   useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('overlay')) return;
+
+    setOverlayMode(true);
+    const captureFromReadyBridge = () => {
+      if (document.visibilityState === 'hidden') {
+        clearOverlayScreenContext();
+        return;
+      }
+      const bridge = getEvogentAssistantBridge();
+      const ready = isEvogentAssistantBridgeReady(bridge);
+      setAssistantBridgeReady(ready);
+      if (!ready) return;
+
+      const captured = captureOverlayScreenContextFromBridge(
+        overlayScreenContextHandoffRef.current!,
+        bridge,
+      );
+      if (captured !== undefined) {
+        // Raw native text remains owned by the handoff closure. React state receives only a
+        // non-sensitive label so no component can copy or reuse the screen context.
+        setOverlayScreenContextPreview(captured);
+      }
+    };
+    const abandonScreenContext = () => {
+      clearOverlayScreenContext();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        abandonScreenContext();
+      } else {
+        // Re-enable the native escape actions after returning, but the terminal clear above means
+        // this recheck can never reacquire raw context from the abandoned invocation.
+        captureFromReadyBridge();
+      }
+    };
+
+    // Document-start installation is the normal path. The named event is emitted only after the
+    // native host proves and installs its authenticated fallback facade, closing the onPageFinished
+    // race without polling or weakening the one-shot handoff.
+    window.addEventListener(EVOGENT_NATIVE_BRIDGE_READY_EVENT, captureFromReadyBridge);
+    window.addEventListener('pagehide', abandonScreenContext);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    captureFromReadyBridge();
+    const contextDeadline = window.setTimeout(
+      abandonScreenContext,
+      ASSISTANT_SCREEN_CONTEXT_TTL_MS,
+    );
+
+    return () => {
+      window.clearTimeout(contextDeadline);
+      window.removeEventListener(EVOGENT_NATIVE_BRIDGE_READY_EVENT, captureFromReadyBridge);
+      window.removeEventListener('pagehide', abandonScreenContext);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Do not clear in generic effect cleanup: React Strict Mode intentionally tears down and
+      // reruns effects during development. Page hide, visibility loss, and the active deadline
+      // cover real abandonment while preserving the invocation across that diagnostic cycle.
+    };
+  }, [clearOverlayScreenContext]);
+
+  const invokeAssistantBridgeAction = useCallback((action: 'close' | 'openApp') => {
+    // Abandon any unconsumed screen context before native navigation. This is terminal: a late
+    // fallback-ready event cannot reacquire it.
+    clearOverlayScreenContext();
+    const bridge = getEvogentAssistantBridge();
     try {
-      if (!new URLSearchParams(window.location.search).has('overlay')) return;
-      const bridge = (window as unknown as {
-        EvogentOverlay?: { getScreenContext?: () => string };
-      }).EvogentOverlay;
-      const captured = overlayScreenContextHandoffRef.current?.captureOnce(
-        () => bridge?.getScreenContext?.(),
-      ) ?? null;
-      // Raw native text remains owned by the handoff closure. React state receives only a
-      // non-sensitive label so no component can copy or reuse the screen context.
-      setOverlayScreenContextPreview(captured);
-      setOverlayMode(true);
-    } catch { /* ignore */ }
-  }, []);
+      bridge?.[action]?.();
+    } catch {
+      setAssistantBridgeReady(false);
+    }
+  }, [clearOverlayScreenContext]);
 
   const conversationCards = useMemo(() => {
     return buildSessionCards(
@@ -4477,8 +4553,7 @@ export default function Home() {
     setChatInputElement(element);
   }, []);
 
-  // Overlay mode: put the cursor in the composer on open — the user tapped the bubble
-  // specifically to ask something.
+  // Assistant mode: put the cursor in the composer after an explicit assistant invocation.
   const overlayFocusedOnceRef = useRef(false);
   useEffect(() => {
     if (!overlayMode || overlayFocusedOnceRef.current) return;
@@ -5049,7 +5124,7 @@ export default function Home() {
   }, [focusChatInput, prepareChatAboutPost]);
 
   const handleChatAboutSuggestion = useCallback(async (item: FeedItem) => {
-    // Works like the anywhere-overlay composer: chatting about a suggestion gets its OWN
+    // Works like the assistant composer: chatting about a suggestion gets its OWN
     // fresh session (titled after the suggestion) instead of dumping into whatever session
     // was open — reusing an existing thread with unrelated history was confusing. A later
     // Chat tap on the same suggestion resumes its linked conversation (contextRefId).
@@ -6294,10 +6369,9 @@ export default function Home() {
     setStreamingChat(null);
     setLastChatActivityAt(null);
 
-    // Overlay mode: if Chat is the first consumer, attach what the user was looking at
-    // (captured by the accessibility service when they tapped the bubble). Like and Bookmark
-    // compete for this same one-shot value. The server treats contextKind 'screen' as
-    // untrusted data; follow-ups in the same open never re-attach it.
+    // Assistant mode: if Chat is the first consumer, attach the system-provided assist context
+    // from this explicit invocation. Like and Bookmark compete for this same one-shot value. The
+    // server treats contextKind 'screen' as untrusted data; follow-ups never re-attach it.
     let sendContext: string | null = chatContext;
     let sendContextKind: 'global' | 'screen' = 'global';
     let sendMetadata: Record<string, unknown> | undefined;
@@ -7366,21 +7440,6 @@ export default function Home() {
     ? baseComposerReservedHeight
     : CHAT_COMPOSER_GAP_PX;
 
-  // Overlay panel sizing: tell the native host how tall the bottom sheet should be. Compact —
-  // just the composer — until there's a conversation to show (or the user is mid-send, or the
-  // keyboard is up and needs room). Heights are CSS px; the native side scales by density.
-  // (Declared here, after baseComposerReservedHeight, so it isn't used before declaration.)
-  useEffect(() => {
-    if (!overlayMode) return;
-    const bridge = (window as unknown as { EvogentOverlay?: { setHeight?: (px: number) => void } }).EvogentOverlay;
-    if (!bridge?.setHeight) return;
-    const screenH = (typeof window.screen?.height === 'number' && window.screen.height) || window.innerHeight || 900;
-    const expandedPx = Math.round(screenH * 0.6);
-    const compactPx = Math.min(expandedPx, Math.round(baseComposerReservedHeight + 28));
-    const expand = Boolean(overlaySessionId) || isSendingChat || isMobileKeyboardVisible;
-    try { bridge.setHeight(expand ? expandedPx : compactPx); } catch { /* bridge unavailable */ }
-  }, [overlayMode, overlaySessionId, isSendingChat, isMobileKeyboardVisible, baseComposerReservedHeight]);
-
   const currentSession = conversationSessions.find((s) => s.sessionId === targetSessionId) ?? null;
   const sessionLabel = currentSession?.title
     || (conversationSessions.length > 0 ? DEFAULT_GENERAL_AGENT_SESSION_TITLE : 'New session');
@@ -7792,7 +7851,6 @@ export default function Home() {
           <OverlaySignalBar
             preview={overlayScreenContextPreview}
             takeContext={takeOverlayScreenContext}
-            onActive={setOverlaySignalActive}
           />
         </div>
       ) : null}
@@ -8149,7 +8207,9 @@ export default function Home() {
               disabled={isSendingChat || isUploadingChatAttachments}
               data-testid="chat-attachment-button"
               aria-label="Attach files"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-600"
+              className={`inline-flex shrink-0 items-center justify-center text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-600 ${
+                overlayMode ? 'h-12 w-12 rounded-full' : 'h-8 w-8 rounded-lg'
+              }`}
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[18px] w-[18px]">
                 <path
@@ -8173,7 +8233,9 @@ export default function Home() {
               disabled={isSendingChat || isUploadingChatAttachments}
               data-testid="chat-command-button"
               aria-label="Open slash command picker"
-              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold transition disabled:cursor-not-allowed disabled:text-zinc-600 ${
+              className={`inline-flex shrink-0 items-center justify-center text-sm font-semibold transition disabled:cursor-not-allowed disabled:text-zinc-600 ${
+                overlayMode ? 'h-12 w-12 rounded-full' : 'h-8 w-8 rounded-lg'
+              } ${
                 commandPickerOpen
                   ? 'bg-zinc-800 text-zinc-100'
                   : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
@@ -8187,7 +8249,9 @@ export default function Home() {
                 closeCommandPicker();
                 setSessionPickerOpen((open) => !open);
               }}
-              className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-700/60 bg-zinc-800/80 px-3 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-700/80"
+              className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-700/60 bg-zinc-800/80 px-3 text-xs text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-700/80 ${
+                overlayMode ? 'min-h-12 py-2' : 'py-1'
+              }`}
               data-testid="session-picker-toggle"
             >
               <span className="truncate">{sessionLabel}</span>
@@ -8207,7 +8271,9 @@ export default function Home() {
               type="submit"
               disabled={isSendingChat || isUploadingChatAttachments || !chatInput.trim()}
               data-testid="chat-send-button"
-              className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/15 px-3 text-xs font-medium text-sky-50 transition hover:border-sky-400/50 hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500"
+              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/15 font-medium text-sky-50 transition hover:border-sky-400/50 hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500 ${
+                overlayMode ? 'min-h-12 px-5 text-sm' : 'h-8 px-3 text-xs'
+              }`}
             >
               {isUploadingChatAttachments ? 'Uploading...' : isSendingChat ? 'Sending...' : 'Send'}
             </button>
@@ -8339,56 +8405,57 @@ export default function Home() {
     showPreferencesPanel,
   ]);
 
-  // The anywhere-composer: this page inside the floating bubble's bottom sheet. The exact
-  // same ConversationDetail + composer the user knows from the app. It opens BLANK (no
-  // session) so the user starts a fresh "ask about this screen" thread; the first send mints
-  // the session. The native bridge (EvogentOverlay) supplies screen context and close/open.
+  // The Android assistant surface uses the same ConversationDetail + composer as Evogent. It
+  // opens blank so the user starts a fresh "ask about this screen" thread; the first send mints
+  // the session. The narrow native bridge supplies one-shot context and the explicit escape
+  // actions in the header.
   if (overlayMode) {
     const overlayConversation = overlaySessionId
       ? conversationCardMap[overlaySessionId] ?? null
       : null;
-    // Minimized composer: before the first send there's no session, so we render ONLY the
-    // pinned composer (input + control row) — no header, no × (the purple bubble toggles the
-    // panel closed), no empty thread. The native side sizes the panel to just the composer
-    // (see the setHeight bridge effect); once a session exists the thread renders above and
-    // the panel expands. justify-end keeps the composer pinned to the bottom in the compact
-    // state where the thread is absent.
     return (
-      <main data-testid="overlay-composer-page" className="flex h-dvh flex-col justify-end overflow-hidden rounded-t-3xl border-t border-zinc-800/90 bg-zinc-950 text-zinc-100">
-        {overlaySessionId ? (
-          // ConversationDetail is the SINGLE scroll container (layoutMode="detail" gives it its
-          // own min-h-0 flex-1 overflow-y-auto region). Do NOT wrap it in another overflow-y-auto
-          // div — that double-container broke scroll-to-bottom. composerReservedHeight clears the
-          // fixed composer so the newest message stays visible.
-          <ConversationDetail
-            key="overlay-session"
-            conversation={overlayConversation}
-            agentName={agentName}
-            curationTask={feedBannerCurationTask}
-            visibleStreamingChat={visibleStreamingChat}
-            retainedLiveActivity={overlayConversation ? retainedLiveActivityBySession[overlayConversation.sessionId] ?? null : null}
-            lastChatActivityAt={lastChatActivityAt}
-            chatProgress={effectiveChatProgress}
-            orchestratorStatus={orchestratorStatus}
-            onInlineCodeFixSuggestionDecision={(suggestion, decision) => {
-              void handleInlineCodeFixSuggestionDecision(suggestion, decision);
-            }}
-            resolveInlineCodeFixSuggestionStatus={resolveInlineCodeFixSuggestionStatus}
-            suggestionPendingActions={suggestionPendingActions}
-            suggestionFeedback={suggestionFeedback}
-            onCancelTask={handleCancelOrchestratorTask}
-            shouldScrollToBottom={overlayConversation ? conversationScrollToBottomId === overlayConversation.sessionId : false}
-            onDidScrollToBottom={() => setConversationScrollToBottomId(null)}
-            scrollToMessageId={null}
-            onDidScrollToMessage={() => setConversationScrollToMessage(null)}
-            layoutMode="detail"
-            composerReservedHeight={baseComposerReservedHeight}
-            showCurationStatusWhenEmpty={false}
-            detailEntryKey="overlay-session"
-            searchQuery={null}
-            emptyState=""
-          />
-        ) : null}
+      <main data-testid="overlay-composer-page" className="relative flex h-dvh flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+        <AssistantSurfaceActions
+          bridgeReady={assistantBridgeReady}
+          onClose={() => invokeAssistantBridgeAction('close')}
+          onOpenEvogent={() => invokeAssistantBridgeAction('openApp')}
+        />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {overlaySessionId ? (
+            // ConversationDetail is the SINGLE scroll container (layoutMode="detail" gives it its
+            // own min-h-0 flex-1 overflow-y-auto region). Do NOT wrap it in another overflow-y-auto
+            // div — that double-container broke scroll-to-bottom. composerReservedHeight clears the
+            // fixed composer so the newest message stays visible.
+            <ConversationDetail
+              key="overlay-session"
+              conversation={overlayConversation}
+              agentName={agentName}
+              curationTask={feedBannerCurationTask}
+              visibleStreamingChat={visibleStreamingChat}
+              retainedLiveActivity={overlayConversation ? retainedLiveActivityBySession[overlayConversation.sessionId] ?? null : null}
+              lastChatActivityAt={lastChatActivityAt}
+              chatProgress={effectiveChatProgress}
+              orchestratorStatus={orchestratorStatus}
+              onInlineCodeFixSuggestionDecision={(suggestion, decision) => {
+                void handleInlineCodeFixSuggestionDecision(suggestion, decision);
+              }}
+              resolveInlineCodeFixSuggestionStatus={resolveInlineCodeFixSuggestionStatus}
+              suggestionPendingActions={suggestionPendingActions}
+              suggestionFeedback={suggestionFeedback}
+              onCancelTask={handleCancelOrchestratorTask}
+              shouldScrollToBottom={overlayConversation ? conversationScrollToBottomId === overlayConversation.sessionId : false}
+              onDidScrollToBottom={() => setConversationScrollToBottomId(null)}
+              scrollToMessageId={null}
+              onDidScrollToMessage={() => setConversationScrollToMessage(null)}
+              layoutMode="detail"
+              composerReservedHeight={baseComposerReservedHeight}
+              showCurationStatusWhenEmpty={false}
+              detailEntryKey="overlay-session"
+              searchQuery={null}
+              emptyState=""
+            />
+          ) : null}
+        </div>
         {renderChatComposerPanel('detail')}
       </main>
     );

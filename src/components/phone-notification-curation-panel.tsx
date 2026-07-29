@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type NotificationMode = 'observe' | 'curated' | 'paused';
 type LockScreenPreview = 'private' | 'detailed';
@@ -37,6 +37,91 @@ interface SettingsView {
     digestProofRequired: true;
   };
 }
+
+export interface NativeNotificationCapability {
+  schemaVersion: 1;
+  digestSupported: boolean;
+  listenerAccessGranted: boolean;
+  postingPermissionGranted: boolean;
+  appNotificationsEnabled: boolean;
+  digestChannelEnabled: boolean;
+  canPostDigest: boolean;
+}
+
+interface EvogentNotificationShell {
+  getNotificationCapability?: () => string | null;
+  openNotificationListenerSettings?: () => string | null;
+  openNotificationSettings?: () => string | null;
+}
+
+function notificationShell(): EvogentNotificationShell | null {
+  if (typeof window === 'undefined') return null;
+  const shell = (window as typeof window & {
+    EvogentShell?: EvogentNotificationShell;
+  }).EvogentShell;
+  return shell ?? null;
+}
+
+export function readNativeNotificationCapability(): NativeNotificationCapability | null {
+  const getCapability = notificationShell()?.getNotificationCapability;
+  if (typeof getCapability !== 'function') return null;
+  try {
+    const encoded = getCapability();
+    if (typeof encoded !== 'string' || encoded.length === 0 || encoded.length > 2048) return null;
+    const value = JSON.parse(encoded) as Partial<NativeNotificationCapability> | null;
+    if (
+      value?.schemaVersion !== 1
+      || typeof value.digestSupported !== 'boolean'
+      || typeof value.listenerAccessGranted !== 'boolean'
+      || typeof value.postingPermissionGranted !== 'boolean'
+      || typeof value.appNotificationsEnabled !== 'boolean'
+      || typeof value.digestChannelEnabled !== 'boolean'
+      || typeof value.canPostDigest !== 'boolean'
+    ) {
+      return null;
+    }
+    return value as NativeNotificationCapability;
+  } catch {
+    return null;
+  }
+}
+
+export function openNativeNotificationSettings(): boolean {
+  const openSettings = notificationShell()?.openNotificationSettings;
+  if (typeof openSettings !== 'function') return false;
+  try {
+    return openSettings() === 'opened';
+  } catch {
+    return false;
+  }
+}
+
+export function openNativeNotificationListenerSettings(): boolean {
+  const openSettings = notificationShell()?.openNotificationListenerSettings;
+  if (typeof openSettings !== 'function') return false;
+  try {
+    return openSettings() === 'opened';
+  } catch {
+    return false;
+  }
+}
+
+export function nativeNotificationCapabilitiesEqual(
+  left: NativeNotificationCapability | null,
+  right: NativeNotificationCapability | null,
+): boolean {
+  if (left === right) return true;
+  if (left === null || right === null) return false;
+  return left.schemaVersion === right.schemaVersion
+    && left.digestSupported === right.digestSupported
+    && left.listenerAccessGranted === right.listenerAccessGranted
+    && left.postingPermissionGranted === right.postingPermissionGranted
+    && left.appNotificationsEnabled === right.appNotificationsEnabled
+    && left.digestChannelEnabled === right.digestChannelEnabled
+    && left.canPostDigest === right.canPostDigest;
+}
+
+const NATIVE_CAPABILITY_REFRESH_COALESCE_MS = 50;
 
 const MODE_OPTIONS: Array<{
   value: NotificationMode;
@@ -76,6 +161,9 @@ export function PhoneNotificationCurationPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [nativeCapability, setNativeCapability] =
+    useState<NativeNotificationCapability | null>(null);
+  const nativeCapabilityRefreshTimer = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +184,42 @@ export function PhoneNotificationCurationPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const refreshNativeCapability = useCallback(() => {
+    const next = readNativeNotificationCapability();
+    setNativeCapability((current) => (
+      nativeNotificationCapabilitiesEqual(current, next) ? current : next
+    ));
+  }, []);
+
+  const scheduleNativeCapabilityRefresh = useCallback(() => {
+    if (nativeCapabilityRefreshTimer.current !== null) return;
+    nativeCapabilityRefreshTimer.current = window.setTimeout(() => {
+      nativeCapabilityRefreshTimer.current = null;
+      refreshNativeCapability();
+    }, NATIVE_CAPABILITY_REFRESH_COALESCE_MS);
+  }, [refreshNativeCapability]);
+
+  useEffect(() => {
+    refreshNativeCapability();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') scheduleNativeCapabilityRefresh();
+    };
+    window.addEventListener('focus', scheduleNativeCapabilityRefresh);
+    window.addEventListener('pageshow', scheduleNativeCapabilityRefresh);
+    window.addEventListener('evogent:native-bridge-ready', scheduleNativeCapabilityRefresh);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', scheduleNativeCapabilityRefresh);
+      window.removeEventListener('pageshow', scheduleNativeCapabilityRefresh);
+      window.removeEventListener('evogent:native-bridge-ready', scheduleNativeCapabilityRefresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      if (nativeCapabilityRefreshTimer.current !== null) {
+        window.clearTimeout(nativeCapabilityRefreshTimer.current);
+        nativeCapabilityRefreshTimer.current = null;
+      }
+    };
+  }, [refreshNativeCapability, scheduleNativeCapabilityRefresh]);
 
   const update = useCallback(async (patch: Record<string, unknown>) => {
     setSaving(true);
@@ -149,6 +273,22 @@ export function PhoneNotificationCurationPanel() {
   const selectedMode = view.config.mode;
   const preserved = new Set(view.config.preservedPackages);
   const replacementAllowed = new Set(view.config.replacementPackages);
+  const nativeNotificationIntegrationDegraded = selectedMode !== 'paused'
+    && nativeCapability !== null
+    && (
+      !nativeCapability.listenerAccessGranted
+      || (selectedMode === 'curated' && !nativeCapability.canPostDigest)
+    );
+  const canRecoverListenerAccess = nativeCapability !== null
+    && !nativeCapability.listenerAccessGranted;
+  const canRecoverInNotificationSettings = selectedMode === 'curated'
+    && nativeCapability !== null
+    && nativeCapability.digestSupported
+    && (
+      !nativeCapability.postingPermissionGranted
+      || !nativeCapability.appNotificationsEnabled
+      || !nativeCapability.digestChannelEnabled
+    );
 
   return (
     <div
@@ -159,6 +299,59 @@ export function PhoneNotificationCurationPanel() {
         <div role="alert" className="rounded-lg border border-amber-800/70 bg-amber-950/30 p-3 text-amber-100">
           The local settings file was invalid, so Evogent fell back to Observe. Saving any choice
           below will replace it with a valid private settings file.
+        </div>
+      ) : null}
+
+      {nativeNotificationIntegrationDegraded ? (
+        <div
+          role="alert"
+          data-testid="notification-capability-alert"
+          className="rounded-lg border border-amber-700/70 bg-amber-950/30 p-3 text-amber-50"
+        >
+          <p className="font-medium">Android notification access needs attention</p>
+          <p className="mt-1 text-xs leading-5 text-amber-100">
+            {!nativeCapability.digestSupported
+              ? 'This Android version cannot provide Evogent’s self-expiring digest. Every Android original will stay visible.'
+              : !nativeCapability.listenerAccessGranted
+                ? 'Evogent cannot currently observe Android notifications. Every Android original will stay visible.'
+                : !nativeCapability.postingPermissionGranted
+                  ? 'Android has not allowed Evogent to post its curated digest. Every Android original will stay visible until you enable notifications.'
+                  : !nativeCapability.appNotificationsEnabled
+                    ? 'Evogent notifications are turned off in Android. Every Android original will stay visible until you enable them.'
+                    : 'Evogent’s curated digest channel is turned off in Android. Every Android original will stay visible until you enable it.'}
+          </p>
+          {canRecoverListenerAccess || canRecoverInNotificationSettings ? (
+            <div className="mt-3 flex flex-col items-start gap-2">
+              {canRecoverListenerAccess ? (
+                <button
+                  type="button"
+                  data-testid="open-android-notification-listener-settings"
+                  onClick={() => {
+                    if (!openNativeNotificationListenerSettings()) {
+                      setStatus('Could not open Android notification access settings.');
+                    }
+                  }}
+                  className="min-h-11 rounded-lg border border-amber-500/70 bg-amber-900/30 px-3 py-2 text-sm font-medium text-amber-50 hover:bg-amber-900/50"
+                >
+                  Open Android notification access settings
+                </button>
+              ) : null}
+              {canRecoverInNotificationSettings ? (
+                <button
+                  type="button"
+                  data-testid="open-android-notification-settings"
+                  onClick={() => {
+                    if (!openNativeNotificationSettings()) {
+                      setStatus('Could not open Android notification settings.');
+                    }
+                  }}
+                  className="min-h-11 rounded-lg border border-amber-500/70 bg-amber-900/30 px-3 py-2 text-sm font-medium text-amber-50 hover:bg-amber-900/50"
+                >
+                  Open Android notification settings
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

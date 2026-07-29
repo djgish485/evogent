@@ -357,6 +357,94 @@ test('accessible UI exposes default preservation and explicit reversible best-ef
   assert.match(notificationCuration, /replacementAllowed/);
 });
 
+test('Phone Alerts exposes a fail-safe native capability recovery state', () => {
+  assert.match(mainActivity, /getNotificationCapability:function\(\)/);
+  assert.match(mainActivity, /openNotificationListenerSettings:function\(\)/);
+  assert.match(mainActivity, /openNotificationSettings:function\(\)/);
+  assert.match(
+    mainActivity,
+    /isHomeSurface\(\)[\s\S]{0,100}"getNotificationCapability"\.equals\(method\)/,
+  );
+  assert.match(
+    mainActivity,
+    /isHomeSurface\(\)[\s\S]{0,100}"openNotificationSettings"\.equals\(method\)/,
+  );
+  assert.match(
+    mainActivity,
+    /isHomeSurface\(\)[\s\S]{0,100}"openNotificationListenerSettings"\.equals\(method\)/,
+  );
+  const boundEscapeBlock = mainActivity.match(
+    /boolean assistantEscapeOperation =[\s\S]*?;\s*boolean validOperation =/,
+  )?.[0] ?? '';
+  assert.match(boundEscapeBlock, /assistantPrompt/);
+  assert.match(boundEscapeBlock, /"close"\.equals\(method\)/);
+  assert.match(boundEscapeBlock, /"openApp"\.equals\(method\)/);
+  assert.match(boundEscapeBlock, /"openAndroidHome"\.equals\(method\)/);
+  assert.doesNotMatch(
+    boundEscapeBlock,
+    /getNotificationCapability|openNotificationSettings|openNotificationListenerSettings/,
+  );
+  const boundCapabilityBlock = mainActivity.match(
+    /boolean boundCapabilityReadOperation =[\s\S]*?;\s*boolean boundDocumentOperation =/,
+  )?.[0] ?? '';
+  assert.match(boundCapabilityBlock, /"getNotificationCapability"\.equals\(method\)/);
+  assert.doesNotMatch(
+    boundCapabilityBlock,
+    /openNotificationSettings|openNotificationListenerSettings/,
+  );
+  assert.match(
+    mainActivity,
+    /boolean boundDocumentOperation =\s*boundEscapeOperation \|\| boundCapabilityReadOperation[\s\S]*?boolean authorizedOperation = boundDocumentOperation[\s\S]{0,120}: authorizeCurrentDocumentForNativeAction\(\)/,
+  );
+  assert.match(mainActivity, /Settings\.ACTION_APP_NOTIFICATION_SETTINGS/);
+  assert.match(mainActivity, /Settings\.ACTION_NOTIFICATION_LISTENER_SETTINGS/);
+  assert.match(mainActivity, /Settings\.EXTRA_APP_PACKAGE/);
+  assert.match(mainActivity, /Settings\.ACTION_APPLICATION_DETAILS_SETTINGS/);
+  assert.match(mainActivity, /result\.confirm\(openNotificationListenerSettings\(\)\)/);
+  assert.match(mainActivity, /\.put\("digestSupported", digestSupported\)/);
+  assert.match(mainActivity, /\.put\("listenerAccessGranted", listenerAccessGranted\)/);
+  assert.match(mainActivity, /\.put\("postingPermissionGranted", postingPermissionGranted\)/);
+  assert.match(mainActivity, /\.put\("appNotificationsEnabled", appNotificationsEnabled\)/);
+  assert.match(mainActivity, /\.put\("digestChannelEnabled", digestChannelEnabled\)/);
+  assert.match(mainActivity, /\.put\("canPostDigest", canPostDigest\)/);
+  assert.match(mainActivity, /authenticatedFallbackFacadeReadyScript/);
+  assert.match(mainActivity, /window\.dispatchEvent\(new Event\('/);
+  assert.match(mainActivity, /evogent:native-bridge-ready/);
+  assert.match(settingsPanel, /getNotificationCapability/);
+  assert.match(settingsPanel, /openNotificationListenerSettings/);
+  assert.match(settingsPanel, /openNotificationSettings/);
+  assert.match(settingsPanel, /schemaVersion:\s*1/);
+  assert.match(settingsPanel, /postingPermissionGranted/);
+  assert.match(settingsPanel, /canPostDigest/);
+  assert.match(settingsPanel, /role="alert"/);
+  assert.match(settingsPanel, /Every Android original will stay visible/);
+  assert.match(settingsPanel, /Open Android notification access settings/);
+  assert.match(settingsPanel, /Open Android notification settings/);
+  assert.match(settingsPanel, /NATIVE_CAPABILITY_REFRESH_COALESCE_MS\s*=\s*50/);
+  assert.match(settingsPanel, /if \(nativeCapabilityRefreshTimer\.current !== null\) return/);
+  assert.match(
+    settingsPanel,
+    /nativeNotificationCapabilitiesEqual\(current, next\) \? current : next/,
+  );
+  assert.match(
+    settingsPanel,
+    /window\.addEventListener\('focus', scheduleNativeCapabilityRefresh\)/,
+  );
+  assert.match(
+    settingsPanel,
+    /window\.addEventListener\('evogent:native-bridge-ready', scheduleNativeCapabilityRefresh\)/,
+  );
+  assert.match(settingsPanel, /document\.addEventListener\('visibilitychange', refreshWhenVisible\)/);
+  assert.match(
+    architectureProse,
+    /listener access.*Android notification-access-settings action/i,
+  );
+  assert.match(
+    architectureProse,
+    /coalesced into at most one native capability proof per short event burst/i,
+  );
+});
+
 test('public architecture does not overclaim Android lock-screen or cancellation authority', () => {
   assert.match(architectureProse, /cannot:.*replace the Android lock screen/i);
   assert.match(architectureProse, /after a notification is posted/i);

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createOverlayScreenContextHandoff } from '@/lib/overlay-screen-context';
+import {
+  ASSISTANT_SCREEN_CONTEXT_TTL_MS,
+  captureOverlayScreenContextFromBridge,
+  createOverlayScreenContextHandoff,
+} from '@/lib/overlay-screen-context';
 
 test('overlay mount captures once, remains previewable, then attaches only to the first send', () => {
   const handoff = createOverlayScreenContextHandoff();
@@ -143,4 +147,104 @@ test('preview exposes only a display label, never the app identifier or screen t
 
   assert.deepStrictEqual(preview, { label: 'this Instagram post' });
   assert.doesNotMatch(JSON.stringify(preview), /com\.instagram|private post/i);
+});
+
+test('missing bridge does not burn the one-shot before authenticated fallback readiness', () => {
+  const handoff = createOverlayScreenContextHandoff();
+  let reads = 0;
+
+  assert.strictEqual(
+    captureOverlayScreenContextFromBridge(handoff, undefined),
+    undefined,
+  );
+  assert.strictEqual(
+    captureOverlayScreenContextFromBridge(handoff, {}),
+    undefined,
+  );
+
+  const preview = captureOverlayScreenContextFromBridge(handoff, {
+    getScreenContext() {
+      reads += 1;
+      return JSON.stringify({
+        app: 'com.example.reader',
+        text: 'context supplied after authenticated fallback injection',
+      });
+    },
+  });
+
+  assert.deepStrictEqual(preview, { label: 'this screen' });
+  assert.equal(reads, 1);
+  assert.match(handoff.take()?.text ?? '', /authenticated fallback injection/);
+});
+
+test('explicit abandonment clears raw context and prevents every late reacquisition', () => {
+  const handoff = createOverlayScreenContextHandoff();
+  let reads = 0;
+  handoff.captureOnce(() => {
+    reads += 1;
+    return JSON.stringify({
+      app: 'com.example.reader',
+      text: 'abandoned private context',
+    });
+  });
+
+  handoff.clear();
+
+  assert.strictEqual(handoff.preview(), null);
+  assert.strictEqual(handoff.take(), null);
+  assert.strictEqual(handoff.captureOnce(() => {
+    reads += 1;
+    return JSON.stringify({ app: 'com.example.other', text: 'late private context' });
+  }), null);
+  assert.equal(reads, 1);
+});
+
+test('abandonment before fallback readiness prevents a late bridge from reading context', () => {
+  const handoff = createOverlayScreenContextHandoff();
+  let reads = 0;
+
+  assert.strictEqual(
+    captureOverlayScreenContextFromBridge(handoff, undefined),
+    undefined,
+  );
+  handoff.clear();
+
+  assert.strictEqual(
+    captureOverlayScreenContextFromBridge(handoff, {
+      getScreenContext() {
+        reads += 1;
+        return JSON.stringify({
+          app: 'com.example.reader',
+          text: 'late bridge must never read this value',
+        });
+      },
+    }),
+    null,
+  );
+  assert.equal(reads, 0);
+  assert.strictEqual(handoff.preview(), null);
+  assert.strictEqual(handoff.take(), null);
+});
+
+test('raw context expires even when a throttled page timer has not run', () => {
+  let nowMs = 10_000;
+  const handoff = createOverlayScreenContextHandoff({
+    now: () => nowMs,
+    ttlMs: ASSISTANT_SCREEN_CONTEXT_TTL_MS,
+  });
+  handoff.captureOnce(() => JSON.stringify({
+    app: 'com.example.reader',
+    text: 'time bounded private context',
+  }));
+
+  nowMs += ASSISTANT_SCREEN_CONTEXT_TTL_MS - 1;
+  assert.deepStrictEqual(handoff.preview(), { label: 'this screen' });
+
+  nowMs += 1;
+  assert.strictEqual(handoff.preview(), null);
+  assert.strictEqual(handoff.take(), null);
+  assert.strictEqual(handoff.captureOnce(() => JSON.stringify({
+    app: 'com.example.other',
+    text: 'must not be reacquired',
+  })), null);
 });

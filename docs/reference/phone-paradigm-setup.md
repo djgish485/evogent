@@ -64,8 +64,11 @@ Evogent also qualifies for the Android assistant role through a `VoiceInteractio
 Assigning that role makes the system assistant gesture open the existing authenticated Add Message
 form, while persistent cross-app overlay windows and their permission remain absent. The session
 accepts only the system's assist structure for the explicitly invoked foreground activity, filters
-password inputs, bounds visible text, and transfers it once in process memory. Lock-screen assistant
-launch is deliberately disabled.
+password inputs, bounds visible text, and transfers it once in process memory. The Add Message
+surface always presents phone-sized **Close** and **Open Evogent** actions. Unsent raw context has a
+five-minute maximum lifetime and is terminally discarded when the page is hidden, navigated away
+from, or either escape action is selected; a late native-bridge fallback cannot reacquire it.
+Lock-screen assistant launch is deliberately disabled.
 
 Role assignment is transactional deployment state rather than an APK self-grant. Before APK
 mutation, the versioned release installer privately snapshots the exact HOME and ASSISTANT role
