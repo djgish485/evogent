@@ -138,6 +138,7 @@ describe('runtime-agent freshness shipments', { concurrency: false }, () => {
 
     const [bench] = benchRows();
     const item = JSON.parse(bench.item_json) as {
+      reason: string;
       metadata: {
         interest: { score: number; reason: string };
         shipment: { id: string; decision: string; rank: number; reason: string };
@@ -148,6 +149,7 @@ describe('runtime-agent freshness shipments', { concurrency: false }, () => {
     };
     assert.strictEqual(bench.score, 0.82);
     assert.strictEqual(bench.reason, publicReason);
+    assert.strictEqual(item.reason, publicReason);
     assert.deepStrictEqual(item.metadata.interest, { score: 0.82, reason: publicReason });
     assert.deepStrictEqual(item.metadata.shipment, {
       id: stableShipmentId({ source: 'twitter', sourceId: '1001' }),
@@ -206,6 +208,8 @@ describe('runtime-agent freshness shipments', { concurrency: false }, () => {
     const [bench] = benchRows();
     assert.strictEqual(bench.source, 'hackernews');
     assert.strictEqual(bench.score, 0.9);
+    const item = JSON.parse(bench.item_json) as { reason: string };
+    assert.strictEqual(item.reason, 'The reported result is concrete and unusually informative.');
   });
 
   test('an old unexpired judged row reaches the bench despite sustained newer arrivals', async () => {
